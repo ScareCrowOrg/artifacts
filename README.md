@@ -1,8 +1,8 @@
-# Artefatos - NotebookItem/NotebookItemType Architecture
+# Artifacts - NotebookItem/NotebookItemType Architecture
 
 ## 📋 Visão Geral
 
-**Artefatos** são a base fundamental do ScareVerse. Tudo no sistema é um artefato - código, texto, configurações, workflows. A nova arquitetura usa **type-driven behavior** baseado em NotebookItem e NotebookItemType.
+**Artifacts** são a base fundamental do ScareVerse. Tudo no sistema é um artefato - código, texto, configurações, workflows. A nova arquitetura usa **type-driven behavior** baseado em NotebookItem e NotebookItemType.
 
 ## 🔄 Nova Arquitetura: NotebookItem/NotebookItemType/PipelineItem
 
@@ -22,7 +22,7 @@ A decomposição iterativa permite criar módulos que, reagrupados, geram o prod
 ### Artefatos Canônicos (NotebookItemType)
 Artefatos **base/templates** armazenados em **Git** (este repositório). São imutáveis e versionados, servindo como blueprints para instâncias. Implementados como `NotebookItemType`.
 
-**Localização**: `Artefatos/canonicos/`  
+**Localização**: `artifacts/canonical/`  
 **Armazenamento**: Sistema de arquivos (Git)  
 **Uso**: NotebookItemType, modelos de IA, workflows, livros mestres
 
@@ -36,11 +36,11 @@ Artefatos **criados durante execução**, baseados em NotebookItemType. Isolados
 ## 📁 Estrutura do Módulo
 
 ```
-Artefatos/
+artifacts/
 ├── README.md                          # Este arquivo
-├── canonicos/                         # Artefatos canônicos (Git)
+├── canonical/                         # Artefatos canônicos (Git)
 │   ├── README.md                      # Doc de artefatos canônicos
-│   ├── tipos_celula/                  # NotebookItemType (blueprints de tipos)
+│   ├── cell_types/                    # NotebookItemType (blueprints de tipos)
 │   │   ├── README.md
 │   │   ├── SCHEMA.md
 │   │   └── *.json
@@ -50,13 +50,13 @@ Artefatos/
 │   ├── agents/                        # Instâncias de agentes canônicos
 │   │   ├── README.md
 │   │   └── *.json
-│   ├── celulas/                       # Células canônicas (templates)
+│   ├── cells/                         # Células canônicas (templates)
 │   │   ├── README.md
 │   │   └── *.json
-│   ├── livros/                        # Livros canônicos (mestres)
+│   ├── books/                         # Livros canônicos (mestres)
 │   │   ├── README.md
 │   │   └── *.json
-│   ├── modelos_ia/                    # Modelos de IA configurados
+│   ├── ai_models/                     # Modelos de IA configurados
 │   │   ├── README.md
 │   │   ├── SCHEMA.md
 │   │   └── *.json
@@ -66,13 +66,13 @@ Artefatos/
 │
 └── runtime/                           # Docs de artefatos runtime
     ├── README.md                      # Doc de artefatos runtime (NotebookItem/PipelineItem)
-    ├── celulas/                       # Células instanciadas (Celula - NotebookItem)
+    ├── cells/                         # Células instanciadas (Celula - NotebookItem)
     │   ├── README.md
     │   ├── SCHEMA.md
     │   ├── SANDBOX_CELL_QUICK_REF.md
     │   └── sandbox_guide/             # 🆕 Guia sandbox modularizado
     │       └── *.md
-    ├── livros/                        # Livros (Livro - NotebookItem)
+    ├── books/                         # Livros (Livro - NotebookItem)
     │   ├── README.md
     │   └── SCHEMA.md
     ├── sessoes/                       # Sessões de usuário
@@ -88,7 +88,7 @@ Artefatos/
 > **🆕 Evolução para Células Sandbox**: O sistema de células está sendo expandido para suportar runtime dinâmico, metadados avançados e controle de lifecycle. Consulte:
 > - [Análise de Gaps](../docs/project/SANDBOX_CELLS_GAP_ANALYSIS.md) - Identificação de 8 gaps críticos
 > - [Plano de Implementação](../docs/project/SANDBOX_CELLS_IMPLEMENTATION_PLAN.md) - Roadmap de 8 fases
-> - [Referência Rápida](./runtime/celulas/SANDBOX_CELL_QUICK_REF.md) - Guia de uso dos novos recursos
+> - [Referência Rápida](./runtime/cells/SANDBOX_CELL_QUICK_REF.md) - Guia de uso dos novos recursos
 
 ## 🔄 Fluxo de Artefatos (Nova Arquitetura)
 
