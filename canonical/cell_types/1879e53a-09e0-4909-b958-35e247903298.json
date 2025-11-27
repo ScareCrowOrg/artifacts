@@ -1,0 +1,16 @@
+{
+  "id": "1879e53a-09e0-4909-b958-35e247903298",
+  "name": "Memória de Conversação",
+  "descricao": "Memória de Conversação",
+  "category": "persistida",
+  "icon": null,
+  "properties": [],
+  "docs_refs": [],
+  "python_refs": [],
+  "javascript_refs": [],
+  "yaml_refs": [],
+  "attachment_refs": [],
+  "views_components": ["CellView_Memory"],
+  "workflows": "# Workflow de memória\nsteps:\n  - capture\n  - store\n  - retrieve",
+  "versao": "1.0.0"
+}

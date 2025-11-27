@@ -1,0 +1,8 @@
+{
+  "id": "02d9eeb5-6e5a-425f-a0cb-2e6122ad3343",
+  "name": "cells.update_any",
+  "description": "Update any user's cells",
+  "resource": "cells",
+  "action": "update",
+  "scope": "any"
+}

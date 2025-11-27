@@ -1,0 +1,8 @@
+{
+  "id": "e8231b5e-e184-4a3d-945d-8498b82d1444",
+  "name": "cells.read_own",
+  "description": "Read own cells",
+  "resource": "cells",
+  "action": "read",
+  "scope": "own"
+}

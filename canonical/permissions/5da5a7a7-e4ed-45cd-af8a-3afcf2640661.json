@@ -1,0 +1,8 @@
+{
+  "id": "5da5a7a7-e4ed-45cd-af8a-3afcf2640661",
+  "name": "books.update_any",
+  "description": "Update any user's books",
+  "resource": "books",
+  "action": "update",
+  "scope": "any"
+}

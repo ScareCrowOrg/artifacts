@@ -1,0 +1,8 @@
+{
+  "id": "a2cbaf0d-7dd0-445e-892d-f498b6c02f28",
+  "name": "cells.delete_own",
+  "description": "Delete own cells",
+  "resource": "cells",
+  "action": "delete",
+  "scope": "own"
+}

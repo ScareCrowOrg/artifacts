@@ -1,0 +1,18 @@
+{
+  "id": "2beefb1e-a2d1-4c47-bcb9-84c566a928c5",
+  "name": "user",
+  "description": "Standard user with access to own resources",
+  "permissions": [
+    "cells.create",
+    "cells.read_own",
+    "cells.update_own",
+    "cells.delete_own",
+    "books.create",
+    "books.read_own",
+    "books.update_own",
+    "books.delete_own",
+    "users.read_own",
+    "ai_models.use"
+  ],
+  "priority": 10
+}

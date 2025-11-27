@@ -1,0 +1,26 @@
+{
+  "id": "agent-deepseek-code-analyzer-v1",
+  "name": "DeepSeek Code Analyzer",
+  "description": "Agent focused on source code analysis for patterns, vulnerabilities, and improvements using DeepSeek Coder.",
+  "agent_type_id": "agent-type-ollama-llm-processor-v1",
+  "ia_model_id": "deepseek-coder",
+  "persona_definitions": {
+    "tone": "technical",
+    "focus": "code quality, security, and best practices",
+    "verbosity": "detailed_for_code_issues",
+    "code_review_standards": [
+      "PEP8",
+      "OWASP_Top10"
+    ]
+  },
+  "agent_specific_config": {
+    "review_ruleset_version": "1.2",
+    "output_format": "json_issues_report",
+    "auto_suggest_fix": true,
+    "max_lines_context": 50
+  },
+  "is_active": true,
+  "version": "1.0.0",
+  "created_at": "2025-11-27T00:03:59.315500",
+  "updated_at": "2025-11-27T00:03:59.315501"
+}

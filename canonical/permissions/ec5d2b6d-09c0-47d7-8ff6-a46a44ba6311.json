@@ -1,0 +1,8 @@
+{
+  "id": "ec5d2b6d-09c0-47d7-8ff6-a46a44ba6311",
+  "name": "system.view_logs",
+  "description": "View system logs and diagnostics",
+  "resource": "system",
+  "action": "view_logs",
+  "scope": null
+}

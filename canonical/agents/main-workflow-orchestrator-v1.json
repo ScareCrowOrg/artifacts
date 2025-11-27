@@ -1,0 +1,21 @@
+{
+  "id": "main-workflow-orchestrator-v1",
+  "name": "Main Workflow Orchestrator",
+  "description": "The primary orchestrator instance, actively managing the issues-queue and driving cell processing.",
+  "agent_type_id": "agent-type-workflow-orchestrator-v1",
+  "ia_model_id": "mistral",
+  "persona_definitions": {
+    "tone": "systematic",
+    "focus": "workflow execution and task orchestration",
+    "error_recovery": "retry_with_exponential_backoff",
+    "verbosity": "detailed_logging"
+  },
+  "agent_specific_config": {
+    "polling_interval_seconds": 5,
+    "max_concurrent_cells": 2
+  },
+  "is_active": true,
+  "version": "1.0.0",
+  "created_at": "2025-11-27T00:03:59.316130",
+  "updated_at": "2025-11-27T00:03:59.316131"
+}

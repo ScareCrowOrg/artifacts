@@ -1,0 +1,22 @@
+{
+  "id": "agent-phi-task-executor-v1",
+  "name": "Phi Focused Task Executor",
+  "description": "Agent for concise, direct text processing tasks like quick summaries or entity extraction, optimized for efficiency with the Phi model.",
+  "agent_type_id": "agent-type-ollama-llm-processor-v1",
+  "ia_model_id": "phi",
+  "persona_definitions": {
+    "tone": "direct",
+    "focus": "specific task execution, brevity",
+    "verbosity": "minimal",
+    "error_handling_strategy": "report_and_stop"
+  },
+  "agent_specific_config": {
+    "max_output_tokens": 500,
+    "response_format_preference": "markdown_list",
+    "validation_schema_ref": "task_output_schema_v1"
+  },
+  "is_active": true,
+  "version": "1.0.0",
+  "created_at": "2025-11-27T00:03:59.315829",
+  "updated_at": "2025-11-27T00:03:59.315830"
+}

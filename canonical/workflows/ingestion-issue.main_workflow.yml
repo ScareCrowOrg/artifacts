@@ -1,0 +1,22 @@
+steps:
+  - id: preprocess_and_chunk_file
+    tool: run_script
+    path: scripts/ingestion/preprocess_and_chunk.py
+    inputs:
+      file_path: "{{ cell.data.file_path }}"
+      file_type: "{{ cell.data.file_type }}"
+    outputs:
+      chunks_output_path: "{{ temp_dir }}/{{ cell.id }}_chunks.json"
+    description: "Loads, preprocesses, and chunks the source file based on its type."
+
+  - id: generate_embeddings_and_store
+    tool: run_script
+    path: scripts/ingestion/generate_embeddings_and_store.py
+    inputs:
+      chunks_json_path: "{{ output.preprocess_and_chunk_file.chunks_output_path }}"
+      embedding_model_id: "{{ agent.model_ia_model_id_ref }}"
+      file_type: "{{ cell.data.file_type }}"
+      document_id: "{{ cell.data.document_id }}"
+    outputs:
+      ingestion_status: "{{ stdout }}"
+    description: "Generates embeddings for chunks and stores them in the appropriate ChromaDB collection."

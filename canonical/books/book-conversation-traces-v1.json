@@ -1,0 +1,16 @@
+{
+  "id": "book-conversation-traces-v1",
+  "name": "conversation-traces",
+  "description": "A volatile system book for storing conversation trace cells. Not visible in user sidebar.",
+  "assignee_id": "",
+  "tipo": "VOLATIL",
+  "origem": null,
+  "intencao": "Store and manage conversation trace data for observability and debugging",
+  "filhos": [],
+  "celulas": [],
+  "dataCriacao": "2025-11-18T08:00:00.000000",
+  "dataAtualizacao": "2025-11-27T00:03:59.316496",
+  "is_canonical": true,
+  "notebook_item_type_id": "book-type-generic-v1",
+  "is_canonical_system_book": true
+}

@@ -1,0 +1,19 @@
+{
+  "id": "0cd532bb-f2b9-4951-8768-59644e40c7ab",
+  "name": "Executor de Testes",
+  "description": "Executor de Testes",
+  "default_refs": {
+    "workflow_graph": []
+  },
+  "default_initial_data": {
+    "workflow_yaml": "# Workflow de testes\nsteps:\n  - setup\n  - run_tests\n  - collect_results\n  - generate_report",
+    "category": "persistida",
+    "views_components": [
+      "CellView_TestRunner"
+    ],
+    "versao": "1.0.0"
+  },
+  "allow_instance_override_refs": true,
+  "created_at": "2025-11-17T06:08:04.280635",
+  "updated_at": "2025-11-17T06:08:04.280635"
+}

@@ -1,0 +1,33 @@
+{
+  "id": "unclassified",
+  "name": "Célula Não Classificada",
+  "description": "Um tipo de célula genérico e persistido, usado para testar a funcionalidade básica de criação, edição e persistência de células. Possui um título e um campo de conteúdo.",
+  "default_refs": {},
+  "default_initial_data": {
+    "category": "persistida",
+    "icon": "mdi-text-box",
+    "properties": [
+      {
+        "name": "title",
+        "type": "string",
+        "label": "Título da Célula",
+        "required": true,
+        "default": "Nova Célula Sem Título"
+      },
+      {
+        "name": "content",
+        "type": "text",
+        "label": "Conteúdo da Célula",
+        "required": false,
+        "default": ""
+      }
+    ],
+    "views_components": [
+      "CellView_Unclassified"
+    ],
+    "versao": "1.0.0"
+  },
+  "allow_instance_override_refs": true,
+  "created_at": "2025-11-17T06:08:04.281032",
+  "updated_at": "2025-11-17T06:08:04.281033"
+}

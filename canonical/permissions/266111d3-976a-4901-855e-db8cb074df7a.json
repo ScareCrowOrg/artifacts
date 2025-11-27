@@ -1,0 +1,8 @@
+{
+  "id": "266111d3-976a-4901-855e-db8cb074df7a",
+  "name": "users.read_own",
+  "description": "Read own user profile",
+  "resource": "users",
+  "action": "read",
+  "scope": "own"
+}

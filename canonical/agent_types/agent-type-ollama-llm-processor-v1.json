@@ -1,0 +1,20 @@
+{
+  "id": "agent-type-ollama-llm-processor-v1",
+  "name": "Ollama LLM Processor",
+  "description": "Generic agent type for processing text, code, or data using LLMs hosted via Ollama.",
+  "base_capabilities": [
+    "generate_text",
+    "analyze_code",
+    "summarize_data",
+    "translate_language",
+    "extract_information"
+  ],
+  "default_persona_traits": {
+    "concise": true,
+    "analytical": true,
+    "adaptive": true
+  },
+  "version": "1.0.0",
+  "created_at": "2025-11-09T08:25:03.138004",
+  "updated_at": "2025-11-09T08:25:03.138010"
+}

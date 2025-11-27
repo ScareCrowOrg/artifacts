@@ -1,0 +1,35 @@
+{
+  "id": "bf42960f-2297-487b-9477-f8d71bc9989b",
+  "nome": "GPT-3.5 Turbo (OpenAI)",
+  "descricao": "Modelo rápido e eficiente da OpenAI (GPT-3.5 Turbo). Suporta BYOK (Bring Your Own Key) para configuração individual por usuário.",
+  "tipo": "cloud",
+  "provider": "openai",
+  "modeloId": "gpt-3.5-turbo",
+  "apiKey": null,
+  "versao": "1.0.0",
+  "ativo": true,
+  "configuracao": {
+    "temperature": 0.7,
+    "max_tokens": 2048,
+    "timeout": 60,
+    "requiresApiKey": true
+  },
+  "metadados": {
+    "context_window": "16k tokens",
+    "multimodal": false,
+    "especialidade": "Conversação rápida e eficiente",
+    "linguagens": [
+      "pt",
+      "en",
+      "es",
+      "fr",
+      "de",
+      "ja",
+      "ko",
+      "zh"
+    ],
+    "byok": true
+  },
+  "dataCriacao": "2025-11-07T18:43:00",
+  "dataAtualizacao": "2025-11-07T18:43:00"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "deb1270a-bff7-4141-a0fa-8913d29f6ce9",
+  "name": "books.create",
+  "description": "Create new books",
+  "resource": "books",
+  "action": "create",
+  "scope": null
+}

@@ -1,0 +1,8 @@
+{
+  "id": "72bd7225-6732-40fa-abc7-f368090596cd",
+  "name": "books.delete_any",
+  "description": "Delete any user's books",
+  "resource": "books",
+  "action": "delete",
+  "scope": "any"
+}

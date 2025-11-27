@@ -1,0 +1,8 @@
+{
+  "id": "bb8ffa37-11a7-488b-a229-8d9a7bb043cf",
+  "name": "books.update_own",
+  "description": "Update own books",
+  "resource": "books",
+  "action": "update",
+  "scope": "own"
+}

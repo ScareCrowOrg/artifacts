@@ -1,0 +1,8 @@
+{
+  "id": "7febeb62-e22f-4ddf-948c-f9e769e0ffc1",
+  "name": "ai_models.configure",
+  "description": "Configure AI models and settings",
+  "resource": "ai_models",
+  "action": "configure",
+  "scope": null
+}

@@ -1,0 +1,8 @@
+{
+  "id": "add180c9-35b0-49da-b9d9-4913a9f43a52",
+  "name": "cells.update_own",
+  "description": "Update own cells",
+  "resource": "cells",
+  "action": "update",
+  "scope": "own"
+}

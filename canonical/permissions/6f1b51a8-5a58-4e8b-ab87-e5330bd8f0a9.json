@@ -1,0 +1,8 @@
+{
+  "id": "6f1b51a8-5a58-4e8b-ab87-e5330bd8f0a9",
+  "name": "cells.delete_any",
+  "description": "Delete any user's cells",
+  "resource": "cells",
+  "action": "delete",
+  "scope": "any"
+}

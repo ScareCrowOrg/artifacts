@@ -1,0 +1,8 @@
+{
+  "id": "efd3ecec-d447-4d87-80ad-fd161864615d",
+  "name": "books.read_own",
+  "description": "Read own books",
+  "resource": "books",
+  "action": "read",
+  "scope": "own"
+}

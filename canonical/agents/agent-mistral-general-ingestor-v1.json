@@ -1,0 +1,29 @@
+{
+  "id": "agent-mistral-general-ingestor-v1",
+  "name": "Mistral Document Ingestor",
+  "description": "Agent specialized in general document ingestion and preprocessing using the Mistral model.",
+  "agent_type_id": "agent-type-ollama-llm-processor-v1",
+  "ia_model_id": "mistral",
+  "persona_definitions": {
+    "tone": "helpful",
+    "focus": "document parsing and data integrity",
+    "verbosity": "moderate",
+    "safety_check": true
+  },
+  "agent_specific_config": {
+    "chunking_strategy": "recursive",
+    "max_chunk_size": 1000,
+    "chunk_overlap": 200,
+    "supported_file_extensions": [
+      ".md",
+      ".txt",
+      ".json",
+      ".py",
+      ".html"
+    ]
+  },
+  "is_active": true,
+  "version": "1.0.0",
+  "created_at": "2025-11-27T00:03:59.315181",
+  "updated_at": "2025-11-27T00:03:59.315185"
+}

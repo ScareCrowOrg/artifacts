@@ -1,0 +1,8 @@
+{
+  "id": "0f8f5596-60b0-44f8-be8a-fdaa98f52f2b",
+  "name": "users.read_any",
+  "description": "Read any user's profile",
+  "resource": "users",
+  "action": "read",
+  "scope": "any"
+}

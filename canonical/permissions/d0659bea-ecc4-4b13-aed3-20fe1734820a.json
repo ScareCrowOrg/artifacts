@@ -1,0 +1,8 @@
+{
+  "id": "d0659bea-ecc4-4b13-aed3-20fe1734820a",
+  "name": "books.delete_own",
+  "description": "Delete own books",
+  "resource": "books",
+  "action": "delete",
+  "scope": "own"
+}

@@ -1,0 +1,50 @@
+{
+  "id": "conversation-trace-item",
+  "name": "Conversation Trace",
+  "description": "Structured trace of a conversation flow through the RAG pipeline and LLM processing stages.",
+  "default_refs": {
+    "workflow_graph": [],
+    "python": ["backend/app/services/conversation_trace_service.py"]
+  },
+  "default_initial_data": {
+    "category": "efemera",
+    "icon": "diagram-3",
+    "properties": [
+      {
+        "name": "conversation_id",
+        "type": "string",
+        "description": "Unique identifier for the conversation being traced",
+        "required": true
+      },
+      {
+        "name": "session_id",
+        "type": "string",
+        "description": "Session ID for the conversation",
+        "required": false
+      },
+      {
+        "name": "tracing_enabled",
+        "type": "boolean",
+        "description": "Whether tracing is active for this conversation",
+        "required": true,
+        "default": false
+      },
+      {
+        "name": "user_message",
+        "type": "string",
+        "description": "Original user message that started the conversation",
+        "required": false
+      },
+      {
+        "name": "target_llm",
+        "type": "string",
+        "description": "Target LLM for the conversation (openai, gemini, ollama)",
+        "required": false
+      }
+    ],
+    "versao": "1.0.0"
+  },
+  "allow_instance_override_refs": true,
+  "created_at": "2025-11-18T08:00:00.000000",
+  "updated_at": "2025-11-18T08:00:00.000000"
+}

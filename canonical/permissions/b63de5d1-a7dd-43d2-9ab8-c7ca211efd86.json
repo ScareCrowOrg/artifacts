@@ -1,0 +1,8 @@
+{
+  "id": "b63de5d1-a7dd-43d2-9ab8-c7ca211efd86",
+  "name": "users.manage",
+  "description": "Manage users (create, update, delete, assign roles)",
+  "resource": "users",
+  "action": "manage",
+  "scope": null
+}

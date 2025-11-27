@@ -1,0 +1,19 @@
+{
+  "id": "1879e53a-09e0-4909-b958-35e247903298",
+  "name": "Memória de Conversação",
+  "description": "Memória de Conversação",
+  "default_refs": {
+    "workflow_graph": []
+  },
+  "default_initial_data": {
+    "workflow_yaml": "# Workflow de memória\nsteps:\n  - capture\n  - store\n  - retrieve",
+    "category": "persistida",
+    "views_components": [
+      "CellView_Memory"
+    ],
+    "versao": "1.0.0"
+  },
+  "allow_instance_override_refs": true,
+  "created_at": "2025-11-17T06:08:04.281650",
+  "updated_at": "2025-11-17T06:08:04.281651"
+}

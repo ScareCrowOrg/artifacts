@@ -1,0 +1,13 @@
+{
+  "id": "book-type-generic-v1",
+  "name": "Generic Book",
+  "description": "Generic book type for organizing cells",
+  "default_refs": {},
+  "default_initial_data": {
+    "category": "persistida",
+    "icon": "book"
+  },
+  "allow_instance_override_refs": true,
+  "created_at": "2025-11-17T06:08:04.292394",
+  "updated_at": "2025-11-17T06:08:04.292395"
+}

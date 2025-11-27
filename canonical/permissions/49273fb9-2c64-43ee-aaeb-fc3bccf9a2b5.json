@@ -1,0 +1,8 @@
+{
+  "id": "49273fb9-2c64-43ee-aaeb-fc3bccf9a2b5",
+  "name": "system.manage",
+  "description": "Manage roles and permissions",
+  "resource": "system",
+  "action": "manage",
+  "scope": null
+}

@@ -1,0 +1,8 @@
+{
+  "id": "54d8cb8e-f019-42a7-8f87-92239dee1a76",
+  "name": "ai_models.use",
+  "description": "Use AI models for chat and processing",
+  "resource": "ai_models",
+  "action": "use",
+  "scope": null
+}

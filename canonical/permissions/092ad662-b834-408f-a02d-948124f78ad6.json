@@ -1,0 +1,8 @@
+{
+  "id": "092ad662-b834-408f-a02d-948124f78ad6",
+  "name": "cells.read_any",
+  "description": "Read any user's cells",
+  "resource": "cells",
+  "action": "read",
+  "scope": "any"
+}

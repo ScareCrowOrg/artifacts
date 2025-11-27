@@ -1,0 +1,8 @@
+{
+  "id": "3259f7dc-2f17-4c6b-bb48-fc1db6af97fa",
+  "name": "system.configure",
+  "description": "Configure system settings",
+  "resource": "system",
+  "action": "configure",
+  "scope": null
+}

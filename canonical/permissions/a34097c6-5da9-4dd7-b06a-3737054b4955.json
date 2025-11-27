@@ -1,0 +1,8 @@
+{
+  "id": "a34097c6-5da9-4dd7-b06a-3737054b4955",
+  "name": "cells.create",
+  "description": "Create new cells",
+  "resource": "cells",
+  "action": "create",
+  "scope": null
+}
