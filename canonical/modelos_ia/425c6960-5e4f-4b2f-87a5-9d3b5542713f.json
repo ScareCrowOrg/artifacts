@@ -1,0 +1,35 @@
+{
+  "id": "425c6960-5e4f-4b2f-87a5-9d3b5542713f",
+  "nome": "gemini-2.5-flash",
+  "descricao": "Modelo cloud de última geração do Google. Suporta BYOK (Bring Your Own Key) para configuração individual por usuário.",
+  "tipo": "cloud",
+  "provider": "gemini",
+  "modeloId": "gemini-2.5-flash",
+  "apiKey": null,
+  "versao": "1.0.0",
+  "ativo": true,
+  "configuracao": {
+    "timeout": 30,
+    "requiresApiKey": true,
+    "apiKey": "AIzaSyCQmgErURaotwWeZvOsqPF4xiJtBHOvkbs",
+    "temperature": 0.7,
+    "max_tokens": 2048
+  },
+  "metadados": {
+    "contexto": "32K tokens",
+    "multimodal": false,
+    "especialidade": "Conversação avançada",
+    "linguagens": [
+      "pt",
+      "en",
+      "es",
+      "fr",
+      "de",
+      "ja",
+      "ko"
+    ],
+    "byok": true
+  },
+  "dataCriacao": "2025-11-04T00:33:58.164133",
+  "dataAtualizacao": "2025-11-05T17:42:28.836078"
+}

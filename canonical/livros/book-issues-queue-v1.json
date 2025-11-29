@@ -1,0 +1,24 @@
+{
+  "id": "book-issues-queue-v1",
+  "assignee_id": "",
+  "fragments": [],
+  "refs": {},
+  "initial_data": {
+    "category": "persistida",
+    "icon": "book"
+  },
+  "created_at": "2025-11-29T19:03:04.362076",
+  "updated_at": "2025-11-29T19:03:04.362076",
+  "notebook_item_type_id": "book-type-generic-v1",
+  "name": "issues-queue",
+  "description": "A volatile queue for processing various cells, orchestrating tasks for ScareVerse's local LLM agents.",
+  "tipo": "VOLATIL",
+  "origem": null,
+  "intencao": "Track and manage execution demands",
+  "filhos": [],
+  "celulas": [],
+  "is_unclassified_master_template": false,
+  "is_canonical_system_book": true,
+  "is_canonical": true,
+  "dataAtualizacao": "2025-11-29T19:17:54.002347"
+}
