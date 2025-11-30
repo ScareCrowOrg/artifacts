@@ -1,0 +1,37 @@
+{
+  "id": "b5db5c64-815a-4a4f-b31c-79357a05e514",
+  "nome": "Qwen2.5 Coder 14B",
+  "descricao": "Modelo especializado em código da série Qwen 2.5, versão 14B. Otimizado para geração, análise, refatoração e compreensão de código em múltiplas linguagens de programação.",
+  "tipo": "local",
+  "provider": "ollama",
+  "modeloId": "qwen2.5-coder:14b",
+  "apiKey": null,
+  "versao": "1.0.0",
+  "ativo": true,
+  "configuracao": {
+    "timeout": 45,
+    "temperature": 0.5,
+    "max_tokens": 8192
+  },
+  "metadados": {
+    "parametros": "14B",
+    "contexto": "32K tokens",
+    "arquitetura": "Transformer",
+    "especialidade": "Geração e análise de código avançada",
+    "linguagens": [
+      "Python",
+      "JavaScript",
+      "TypeScript",
+      "Java",
+      "C++",
+      "Go",
+      "Rust",
+      "PHP",
+      "Ruby",
+      "Swift"
+    ],
+    "fabricante": "Alibaba Cloud"
+  },
+  "dataCriacao": "2025-11-30T22:55:00.000000",
+  "dataAtualizacao": "2025-11-30T22:55:00.000000"
+}
