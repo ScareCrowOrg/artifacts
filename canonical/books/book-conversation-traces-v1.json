@@ -7,7 +7,7 @@
   "origem": null,
   "intencao": "Store and manage conversation trace data for observability and debugging",
   "filhos": [],
-  "celulas": [],
+  "cells": [],
   "dataCriacao": "2025-11-18T08:00:00.000000",
   "dataAtualizacao": "2025-12-01T00:33:47.553511",
   "is_canonical": true,
