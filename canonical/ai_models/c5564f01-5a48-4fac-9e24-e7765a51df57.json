@@ -1,19 +1,19 @@
 {
   "id": "c5564f01-5a48-4fac-9e24-e7765a51df57",
-  "nome": "Phi",
-  "descricao": "Modelo compacto e rápido da Microsoft, ideal para tarefas simples e respostas rápidas com menor consumo de recursos.",
-  "tipo": "local",
+  "name": "Phi",
+  "description": "Modelo compacto e rápido da Microsoft, ideal para tarefas simples e respostas rápidas com menor consumo de recursos.",
+  "type": "local",
   "provider": "ollama",
-  "modeloId": "phi",
+  "modelId": "phi",
   "apiKey": null,
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
     "timeout": 20,
     "temperature": 0.8,
     "max_tokens": 2048
   },
-  "metadados": {
+  "metadata": {
     "parametros": "2.7B",
     "contexto": "4K tokens",
     "arquitetura": "Transformer",
@@ -23,6 +23,6 @@
       "pt"
     ]
   },
-  "dataCriacao": "2025-11-04T00:33:58.164715",
-  "dataAtualizacao": "2025-11-04T00:33:58.164716"
+  "createdAt": "2025-11-04T00:33:58.164715",
+  "updatedAt": "2025-11-04T00:33:58.164716"
 }

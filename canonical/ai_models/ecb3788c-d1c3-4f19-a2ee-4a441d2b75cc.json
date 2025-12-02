@@ -1,19 +1,19 @@
 {
   "id": "ecb3788c-d1c3-4f19-a2ee-4a441d2b75cc",
-  "nome": "Phi-3",
-  "descricao": "Modelo compacto e eficiente da Microsoft, versão Phi-3. Otimizado para tarefas de raciocínio, código e compreensão de linguagem com alto desempenho e baixo consumo de recursos.",
-  "tipo": "local",
+  "name": "Phi-3",
+  "description": "Modelo compacto e eficiente da Microsoft, versão Phi-3. Otimizado para tarefas de raciocínio, código e compreensão de linguagem com alto desempenho e baixo consumo de recursos.",
+  "type": "local",
   "provider": "ollama",
-  "modeloId": "phi3:latest",
+  "modelId": "phi3:latest",
   "apiKey": null,
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
     "timeout": 25,
     "temperature": 0.7,
     "max_tokens": 3072
   },
-  "metadados": {
+  "metadata": {
     "parametros": "3.8B",
     "contexto": "128K tokens",
     "arquitetura": "Transformer",
@@ -24,6 +24,6 @@
     ],
     "fabricante": "Microsoft"
   },
-  "dataCriacao": "2024-11-30T22:55:00",
-  "dataAtualizacao": "2024-11-30T22:55:00"
+  "createdAt": "2024-11-30T22:55:00",
+  "updatedAt": "2024-11-30T22:55:00"
 }

@@ -1,21 +1,21 @@
 {
   "id": "e866b850-0610-444d-b933-9f6bb7fb5e34",
-  "nome": "GPT-4o Mini (OpenAI)",
-  "descricao": "Modelo multimodal avançado da OpenAI (GPT-4o). Suporta BYOK (Bring Your Own Key) para configuração individual por usuário.",
-  "tipo": "cloud",
+  "name": "GPT-4o Mini (OpenAI)",
+  "description": "Modelo multimodal avançado da OpenAI (GPT-4o). Suporta BYOK (Bring Your Own Key) para configuração individual por usuário.",
+  "type": "cloud",
   "provider": "openai",
-  "modeloId": "gpt-4o-mini",
+  "modelId": "gpt-4o-mini",
   "apiKey": null,
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
     "temperature": 0.7,
     "max_tokens": 4096,
     "timeout": 60,
     "requiresApiKey": true,
     "system_prompt": "Você é um assistente útil e conciso."
   },
-  "metadados": {
+  "metadata": {
     "context_window": "128k tokens",
     "multimodal": true,
     "especialidade": "Conversação avançada e análise multimodal",
@@ -31,6 +31,6 @@
     ],
     "byok": true
   },
-  "dataCriacao": "2025-11-07T18:43:00",
-  "dataAtualizacao": "2025-11-07T18:43:00"
+  "createdAt": "2025-11-07T18:43:00",
+  "updatedAt": "2025-11-07T18:43:00"
 }

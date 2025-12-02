@@ -1,19 +1,19 @@
 {
   "id": "918410bc-ad22-4c2b-b4b6-aa175a96b22f",
-  "nome": "DeepSeek Code",
-  "descricao": "Modelo especializado em código e tarefas técnicas. Otimizado para geração, análise e refatoração de código.",
-  "tipo": "local",
+  "name": "DeepSeek Code",
+  "description": "Modelo especializado em código e tarefas técnicas. Otimizado para geração, análise e refatoração de código.",
+  "type": "local",
   "provider": "ollama",
-  "modeloId": "deepseek-coder",
+  "modelId": "deepseek-coder",
   "apiKey": null,
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
     "timeout": 30,
     "temperature": 0.5,
     "max_tokens": 4096
   },
-  "metadados": {
+  "metadata": {
     "parametros": "6.7B",
     "contexto": "16K tokens",
     "arquitetura": "Transformer",
@@ -26,6 +26,6 @@
       "Go"
     ]
   },
-  "dataCriacao": "2025-11-04T00:33:58.162673",
-  "dataAtualizacao": "2025-11-04T00:33:58.162673"
+  "createdAt": "2025-11-04T00:33:58.162673",
+  "updatedAt": "2025-11-04T00:33:58.162673"
 }

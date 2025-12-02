@@ -1,19 +1,19 @@
 {
   "id": "4e8191e3-ab2e-468f-98e8-2a6891b45d08",
-  "nome": "Gemma 7B",
-  "descricao": "Modelo de linguagem aberto do Google, versão 7B. Ideal para tarefas de geração de texto, conversação e compreensão de linguagem natural com alta qualidade.",
-  "tipo": "local",
+  "name": "Gemma 7B",
+  "description": "Modelo de linguagem aberto do Google, versão 7B. Ideal para tarefas de geração de texto, conversação e compreensão de linguagem natural com alta qualidade.",
+  "type": "local",
   "provider": "ollama",
-  "modeloId": "gemma:7b",
+  "modelId": "gemma:7b",
   "apiKey": null,
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
     "timeout": 30,
     "temperature": 0.7,
     "max_tokens": 2048
   },
-  "metadados": {
+  "metadata": {
     "parametros": "7B",
     "contexto": "8K tokens",
     "arquitetura": "Transformer",
@@ -28,6 +28,6 @@
     ],
     "fabricante": "Google"
   },
-  "dataCriacao": "2024-11-30T22:55:00",
-  "dataAtualizacao": "2024-11-30T22:55:00"
+  "createdAt": "2024-11-30T22:55:00",
+  "updatedAt": "2024-11-30T22:55:00"
 }

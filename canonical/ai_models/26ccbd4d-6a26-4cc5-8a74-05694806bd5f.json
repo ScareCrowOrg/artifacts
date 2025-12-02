@@ -1,19 +1,19 @@
 {
   "id": "26ccbd4d-6a26-4cc5-8a74-05694806bd5f",
-  "nome": "DeepSeek Coder 6.7B",
-  "descricao": "Modelo especializado em código, versão 6.7B. Otimizado para geração, análise e refatoração de código com foco em qualidade e precisão técnica.",
-  "tipo": "local",
+  "name": "DeepSeek Coder 6.7B",
+  "description": "Modelo especializado em código, versão 6.7B. Otimizado para geração, análise e refatoração de código com foco em qualidade e precisão técnica.",
+  "type": "local",
   "provider": "ollama",
-  "modeloId": "deepseek-coder:6.7b",
+  "modelId": "deepseek-coder:6.7b",
   "apiKey": null,
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
     "timeout": 35,
     "temperature": 0.5,
     "max_tokens": 4096
   },
-  "metadados": {
+  "metadata": {
     "parametros": "6.7B",
     "contexto": "16K tokens",
     "arquitetura": "Transformer",
@@ -30,6 +30,6 @@
     ],
     "fabricante": "DeepSeek"
   },
-  "dataCriacao": "2024-11-30T22:55:00",
-  "dataAtualizacao": "2024-11-30T22:55:00"
+  "createdAt": "2024-11-30T22:55:00",
+  "updatedAt": "2024-11-30T22:55:00"
 }

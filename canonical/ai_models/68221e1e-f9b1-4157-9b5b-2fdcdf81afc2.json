@@ -1,19 +1,19 @@
 {
   "id": "68221e1e-f9b1-4157-9b5b-2fdcdf81afc2",
-  "nome": "Mistral",
-  "descricao": "Modelo de propósito geral equilibrado entre velocidade e qualidade. Ideal para conversação, geração de código e tarefas gerais.",
-  "tipo": "local",
+  "name": "Mistral",
+  "description": "Modelo de propósito geral equilibrado entre velocidade e qualidade. Ideal para conversação, geração de código e tarefas gerais.",
+  "type": "local",
   "provider": "ollama",
-  "modeloId": "mistral",
+  "modelId": "mistral",
   "apiKey": null,
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
     "timeout": 30,
     "temperature": 0.7,
     "max_tokens": 2048
   },
-  "metadados": {
+  "metadata": {
     "parametros": "7B",
     "contexto": "8K tokens",
     "arquitetura": "Transformer",
@@ -25,6 +25,6 @@
       "fr"
     ]
   },
-  "dataCriacao": "2025-11-04T00:33:58.163458",
-  "dataAtualizacao": "2025-11-04T04:28:49.592562"
+  "createdAt": "2025-11-04T00:33:58.163458",
+  "updatedAt": "2025-11-04T04:28:49.592562"
 }
