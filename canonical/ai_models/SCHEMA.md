@@ -11,28 +11,29 @@ Modelos de IA são artefatos que representam engines de processamento de linguag
 ## 📊 Schema Pydantic
 
 ```python
-class TipoModeloIA(str, Enum):
-    """Tipo de modelo de IA."""
-    LOCAL = "local"  # Ollama local
-    CLOUD = "cloud"  # API externa como Gemini
-    BYOK = "byok"    # Bring Your Own Key/Model
+class AIModelProvider(str, Enum):
+    """AI model provider."""
+    OLLAMA = "ollama"  # Local Ollama
+    GEMINI = "gemini"  # Google Gemini API
+    OPENAI = "openai"  # OpenAI API
+    GROQ = "groq"      # Groq API
 
 
-class ModeloIA(BaseModel):
-    """Modelo de IA registrado como artefato."""
-    id: str = Field(default_factory=generate_uuid, description="UUID do modelo")
-    nome: str = Field(..., description="Nome do modelo (ex: Mistral, Gemini)")
-    descricao: str = Field(..., description="Descrição do modelo")
-    tipo: TipoModeloIA = Field(..., description="Tipo do modelo (local, cloud, byok)")
-    provider: str = Field(..., description="Provider do modelo (ollama, gemini, openai)")
-    modeloId: str = Field(..., description="ID do modelo no provider (ex: mistral, gemini-pro)")
-    apiKey: Optional[str] = Field(None, description="API Key do modelo (criptografada no armazenamento, descriptografada na leitura)")
-    versao: str = Field(default="1.0.0", description="Versão do modelo")
-    ativo: bool = Field(default=True, description="Se o modelo está ativo/disponível")
-    configuracao: Dict[str, Any] = Field(default_factory=dict, description="Configurações específicas do modelo")
-    metadados: Dict[str, Any] = Field(default_factory=dict, description="Metadados adicionais")
-    dataCriacao: datetime = Field(default_factory=datetime.utcnow, description="Data de criação")
-    dataAtualizacao: datetime = Field(default_factory=datetime.utcnow, description="Data de atualização")
+class AIModel(BaseModel):
+    """AI model registered as artifact."""
+    id: str = Field(default_factory=generate_uuid, description="Model UUID")
+    name: str = Field(..., description="Model name (e.g., Mistral, Gemini)")
+    description: str = Field(..., description="Model description")
+    type: str = Field(..., description="Model type (cloud, local, byok, etc)")
+    provider: AIModelProvider = Field(..., description="Model provider (openai, gemini, ollama, groq)")
+    modelId: str = Field(..., description="Model ID in provider (e.g., mistral, gemini-pro)")
+    apiKey: Optional[str] = Field(None, description="Model API Key (encrypted in storage, decrypted on read)")
+    version: str = Field(default="1.0.0", description="Model version")
+    active: bool = Field(default=True, description="Whether the model is active/available")
+    configuration: Dict[str, Any] = Field(default_factory=dict, description="Model-specific configurations")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    createdAt: datetime = Field(default_factory=datetime.utcnow, description="Creation date")
+    updatedAt: datetime = Field(default_factory=datetime.utcnow, description="Update date")
 ```
 
 ## 📝 Campos Detalhados
@@ -44,7 +45,7 @@ UUID único do modelo no sistema.
 **Exemplo**: `"550e8400-e29b-41d4-a716-446655440000"`  
 **Geração**: Automática via `generate_uuid()`
 
-### `nome` (string, obrigatório)
+### `name` (string, obrigatório)
 Nome amigável do modelo exibido na interface.
 
 **Exemplos**:
@@ -52,12 +53,12 @@ Nome amigável do modelo exibido na interface.
 - `"DeepSeek Code"`
 - `"Gemini Pro"`
 
-### `descricao` (string, obrigatório)
+### `description` (string, obrigatório)
 Descrição detalhada do modelo, suas capacidades e casos de uso.
 
 **Exemplo**: `"Modelo de propósito geral otimizado para conversação e geração de código"`
 
-### `tipo` (TipoModeloIA, obrigatório)
+### `type` (string, obrigatório)
 Tipo de deployment do modelo.
 
 **Valores**:
@@ -95,40 +96,40 @@ API Key específica do modelo para autenticação.
 
 **Exemplo de uso no Gemini**:
 ```python
-modelo = ModeloIA(
-    nome="Gemini Pro",
+model = AIModel(
+    name="Gemini Pro",
     provider="gemini",
-    modeloId="gemini-pro",
+    modelId="gemini-pro",
     apiKey="AIzaSy..."  # Será criptografada automaticamente
 )
 ```
 
-### `versao` (string, opcional)
+### `version` (string, opcional)
 Versão do artefato de modelo (não confundir com versão do modelo LLM).
 
 **Padrão**: `"1.0.0"`  
 **Formato**: Semantic Versioning
 
-### `ativo` (boolean, opcional)
+### `active` (boolean, opcional)
 Se o modelo está disponível para uso.
 
 **Padrão**: `true`  
 **Uso**: Permite desativar modelos sem deletá-los
 
-### `configuracao` (object, opcional)
+### `configuration` (object, opcional)
 Configurações específicas do modelo para inferência.
 
 **Campos comuns**:
 ```json
 {
-  "temperatura": 0.7,
-  "maxTokens": 2048,
+  "temperature": 0.7,
+  "max_tokens": 2048,
   "topP": 0.95,
   "timeout": 30
 }
 ```
 
-### `metadados` (object, opcional)
+### `metadata` (object, opcional)
 Metadados adicionais sobre o modelo.
 
 **Campos comuns**:
@@ -141,13 +142,13 @@ Metadados adicionais sobre o modelo.
 }
 ```
 
-### `dataCriacao` (datetime, automático)
+### `createdAt` (datetime, automático)
 Timestamp de quando o modelo foi registrado.
 
 **Formato**: ISO 8601  
 **Geração**: Automática
 
-### `dataAtualizacao` (datetime, automático)
+### `updatedAt` (datetime, automático)
 Timestamp da última atualização.
 
 **Formato**: ISO 8601  
@@ -160,26 +161,26 @@ Timestamp da última atualização.
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440001",
-  "nome": "Mistral",
-  "descricao": "Modelo de propósito geral equilibrado entre velocidade e qualidade",
-  "tipo": "local",
+  "name": "Mistral",
+  "description": "Modelo de propósito geral equilibrado entre velocidade e qualidade",
+  "type": "local",
   "provider": "ollama",
-  "modeloId": "mistral",
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
-    "temperatura": 0.7,
-    "maxTokens": 2048,
+  "modelId": "mistral",
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
+    "temperature": 0.7,
+    "max_tokens": 2048,
     "timeout": 30
   },
-  "metadados": {
+  "metadata": {
     "parametros": "7B",
     "contexto": "8K tokens",
     "arquitetura": "Transformer",
     "especialidade": "Conversação geral"
   },
-  "dataCriacao": "2024-11-03T00:00:00Z",
-  "dataAtualizacao": "2024-11-03T00:00:00Z"
+  "createdAt": "2024-11-03T00:00:00Z",
+  "updatedAt": "2024-11-03T00:00:00Z"
 }
 ```
 
@@ -188,26 +189,26 @@ Timestamp da última atualização.
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440002",
-  "nome": "DeepSeek Code",
-  "descricao": "Modelo especializado em código e tarefas técnicas",
-  "tipo": "local",
+  "name": "DeepSeek Code",
+  "description": "Modelo especializado em código e tarefas técnicas",
+  "type": "local",
   "provider": "ollama",
-  "modeloId": "deepseek-coder",
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
-    "temperatura": 0.5,
-    "maxTokens": 4096,
+  "modelId": "deepseek-coder",
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
+    "temperature": 0.5,
+    "max_tokens": 4096,
     "timeout": 30
   },
-  "metadados": {
+  "metadata": {
     "parametros": "6.7B",
     "contexto": "16K tokens",
     "arquitetura": "Transformer",
     "especialidade": "Código e desenvolvimento"
   },
-  "dataCriacao": "2024-11-03T00:00:00Z",
-  "dataAtualizacao": "2024-11-03T00:00:00Z"
+  "createdAt": "2024-11-03T00:00:00Z",
+  "updatedAt": "2024-11-03T00:00:00Z"
 }
 ```
 
@@ -216,26 +217,26 @@ Timestamp da última atualização.
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440003",
-  "nome": "Phi",
-  "descricao": "Modelo compacto e rápido, ideal para tarefas simples",
-  "tipo": "local",
+  "name": "Phi",
+  "description": "Modelo compacto e rápido, ideal para tarefas simples",
+  "type": "local",
   "provider": "ollama",
-  "modeloId": "phi",
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
-    "temperatura": 0.8,
-    "maxTokens": 2048,
+  "modelId": "phi",
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
+    "temperature": 0.8,
+    "max_tokens": 2048,
     "timeout": 20
   },
-  "metadados": {
+  "metadata": {
     "parametros": "2.7B",
     "contexto": "4K tokens",
     "arquitetura": "Transformer",
     "especialidade": "Tarefas rápidas"
   },
-  "dataCriacao": "2024-11-03T00:00:00Z",
-  "dataAtualizacao": "2024-11-03T00:00:00Z"
+  "createdAt": "2024-11-03T00:00:00Z",
+  "updatedAt": "2024-11-03T00:00:00Z"
 }
 ```
 
@@ -244,26 +245,26 @@ Timestamp da última atualização.
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440004",
-  "nome": "Gemini Pro",
-  "descricao": "Modelo cloud de última geração do Google",
-  "tipo": "cloud",
+  "name": "Gemini Pro",
+  "description": "Modelo cloud de última geração do Google",
+  "type": "cloud",
   "provider": "gemini",
-  "modeloId": "gemini-pro",
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
-    "temperatura": 0.7,
-    "maxTokens": 2048,
+  "modelId": "gemini-pro",
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
+    "temperature": 0.7,
+    "max_tokens": 2048,
     "timeout": 30,
     "requiresApiKey": true
   },
-  "metadados": {
+  "metadata": {
     "contexto": "32K tokens",
     "multimodal": false,
     "especialidade": "Conversação avançada"
   },
-  "dataCriacao": "2024-11-03T00:00:00Z",
-  "dataAtualizacao": "2024-11-03T00:00:00Z"
+  "createdAt": "2024-11-03T00:00:00Z",
+  "updatedAt": "2024-11-03T00:00:00Z"
 }
 ```
 
