@@ -70,19 +70,19 @@ Cada modelo IA é definido com:
 ```json
 {
   "id": "uuid",
-  "nome": "Nome do Modelo",
-  "descricao": "Descrição detalhada",
-  "tipo": "local|cloud|byok",
+  "name": "Nome do Modelo",
+  "description": "Descrição detalhada",
+  "type": "local|cloud|byok",
   "provider": "ollama|gemini|openai",
-  "modeloId": "id-no-provider",
+  "modelId": "id-no-provider",
   "apiKey": "gAAAAABhN...",  // Criptografado automaticamente (opcional)
-  "versao": "1.0.0",
-  "ativo": true,
-  "configuracao": {
-    "temperatura": 0.7,
-    "maxTokens": 2048
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
+    "temperature": 0.7,
+    "max_tokens": 2048
   },
-  "metadados": {
+  "metadata": {
     "parametros": "7B",
     "contexto": "8K tokens"
   }
@@ -110,8 +110,8 @@ const modelos = await response.json()
 
 // Renderiza dropdown dinamicamente
 <select v-model="selectedModel">
-  <option v-for="modelo in modelos" :value="modelo.modeloId">
-    {{ modelo.nome }}
+  <option v-for="modelo in modelos" :value="modelo.modelId">
+    {{ modelo.name }}
   </option>
 </select>
 ```
