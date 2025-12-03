@@ -1,6 +1,8 @@
-# Agent Types - Tipos de Agentes
+# Agent Types - Agent Type Definitions
 
-Este diretório contém as definições JSON dos tipos de agentes (agent types) disponíveis no sistema ScareVerse. Agent types definem os blueprints para agentes que processam diferentes tipos de tarefas.
+Este diretório contém as definições JSON dos tipos de agentes (AgentType) disponíveis no sistema ScareVerse. Agent types definem os blueprints para agentes que processam diferentes tipos de tarefas.
+
+**Pydantic Model**: `backend/app/models/agents.py::AgentType`
 
 (This directory contains JSON definitions for agent types available in the ScareVerse system. Agent types define the blueprints for agents that process different task types.)
 
@@ -44,22 +46,33 @@ Tipo de agente responsável por orquestrar workflows complexos coordenando outro
 - Gerencia fluxo de dados entre agentes
 - Suporta decisões condicionais baseadas em resultados
 
-## Estrutura JSON de Agent Type
+## Estrutura JSON de AgentType
+
+Baseado no modelo Pydantic `AgentType` em `backend/app/models/agents.py`:
 
 ```json
 {
   "id": "unique-agent-type-id",
   "name": "Agent Type Name",
+  "description": "Detailed description of the agent type purpose and capabilities",
+  "base_capabilities": ["capability1", "capability2"],
+  "default_persona_traits": {
+    "concise": true,
+    "analytical": true
+  },
   "version": "1.0.0",
-  "description": "Description of what this agent type does",
-  "capabilities": ["capability1", "capability2"],
-  "config_schema": {
-    "model": "string",
-    "temperature": "number",
-    "other_params": "..."
-  }
+  "created_at": "ISO-8601 timestamp",
+  "updated_at": "ISO-8601 timestamp"
 }
 ```
+
+**Key Fields** (from AgentType Pydantic model):
+- `id` - Unique UUID for the agent type
+- `name` - Short, human-readable name
+- `description` - Detailed purpose description
+- `base_capabilities` - List of core functionalities (e.g., 'generate_text', 'analyze_code')
+- `default_persona_traits` - Default persona characteristics (Dict[str, Any])
+- `version` - Version of the agent type definition
 
 ## Uso
 

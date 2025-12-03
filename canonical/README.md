@@ -14,70 +14,82 @@ Artefatos **canônicos** são templates/blueprints imutáveis armazenados em **G
 ## 📁 Estrutura
 
 ```
-canonicos/
+canonical/
 ├── README.md              # Este arquivo
-├── agent_types/           # Tipos de agentes (blueprints)
+├── agent_types/           # Tipos de agentes (blueprints AgentType)
 │   ├── README.md
 │   └── *.json             # Definições de tipos de agentes
-├── agents/                # Instâncias de agentes
+├── agents/                # Instâncias de agentes (Agent)
 │   ├── README.md
 │   └── *.json             # Agentes específicos
-├── celulas/               # Células canônicas
+├── cells/                 # Células canônicas (Cell templates)
 │   ├── README.md
 │   └── *.json             # Células base
-├── livros/                # Livros canônicos (templates)
+├── books/                 # Livros canônicos (Book templates)
 │   ├── README.md
 │   └── *.json             # Livros mestres
-├── modelos_ia/            # Modelos de IA
+├── ai_models/             # Modelos de IA (AIModel)
 │   ├── README.md
 │   ├── SCHEMA.md
 │   └── *.json             # Configurações de modelos
-├── tipos_celula/          # Tipos de células (templates)
-│   ├── README.md
-│   ├── SCHEMA.md
-│   └── *.json             # Arquivos JSON dos tipos
+├── cell_types/            # ⚠️ LEGACY: Tipos de células (TipoCelula format)
+│   ├── README.md          # Redirects to notebook_item_types/
+│   ├── SCHEMA.md          # Legacy schema documentation
+│   └── *.json             # Legacy cell type files
+├── notebook_item_types/   # ✅ CURRENT: Tipos de células (NotebookItemType format)
+│   ├── README.md          # Current implementation docs
+│   └── *.json             # Current cell type definitions
 └── workflows/             # Workflows canônicos
     ├── README.md
     └── *.json             # Definições de workflows
 ```
 
+### Important Notes
+
+**Cell Types Duplication**:
+- `cell_types/` = **LEGACY** directory (old TipoCelula format, maintained for backward compatibility)
+- `notebook_item_types/` = **CURRENT** directory (new NotebookItemType format)
+- All new cell types should be created in `notebook_item_types/`
+- See [cell_types/README.md](./cell_types/README.md) for migration guide
+
 ## 🔧 Tipos de Artefatos Canônicos
 
-### 1. Tipos de Célula
-**Localização**: `tipos_celula/`  
-**Schema**: [tipos_celula/SCHEMA.md](./tipos_celula/SCHEMA.md)  
-**Quantidade**: 20+ tipos implementados
+### 1. Notebook Item Types (Cell Types)
+**Localização**: `notebook_item_types/` (current) / `cell_types/` (legacy)  
+**Schema**: [notebook_item_types/README.md](./notebook_item_types/README.md)  
+**Pydantic Model**: `NotebookItemType` in `backend/app/models/content.py`  
+**Quantidade**: 7+ tipos implementados
 
-Templates que definem comportamento e estrutura de células. Cada tipo pode ter:
-- Scripts Python/JavaScript
-- Markup HTML/Markdown
-- Views disponíveis
-- Workflows YAML
+Templates que definem comportamento e estrutura de células (NotebookItem instances). Cada tipo define:
+- `default_refs`: Workflows, docs, scripts, componentes
+- `default_initial_data`: Dados padrão para novas instâncias
+- `allow_instance_override_refs`: Política de sobrescrita
 
 **Exemplos**:
-- Gerador de Código
-- Editor de Artefatos
-- Executor de Scripts
-- Analisador de Dados
+- Ingestion Cell
+- Code Generator Cell
+- Artifact Editor Cell
+- Conversation Memory Cell
 
-### 2. Modelos de IA
-**Localização**: `modelos_ia/`  
-**Schema**: [modelos_ia/SCHEMA.md](./modelos_ia/SCHEMA.md)  
-**Quantidade**: 6 modelos implementados
+**Migration Note**: The old `TipoCelula` format in `cell_types/` has been replaced by `NotebookItemType` in `notebook_item_types/`.
 
-Configurações de modelos de IA disponíveis no sistema (Ollama, Gemini, OpenAI).
+### 2. AI Models
+**Localização**: `ai_models/`  
+**Schema**: [ai_models/SCHEMA.md](./ai_models/SCHEMA.md)  
+**Pydantic Model**: `AIModel` in `backend/app/models/ai_models.py`  
+**Quantidade**: 10+ modelos implementados
+
+Configurações de modelos de IA disponíveis no sistema (Ollama, Gemini, OpenAI, Groq).
 
 **Modelos**:
-- Mistral (Ollama)
-- DeepSeek Code (Ollama)
-- Phi (Ollama)
-- gemini-2.5-flash (Google Cloud)
-- GPT-3.5 Turbo (OpenAI)
-- GPT-4o mini (OpenAI)
+- Ollama: Mistral, DeepSeek Coder, Phi, Gemma 7B, Phi-3, Qwen2.5 Coder 14B
+- Google Cloud: gemini-2.5-flash
+- OpenAI: GPT-3.5 Turbo, GPT-4o
 
 ### 3. Agent Types
 **Localização**: `agent_types/`  
-**Quantidade**: 2 tipos implementados
+**Pydantic Model**: `AgentType` in `backend/app/models/agents.py`  
+**Quantidade**: 2+ tipos implementados
 
 Definições de tipos de agentes que processam diferentes tipos de tarefas.
 
@@ -87,7 +99,8 @@ Definições de tipos de agentes que processam diferentes tipos de tarefas.
 
 ### 4. Agents
 **Localização**: `agents/`  
-**Quantidade**: 4 agentes implementados
+**Pydantic Model**: `Agent` in `backend/app/models/agents.py`  
+**Quantidade**: 4+ agentes implementados
 
 Instâncias específicas de agentes baseadas nos agent types.
 

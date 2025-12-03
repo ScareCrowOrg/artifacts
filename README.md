@@ -40,14 +40,17 @@ artifacts/
 ├── README.md                          # Este arquivo
 ├── canonical/                         # Artefatos canônicos (Git)
 │   ├── README.md                      # Doc de artefatos canônicos
-│   ├── cell_types/                    # NotebookItemType (blueprints de tipos)
+│   ├── notebook_item_types/           # ✅ CURRENT: NotebookItemType (blueprints)
 │   │   ├── README.md
+│   │   └── *.json
+│   ├── cell_types/                    # ⚠️ LEGACY: TipoCelula (deprecated format)
+│   │   ├── README.md                  # Redirects to notebook_item_types/
 │   │   ├── SCHEMA.md
 │   │   └── *.json
-│   ├── agent_types/                   # Tipos de agentes
+│   ├── agent_types/                   # Tipos de agentes (AgentType)
 │   │   ├── README.md
 │   │   └── *.json
-│   ├── agents/                        # Instâncias de agentes canônicos
+│   ├── agents/                        # Instâncias de agentes (Agent)
 │   │   ├── README.md
 │   │   └── *.json
 │   ├── cells/                         # Células canônicas (templates)
@@ -56,7 +59,7 @@ artifacts/
 │   ├── books/                         # Livros canônicos (mestres)
 │   │   ├── README.md
 │   │   └── *.json
-│   ├── ai_models/                     # Modelos de IA configurados
+│   ├── ai_models/                     # Modelos de IA (AIModel)
 │   │   ├── README.md
 │   │   ├── SCHEMA.md
 │   │   └── *.json
@@ -66,13 +69,13 @@ artifacts/
 │
 └── runtime/                           # Docs de artefatos runtime
     ├── README.md                      # Doc de artefatos runtime (NotebookItem/PipelineItem)
-    ├── cells/                         # Células instanciadas (Celula - NotebookItem)
+    ├── cells/                         # Células instanciadas (Cell - NotebookItem)
     │   ├── README.md
     │   ├── SCHEMA.md
     │   ├── SANDBOX_CELL_QUICK_REF.md
     │   └── sandbox_guide/             # 🆕 Guia sandbox modularizado
     │       └── *.md
-    ├── books/                         # Livros (Livro - NotebookItem)
+    ├── books/                         # Livros (Book - NotebookItem)
     │   ├── README.md
     │   └── SCHEMA.md
     ├── sessoes/                       # Sessões de usuário
@@ -84,6 +87,11 @@ artifacts/
 ```
 
 > **📌 NOTA**: O diretório `runtime/` contém apenas **documentação**. Os artefatos runtime reais estão armazenados em MongoDB.
+
+> **⚠️ LEGACY vs CURRENT**: 
+> - `canonical/cell_types/` = LEGACY (TipoCelula format, deprecated)
+> - `canonical/notebook_item_types/` = CURRENT (NotebookItemType format)
+> - See [canonical/cell_types/README.md](./canonical/cell_types/README.md) for migration guide
 
 > **🆕 Evolução para Células Sandbox**: O sistema de células está sendo expandido para suportar runtime dinâmico, metadados avançados e controle de lifecycle. Consulte:
 > - [Análise de Gaps](../docs/project/SANDBOX_CELLS_GAP_ANALYSIS.md) - Identificação de 8 gaps críticos
@@ -123,19 +131,20 @@ artifacts/
 ## 📚 Documentação por Tipo
 
 ### Artefatos Canônicos
-- [canonicos/README.md](./canonicos/README.md) - Documentação completa
-- [canonicos/tipos_celula/](./canonicos/tipos_celula/) - Tipos de células
-- [canonicos/modelos_ia/](./canonicos/modelos_ia/) - Modelos de IA (Ollama, Gemini, OpenAI)
-- [canonicos/agent_types/](./canonicos/agent_types/) - Tipos de agentes
-- [canonicos/agents/](./canonicos/agents/) - Instâncias de agentes
-- [canonicos/workflows/](./canonicos/workflows/) - Workflows
-- [canonicos/livros/](./canonicos/livros/) - Livros canônicos
-- [canonicos/celulas/](./canonicos/celulas/) - Células canônicas
+- [canonical/README.md](./canonical/README.md) - Documentação completa
+- [canonical/notebook_item_types/](./canonical/notebook_item_types/) - ✅ CURRENT: Tipos de células (NotebookItemType)
+- [canonical/cell_types/](./canonical/cell_types/) - ⚠️ LEGACY: Tipos de células (TipoCelula, deprecated)
+- [canonical/ai_models/](./canonical/ai_models/) - Modelos de IA (AIModel: Ollama, Gemini, OpenAI)
+- [canonical/agent_types/](./canonical/agent_types/) - Tipos de agentes (AgentType)
+- [canonical/agents/](./canonical/agents/) - Instâncias de agentes (Agent)
+- [canonical/workflows/](./canonical/workflows/) - Workflows
+- [canonical/books/](./canonical/books/) - Livros canônicos (Book)
+- [canonical/cells/](./canonical/cells/) - Células canônicas (Cell)
 
 ### Artefatos Runtime
 - [runtime/README.md](./runtime/README.md) - Documentação completa
-- [runtime/celulas/](./runtime/celulas/) - Células instanciadas
-- [runtime/livros/](./runtime/livros/) - Livros voláteis
+- [runtime/cells/](./runtime/cells/) - Células instanciadas (Cell instances)
+- [runtime/books/](./runtime/books/) - Livros voláteis (Book instances)
 - [runtime/sessoes/](./runtime/sessoes/) - Sessões
 - [runtime/usuarios/](./runtime/usuarios/) - Usuários
 
@@ -143,26 +152,38 @@ artifacts/
 
 Os schemas de artefatos são implementados no backend:
 
-**Arquivo**: `backend/app/models.py`
+**Arquivos**: 
+- `backend/app/models/content.py` - Cell, Book, NotebookItemType
+- `backend/app/models/ai_models.py` - AIModel
+- `backend/app/models/agents.py` - Agent, AgentType
+- `backend/app/models/artifacts.py` - CanonicalArtifact, InstantiatedArtifact
 
 **Modelos Implementados**:
-- `TipoCelula` - Template de tipo de célula (canônico)
-- `Celula` - Célula instanciada (runtime)
-- `Livro` - Livro de células (runtime/canônico)
-- `ModeloIA` - Modelo de IA (canônico)
-- `ArtefatoCanonico` - Artefato canônico genérico
-- `ArtefatoInstanciado` - Artefato runtime genérico
+- `NotebookItemType` - Template de tipo de célula (canônico) - ✅ CURRENT
+- `TipoCelula` - LEGACY model (deprecated, use NotebookItemType)
+- `Cell` - Célula instanciada (runtime, extends NotebookItem)
+- `Book` - Livro de células (runtime/canônico, extends NotebookItem)
+- `AIModel` - Modelo de IA (canônico)
+- `Agent` - Agente instanciado (canônico)
+- `AgentType` - Tipo de agente (canônico)
+- `CanonicalArtifact` - Artefato canônico genérico
+- `InstantiatedArtifact` - Artefato runtime genérico
 - `Usuario` - Usuário/jogador
 - `Sessao` - Sessão de trabalho
 
 **APIs REST**:
-- `POST /api/celulas/criar` - Criar célula (instanciar de tipo)
-- `GET /api/celulas/{id}` - Obter célula
-- `POST /api/celulas/{id}/executar` - Executar célula
-- `POST /api/livros/criar` - Criar livro
-- `POST /api/livros/{id}/adicionar_celula` - Adicionar célula a livro
-- `GET /api/modelos-ia/listar` - Listar modelos de IA disponíveis
-- `POST /api/modelos-ia/criar` - Criar novo modelo de IA
+- `POST /api/cells/create` - Criar célula (instanciar de tipo) [Current]
+- `GET /api/cells/{id}` - Obter célula [Current]
+- `POST /api/cells/{id}/execute` - Executar célula [Current]
+- `POST /api/books/create` - Criar livro [Current]
+- `POST /api/books/{id}/add-cell` - Adicionar célula a livro [Current]
+- `GET /api/ai-models/list` - Listar modelos de IA disponíveis [Current]
+- `POST /api/ai-models/create` - Criar novo modelo de IA [Current]
+
+**Legacy APIs** (still functional):
+- `POST /api/celulas/criar` - Maps to /api/cells/create
+- `GET /api/celulas/{id}` - Maps to /api/cells/{id}
+- `POST /api/modelos-ia/listar` - Maps to /api/ai-models/list
 
 Documentação completa: [backend/docs/](../backend/docs/)
 

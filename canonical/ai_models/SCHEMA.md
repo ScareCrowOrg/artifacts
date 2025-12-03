@@ -1,12 +1,14 @@
-# Schema: ModeloIA
+# Schema: AIModel
 
 ## 📋 Visão Geral
 
-Este documento define o schema completo de um **Modelo de IA** como artefato canônico no ScareVerse.
+Este documento define o schema completo de um **AI Model** como artefato canônico no ScareVerse.
+
+**Pydantic Model**: `backend/app/models/ai_models.py::AIModel`
 
 ## 🎯 Propósito
 
-Modelos de IA são artefatos que representam engines de processamento de linguagem natural disponíveis no sistema, sejam locais (Ollama) ou cloud (Gemini, OpenAI).
+AI Models são artefatos que representam engines de processamento de linguagem natural disponíveis no sistema, sejam locais (Ollama) ou cloud (Gemini, OpenAI, Groq).
 
 ## 📊 Schema Pydantic
 
@@ -74,12 +76,15 @@ Provedor/plataforma que serve o modelo.
 - `"gemini"` - Google Gemini
 - `"openai"` - OpenAI (futuro)
 
-### `modeloId` (string, obrigatório)
-Identificador do modelo no provider.
+### `modelId` (string, obrigatório)
+Identificador do modelo no provedor (provider).
 
 **Exemplos**:
 - Ollama: `"mistral"`, `"deepseek-coder"`, `"phi"`
 - Gemini: `"gemini-pro"`, `"gemini-pro-vision"`
+- OpenAI: `"gpt-3.5-turbo"`, `"gpt-4o"`
+
+**Note**: Field name is `modelId` (camelCase), not `modeloId`.
 
 ### `apiKey` (string, opcional)
 API Key específica do modelo para autenticação.

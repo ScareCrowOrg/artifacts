@@ -1,8 +1,35 @@
-# Schema: TipoCelula (Tipo de Célula)
+# Schema: TipoCelula (LEGACY Format)
 
-## 📋 Visão Geral
+## ⚠️ LEGACY NOTICE
 
-Este documento define o schema completo para **Tipos de Célula** - artefatos canônicos que servem como templates para células instanciadas. Ele reflete a estrutura atualizada do backend, incluindo metadados para a UI, um esquema de propriedades para os dados da instância (`Celula.data`), e um sistema de referências a componentes e arquivos externos.
+**This schema describes the OLD TipoCelula format, which is DEPRECATED.**
+
+For the **current schema**, see: **[../notebook_item_types/README.md](../notebook_item_types/README.md)**
+
+### Migration
+
+The `TipoCelula` model has been replaced by `NotebookItemType`. Key changes:
+
+| TipoCelula Field | NotebookItemType Field | Type | Notes |
+|------------------|------------------------|------|-------|
+| `name` | `name` | string | ✅ Unchanged |
+| `descricao` | `description` | string | 🔄 Renamed |
+| `docs_refs` | `default_refs["docs"]` | List[str] | 🔄 Grouped in default_refs |
+| `python_refs` | `default_refs["python"]` | List[str] | 🔄 Grouped in default_refs |
+| `javascript_refs` | `default_refs["javascript"]` | List[str] | 🔄 Grouped in default_refs |
+| `yaml_refs` | `default_refs["yaml"]` | List[str] | 🔄 Grouped in default_refs |
+| `views_components` | `default_refs["views_components"]` | List[str] | 🔄 Grouped in default_refs |
+| `workflows` | `default_refs["workflow_graph"]` | List[str] | 🔄 Restructured |
+| `properties` | `default_initial_data` (schema) | Dict | 🔄 Restructured |
+| *(not present)* | `allow_instance_override_refs` | bool | 🆕 New field |
+
+For full NotebookItemType schema, see: **[../notebook_item_types/README.md](../notebook_item_types/README.md)**
+
+---
+
+## 📋 Visão Geral (LEGACY Documentation)
+
+Este documento define o schema completo para **Tipos de Célula (LEGACY)** - artefatos canônicos que serviam como templates para células instanciadas no formato TipoCelula.
 
 ## 🔧 Schema Pydantic
 

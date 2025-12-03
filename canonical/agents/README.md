@@ -1,6 +1,8 @@
-# Agents - Agentes Configurados
+# Agents - Agent Instances
 
 Este diretório contém as configurações JSON de agentes individuais instanciados no sistema ScareVerse. Cada agente é uma instância concreta de um agent type, configurado para executar tarefas específicas.
+
+**Pydantic Model**: `backend/app/models/agents.py::Agent`
 
 (This directory contains JSON configurations for individual agents instantiated in the ScareVerse system. Each agent is a concrete instance of an agent type, configured to execute specific tasks.)
 
@@ -79,26 +81,36 @@ Agente orquestrador principal que coordena workflows complexos entre múltiplos 
 
 ## Estrutura JSON de Agent
 
+Baseado no modelo Pydantic `Agent` em `backend/app/models/agents.py`:
+
 ```json
 {
   "id": "unique-agent-id",
   "name": "Agent Name",
-  "version": "1.0.0",
-  "agent_type_id": "reference-to-agent-type",
   "description": "What this agent does",
-  "model": "ollama/model-name",
-  "config": {
-    "temperature": 0.7,
-    "max_tokens": 2000,
-    "custom_params": "..."
+  "agent_type_id": "reference-to-agent-type",
+  "ia_model_id": "model-id-from-ai-model",
+  "persona_definitions": {
+    "tone": "technical",
+    "verbosity": "concise"
   },
-  "capabilities": ["cap1", "cap2"],
-  "metadata": {
-    "created_at": "ISO-8601 timestamp",
-    "updated_at": "ISO-8601 timestamp"
-  }
+  "agent_specific_config": {
+    "temperature": 0.7,
+    "max_tokens": 2000
+  },
+  "is_active": true,
+  "version": "1.0.0",
+  "created_at": "ISO-8601 timestamp",
+  "updated_at": "ISO-8601 timestamp"
 }
 ```
+
+**Key Fields** (from Agent Pydantic model):
+- `agent_type_id` - UUID of the canonical AgentType
+- `ia_model_id` - The `modelId` from AIModel (e.g., 'mistral', 'deepseek-coder')
+- `persona_definitions` - Persona characteristics (system_prompt, traits)
+- `agent_specific_config` - Operational configurations
+- `is_active` - Whether agent is available for processing
 
 ## Uso
 

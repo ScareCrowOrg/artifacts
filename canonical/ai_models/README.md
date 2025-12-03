@@ -1,8 +1,10 @@
-# Modelos de IA - Artefatos Canônicos
+# AI Models - Canonical Artifacts
 
 ## 📋 Visão Geral
 
-Este diretório contém os **artefatos canônicos** dos modelos de IA disponíveis no ScareVerse. Cada modelo é registrado como um artefato, facilitando curadoria, integração e governança.
+Este diretório contém os **artefatos canônicos** dos modelos de IA (AI Models) disponíveis no ScareVerse. Cada modelo é registrado como um artefato, facilitando curadoria, integração e governança.
+
+**Model Implementation**: `backend/app/models/ai_models.py::AIModel`
 
 ## 🎯 Objetivo
 
@@ -63,9 +65,9 @@ Modelos configuráveis pelo usuário com suas próprias credenciais.
 - Segurança de credenciais
 - Flexibilidade total
 
-## 📊 Schema do Modelo
+## 📊 Schema do Modelo (AIModel)
 
-Cada modelo IA é definido com:
+Cada modelo IA é definido conforme o modelo Pydantic `AIModel` em `backend/app/models/ai_models.py`:
 
 ```json
 {
@@ -73,7 +75,7 @@ Cada modelo IA é definido com:
   "name": "Nome do Modelo",
   "description": "Descrição detalhada",
   "type": "local|cloud|byok",
-  "provider": "ollama|gemini|openai",
+  "provider": "ollama|gemini|openai|groq",
   "modelId": "id-no-provider",
   "apiKey": "gAAAAABhN...",  // Criptografado automaticamente (opcional)
   "version": "1.0.0",
@@ -85,20 +87,34 @@ Cada modelo IA é definido com:
   "metadata": {
     "parametros": "7B",
     "contexto": "8K tokens"
-  }
+  },
+  "createdAt": "2024-11-03T00:00:00Z",
+  "updatedAt": "2024-11-03T00:00:00Z"
 }
 ```
+
+**Key Field Names** (match AIModel Pydantic model):
+- `modelId` (not modeloId) - Model identifier in provider
+- `active` (not ativo) - Whether model is active
+- `createdAt` / `updatedAt` (camelCase) - Timestamps
 
 Veja [SCHEMA.md](./SCHEMA.md) para detalhes completos.
 
 ## 🚀 Uso no Sistema
 
 ### Backend
+
 Os modelos são carregados na inicialização e disponibilizados via:
-- `GET /api/modelos-ia/listar` - Lista modelos ativos
-- `POST /api/modelos-ia/criar` - Cria novo modelo
-- `PUT /api/modelos-ia/{id}/atualizar` - Atualiza modelo
-- `POST /api/modelos-ia/{id}/ativar` - Ativa/desativa modelo
+- `GET /api/ai-models/list` - Lista modelos ativos (endpoint atual)
+- `POST /api/ai-models/create` - Cria novo modelo
+- `PUT /api/ai-models/{id}/update` - Atualiza modelo
+- `POST /api/ai-models/{id}/activate` - Ativa/desativa modelo
+
+**Legacy endpoints** (ainda funcionam):
+- `GET /api/modelos-ia/listar`
+- `POST /api/modelos-ia/criar`
+- `PUT /api/modelos-ia/{id}/atualizar`
+- `POST /api/modelos-ia/{id}/ativar`
 
 ### Frontend
 O componente **ChatIA** busca dinamicamente os modelos disponíveis:

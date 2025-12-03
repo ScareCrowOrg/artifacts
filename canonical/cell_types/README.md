@@ -1,17 +1,55 @@
-# Tipos de Célula - NotebookItemType Canônicos
+# Cell Types - LEGACY Directory (TipoCelula Format)
 
-## 📋 Visão Geral
+## ⚠️ LEGACY NOTICE
 
-**Tipos de Célula** são blueprints canônicos implementados como **NotebookItemType** que definem a estrutura, comportamento e workflows de células instanciadas. A nova arquitetura usa tipo-driven behavior onde células herdam configurações de seus tipos.
+**This directory contains LEGACY cell type definitions in the old TipoCelula format.**
+
+### Migration Status
+
+The project has migrated to the new **NotebookItemType** architecture. All new cell type definitions should be created in:
+
+👉 **[../notebook_item_types/](../notebook_item_types/)** - Current NotebookItemType format
+
+This directory (`cell_types/`) is maintained for **backward compatibility** only.
+
+### What Changed?
+
+**Old Architecture** (TipoCelula - this directory):
+- Portuguese naming (TipoCelula)
+- Separate fields: `docs_refs`, `python_refs`, `javascript_refs`, `workflows`
+- No instance override control
+
+**New Architecture** (NotebookItemType - `notebook_item_types/`):
+- English naming (NotebookItemType)
+- Unified `default_refs` dictionary
+- Instance override policy (`allow_instance_override_refs`)
+- Better separation of concerns with `default_initial_data`
+
+### Migration Guide
+
+See **[../notebook_item_types/README.md](../notebook_item_types/README.md)** for:
+- Complete NotebookItemType documentation
+- Migration examples (TipoCelula → NotebookItemType)
+- Field mapping table
+- How to create new types
+
+---
+
+## 📋 Visão Geral (Legacy Documentation)
+
+**Tipos de Célula (Cell Types)** são blueprints canônicos que definem a estrutura, comportamento e workflows de células instanciadas.
+
+> **⚠️ IMPORTANT**: This documentation describes the LEGACY TipoCelula format. For current implementation, see [../notebook_item_types/](../notebook_item_types/).
 
 ### 🔄 Nova Arquitetura: NotebookItemType
 
-Os tipos de célula agora são implementados como `NotebookItemType`, fornecendo:
+Os tipos de célula agora são implementados como `NotebookItemType` no diretório `../notebook_item_types/`, fornecendo:
 - **default_refs**: Workflows, docs, scripts padrão (Dict[str, List[str]])
 - **default_initial_data**: Dados iniciais padrão para novas instâncias
 - **allow_instance_override_refs**: Política de override (bool)
 
 > **📚 Documentação Completa**: [NOTEBOOK_ITEM_TYPE_ARCHITECTURE.md](../../../docs/NOTEBOOK_ITEM_TYPE_ARCHITECTURE.md)
+> **📚 Current Implementation**: [../notebook_item_types/README.md](../notebook_item_types/README.md)
 
 ## ⚠️ Migração: TipoCelula → NotebookItemType
 
