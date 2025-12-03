@@ -104,13 +104,17 @@ Veja [SCHEMA.md](./SCHEMA.md) para detalhes completos.
 
 ### Backend
 
-Os modelos são carregados na inicialização e disponibilizados via:
-- `GET /api/ai-models/list` - Lista modelos ativos (endpoint atual)
-- `POST /api/ai-models/create` - Cria novo modelo
-- `PUT /api/ai-models/{id}/update` - Atualiza modelo
-- `POST /api/ai-models/{id}/activate` - Ativa/desativa modelo
+Os modelos são carregados na inicialização e disponibilizados via API REST.
 
-**Legacy endpoints** (ainda funcionam):
+**Endpoints atuais** (implementados em `backend/app/routers/ai_models_router.py`):
+- `GET /ai-models/list` - Lista modelos ativos
+- `GET /ai-models/{id}` - Obter modelo específico
+- `POST /ai-models/create` - Cria novo modelo
+- `PUT /ai-models/{id}/update` - Atualiza modelo
+- `POST /ai-models/{id}/activate` - Ativa/desativa modelo
+- `DELETE /ai-models/{id}/delete` - Deleta modelo
+
+**Legacy endpoints** (ainda funcionam, mas deprecados):
 - `GET /api/modelos-ia/listar`
 - `POST /api/modelos-ia/criar`
 - `PUT /api/modelos-ia/{id}/atualizar`
