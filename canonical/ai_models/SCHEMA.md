@@ -84,7 +84,13 @@ Identificador do modelo no provedor (provider).
 - Gemini: `"gemini-pro"`, `"gemini-pro-vision"`
 - OpenAI: `"gpt-3.5-turbo"`, `"gpt-4o"`
 
-**Note**: Field name is `modelId` (camelCase), not `modeloId`.
+**Nota sobre Nomenclatura / Field Naming Note:**
+- Este schema usa nomenclatura em **inglês** seguindo o padrão do código Python (`modelId`, `apiKey`, `createdAt`, `updatedAt`)
+- **Migração de Nomenclatura**: O projeto passou por uma migração de nomenclatura de português para inglês
+  - Campos legados em português (`modeloId`, `ativo`) → Campos atuais em inglês (`modelId`, `active`)
+  - Esta migração afeta todos os modelos do sistema (Cell, NotebookItemType, Agent, etc.)
+  - Para mais detalhes, consulte: `docs/migrations/CELULAS_TO_CELLS_MIGRATION.md`
+- A documentação mantém descrições bilíngues (português/inglês) para facilitar compreensão
 
 ### `apiKey` (string, opcional)
 API Key específica do modelo para autenticação.
