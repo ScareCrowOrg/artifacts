@@ -6,6 +6,12 @@ These tests validate the execution logic of the example cell type.
 
 import pytest
 import json
+import sys
+from pathlib import Path
+
+# Add the project root to path to allow imports
+project_root = Path(__file__).parent.parent.parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 from artifacts.canonical.cell_types.example.backend.scripts.main import execute_cell
 
