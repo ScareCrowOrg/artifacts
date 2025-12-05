@@ -1,0 +1,29 @@
+{
+  "id": "example",
+  "name": "Example Cell",
+  "description": "Reference implementation of a plug-and-play cell type",
+  "version": "1.0.0",
+  "category": "reference",
+  "default_refs": {
+    "scripts": ["backend/scripts/main.py"],
+    "view": ["frontend/View.vue"],
+    "docs": ["docs/README.md"]
+  },
+  "default_initial_data": {
+    "message": "Hello from Example Cell",
+    "counter": 0
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "message": {
+      "type": "string",
+      "default": "Hello from Example Cell",
+      "description": "Display message"
+    },
+    "counter": {
+      "type": "integer",
+      "default": 0,
+      "description": "Simple counter value"
+    }
+  }
+}
