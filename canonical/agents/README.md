@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2025-12-08
+themes:
+  - agents
+  - instances
+  - configuration
+modules:
+  - artifacts
+  - agents
+code_verified: true
+dead_docs_found: false
+---
 # Agents - Agent Instances
 
 Este diretório contém as configurações JSON de agentes individuais instanciados no sistema ScareVerse. Cada agente é uma instância concreta de um agent type, configurado para executar tarefas específicas.

@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2025-12-08
+themes:
+  - ai-models
+  - configuration
+  - llm
+modules:
+  - artifacts
+  - ai
+code_verified: true
+dead_docs_found: false
+---
 # AI Models - Canonical Artifacts
 
 ## 📋 Visão Geral

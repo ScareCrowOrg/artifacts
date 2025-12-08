@@ -1,3 +1,18 @@
+---
+processed: true
+processed_date: 2025-12-08
+themes:
+  - architecture
+  - canonical-artifacts
+  - templates
+  - data-modeling
+  - versioning
+modules:
+  - artifacts
+  - architecture
+code_verified: true
+dead_docs_found: false
+---
 # Artefatos Canônicos
 
 ## 📋 Visão Geral

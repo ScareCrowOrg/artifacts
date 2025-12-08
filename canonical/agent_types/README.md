@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2025-12-08
+themes:
+  - agents
+  - configuration
+  - architecture
+modules:
+  - artifacts
+  - agents
+code_verified: true
+dead_docs_found: false
+---
 # Agent Types - Agent Type Definitions
 
 Este diretório contém as definições JSON dos tipos de agentes (AgentType) disponíveis no sistema ScareVerse. Agent types definem os blueprints para agentes que processam diferentes tipos de tarefas.
