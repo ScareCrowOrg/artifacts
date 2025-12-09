@@ -5,9 +5,15 @@
   "version": "1.0.0",
   "category": "reference",
   "default_refs": {
-    "scripts": ["backend/scripts/main.py"],
-    "view": ["frontend/View.vue"],
-    "docs": ["docs/README.md"]
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "view": [
+      "frontend/View.vue"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
   },
   "default_initial_data": {
     "message": "Hello from Example Cell",
@@ -25,5 +31,6 @@
       "default": 0,
       "description": "Simple counter value"
     }
-  }
+  },
+  "can_render_dynamically": false
 }
