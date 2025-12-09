@@ -1,3 +1,17 @@
+---
+processed: true
+processed_date: 2025-12-09
+themes:
+  - cells
+  - plugin-system
+  - example
+  - documentation
+modules:
+  - backend
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # Example Cell Type
 
 ## Overview

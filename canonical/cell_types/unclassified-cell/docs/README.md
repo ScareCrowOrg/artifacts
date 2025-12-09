@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2025-12-09
+themes:
+  - cells
+  - plugin-system
+  - unclassified
+modules:
+  - backend
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # Unclassified Cell - Canonical Cell Type
 
 **Version:** 2.0.0  
