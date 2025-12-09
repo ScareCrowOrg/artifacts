@@ -201,6 +201,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useBaseCellFeatures } from '../composables/useBaseCellFeatures.ts'
+import { useParentCellContext } from '@/composables/useParentCellContext'
 import type { CellFragment } from '@/types/baseCell'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
@@ -221,20 +222,17 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// Extract the actual cell ID from the cell object
-// The fragments manager is spawned with sourceCellId in state
-const cellId = computed(() => {
-  const id = props.cell?.state?.sourceCellId || props.cell?.id || props.cell?.cellId || ''
-  
-  if (!id) {
-    console.error('[BaseFragmentsManager] ❌ No valid cellId found in cell object:', props.cell)
-  }
-  
-  return id
-})
+// ============================================================
+// Parent Cell Context (New Approach)
+// ============================================================
+// Use the standardized composable to get parent cell context
+const parentContext = useParentCellContext(props.cell)
+const cellId = parentContext.cellId
+const parentCellType = parentContext.cellType
 
 console.group('[BaseFragmentsManager] 🎨 Component mounted')
 console.log('📦 Cell ID:', cellId.value)
+console.log('🏷️ Parent Cell Type:', parentCellType.value)
 console.log('📦 Full Cell Object:', props.cell)
 console.groupEnd()
 
@@ -254,9 +252,14 @@ const newFragmentContent = ref('')
 // ============================================================
 // Base Cell Features
 // ============================================================
-// Get cell type from the notebook store
+// Get cell type from the notebook store (with fallback to parent context)
 const cell = computed(() => notebookStore.cells[cellId.value])
-const cellType = computed(() => cell.value?.type || cell.value?.notebook_item_type_id || 'unclassified-cell')
+const cellType = computed(() => {
+  return cell.value?.type || 
+         cell.value?.notebook_item_type_id || 
+         parentCellType.value ||
+         'unclassified-cell'
+})
 
 const baseCellApi = useBaseCellFeatures(
   cellId,

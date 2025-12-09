@@ -13,7 +13,7 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
-import type { BaseCellAPI, CellFragment, BaseCellFeaturesOptions } from '@/types/baseCell'
+import type { BaseCellAPI, CellFragment, BaseCellFeaturesOptions, SubViewConfig, ParentCellContext } from '@/types/baseCell'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useCellsStore } from '@/stores/cells'
 import { useChatStore } from '@/stores/chat'
@@ -71,11 +71,36 @@ export function useBaseCellFeatures(
   const isSaving = ref(false)
   const errorMessage = ref<string | null>(null)
   const successMessage = ref<string | null>(null)
+  
+  // Subviews registry
+  const subViews = ref<Map<string, SubViewConfig>>(new Map())
+  
+  // Track rendered subview instances
+  const renderedSubViews = ref<Map<string, string>>(new Map()) // instanceId -> subViewId
 
   // Auto-clear timers
   let successTimer: ReturnType<typeof setTimeout> | null = null
   let errorTimer: ReturnType<typeof setTimeout> | null = null
 
+  // ============================================================
+  // Initialization
+  // ============================================================
+  
+  // Auto-register the fragments-manager subview (built-in subview)
+  // This is done immediately so it's always available
+  const fragmentsManagerConfig: SubViewConfig = {
+    id: 'fragments-manager',
+    label: '📚 Gerenciador de Fragmentos',
+    component: 'base_cell_components/frontend/views/BaseFragmentsManager.vue',
+    renderMode: 'grid',
+    gridPosition: {
+      w: 6,
+      h: 8,
+    },
+  }
+  
+  // Will be registered after methods are defined
+  
   // ============================================================
   // Core Methods
   // ============================================================
@@ -153,6 +178,7 @@ export function useBaseCellFeatures(
 
   /**
    * Show cell fragments manager as a dynamic subview
+   * Uses the new subview rendering system
    */
   function showCellFragmentsManager(): void {
     console.group('[useBaseCellFeatures] 📚 Showing fragments manager')
@@ -167,37 +193,27 @@ export function useBaseCellFeatures(
     }
 
     try {
-      // Create a unique ID for the fragments manager view
-      const fragmentsManagerId = `fragments-manager-${cellId.value}`
-      
-      console.log('🆔 Fragments Manager ID:', fragmentsManagerId)
-
       // Check if already open
-      if (layoutStore.getCellById(fragmentsManagerId)) {
+      const existingInstanceId = `fragments-manager-${cellId.value}`
+      if (layoutStore.getCellById(existingInstanceId)) {
         console.log('ℹ️ Fragments manager already open, focusing...')
-        layoutStore.setActiveCellId(fragmentsManagerId)
+        layoutStore.setActiveCellId(existingInstanceId)
         console.groupEnd()
         return
       }
 
-      // Add to layout as a new grid item
-      const added = layoutStore.addCell({
-        cellId: fragmentsManagerId,
-        type: 'fragments-manager',
-        title: `📚 Fragmentos - ${cellId.value}`,
-        state: {
-          sourceCellId: cellId.value,
-          cellType: cellType.value,
-        },
+      // Use the new subview rendering system
+      const instanceId = renderSubView('fragments-manager', {
+        cellId: cellId.value,
       })
-
-      if (added) {
-        console.log('✅ Fragments manager opened successfully')
-        showSuccess('Gerenciador de fragmentos aberto!')
-      } else {
-        console.warn('⚠️ Failed to open fragments manager')
-        showError('Não foi possível abrir o gerenciador de fragmentos')
+      
+      if (!instanceId) {
+        console.warn('⚠️ Failed to render fragments manager')
+        console.groupEnd()
+        return
       }
+      
+      console.log('✅ Fragments manager opened successfully')
     } catch (error: any) {
       console.error('❌ Error opening fragments manager:', error)
       showError(error.message || 'Erro ao abrir gerenciador de fragmentos')
@@ -349,6 +365,151 @@ export function useBaseCellFeatures(
   }
 
   // ============================================================
+  // Subview Management Methods
+  // ============================================================
+
+  /**
+   * Register a subview configuration
+   */
+  function registerSubView(config: SubViewConfig): void {
+    console.group('[useBaseCellFeatures] 📋 Registering subview')
+    console.log('🆔 Subview ID:', config.id)
+    console.log('🏷️ Label:', config.label)
+    console.log('🎨 Render mode:', config.renderMode)
+    
+    if (subViews.value.has(config.id)) {
+      console.warn('⚠️ Subview already registered, updating configuration')
+    }
+    
+    subViews.value.set(config.id, config)
+    console.log('✅ Subview registered, total subviews:', subViews.value.size)
+    console.groupEnd()
+  }
+
+  /**
+   * Render a registered subview
+   */
+  function renderSubView(subViewId: string, props: Record<string, any> = {}): string | null {
+    console.group('[useBaseCellFeatures] 🎨 Rendering subview')
+    console.log('🆔 Subview ID:', subViewId)
+    console.log('📦 Cell ID:', cellId.value)
+    console.log('🎁 Additional props:', props)
+
+    const config = subViews.value.get(subViewId)
+    
+    if (!config) {
+      console.error('❌ Subview not registered:', subViewId)
+      showError(`Subview "${subViewId}" não está registrada`)
+      console.groupEnd()
+      return null
+    }
+
+    try {
+      const instanceId = `${subViewId}-${cellId.value}-${Date.now()}`
+      console.log('🆔 Instance ID:', instanceId)
+      console.log('🎨 Render mode:', config.renderMode)
+
+      if (config.renderMode === 'grid') {
+        // Render as grid item (existing behavior)
+        const gridPosition = config.gridPosition || {}
+        const added = layoutStore.addCell({
+          cellId: instanceId,
+          type: subViewId,
+          title: config.label,
+          position: gridPosition,
+          state: {
+            sourceCellId: cellId.value,
+            cellType: cellType.value,
+            ...config.defaultProps,
+            ...props,
+          },
+        })
+
+        if (added) {
+          renderedSubViews.value.set(instanceId, subViewId)
+          console.log('✅ Subview rendered as grid item')
+          showSuccess(`${config.label} aberto!`)
+        } else {
+          console.warn('⚠️ Failed to render subview as grid item')
+          showError(`Não foi possível abrir ${config.label}`)
+          console.groupEnd()
+          return null
+        }
+      } else if (config.renderMode === 'inline') {
+        // For inline rendering, we just track the instance
+        // The parent component is responsible for rendering the subview inline
+        renderedSubViews.value.set(instanceId, subViewId)
+        console.log('✅ Subview registered for inline rendering')
+      } else if (config.renderMode === 'modal') {
+        // Modal rendering can be implemented later
+        console.warn('⚠️ Modal render mode not yet implemented')
+        showError('Modo modal ainda não implementado')
+        console.groupEnd()
+        return null
+      }
+
+      console.groupEnd()
+      return instanceId
+    } catch (error: any) {
+      console.error('❌ Error rendering subview:', error)
+      showError(error.message || `Erro ao abrir ${config.label}`)
+      console.groupEnd()
+      return null
+    }
+  }
+
+  /**
+   * Close a rendered subview
+   */
+  function closeSubView(instanceId: string): void {
+    console.group('[useBaseCellFeatures] 🔒 Closing subview')
+    console.log('🆔 Instance ID:', instanceId)
+
+    const subViewId = renderedSubViews.value.get(instanceId)
+    
+    if (!subViewId) {
+      console.warn('⚠️ Subview instance not found:', instanceId)
+      console.groupEnd()
+      return
+    }
+
+    const config = subViews.value.get(subViewId)
+    
+    if (config?.renderMode === 'grid') {
+      // Remove from layout
+      layoutStore.removeCell(instanceId)
+      console.log('✅ Subview removed from grid')
+    }
+
+    renderedSubViews.value.delete(instanceId)
+    console.log('✅ Subview instance closed')
+    console.groupEnd()
+  }
+
+  /**
+   * Get parent cell context for subviews
+   */
+  function getParentContext(): ParentCellContext {
+    const cell = notebookStore.cells[cellId.value]
+    
+    return {
+      cellId: cellId.value,
+      cellType: cellType.value,
+      cellState: cell?.state,
+      // Note: We don't pass cellApi here to avoid circular references
+      // Subviews can use inject to get the parent API if needed
+    }
+  }
+
+  // ============================================================
+  // Auto-register built-in subviews
+  // ============================================================
+  
+  // Register the fragments manager subview automatically
+  registerSubView(fragmentsManagerConfig)
+  console.log('[useBaseCellFeatures] ✅ Auto-registered fragments-manager subview')
+
+  // ============================================================
   // Return API
   // ============================================================
   
@@ -360,6 +521,7 @@ export function useBaseCellFeatures(
     isSaving,
     errorMessage,
     successMessage,
+    subViews,
     
     // Core Methods
     saveCell,
@@ -367,6 +529,12 @@ export function useBaseCellFeatures(
     showCellFragmentsManager,
     addFragment,
     sendFragmentToChat,
+    
+    // Subview Methods
+    registerSubView,
+    renderSubView,
+    closeSubView,
+    getParentContext,
     
     // Utility Methods
     showSuccess,
