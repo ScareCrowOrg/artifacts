@@ -206,9 +206,9 @@ const newFragmentContent = ref('')
 // ============================================================
 // Base Cell Features
 // ============================================================
-// We need to determine the cell type
-// For now, we'll use a generic type, but this should be passed or inferred
-const cellType = ref('unclassified-cell') // TODO: Get actual cell type
+// Get cell type from the notebook store
+const cell = computed(() => notebookStore.cells[props.cellId])
+const cellType = computed(() => cell.value?.type || cell.value?.notebook_item_type_id || 'unclassified-cell')
 
 const baseCellApi = useBaseCellFeatures(
   computed(() => props.cellId),
