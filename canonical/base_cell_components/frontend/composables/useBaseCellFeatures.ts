@@ -405,7 +405,12 @@ export function useBaseCellFeatures(
     }
 
     try {
-      const instanceId = `${subViewId}-${cellId.value}-${Date.now()}`
+      // Generate unique instance ID using crypto.randomUUID() if available,
+      // otherwise fallback to timestamp-based ID
+      const instanceId = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? `${subViewId}-${cellId.value}-${crypto.randomUUID()}`
+        : `${subViewId}-${cellId.value}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+      
       console.log('🆔 Instance ID:', instanceId)
       console.log('🎨 Render mode:', config.renderMode)
 

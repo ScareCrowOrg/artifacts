@@ -252,13 +252,23 @@ const newFragmentContent = ref('')
 // ============================================================
 // Base Cell Features
 // ============================================================
-// Get cell type from the notebook store (with fallback to parent context)
+// Get cell type from the notebook store
+// Priority order:
+// 1. cell.type (notebook store, most reliable)
+// 2. cell.notebook_item_type_id (notebook store, fallback)
+// 3. parentCellType (from context, passed during subview creation)
+// 4. 'unclassified-cell' (default fallback)
 const cell = computed(() => notebookStore.cells[cellId.value])
 const cellType = computed(() => {
-  return cell.value?.type || 
-         cell.value?.notebook_item_type_id || 
-         parentCellType.value ||
-         'unclassified-cell'
+  // Prefer data from notebook store as it's the source of truth
+  if (cell.value?.type) return cell.value.type
+  if (cell.value?.notebook_item_type_id) return cell.value.notebook_item_type_id
+  
+  // Fallback to parent context if cell not yet in store
+  if (parentCellType.value) return parentCellType.value
+  
+  // Final fallback
+  return 'unclassified-cell'
 })
 
 const baseCellApi = useBaseCellFeatures(
