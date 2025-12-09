@@ -1,3 +1,17 @@
+---
+processed: true
+processed_date: 2025-12-09
+themes:
+  - architecture
+  - artifacts
+  - backend
+  - data-models
+modules:
+  - backend
+  - architecture
+code_verified: true
+dead_docs_found: false
+---
 # Cell Types Directory
 
 This directory contains the plug-and-play cell type definitions for the ScareVerse project.

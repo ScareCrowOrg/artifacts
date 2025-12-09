@@ -1,3 +1,17 @@
+---
+processed: true
+processed_date: 2025-12-09
+themes:
+  - architecture
+  - artifacts
+  - backend
+  - data-models
+modules:
+  - backend
+  - architecture
+code_verified: true
+dead_docs_found: false
+---
 # Workflows - Fluxos de Trabalho
 
 Este diretório contém as definições JSON de workflows (fluxos de trabalho) do sistema ScareVerse. Workflows orquestram sequências de operações envolvendo múltiplos agentes e processos.

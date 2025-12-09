@@ -1,3 +1,17 @@
+---
+processed: true
+processed_date: 2025-12-09
+themes:
+  - architecture
+  - artifacts
+  - backend
+  - data-models
+modules:
+  - backend
+  - architecture
+code_verified: true
+dead_docs_found: false
+---
 # Células - Cell Definitions
 
 Este diretório contém as definições JSON de células (cells) criadas no sistema ScareVerse. Células são unidades de conteúdo estruturado no sistema de notebooks.
