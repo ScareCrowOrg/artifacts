@@ -1,0 +1,20 @@
+{
+  "id": "unclassified-cell",
+  "name": "Unclassified Cell",
+  "description": "A generic cell type for viewing unclassified content and memory fragments. Provides a simple interface for displaying title, content, and associated memory fragments.",
+  "version": "2.0.0",
+  "category": "viewer",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "docs": ["docs/README.md"],
+    "composables": ["frontend/composables/useUnclassifiedCell.ts"]
+  },
+  "default_initial_data": {
+    "title": "Nova Célula Sem Título",
+    "content": "",
+    "category": "persistida",
+    "icon": "mdi-text-box"
+  },
+  "allow_instance_override_refs": true
+}
