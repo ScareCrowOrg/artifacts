@@ -1,5 +1,5 @@
 {
-  "id": "file-editor",
+  "id": "file-editor-v2",
   "name": "File Editor",
   "description": "Edit text files and code with syntax highlighting and save functionality",
   "version": "2.0.0",
@@ -10,9 +10,9 @@
     "docs": ["docs/README.md"]
   },
   "default_initial_data": {
-    "fileName": "",
-    "filePath": "",
-    "language": "text",
+    "fileName": "untitled.md",
+    "filePath": "docs",
+    "language": "markdown",
     "readOnly": false
   },
   "allow_instance_override_refs": true,
