@@ -286,14 +286,17 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
   }
 
   // Watch for cell data changes and update store
+  // NOTE: This updates the store's in-memory representation only.
+  // Actual persistence happens when saveCell() is called.
+  // The deep watch is necessary for nested object changes (title, content).
   watch(cellData, (newData) => {
-    console.log('[useUnclassifiedCell] 🔄 Cell data changed:', newData)
+    console.log('[useUnclassifiedCell] 🔄 Cell data changed (in-memory update):', newData)
     
-    // Update cell data through store
+    // Update cell data in store (in-memory only, no API call)
     if (cell.value?.id) {
       cellsStore.updateCellData(cell.value.id, newData)
     }
-  }, { deep: true })
+  }, { deep: true, flush: 'post' })
 
   // Load cell data on initialization
   loadCellData()
