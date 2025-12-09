@@ -118,7 +118,7 @@
 import { ref, computed } from 'vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { useUnclassifiedCell, type UnclassifiedCell } from './composables/useUnclassifiedCell'
-import { useBaseCellFeatures } from '@/../artifacts/canonical/base_cell_components/frontend/composables/useBaseCellFeatures'
+import { useBaseCellFeatures } from '#artifacts/canonical/base_cell_components/frontend/composables/useBaseCellFeatures.ts'
 
 /**
  * Props interface for Unclassified Cell View

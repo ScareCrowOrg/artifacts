@@ -172,7 +172,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useNotebookStore } from '@/stores/useNotebookStore'
-import { useBaseCellFeatures } from '../composables/useBaseCellFeatures'
+import { useBaseCellFeatures } from '../composables/useBaseCellFeatures.ts'
 import type { CellFragment } from '@/types/baseCell'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
