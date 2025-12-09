@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2025-12-09
+themes:
+  - cells
+  - frontend
+  - components
+modules:
+  - artifacts
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # Base Cell Components
 
 This directory contains reusable base components and composables for the Plug-and-Play cell architecture in ScareVerse Cockpit.

@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2025-12-09
+themes:
+  - cells
+  - frontend
+  - components
+modules:
+  - artifacts
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # Base Cell Views
 
 Reusable Vue 3 components for the base cell architecture.
