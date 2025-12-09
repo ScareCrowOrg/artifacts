@@ -180,14 +180,28 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
  * Props interface for BaseFragmentsManager
  */
 interface Props {
-  /** ID of the cell whose fragments to manage */
-  cellId: string
+  /** Cell object with metadata (standard cell view prop) */
+  cell: {
+    id?: string
+    cellId?: string
+    state?: {
+      sourceCellId?: string
+      cellType?: string
+    }
+  }
 }
 
 const props = defineProps<Props>()
 
+// Extract the actual cell ID from the cell object
+// The fragments manager is spawned with sourceCellId in state
+const cellId = computed(() => {
+  return props.cell?.state?.sourceCellId || props.cell?.id || props.cell?.cellId || ''
+})
+
 console.group('[BaseFragmentsManager] 🎨 Component mounted')
-console.log('📦 Cell ID:', props.cellId)
+console.log('📦 Cell ID:', cellId.value)
+console.log('📦 Full Cell Object:', props.cell)
 console.groupEnd()
 
 // ============================================================
@@ -207,11 +221,11 @@ const newFragmentContent = ref('')
 // Base Cell Features
 // ============================================================
 // Get cell type from the notebook store
-const cell = computed(() => notebookStore.cells[props.cellId])
+const cell = computed(() => notebookStore.cells[cellId.value])
 const cellType = computed(() => cell.value?.type || cell.value?.notebook_item_type_id || 'unclassified-cell')
 
 const baseCellApi = useBaseCellFeatures(
-  computed(() => props.cellId),
+  cellId,
   cellType
 )
 
@@ -221,13 +235,6 @@ const { errorMessage, successMessage, sendFragmentToChat, addFragment } = baseCe
 // ============================================================
 // Computed
 // ============================================================
-
-/**
- * Get cell from notebook store
- */
-const cell = computed(() => {
-  return notebookStore.cells[props.cellId]
-})
 
 /**
  * Get fragments from cell
@@ -329,7 +336,7 @@ function handleClose(): void {
 
 onMounted(() => {
   console.group('[BaseFragmentsManager] 🔄 Component mounted lifecycle')
-  console.log('📦 Cell ID:', props.cellId)
+  console.log('📦 Cell ID:', cellId.value)
   console.log('🧩 Fragments:', fragmentCount.value)
   console.groupEnd()
 })
