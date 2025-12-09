@@ -15,5 +15,6 @@
   },
   "allow_instance_override_refs": true,
   "created_at": "2025-11-17T06:08:04.280635",
-  "updated_at": "2025-11-17T06:08:04.280635"
+  "updated_at": "2025-11-17T06:08:04.280635",
+  "can_render_dynamically": false
 }

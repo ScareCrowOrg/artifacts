@@ -1,0 +1,22 @@
+{
+  "id": "file-editor-v2",
+  "name": "File Editor (TypeScript)",
+  "description": "Advanced file editor with TypeScript implementation, syntax highlighting, and full DynamicWorkspace compatibility",
+  "version": "2.0.0",
+  "category": "editor",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "docs": ["docs/README.md"],
+    "composables": ["frontend/composables/useFileEditor.ts"]
+  },
+  "default_initial_data": {
+    "fileName": "untitled.md",
+    "filePath": "docs",
+    "language": "markdown",
+    "readOnly": false,
+    "category": "efemera",
+    "icon": "📄"
+  },
+  "allow_instance_override_refs": true
+}

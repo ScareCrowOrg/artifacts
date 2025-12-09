@@ -4,7 +4,9 @@
   "description": "Structured trace of a conversation flow through the RAG pipeline and LLM processing stages.",
   "default_refs": {
     "workflow_graph": [],
-    "python": ["backend/app/services/conversation_trace_service.py"]
+    "python": [
+      "backend/app/services/conversation_trace_service.py"
+    ]
   },
   "default_initial_data": {
     "category": "efemera",
@@ -46,5 +48,6 @@
   },
   "allow_instance_override_refs": true,
   "created_at": "2025-11-18T08:00:00.000000",
-  "updated_at": "2025-11-18T08:00:00.000000"
+  "updated_at": "2025-11-18T08:00:00.000000",
+  "can_render_dynamically": false
 }
