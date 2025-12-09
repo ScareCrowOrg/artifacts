@@ -1,18 +1,45 @@
 <template>
   <div class="flex flex-col h-full p-6 gap-4 overflow-y-auto bg-white">
-    <!-- Header -->
-    <div class="flex justify-between items-center pb-4 border-b-2 border-black/20">
-      <h2 class="m-0 text-2xl text-black font-semibold">
-        📚 Gerenciador de Fragmentos
-      </h2>
-      <button
-        class="w-6 h-6 text-lg border-0 bg-background hover:bg-background cursor-pointer rounded flex items-center justify-center transition-colors"
-        title="Fechar"
-        @click="handleClose"
-      >
-        ×
-      </button>
+    <!-- Error State: No Cell ID -->
+    <div
+      v-if="!cellId"
+      class="flex items-center justify-center h-full"
+    >
+      <div class="text-center border-2 border-red-300 rounded-lg p-6 bg-red-50 max-w-md">
+        <span class="text-5xl mb-3 block">⚠️</span>
+        <p class="font-bold text-lg text-red-700 mb-2">Erro de Configuração</p>
+        <p class="text-sm text-red-600 mb-2">
+          Não foi possível identificar a célula para gerenciar fragmentos.
+        </p>
+        <p class="text-xs text-red-500">
+          O objeto da célula deve conter <code class="px-1 py-0.5 bg-red-100 rounded">state.sourceCellId</code>,
+          <code class="px-1 py-0.5 bg-red-100 rounded">id</code>, ou
+          <code class="px-1 py-0.5 bg-red-100 rounded">cellId</code>.
+        </p>
+        <button
+          class="mt-4 px-4 py-2 border border-red-700 rounded-md bg-white text-red-700 text-sm font-medium cursor-pointer transition-all hover:bg-red-700 hover:text-white"
+          @click="handleClose"
+        >
+          Fechar
+        </button>
+      </div>
     </div>
+
+    <!-- Main Content (only when cellId is valid) -->
+    <template v-else>
+      <!-- Header -->
+      <div class="flex justify-between items-center pb-4 border-b-2 border-black/20">
+        <h2 class="m-0 text-2xl text-black font-semibold">
+          📚 Gerenciador de Fragmentos
+        </h2>
+        <button
+          class="w-6 h-6 text-lg border-0 bg-background hover:bg-background cursor-pointer rounded flex items-center justify-center transition-colors"
+          title="Fechar"
+          @click="handleClose"
+        >
+          ×
+        </button>
+      </div>
 
     <!-- Cell Info -->
     <div class="bg-[#f9f9fb] border border-black/10 rounded-lg p-4">
@@ -166,6 +193,7 @@
     >
       {{ successMessage }}
     </div>
+    </template>
   </div>
 </template>
 
@@ -196,7 +224,13 @@ const props = defineProps<Props>()
 // Extract the actual cell ID from the cell object
 // The fragments manager is spawned with sourceCellId in state
 const cellId = computed(() => {
-  return props.cell?.state?.sourceCellId || props.cell?.id || props.cell?.cellId || ''
+  const id = props.cell?.state?.sourceCellId || props.cell?.id || props.cell?.cellId || ''
+  
+  if (!id) {
+    console.error('[BaseFragmentsManager] ❌ No valid cellId found in cell object:', props.cell)
+  }
+  
+  return id
 })
 
 console.group('[BaseFragmentsManager] 🎨 Component mounted')
