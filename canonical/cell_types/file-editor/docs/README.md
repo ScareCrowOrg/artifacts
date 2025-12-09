@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2025-12-09
+themes:
+  - cells
+  - plugin-system
+  - file-editor
+modules:
+  - backend
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # File Editor Cell Type
 
 **Type ID**: `file-editor`  
