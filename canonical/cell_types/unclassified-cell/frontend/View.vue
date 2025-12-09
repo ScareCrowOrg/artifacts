@@ -18,6 +18,29 @@
       </button>
     </div>
 
+    <!-- Toolbar Actions -->
+    <div class="flex gap-2 mb-2">
+      <button
+        class="btn btn-primary"
+        :disabled="isSaving"
+        @click="handleSave"
+      >
+        {{ isSaving ? '⏳ Salvando...' : '💾 Salvar Célula' }}
+      </button>
+      <button
+        class="btn btn-secondary"
+        @click="handleShowFragmentsManager"
+      >
+        📚 Gerenciar Fragmentos
+      </button>
+      <button
+        class="btn btn-secondary"
+        @click="handleAddFragment"
+      >
+        ➕ Adicionar Fragmento
+      </button>
+    </div>
+
     <!-- Title Input -->
     <div class="flex flex-col gap-1">
       <label for="cell-title" class="font-semibold text-sm text-black/60"
@@ -43,57 +66,23 @@
       />
     </div>
 
-    <!-- Fragment Viewer Section (Integrated) -->
+    <!-- Fragment Summary (Compact) -->
     <div
       v-if="fragmentCount > 0"
-      class="bg-[#f9f9fb] border-t-2 border-black/20 p-4 rounded-lg"
+      class="bg-[#f9f9fb] border border-black/10 rounded-lg p-3"
     >
-      <div class="flex justify-between items-center mb-4 pb-3 border-b border-black/20">
-        <h3 class="m-0 text-lg font-semibold text-black/90">
-          📚 Fragmentos de Memória
-        </h3>
-        <span
-          class="px-3 py-1 bg-primary text-white rounded-full text-xs font-semibold"
-          :aria-label="`${fragmentCount} fragmentos`"
-        >
-          {{ fragmentCount }}
+      <div class="flex justify-between items-center">
+        <span class="text-sm text-black/60">
+          📚 Esta célula possui
+          <strong class="text-primary">{{ fragmentCount }}</strong>
           {{ fragmentCount === 1 ? 'fragmento' : 'fragmentos' }}
         </span>
-      </div>
-
-      <div class="flex flex-col gap-4">
-        <div
-          v-for="(fragment, index) in memoryFragments"
-          :key="`fragment-${index}`"
-          class="bg-white border border-black/20 rounded-lg p-4 shadow-sm transition-shadow hover:shadow-md"
+        <button
+          class="px-3 py-1 border border-primary rounded-md bg-white text-primary text-xs font-medium cursor-pointer transition-all hover:bg-primary hover:text-white"
+          @click="handleShowFragmentsManager"
         >
-          <div class="flex justify-between items-center mb-3 pb-2 border-b border-black/10">
-            <div class="flex items-center gap-3">
-              <span
-                class="px-2 py-1 bg-primary/10 border border-primary/30 rounded text-xs font-medium text-primary"
-              >
-                📝 Memória
-              </span>
-              <span class="text-sm text-black/60 font-medium">#{{ index + 1 }}</span>
-            </div>
-            <button
-              class="px-3 py-2 border border-primary rounded-md bg-white text-primary text-xs font-medium cursor-pointer transition-all whitespace-nowrap hover:bg-primary hover:text-white hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(98,0,234,0.3)]"
-              :title="`Enviar fragmento #${index + 1} como anexo para o chat`"
-              @click="handleSendFragmentToChat(fragment, index)"
-            >
-              💬 Enviar para Chat
-            </button>
-          </div>
-
-          <div class="fragment-content text-black/90">
-            <div v-if="fragment.conteudo" class="markdown-scroll">
-              <MarkdownRenderer :content="fragment.conteudo" />
-            </div>
-            <div v-else class="text-black/40 italic text-center py-3">
-              <em>Sem conteúdo</em>
-            </div>
-          </div>
-        </div>
+          Ver Fragmentos
+        </button>
       </div>
     </div>
 
@@ -126,10 +115,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
-import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { useUnclassifiedCell, type UnclassifiedCell } from './composables/useUnclassifiedCell'
+import { useBaseCellFeatures } from '@/../artifacts/canonical/base_cell_components/frontend/composables/useBaseCellFeatures'
 
 /**
  * Props interface for Unclassified Cell View
@@ -147,7 +136,7 @@ console.log('📊 Initial data:', props.cell?.initial_data || props.cell?.data)
 console.log('🧩 Fragments:', props.cell?.fragments?.length || 0)
 console.groupEnd()
 
-// Use unclassified cell composable
+// Use unclassified cell composable for cell-specific logic
 const {
   cellData,
   isLoading,
@@ -163,12 +152,26 @@ const {
   formatDate,
 } = useUnclassifiedCell(ref(props.cell))
 
+// Use base cell features for common cell operations
+const baseCellApi = useBaseCellFeatures(
+  computed(() => props.cell?.id || ''),
+  computed(() => 'unclassified-cell')
+)
+
 /**
  * Handle close button click
  */
 function onClose(): void {
   console.log('[UnclassifiedCellView] ❌ Close button clicked')
   closeCell()
+}
+
+/**
+ * Handle save button click
+ */
+async function handleSave(): Promise<void> {
+  console.log('[UnclassifiedCellView] 💾 Save button clicked')
+  await saveCell()
 }
 
 /**
@@ -180,11 +183,21 @@ async function onSave(): Promise<void> {
 }
 
 /**
- * Handle send fragment to chat
+ * Handle show fragments manager button click
  */
-function handleSendFragmentToChat(fragment: any, index: number): void {
-  console.log('[UnclassifiedCellView] 💬 Send fragment button clicked', index)
-  sendFragmentToChat(fragment, index)
+function handleShowFragmentsManager(): void {
+  console.log('[UnclassifiedCellView] 📚 Show fragments manager clicked')
+  baseCellApi.showCellFragmentsManager()
+}
+
+/**
+ * Handle add fragment button click
+ */
+function handleAddFragment(): void {
+  console.log('[UnclassifiedCellView] ➕ Add fragment clicked')
+  // For now, just open the fragments manager
+  // In the future, this could open a dedicated "add fragment" modal
+  baseCellApi.showCellFragmentsManager()
 }
 
 // Expose methods for parent component (CellToolbar) to call
@@ -221,5 +234,30 @@ defineExpose({
 
 .fragment-content::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* Button styles */
+.btn {
+  @apply px-4 py-2 rounded-md font-medium cursor-pointer transition-all border-0;
+}
+
+.btn-primary {
+  @apply bg-primary text-white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  @apply -translate-y-px shadow-lg;
+}
+
+.btn-primary:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply bg-white text-primary border border-primary;
+}
+
+.btn-secondary:hover {
+  @apply bg-primary text-white -translate-y-px shadow-md;
 }
 </style>

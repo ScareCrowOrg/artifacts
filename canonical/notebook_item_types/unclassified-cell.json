@@ -10,6 +10,14 @@
     "docs": ["docs/README.md"],
     "composables": ["frontend/composables/useUnclassifiedCell.ts"]
   },
+  "dynamic_views": {
+    "fragments-manager": {
+      "label": "Gerenciador de Fragmentos",
+      "default_refs": {
+        "view": "base_cell_components/frontend/views/BaseFragmentsManager.vue"
+      }
+    }
+  },
   "default_initial_data": {
     "title": "Nova Célula Sem Título",
     "content": "",
