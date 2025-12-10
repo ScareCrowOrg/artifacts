@@ -275,18 +275,36 @@ export function useBaseCellFeatures(
   /**
    * Add a new fragment to the cell
    * 
+   * ARCHITECTURE PRINCIPLE: Instance Injection
+   * This method now accepts the cell instance as a parameter instead of
+   * looking it up from the store. This ensures the correct instance is used
+   * and follows the architectural principle that functions operating on a
+   * cell instance MUST receive that instance as an argument.
+   * 
    * Note: This method does NOT automatically save the cell.
    * Fragments are added to the in-memory cell instance only.
    * The caller is responsible for persisting the cell if/when needed.
+   * 
+   * @param cellInstance - The cell instance to add the fragment to
+   * @param fragmentData - The fragment data to add
    */
-  async function addFragment(fragmentData: CellFragment): Promise<void> {
+  async function addFragment(cellInstance: any, fragmentData: CellFragment): Promise<void> {
     console.group('[useBaseCellFeatures] ➕ Adding fragment')
     console.log('📦 Cell ID:', cellId.value)
     console.log('🧩 Fragment data:', fragmentData)
+    console.log('📦 Cell instance provided:', !!cellInstance)
 
     if (!cellId.value) {
       console.warn('⚠️ Cannot add fragment without cell ID')
       showError('Não é possível adicionar fragmento sem ID da célula')
+      console.groupEnd()
+      return
+    }
+    
+    if (!cellInstance) {
+      console.error('❌ Cell instance not provided')
+      console.error('This indicates a violation of the instance injection principle')
+      showError('Célula não fornecida. Por favor, feche e reabra a célula.')
       console.groupEnd()
       return
     }
@@ -295,38 +313,27 @@ export function useBaseCellFeatures(
     errorMessage.value = null
 
     try {
-      // Get cell from notebook store
-      const cell = notebookStore.cells[cellId.value]
-      
-      if (!cell) {
-        // Cell not found in store - this indicates a state management issue
-        // The cell should always be in the store if we have a valid cellId
-        console.error('❌ Cell not found in notebook store:', cellId.value)
-        console.error('Available cells:', Object.keys(notebookStore.cells))
-        console.error('This indicates a state management issue - cell should exist in store')
-        throw new Error('Célula não encontrada no store. Por favor, feche e reabra a célula.')
-      }
-
-      console.log('📋 Cell found in store:', cell.id)
-      console.log('📊 Current fragments:', cell.fragments?.length || 0)
+      console.log('📋 Using provided cell instance:', cellInstance.id)
+      console.log('📊 Current fragments:', cellInstance.fragments?.length || 0)
 
       // Initialize fragments array if it doesn't exist
-      if (!cell.fragments) {
+      if (!cellInstance.fragments) {
         console.log('🆕 Initializing fragments array')
-        cell.fragments = []
+        cellInstance.fragments = []
       }
 
-      // Add fragment to the cell in the store
-      cell.fragments.push(fragmentData)
+      // Add fragment to the cell instance
+      cellInstance.fragments.push(fragmentData)
 
-      console.log('✅ Fragment added to cell, total fragments:', cell.fragments.length)
-      console.log('ℹ️ Fragment added to in-memory store only - not persisted to backend')
+      console.log('✅ Fragment added to cell instance, total fragments:', cellInstance.fragments.length)
+      console.log('ℹ️ Fragment added to in-memory instance only - not persisted to backend')
       console.log('💡 Cell will be persisted when user explicitly saves the cell')
       
       showSuccess('Fragmento adicionado com sucesso!')
     } catch (error: any) {
       console.error('❌ Error adding fragment:', error)
       showError(error.message || 'Erro ao adicionar fragmento')
+      throw error
     } finally {
       isLoading.value = false
       console.groupEnd()

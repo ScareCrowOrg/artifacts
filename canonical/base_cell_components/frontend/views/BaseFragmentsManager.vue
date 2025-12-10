@@ -340,6 +340,9 @@ function getFragmentTypeLabel(type: string): string {
 
 /**
  * Handle add fragment button click
+ * 
+ * Now passes the cell instance directly to addFragment following the
+ * instance injection architectural principle.
  */
 async function handleAddFragment(): Promise<void> {
   console.group('[BaseFragmentsManager] ➕ Adding fragment')
@@ -348,6 +351,12 @@ async function handleAddFragment(): Promise<void> {
 
   if (!canAddFragment.value) {
     console.warn('⚠️ Cannot add empty fragment')
+    console.groupEnd()
+    return
+  }
+  
+  if (!cell.value) {
+    console.error('❌ Cell instance not available')
     console.groupEnd()
     return
   }
@@ -360,7 +369,10 @@ async function handleAddFragment(): Promise<void> {
       conteudo: newFragmentContent.value.trim(),
     }
 
-    await addFragment(fragmentData)
+    // ARCHITECTURE PRINCIPLE: Instance Injection
+    // Pass the cell instance directly instead of relying on store lookup
+    console.log('📦 Passing cell instance to addFragment')
+    await addFragment(cell.value, fragmentData)
 
     // Clear form on success
     newFragmentContent.value = ''
@@ -369,6 +381,7 @@ async function handleAddFragment(): Promise<void> {
     console.log('✅ Fragment added and form cleared')
   } catch (error: any) {
     console.error('❌ Error adding fragment:', error)
+    // Error is already displayed by addFragment
   } finally {
     isAdding.value = false
     console.groupEnd()
