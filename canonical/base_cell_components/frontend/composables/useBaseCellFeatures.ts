@@ -257,6 +257,10 @@ export function useBaseCellFeatures(
 
   /**
    * Add a new fragment to the cell
+   * 
+   * Note: This method saves the cell immediately after adding the fragment.
+   * Future optimization: Consider implementing debounced/batched saves if users
+   * frequently add multiple fragments in quick succession.
    */
   async function addFragment(fragmentData: CellFragment): Promise<void> {
     console.group('[useBaseCellFeatures] ➕ Adding fragment')
@@ -278,11 +282,16 @@ export function useBaseCellFeatures(
       const cell = notebookStore.cells[cellId.value]
       
       if (!cell) {
-        // Cell not found in store - this is a critical error
+        // Cell not found in store - this indicates a state management issue
         // The cell should always be in the store if we have a valid cellId
+        // This could happen in edge cases like:
+        // - Race conditions during cell creation
+        // - Store corruption or unexpected state reset
+        // - Navigation timing issues
         console.error('❌ Cell not found in notebook store:', cellId.value)
         console.error('Available cells:', Object.keys(notebookStore.cells))
-        throw new Error('Célula não encontrada no store. A célula pode não ter sido criada corretamente.')
+        console.error('This indicates a state management issue - cell should exist in store')
+        throw new Error('Célula não encontrada no store. Por favor, feche e reabra a célula.')
       }
 
       console.log('📋 Cell found in store:', cell.id)
@@ -301,6 +310,8 @@ export function useBaseCellFeatures(
       
       // Trigger save to persist the change
       // This will save the cell with its updated fragments array to the backend
+      // Note: Saves immediately after each fragment addition
+      // Future optimization: Could implement debounced/batched saves
       await saveCell()
       
       showSuccess('Fragmento adicionado com sucesso!')
