@@ -225,6 +225,30 @@ export function useBaseCellFeatures(
   }
 
   /**
+   * Fetch a cell from the backend and add it to the store
+   * @param cellId - ID of the cell to fetch
+   * @returns The fetched cell
+   * @throws Error if cell not found in backend
+   */
+  async function fetchCellFromBackend(cellId: string): Promise<any> {
+    console.log('🌐 Fetching cell from backend:', cellId)
+    
+    const response = await apiService.fetch(ENDPOINTS.getCell(cellId))
+    
+    if (!response.ok) {
+      throw new Error('Célula não encontrada no backend')
+    }
+    
+    const cell = await response.json()
+    
+    // Add cell to store for future use
+    notebookStore.cells[cellId] = cell
+    
+    console.log('✅ Cell fetched from backend and added to store')
+    return cell
+  }
+
+  /**
    * Add a new fragment to the cell
    */
   async function addFragment(fragmentData: CellFragment): Promise<void> {
@@ -243,26 +267,13 @@ export function useBaseCellFeatures(
     errorMessage.value = null
 
     try {
-      // Get cell from notebook store
+      // Get cell from notebook store, or fetch from backend if not found
       let cell = notebookStore.cells[cellId.value]
       
-      // If cell not in store, fetch it from backend
       if (!cell) {
         console.warn('⚠️ Cell not found in store, fetching from backend...')
-        
         try {
-          const response = await apiService.fetch(ENDPOINTS.getCell(cellId.value))
-          
-          if (!response.ok) {
-            throw new Error('Célula não encontrada no backend')
-          }
-          
-          cell = await response.json()
-          
-          // Add cell to store for future use
-          notebookStore.cells[cellId.value] = cell
-          
-          console.log('✅ Cell fetched from backend and added to store')
+          cell = await fetchCellFromBackend(cellId.value)
         } catch (fetchError: any) {
           console.error('❌ Error fetching cell from backend:', fetchError)
           throw new Error('Célula não encontrada')
