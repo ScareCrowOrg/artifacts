@@ -203,13 +203,9 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
       // useCellManagement.saveCell() and App.vue's handleSaveCell()
       // This ensures consistent behavior across all cell types
       
+      // Show temporary feedback (will be replaced by actual save result)
       successMessage.value = 'Salvando célula...'
       console.log('✅ Save initiated')
-      
-      // Clear the "saving" message after a moment
-      setTimeout(() => {
-        successMessage.value = null
-      }, 2000)
     } catch (error: any) {
       console.error('❌ Error initiating save:', error)
       errorMessage.value = error.message || 'Erro ao iniciar salvamento'
