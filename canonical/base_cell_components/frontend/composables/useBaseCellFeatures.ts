@@ -18,6 +18,8 @@ import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useCellsStore } from '@/stores/cells'
 import { useChatStore } from '@/stores/chat'
 import { useLayoutStore } from '@/stores/layout'
+import apiService from '@/services/apiService.js'
+import { ENDPOINTS } from '@/config/endpoints.js'
 
 /**
  * Base cell features composable
@@ -242,10 +244,29 @@ export function useBaseCellFeatures(
 
     try {
       // Get cell from notebook store
-      const cell = notebookStore.cells[cellId.value]
+      let cell = notebookStore.cells[cellId.value]
       
+      // If cell not in store, fetch it from backend
       if (!cell) {
-        throw new Error('Célula não encontrada')
+        console.warn('⚠️ Cell not found in store, fetching from backend...')
+        
+        try {
+          const response = await apiService.fetch(ENDPOINTS.getCell(cellId.value))
+          
+          if (!response.ok) {
+            throw new Error('Célula não encontrada no backend')
+          }
+          
+          cell = await response.json()
+          
+          // Add cell to store for future use
+          notebookStore.cells[cellId.value] = cell
+          
+          console.log('✅ Cell fetched from backend and added to store')
+        } catch (fetchError: any) {
+          console.error('❌ Error fetching cell from backend:', fetchError)
+          throw new Error('Célula não encontrada')
+        }
       }
 
       // Initialize fragments array if it doesn't exist
