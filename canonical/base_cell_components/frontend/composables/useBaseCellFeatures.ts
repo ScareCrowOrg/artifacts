@@ -212,6 +212,9 @@ export function useBaseCellFeatures(
   /**
    * Show cell fragments manager as a dynamic subview
    * Uses the new subview rendering system
+   * 
+   * Passes the complete cell instance directly to the fragments manager
+   * to avoid unnecessary backend fetches and ensure data consistency
    */
   function showCellFragmentsManager(): void {
     console.group('[useBaseCellFeatures] 📚 Showing fragments manager')
@@ -226,6 +229,16 @@ export function useBaseCellFeatures(
     }
 
     try {
+      // Get the complete cell instance from the store
+      const cellInstance = notebookStore.cells[cellId.value]
+      
+      if (!cellInstance) {
+        console.error('❌ Cell not found in store:', cellId.value)
+        showError('Célula não encontrada no store')
+        console.groupEnd()
+        return
+      }
+
       // Check if already open
       const existingInstanceId = `fragments-manager-${cellId.value}`
       if (layoutStore.getCellById(existingInstanceId)) {
@@ -235,8 +248,12 @@ export function useBaseCellFeatures(
         return
       }
 
+      console.log('📦 Passing complete cell instance to fragments manager')
+
       // Use the new subview rendering system
+      // Pass the complete cell instance directly as a prop
       const instanceId = renderSubView('fragments-manager', {
+        cellInstance: cellInstance,  // Pass the complete cell object
         cellId: cellId.value,
       })
       
@@ -246,7 +263,7 @@ export function useBaseCellFeatures(
         return
       }
       
-      console.log('✅ Fragments manager opened successfully')
+      console.log('✅ Fragments manager opened successfully with cell instance')
     } catch (error: any) {
       console.error('❌ Error opening fragments manager:', error)
       showError(error.message || 'Erro ao abrir gerenciador de fragmentos')
@@ -258,9 +275,9 @@ export function useBaseCellFeatures(
   /**
    * Add a new fragment to the cell
    * 
-   * Note: This method saves the cell immediately after adding the fragment.
-   * Future optimization: Consider implementing debounced/batched saves if users
-   * frequently add multiple fragments in quick succession.
+   * Note: This method does NOT automatically save the cell.
+   * Fragments are added to the in-memory cell instance only.
+   * The caller is responsible for persisting the cell if/when needed.
    */
   async function addFragment(fragmentData: CellFragment): Promise<void> {
     console.group('[useBaseCellFeatures] ➕ Adding fragment')
@@ -284,10 +301,6 @@ export function useBaseCellFeatures(
       if (!cell) {
         // Cell not found in store - this indicates a state management issue
         // The cell should always be in the store if we have a valid cellId
-        // This could happen in edge cases like:
-        // - Race conditions during cell creation
-        // - Store corruption or unexpected state reset
-        // - Navigation timing issues
         console.error('❌ Cell not found in notebook store:', cellId.value)
         console.error('Available cells:', Object.keys(notebookStore.cells))
         console.error('This indicates a state management issue - cell should exist in store')
@@ -307,12 +320,8 @@ export function useBaseCellFeatures(
       cell.fragments.push(fragmentData)
 
       console.log('✅ Fragment added to cell, total fragments:', cell.fragments.length)
-      
-      // Trigger save to persist the change
-      // This will save the cell with its updated fragments array to the backend
-      // Note: Saves immediately after each fragment addition
-      // Future optimization: Could implement debounced/batched saves
-      await saveCell()
+      console.log('ℹ️ Fragment added to in-memory store only - not persisted to backend')
+      console.log('💡 Cell will be persisted when user explicitly saves the cell')
       
       showSuccess('Fragmento adicionado com sucesso!')
     } catch (error: any) {

@@ -216,6 +216,7 @@ interface Props {
     state?: {
       sourceCellId?: string
       cellType?: string
+      cellInstance?: any  // Complete cell instance passed from parent
     }
   }
 }
@@ -223,17 +224,21 @@ interface Props {
 const props = defineProps<Props>()
 
 // ============================================================
-// Parent Cell Context (New Approach)
+// Parent Cell Context and Cell Instance
 // ============================================================
 // Use the standardized composable to get parent cell context
 const parentContext = useParentCellContext(props.cell)
 const cellId = parentContext.cellId
 const parentCellType = parentContext.cellType
 
+// Get the complete cell instance from state (passed directly by parent)
+const cellInstanceFromProp = computed(() => props.cell?.state?.cellInstance)
+
 console.group('[BaseFragmentsManager] 🎨 Component mounted')
 console.log('📦 Cell ID:', cellId.value)
 console.log('🏷️ Parent Cell Type:', parentCellType.value)
 console.log('📦 Full Cell Object:', props.cell)
+console.log('🔗 Cell Instance from prop:', cellInstanceFromProp.value ? 'Available' : 'Not available')
 console.groupEnd()
 
 // ============================================================
@@ -252,15 +257,24 @@ const newFragmentContent = ref('')
 // ============================================================
 // Base Cell Features
 // ============================================================
-// Get cell type from the notebook store
+// Get cell - prioritize the instance passed as prop, fallback to notebook store
 // Priority order:
-// 1. cell.type (notebook store, most reliable)
-// 2. cell.notebook_item_type_id (notebook store, fallback)
-// 3. parentCellType (from context, passed during subview creation)
-// 4. 'unclassified-cell' (default fallback)
-const cell = computed(() => notebookStore.cells[cellId.value])
+// 1. cellInstanceFromProp (passed directly from parent - most reliable)
+// 2. notebookStore.cells[cellId] (fallback)
+const cell = computed(() => {
+  // Use the cell instance passed as prop if available
+  if (cellInstanceFromProp.value) {
+    console.log('[BaseFragmentsManager] Using cell instance from prop')
+    return cellInstanceFromProp.value
+  }
+  
+  // Fallback to notebook store
+  console.log('[BaseFragmentsManager] Falling back to notebook store')
+  return notebookStore.cells[cellId.value]
+})
+
 const cellType = computed(() => {
-  // Prefer data from notebook store as it's the source of truth
+  // Prefer data from the cell instance
   if (cell.value?.type) return cell.value.type
   if (cell.value?.notebook_item_type_id) return cell.value.notebook_item_type_id
   
