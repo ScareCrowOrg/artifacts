@@ -141,12 +141,42 @@ export function useBaseCellFeatures(
           throw new Error('Célula não encontrada no store')
         }
 
-        // Trigger save through cells store
-        // NOTE: This assumes the cell component is watching cellsStore.saveCellTrigger
-        // and will handle the actual save operation
-        cellsStore.triggerSaveCell()
+        console.log('📊 Cell data to save:', {
+          id: cell.id,
+          data: cell.data || cell.initial_data,
+          fragments: cell.fragments?.length || 0
+        })
+
+        // Save cell to backend via API
+        const response = await apiService.fetch(
+          ENDPOINTS.updateCell(cellId.value),
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              initial_data: cell.data || cell.initial_data || {},
+              fragments: cell.fragments || []
+            }),
+          }
+        )
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('❌ Update cell failed:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText,
+          })
+          throw new Error('Falha ao salvar célula no backend')
+        }
+
+        const updatedCell = await response.json()
+        console.log('✅ Cell saved to backend:', updatedCell.id)
         
-        console.log('✅ Save triggered')
+        // Update the cell in the store with the response from backend
+        notebookStore.cells[cellId.value] = updatedCell
       }
 
       showSuccess('Célula salva com sucesso!')
@@ -154,6 +184,7 @@ export function useBaseCellFeatures(
     } catch (error: any) {
       console.error('❌ Error saving cell:', error)
       showError(error.message || 'Erro ao salvar célula')
+      throw error // Re-throw to allow caller to handle
     } finally {
       isSaving.value = false
       console.groupEnd()
@@ -225,30 +256,6 @@ export function useBaseCellFeatures(
   }
 
   /**
-   * Fetch a cell from the backend and add it to the store
-   * @param cellId - ID of the cell to fetch
-   * @returns The fetched cell
-   * @throws Error if cell not found in backend
-   */
-  async function fetchCellFromBackend(cellId: string): Promise<any> {
-    console.log('🌐 Fetching cell from backend:', cellId)
-    
-    const response = await apiService.fetch(ENDPOINTS.getCell(cellId))
-    
-    if (!response.ok) {
-      throw new Error('Célula não encontrada no backend')
-    }
-    
-    const cell = await response.json()
-    
-    // Add cell to store for future use
-    notebookStore.cells[cellId] = cell
-    
-    console.log('✅ Cell fetched from backend and added to store')
-    return cell
-  }
-
-  /**
    * Add a new fragment to the cell
    */
   async function addFragment(fragmentData: CellFragment): Promise<void> {
@@ -267,30 +274,33 @@ export function useBaseCellFeatures(
     errorMessage.value = null
 
     try {
-      // Get cell from notebook store, or fetch from backend if not found
-      let cell = notebookStore.cells[cellId.value]
+      // Get cell from notebook store
+      const cell = notebookStore.cells[cellId.value]
       
       if (!cell) {
-        console.warn('⚠️ Cell not found in store, fetching from backend...')
-        try {
-          cell = await fetchCellFromBackend(cellId.value)
-        } catch (fetchError: any) {
-          console.error('❌ Error fetching cell from backend:', fetchError)
-          throw new Error('Célula não encontrada')
-        }
+        // Cell not found in store - this is a critical error
+        // The cell should always be in the store if we have a valid cellId
+        console.error('❌ Cell not found in notebook store:', cellId.value)
+        console.error('Available cells:', Object.keys(notebookStore.cells))
+        throw new Error('Célula não encontrada no store. A célula pode não ter sido criada corretamente.')
       }
+
+      console.log('📋 Cell found in store:', cell.id)
+      console.log('📊 Current fragments:', cell.fragments?.length || 0)
 
       // Initialize fragments array if it doesn't exist
       if (!cell.fragments) {
+        console.log('🆕 Initializing fragments array')
         cell.fragments = []
       }
 
-      // Add fragment
+      // Add fragment to the cell in the store
       cell.fragments.push(fragmentData)
 
-      console.log('✅ Fragment added, total fragments:', cell.fragments.length)
+      console.log('✅ Fragment added to cell, total fragments:', cell.fragments.length)
       
       // Trigger save to persist the change
+      // This will save the cell with its updated fragments array to the backend
       await saveCell()
       
       showSuccess('Fragmento adicionado com sucesso!')
