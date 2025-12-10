@@ -153,9 +153,12 @@ const {
 } = useUnclassifiedCell(ref(props.cell))
 
 // Use base cell features for common cell operations
+// ARCHITECTURE PRINCIPLE: Pass cell instance to avoid store lookup
 const baseCellApi = useBaseCellFeatures(
   computed(() => props.cell?.id || ''),
-  computed(() => 'unclassified-cell')
+  computed(() => 'unclassified-cell'),
+  {}, // options
+  ref(props.cell) // Pass cell instance directly
 )
 
 /**

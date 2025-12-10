@@ -15,6 +15,8 @@
 import { ref, computed, watch, type Ref } from 'vue'
 import { useCellsStore } from '@/stores/cells'
 import { useChatStore } from '@/stores/chat'
+import apiService from '@/services/apiService.js'
+import { ENDPOINTS } from '@/config/endpoints.js'
 
 /**
  * Interface for unclassified cell data structure
@@ -173,7 +175,8 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
   }
 
   /**
-   * Save cell data (placeholder - actual save logic depends on backend)
+   * Save cell data to backend
+   * Makes an actual API call to persist the cell data
    */
   async function saveCell(): Promise<void> {
     console.group('[useUnclassifiedCell] 💾 Saving cell')
@@ -191,12 +194,48 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
 
     try {
       console.log('📤 Saving cell data:', cellData.value)
+      console.log('📦 Cell ID:', cell.value.id)
       
-      // Update cell data through store
-      await cellsStore.updateCellData(cell.value.id, cellData.value)
+      // Build the API endpoint
+      const endpoint = ENDPOINTS.updateCell(cell.value.id)
+      console.log('🌐 API endpoint:', endpoint)
+      
+      // Make the actual API call to persist data to backend
+      const response = await apiService.fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          initial_data: cellData.value,
+        }),
+      })
+
+      console.log('📡 Response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ API call failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+        })
+        throw new Error(`Falha ao salvar célula: ${response.statusText}`)
+      }
+
+      const updatedCell = await response.json()
+      console.log('✅ Cell saved successfully to backend:', updatedCell.id)
+      
+      // Update the in-memory cell object with the response
+      if (cell.value) {
+        Object.assign(cell.value, updatedCell)
+      }
+      
+      // Update store with the persisted data
+      cellsStore.updateCellData(cell.value.id, cellData.value)
       
       successMessage.value = 'Célula salva com sucesso!'
-      console.log('✅ Cell saved successfully')
+      console.log('✅ Success message displayed')
       
       // Clear success message after 3 seconds
       setTimeout(() => {

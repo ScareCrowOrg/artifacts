@@ -50,12 +50,14 @@ import { ENDPOINTS } from '@/config/endpoints.js'
 export function useBaseCellFeatures(
   cellId: Ref<string>,
   cellType: Ref<string>,
-  options: BaseCellFeaturesOptions = {}
+  options: BaseCellFeaturesOptions = {},
+  cellInstance?: Ref<any>
 ): BaseCellAPI {
   console.group('[useBaseCellFeatures] 🏗️ Initializing base cell features')
   console.log('📦 Cell ID:', cellId.value)
   console.log('🏷️ Cell Type:', cellType.value)
   console.log('⚙️ Options:', options)
+  console.log('📦 Cell Instance provided:', !!cellInstance?.value)
   console.groupEnd()
 
   // ============================================================
@@ -213,6 +215,10 @@ export function useBaseCellFeatures(
    * Show cell fragments manager as a dynamic subview
    * Uses the new subview rendering system
    * 
+   * ARCHITECTURE PRINCIPLE: Instance Injection
+   * If a cell instance was provided to useBaseCellFeatures, use it directly.
+   * Otherwise, fall back to store lookup (legacy behavior).
+   * 
    * Passes the complete cell instance directly to the fragments manager
    * to avoid unnecessary backend fetches and ensure data consistency
    */
@@ -229,15 +235,26 @@ export function useBaseCellFeatures(
     }
 
     try {
-      // Get the complete cell instance from the store
-      const cellInstance = notebookStore.cells[cellId.value]
+      // ARCHITECTURE PRINCIPLE: Use provided cell instance if available
+      let cell = null
       
-      if (!cellInstance) {
-        console.error('❌ Cell not found in store:', cellId.value)
-        showError('Célula não encontrada no store')
-        console.groupEnd()
-        return
+      if (cellInstance?.value) {
+        console.log('✅ Using cell instance provided to useBaseCellFeatures')
+        cell = cellInstance.value
+      } else {
+        console.log('⚠️ No cell instance provided, falling back to store lookup')
+        cell = notebookStore.cells[cellId.value]
+        
+        if (!cell) {
+          console.error('❌ Cell not found in store:', cellId.value)
+          console.error('Available cells in store:', Object.keys(notebookStore.cells))
+          showError('Célula não encontrada no store. Por favor, feche e reabra a célula.')
+          console.groupEnd()
+          return
+        }
       }
+
+      console.log('📋 Cell found:', cell.id || cellId.value)
 
       // Check if already open
       const existingInstanceId = `fragments-manager-${cellId.value}`
@@ -253,7 +270,7 @@ export function useBaseCellFeatures(
       // Use the new subview rendering system
       // Pass the complete cell instance directly as a prop
       const instanceId = renderSubView('fragments-manager', {
-        cellInstance: cellInstance,  // Pass the complete cell object
+        cellInstance: cell,  // Pass the complete cell object
         cellId: cellId.value,
       })
       
