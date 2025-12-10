@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2025-12-10
+themes:
+  - sandbox
+  - cells
+  - runtime
+modules:
+  - backend
+code_verified: false
+dead_docs_found: true
+notes: "References non-existent sandbox_guide/ directory. Quick reference itself is valid but modularized documentation is missing."
+---
 # Células Sandbox - Referência Rápida
 
 ## 📋 Visão Geral
