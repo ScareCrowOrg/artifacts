@@ -110,15 +110,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onBeforeMount, onBeforeUnmount, onUnmounted, onUpdated } from 'vue'
+import { ref, watch, onMounted, onBeforeMount, onBeforeUnmount, onUnmounted, onUpdated } from 'vue'
 import { useFileManager } from './composables/useFileManager'
 import type { FileManagerCell } from './types'
 import FileTreeNode from './components/FileTreeNode.vue'
 
 // Generate unique instance ID for this component instance to track re-mounts
-// Using timestamp + counter for more reliable uniqueness than Math.random()
-let instanceCounter = 0
-const instanceId = `FileManagerCell-${Date.now()}-${++instanceCounter}`
+// Using timestamp with random suffix for reliable uniqueness
+const instanceId = `FileManagerCell-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 console.log(`[${instanceId}] 🏗️ Component script setup executing`)
 
 /**
