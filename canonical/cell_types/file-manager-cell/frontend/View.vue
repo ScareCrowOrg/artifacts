@@ -110,10 +110,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeMount, onBeforeUnmount, onUnmounted, onUpdated } from 'vue'
 import { useFileManager } from './composables/useFileManager'
 import type { FileManagerCell } from './types'
 import FileTreeNode from './components/FileTreeNode.vue'
+
+// Generate unique instance ID for this component instance
+const instanceId = `FileManagerCell-${Math.random().toString(36).substring(2, 9)}`
+console.log(`[${instanceId}] 🏗️ Component script setup executing`)
 
 /**
  * Props interface for File Manager View
@@ -124,6 +128,12 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+console.log(`[${instanceId}] 📦 Props received:`, {
+  cellId: props.cell?.id,
+  cellType: props.cell?.type,
+  hasInitialData: !!props.cell?.initial_data
+})
 
 // Use file manager composable
 const {
@@ -171,11 +181,56 @@ function handleCreateNew(): void {
   }
 }
 
-// Load tree once on initial mount
-// Using onMounted to ensure it only runs once per component lifecycle
-onMounted(() => {
-  refreshTree()
+// Lifecycle hooks for debugging
+onBeforeMount(() => {
+  console.log(`[${instanceId}] 🔵 onBeforeMount - component about to mount`)
 })
+
+onMounted(() => {
+  console.log(`[${instanceId}] 🟢 onMounted - component mounted to DOM`)
+})
+
+onUpdated(() => {
+  console.log(`[${instanceId}] 🔄 onUpdated - component re-rendered`, {
+    cellId: props.cell?.id,
+    timestamp: new Date().toISOString()
+  })
+})
+
+onBeforeUnmount(() => {
+  console.log(`[${instanceId}] 🟠 onBeforeUnmount - component about to unmount`)
+})
+
+onUnmounted(() => {
+  console.log(`[${instanceId}] 🔴 onUnmounted - component unmounted`)
+})
+
+// Load tree once on initial mount
+// Using a flag to ensure it only runs once even if component re-renders
+let treeInitialized = false
+let watchCallCount = 0
+watch(
+  () => props.cell,
+  (newCell, oldCell) => {
+    watchCallCount++
+    console.log(`[${instanceId}] 👁️ Watcher triggered (call #${watchCallCount})`, {
+      treeInitialized,
+      newCellId: newCell?.id,
+      oldCellId: oldCell?.id,
+      cellChanged: newCell !== oldCell,
+      willCallRefresh: !treeInitialized
+    })
+    
+    if (!treeInitialized) {
+      treeInitialized = true
+      console.log(`[${instanceId}] 🚀 Calling refreshTree() for the first time`)
+      refreshTree()
+    } else {
+      console.log(`[${instanceId}] ⏭️ Skipping refreshTree() - already initialized`)
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>

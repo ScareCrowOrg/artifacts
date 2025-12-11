@@ -163,12 +163,22 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
    * Protected against concurrent calls to prevent infinite loops
    */
   async function refreshTree(): Promise<void> {
+    const callStack = new Error().stack
+    const timestamp = new Date().toISOString()
+    
+    console.group(`[useFileManager] 🔄 refreshTree() called at ${timestamp}`)
+    console.log('Call stack:', callStack)
+    console.log('isRefreshing:', isRefreshing)
+    console.log('isLoading:', isLoading.value)
+    
     // Guard against concurrent refresh operations
     if (isRefreshing) {
-      console.warn('[FileManagerCell] refreshTree() called while already refreshing - skipping to prevent loop')
+      console.warn('[FileManagerCell] ⚠️ refreshTree() called while already refreshing - skipping to prevent loop')
+      console.groupEnd()
       return
     }
     
+    console.log('✅ Guard passed - proceeding with refresh')
     isRefreshing = true
     isLoading.value = true
     errorMessage.value = ''
@@ -176,22 +186,28 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     
     try {
       // Step 1: Invalidate backend cache
+      console.log('📡 Step 1: Calling tree-refresh endpoint...')
       const refreshUrl = `${ENDPOINTS.treeRefresh}`
       await apiService.fetch(refreshUrl, { method: 'POST' })
+      console.log('✅ Cache refresh completed')
       
       // Step 2: Load fresh tree data
+      console.log('📡 Step 2: Loading tree data...')
       const url = `${ENDPOINTS.tree}?format=flat&include_hidden=true`
       const response = await apiService.fetch(url)
       const data = await response.json()
       
       const items = data.data || []
+      console.log(`📊 Loaded ${items.length} items from backend`)
       tree.value = buildTreeFromFlatList(items)
+      console.log(`🌳 Built tree with ${tree.value.length} root nodes`)
       
       successMessage.value = '✅ Árvore de arquivos atualizada'
       setTimeout(() => {
         successMessage.value = ''
       }, 2000)
     } catch (err) {
+      console.error('❌ Error during refresh:', err)
       if (err instanceof SessionExpiredError) {
         throw err
       }
@@ -200,6 +216,8 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     } finally {
       isLoading.value = false
       isRefreshing = false
+      console.log('🏁 refreshTree() completed')
+      console.groupEnd()
     }
   }
   
