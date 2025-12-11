@@ -184,7 +184,6 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
   function prepareForSave(): UnclassifiedCell {
     console.group('[useUnclassifiedCell] 📦 Preparing cell data for save')
     
-    isSaving.value = true
     errorMessage.value = null
     successMessage.value = null
 
@@ -210,6 +209,15 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
       console.groupEnd()
       throw error
     }
+  }
+  
+  /**
+   * Start save operation (show loading state)
+   */
+  function startSaving(): void {
+    isSaving.value = true
+    errorMessage.value = null
+    successMessage.value = null
   }
   
   /**
@@ -339,6 +347,7 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
     // Methods
     loadCellData,
     prepareForSave,
+    startSaving,
     onSaveComplete,
     onSaveError,
     closeCell,

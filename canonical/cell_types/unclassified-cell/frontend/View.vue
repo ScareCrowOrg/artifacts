@@ -147,6 +147,7 @@ const {
   memoryFragments,
   fragmentCount,
   prepareForSave,
+  startSaving,
   onSaveComplete,
   onSaveError,
   closeCell,
@@ -182,7 +183,10 @@ async function handleSave(): Promise<void> {
   console.group('[UnclassifiedCellView] 💾 Save button clicked')
   
   try {
-    // Step 1: Prepare updated cell data from useUnclassifiedCell
+    // Step 1: Start saving state (show loading indicator)
+    startSaving()
+    
+    // Step 2: Prepare updated cell data from useUnclassifiedCell
     const updatedCell = prepareForSave()
     console.log('📦 Cell data prepared:', {
       id: updatedCell.id,
@@ -190,12 +194,12 @@ async function handleSave(): Promise<void> {
       fragmentsCount: updatedCell.fragments?.length || 0,
     })
     
-    // Step 2: Save via baseCellApi with the updated cell instance
+    // Step 3: Save via baseCellApi with the updated cell instance
     // This calls the backend PUT API directly with the cell context
     console.log('📤 Calling baseCellApi.saveCell with cell instance')
     await baseCellApi.saveCell(updatedCell)
     
-    // Step 3: Notify success
+    // Step 4: Notify success
     console.log('✅ Save completed successfully')
     onSaveComplete()
   } catch (error: any) {
