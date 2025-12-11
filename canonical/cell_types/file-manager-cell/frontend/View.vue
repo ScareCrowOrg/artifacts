@@ -110,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useFileManager } from './composables/useFileManager'
 import type { FileManagerCell } from './types'
 import FileTreeNode from './components/FileTreeNode.vue'
@@ -171,10 +171,19 @@ function handleCreateNew(): void {
   }
 }
 
-// Load tree on mount
-onMounted(() => {
-  refreshTree()
-})
+// Load tree once on initial mount
+// Using a flag to ensure it only runs once even if component re-renders
+let treeInitialized = false
+watch(
+  () => props.cell,
+  () => {
+    if (!treeInitialized) {
+      treeInitialized = true
+      refreshTree()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
