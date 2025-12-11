@@ -39,6 +39,9 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   const errorMessage = ref<string>('')
   const successMessage = ref<string>('')
   
+  // Guard to prevent concurrent refresh operations
+  let isRefreshing = false
+  
   // Computed
   const selectedCount = computed<number>(() => selectedFiles.value.length)
   
@@ -157,8 +160,16 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   
   /**
    * Load or refresh the file tree with cache invalidation
+   * Protected against concurrent calls to prevent infinite loops
    */
   async function refreshTree(): Promise<void> {
+    // Guard against concurrent refresh operations
+    if (isRefreshing) {
+      console.warn('[FileManagerCell] refreshTree() called while already refreshing - skipping to prevent loop')
+      return
+    }
+    
+    isRefreshing = true
     isLoading.value = true
     errorMessage.value = ''
     successMessage.value = ''
@@ -188,6 +199,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
       console.error('Error loading file tree:', err)
     } finally {
       isLoading.value = false
+      isRefreshing = false
     }
   }
   
