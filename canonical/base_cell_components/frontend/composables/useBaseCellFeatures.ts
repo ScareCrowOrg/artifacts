@@ -27,9 +27,14 @@ import { ENDPOINTS } from '@/config/endpoints.js'
  * Provides common functionality for all cell types following the BaseCellAPI interface.
  * This composable should be used as the foundation for cell-specific composables.
  * 
+ * FIX for Issue #1206: cellInstance is now strongly encouraged to ensure
+ * proper instance injection architecture. While technically optional for
+ * backward compatibility, a warning is logged if not provided.
+ * 
  * @param cellId - Cell ID (reactive)
  * @param cellType - Cell type identifier (reactive)
  * @param options - Configuration options
+ * @param cellInstance - The cell instance (reactive) - SHOULD be provided
  * @returns BaseCellAPI implementation
  * 
  * @example
@@ -37,13 +42,15 @@ import { ENDPOINTS } from '@/config/endpoints.js'
  * // In a cell-specific composable
  * const baseCellApi = useBaseCellFeatures(
  *   computed(() => props.cell.id),
- *   computed(() => 'unclassified-cell')
+ *   computed(() => 'unclassified-cell'),
+ *   {},
+ *   ref(props.cell)  // ✅ Pass cell instance
  * )
  * 
- * // Save cell
- * await baseCellApi.saveCell()
+ * // Save cell with instance
+ * await baseCellApi.saveCell(props.cell)
  * 
- * // Show fragments manager
+ * // Show fragments manager (automatically uses cellInstance)
  * baseCellApi.showCellFragmentsManager()
  * ```
  */
@@ -58,6 +65,14 @@ export function useBaseCellFeatures(
   console.log('🏷️ Cell Type:', cellType.value)
   console.log('⚙️ Options:', options)
   console.log('📦 Cell Instance provided:', !!cellInstance?.value)
+  
+  // ⚠️ ARCHITECTURE WARNING: Log if cell instance not provided
+  if (!cellInstance || !cellInstance.value) {
+    console.warn('⚠️ Cell instance not provided to useBaseCellFeatures')
+    console.warn('This may cause instance injection issues and fallback to store lookups')
+    console.warn('Please pass the cell instance as the 4th parameter')
+  }
+  
   console.groupEnd()
 
   // ============================================================
@@ -111,11 +126,15 @@ export function useBaseCellFeatures(
 
   /**
    * Save cell data to backend
+   * 
+   * FIX for Issue #1206: Now accepts cell instance as parameter
+   * and sends complete cell object (not just initial_data and fragments)
    */
-  async function saveCell(): Promise<void> {
+  async function saveCell(cellInstance?: any): Promise<void> {
     console.group('[useBaseCellFeatures] 💾 Saving cell')
     console.log('📦 Cell ID:', cellId.value)
     console.log('🏷️ Cell Type:', cellType.value)
+    console.log('📦 Cell instance provided:', !!cellInstance)
 
     if (!cellId.value) {
       console.warn('⚠️ Cannot save cell without ID')
@@ -136,17 +155,49 @@ export function useBaseCellFeatures(
       } else {
         console.log('📤 Using default save handler')
         
-        // Get cell from notebook store
-        const cell = notebookStore.cells[cellId.value]
+        // ARCHITECTURE PRINCIPLE: Use provided cell instance if available
+        let cell = cellInstance
         
         if (!cell) {
+          console.log('⚠️ No cell instance provided, falling back to store lookup')
+          cell = notebookStore.cells[cellId.value]
+        }
+        
+        if (!cell) {
+          console.error('❌ Cell not found:', cellId.value)
+          console.error('Available cells in store:', Object.keys(notebookStore.cells))
           throw new Error('Célula não encontrada no store')
         }
 
-        console.log('📊 Cell data to save:', {
+        console.log('📊 Complete cell object to save:', {
           id: cell.id,
-          data: cell.data || cell.initial_data,
-          fragments: cell.fragments?.length || 0
+          type: cell.notebook_item_type_id || cell.type,
+          initial_data: cell.initial_data || cell.data,
+          fragments: cell.fragments?.length || 0,
+          metadata: cell.metadata,
+          status: cell.status,
+          history: cell.history?.length || 0,
+          title: cell.title,
+          content: cell.content,
+        })
+
+        // ✅ FIX: Send complete cell object (not just initial_data and fragments)
+        const payload = {
+          initial_data: cell.initial_data || cell.data || {},
+          fragments: cell.fragments || [],
+          metadata: cell.metadata || {},
+          status: cell.status,
+          history: cell.history || [],
+          title: cell.title,
+          content: cell.content,
+        }
+        
+        console.log('📤 Sending complete payload to backend:', {
+          keys: Object.keys(payload),
+          initial_data_size: JSON.stringify(payload.initial_data).length,
+          fragments_count: payload.fragments.length,
+          has_metadata: !!payload.metadata,
+          has_status: !!payload.status,
         })
 
         // Save cell to backend via API
@@ -157,10 +208,7 @@ export function useBaseCellFeatures(
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              initial_data: cell.data || cell.initial_data || {},
-              fragments: cell.fragments || []
-            }),
+            body: JSON.stringify(payload),
           }
         )
 
@@ -171,18 +219,22 @@ export function useBaseCellFeatures(
             statusText: response.statusText,
             error: errorText,
           })
-          throw new Error('Falha ao salvar célula no backend')
+          throw new Error(`Falha ao salvar célula: ${response.statusText}`)
         }
 
         const updatedCell = await response.json()
-        console.log('✅ Cell saved to backend:', updatedCell.id)
+        console.log('✅ Cell saved to backend:', {
+          id: updatedCell.id,
+          fragments: updatedCell.fragments?.length || 0,
+          metadata_keys: Object.keys(updatedCell.metadata || {}).length,
+        })
         
         // Update the cell in the store with the response from backend
         notebookStore.cells[cellId.value] = updatedCell
       }
 
       showSuccess('Célula salva com sucesso!')
-      console.log('✅ Cell saved successfully')
+      console.log('✅ Cell save operation completed')
     } catch (error: any) {
       console.error('❌ Error saving cell:', error)
       showError(error.message || 'Erro ao salvar célula')
@@ -216,8 +268,11 @@ export function useBaseCellFeatures(
    * Uses the new subview rendering system
    * 
    * ARCHITECTURE PRINCIPLE: Instance Injection
-   * If a cell instance was provided to useBaseCellFeatures, use it directly.
-   * Otherwise, fall back to store lookup (legacy behavior).
+   * Uses the cellInstance provided to useBaseCellFeatures if available.
+   * Falls back to store lookup only if no instance was provided.
+   * 
+   * FIX for Issue #1206: Now properly validates and uses cellInstance,
+   * logging warnings when fallback occurs.
    * 
    * Passes the complete cell instance directly to the fragments manager
    * to avoid unnecessary backend fetches and ensure data consistency
@@ -226,6 +281,7 @@ export function useBaseCellFeatures(
     console.group('[useBaseCellFeatures] 📚 Showing fragments manager')
     console.log('📦 Cell ID:', cellId.value)
     console.log('🏷️ Cell Type:', cellType.value)
+    console.log('📦 Cell instance available:', !!cellInstance?.value)
 
     if (!cellId.value) {
       console.warn('⚠️ Cannot show fragments manager without cell ID')
@@ -242,19 +298,24 @@ export function useBaseCellFeatures(
         console.log('✅ Using cell instance provided to useBaseCellFeatures')
         cell = cellInstance.value
       } else {
-        console.log('⚠️ No cell instance provided, falling back to store lookup')
+        console.warn('⚠️ No cell instance provided, falling back to store lookup')
+        console.warn('This is not ideal and may cause issues if cell not in store')
         cell = notebookStore.cells[cellId.value]
         
         if (!cell) {
           console.error('❌ Cell not found in store:', cellId.value)
           console.error('Available cells in store:', Object.keys(notebookStore.cells))
-          showError('Célula não encontrada no store. Por favor, feche e reabra a célula.')
+          showError('Célula não encontrada. Por favor, recarregue a célula.')
           console.groupEnd()
           return
         }
       }
 
-      console.log('📋 Cell found:', cell.id || cellId.value)
+      console.log('📋 Cell found:', {
+        id: cell.id || cellId.value,
+        type: cell.notebook_item_type_id || cell.type,
+        fragments: cell.fragments?.length || 0,
+      })
 
       // Check if already open
       const existingInstanceId = `fragments-manager-${cellId.value}`
@@ -265,10 +326,11 @@ export function useBaseCellFeatures(
         return
       }
 
-      console.log('📦 Passing complete cell instance to fragments manager')
+      console.log('📦 Passing complete cell instance to fragments manager via state')
+      console.log('🔗 Instance will be available at props.cell.state.cellInstance')
 
       // Use the new subview rendering system
-      // Pass the complete cell instance directly as a prop
+      // Pass the complete cell instance directly as a prop via state
       const instanceId = renderSubView('fragments-manager', {
         cellInstance: cell,  // Pass the complete cell object
         cellId: cellId.value,
@@ -280,7 +342,8 @@ export function useBaseCellFeatures(
         return
       }
       
-      console.log('✅ Fragments manager opened successfully with cell instance')
+      console.log('✅ Fragments manager opened successfully')
+      console.log('📍 Instance ID:', instanceId)
     } catch (error: any) {
       console.error('❌ Error opening fragments manager:', error)
       showError(error.message || 'Erro ao abrir gerenciador de fragmentos')
