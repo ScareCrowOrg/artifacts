@@ -18,10 +18,11 @@ import { useDynamicLayout } from '@/composables/useDynamicLayout'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useAuthStore } from '@/stores/auth'
 
-// Global guard to prevent concurrent refresh operations across all FileManagerCell instances
+// Global state to prevent concurrent refresh operations across all FileManagerCell instances
 // This prevents infinite loops when async component loading causes component re-creation
 let globalRefreshInProgress = false
-let globalRefreshPromise: Promise<void> | null = null
+let globalRefreshPromise: Promise<FileTreeNode[]> | null = null
+let cachedTreeData: FileTreeNode[] = []
 
 /**
  * File Manager composable
@@ -163,7 +164,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   /**
    * Load or refresh the file tree with cache invalidation
    * Protected against concurrent calls to prevent infinite loops
-   * Uses global guard to prevent multiple component instances from refreshing simultaneously
+   * Uses a global guard to prevent multiple component instances from refreshing simultaneously
    */
   async function refreshTree(): Promise<void> {
     const timestamp = new Date().toISOString()
@@ -173,20 +174,22 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     console.log('isLoading:', isLoading.value)
     console.trace('Call stack trace')
     
-    // Global guard: If ANY instance is already refreshing, wait for it or skip
+    // Global guard: If ANY instance is already refreshing, wait for it
     if (globalRefreshInProgress) {
       console.warn('[FileManagerCell] ⚠️ Global refresh already in progress - reusing existing refresh')
-      console.groupEnd()
       
-      // Wait for the ongoing refresh to complete, then update local state
+      // Wait for the ongoing refresh to complete, then update local state from cache
       if (globalRefreshPromise) {
         try {
-          await globalRefreshPromise
-          console.log('[FileManagerCell] ✅ Global refresh completed, local state should be updated')
+          const treeData = await globalRefreshPromise
+          tree.value = treeData
+          console.log('[FileManagerCell] ✅ Global refresh completed, local state updated from cache')
         } catch (err) {
           console.error('[FileManagerCell] ❌ Global refresh failed:', err)
+          errorMessage.value = '❌ Erro ao carregar árvore de arquivos'
         }
       }
+      console.groupEnd()
       return
     }
     
@@ -197,7 +200,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     successMessage.value = ''
     
     // Create a promise that other instances can await
-    globalRefreshPromise = (async () => {
+    globalRefreshPromise = (async (): Promise<FileTreeNode[]> => {
       try {
         // Step 1: Invalidate backend cache
         console.log('📡 Step 1: Calling tree-refresh endpoint...')
@@ -213,13 +216,19 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
         
         const items = data.data || []
         console.log(`📊 Loaded ${items.length} items from backend`)
-        tree.value = buildTreeFromFlatList(items)
-        console.log(`🌳 Built tree with ${tree.value.length} root nodes`)
+        const treeData = buildTreeFromFlatList(items)
+        console.log(`🌳 Built tree with ${treeData.length} root nodes`)
+        
+        // Update local state and cache
+        tree.value = treeData
+        cachedTreeData = treeData
         
         successMessage.value = '✅ Árvore de arquivos atualizada'
         setTimeout(() => {
           successMessage.value = ''
         }, 2000)
+        
+        return treeData
       } catch (err) {
         console.error('❌ Error during refresh:', err)
         if (err instanceof SessionExpiredError) {
@@ -227,10 +236,12 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
         }
         errorMessage.value = '❌ Erro ao carregar árvore de arquivos'
         console.error('Error loading file tree:', err)
+        throw err
       } finally {
-        isLoading.value = false
+        // Reset global state FIRST to prevent race conditions
         globalRefreshInProgress = false
         globalRefreshPromise = null
+        isLoading.value = false
         console.log('🏁 refreshTree() completed')
         console.groupEnd()
       }
