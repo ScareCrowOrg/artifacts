@@ -1,0 +1,419 @@
+/**
+ * useFileManager Composable
+ * 
+ * Provides file management functionality for the FileManagerCell.
+ * Handles file tree loading, selection, search, and file operations.
+ */
+
+import { ref, computed, watch, type Ref } from 'vue'
+import type {
+  FileManagerCell,
+  FileTreeNode,
+  UseFileManagerReturn,
+  FileOperationResult
+} from '../types'
+import { ENDPOINTS } from '@/config/endpoints'
+import apiService, { SessionExpiredError } from '@/services/apiService'
+import { useCellsStore } from '@/stores/cells'
+
+/**
+ * File Manager composable
+ * 
+ * @param cell - The file manager cell instance (reactive ref)
+ * @returns File manager state and actions
+ */
+export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn {
+  // Stores
+  const cellsStore = useCellsStore()
+  
+  // State
+  const tree = ref<FileTreeNode[]>([])
+  const selectedFiles = ref<string[]>(cell.value.initial_data?.selectedFiles || [])
+  const expandedPaths = ref<Set<string>>(new Set(cell.value.initial_data?.expandedPaths || []))
+  const searchQuery = ref<string>(cell.value.initial_data?.searchQuery || '')
+  const isLoading = ref<boolean>(false)
+  const errorMessage = ref<string>('')
+  const successMessage = ref<string>('')
+  
+  // Computed
+  const selectedCount = computed<number>(() => selectedFiles.value.length)
+  
+  const displayTree = computed<FileTreeNode[]>(() => {
+    if (!searchQuery.value || searchQuery.value.trim() === '') {
+      return tree.value
+    }
+    return filterTree(tree.value, searchQuery.value.toLowerCase())
+  })
+  
+  const hasNoMatches = computed<boolean>(() => {
+    return searchQuery.value.trim() !== '' && displayTree.value.length === 0
+  })
+  
+  // Watch for search query changes to update cell data
+  watch(searchQuery, (newQuery) => {
+    if (cell.value) {
+      cellsStore.updateCell(cell.value.id, {
+        initial_data: {
+          ...cell.value.initial_data,
+          searchQuery: newQuery
+        }
+      })
+    }
+  })
+  
+  // Watch for selection changes to update cell data
+  watch(selectedFiles, (newSelection) => {
+    if (cell.value) {
+      cellsStore.updateCell(cell.value.id, {
+        initial_data: {
+          ...cell.value.initial_data,
+          selectedFiles: newSelection
+        }
+      })
+    }
+  }, { deep: true })
+  
+  /**
+   * Filter tree nodes by search query
+   */
+  function filterTree(nodes: FileTreeNode[], query: string): FileTreeNode[] {
+    const result: FileTreeNode[] = []
+    
+    for (const node of nodes) {
+      const nameMatch = node.name.toLowerCase().includes(query)
+      const childMatches = node.children ? filterTree(node.children, query) : []
+      
+      if (nameMatch || childMatches.length > 0) {
+        result.push({
+          ...node,
+          children: childMatches.length > 0 ? childMatches : node.children
+        })
+      }
+    }
+    
+    return result
+  }
+  
+  /**
+   * Build hierarchical tree from flat list
+   */
+  function buildTreeFromFlatList(items: any[]): FileTreeNode[] {
+    const nodeMap = new Map<string, FileTreeNode>()
+    const root: FileTreeNode[] = []
+    
+    // Create all nodes and map by path
+    for (const item of items) {
+      // Skip actions-runner directories
+      if (
+        item.path.startsWith('actions-runner') ||
+        item.path.startsWith('actions-runner-tests')
+      ) {
+        continue
+      }
+      
+      const isDirectory = item.type === 'directory' || item.path.endsWith('/')
+      const node: FileTreeNode = {
+        name: item.name,
+        path: item.path,
+        isDirectory,
+        children: [],
+        loaded: true,
+        size: item.size,
+        modified: item.modified
+      }
+      nodeMap.set(item.path.replace(/\/$/, ''), node)
+    }
+    
+    // Build hierarchy
+    for (const item of items) {
+      const path = item.path.replace(/\/$/, '')
+      if (
+        path.startsWith('actions-runner') ||
+        path.startsWith('actions-runner-tests')
+      ) {
+        continue
+      }
+      
+      const parts = path.split('/')
+      if (parts.length === 1) {
+        // Root level
+        const node = nodeMap.get(path)
+        if (node) root.push(node)
+      } else {
+        // Has parent
+        const parentPath = parts.slice(0, -1).join('/')
+        const parentNode = nodeMap.get(parentPath)
+        const node = nodeMap.get(path)
+        if (parentNode && node) {
+          parentNode.children?.push(node)
+        } else if (node) {
+          // Fallback: add to root if parent not found
+          root.push(node)
+        }
+      }
+    }
+    
+    // Sort nodes recursively
+    const sortNodes = (nodes: FileTreeNode[]) => {
+      nodes.sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) {
+          return a.isDirectory ? -1 : 1
+        }
+        return a.name.localeCompare(b.name)
+      })
+      nodes.forEach(node => {
+        if (node.children) {
+          sortNodes(node.children)
+        }
+      })
+    }
+    sortNodes(root)
+    
+    return root
+  }
+  
+  /**
+   * Load or refresh the file tree with cache invalidation
+   */
+  async function refreshTree(): Promise<void> {
+    isLoading.value = true
+    errorMessage.value = ''
+    successMessage.value = ''
+    
+    try {
+      // Step 1: Invalidate backend cache
+      const refreshUrl = `${ENDPOINTS.treeRefresh}`
+      await apiService.fetch(refreshUrl, { method: 'POST' })
+      
+      // Step 2: Load fresh tree data
+      const url = `${ENDPOINTS.tree}?format=flat&include_hidden=true`
+      const response = await apiService.fetch(url)
+      const data = await response.json()
+      
+      const items = data.data || []
+      tree.value = buildTreeFromFlatList(items)
+      
+      successMessage.value = '✅ Árvore de arquivos atualizada'
+      setTimeout(() => {
+        successMessage.value = ''
+      }, 2000)
+    } catch (err) {
+      if (err instanceof SessionExpiredError) {
+        throw err
+      }
+      errorMessage.value = '❌ Erro ao carregar árvore de arquivos'
+      console.error('Error loading file tree:', err)
+    } finally {
+      isLoading.value = false
+    }
+  }
+  
+  /**
+   * Toggle file selection
+   */
+  function toggleSelection(path: string): void {
+    const index = selectedFiles.value.indexOf(path)
+    if (index >= 0) {
+      selectedFiles.value.splice(index, 1)
+    } else {
+      selectedFiles.value.push(path)
+    }
+  }
+  
+  /**
+   * Clear all selections
+   */
+  function clearSelection(): void {
+    selectedFiles.value = []
+  }
+  
+  /**
+   * Toggle directory expansion
+   */
+  function toggleExpanded(path: string): void {
+    if (expandedPaths.value.has(path)) {
+      expandedPaths.value.delete(path)
+    } else {
+      expandedPaths.value.add(path)
+    }
+  }
+  
+  /**
+   * Collapse all directories
+   */
+  function collapseAll(): void {
+    expandedPaths.value.clear()
+  }
+  
+  /**
+   * Update search query
+   */
+  function updateSearchQuery(query: string): void {
+    searchQuery.value = query
+  }
+  
+  /**
+   * Open selected files in FileEditorCell instances
+   */
+  async function openSelectedFiles(): Promise<void> {
+    if (selectedFiles.value.length === 0) {
+      errorMessage.value = '❌ Nenhum arquivo selecionado'
+      return
+    }
+    
+    try {
+      // Create FileEditorCell instances for each selected file
+      for (const filePath of selectedFiles.value) {
+        // Extract file name and directory
+        const parts = filePath.split('/')
+        const fileName = parts[parts.length - 1]
+        const dirPath = parts.slice(0, -1).join('/')
+        
+        // Only open files, not directories
+        const node = findNodeByPath(tree.value, filePath)
+        if (node && !node.isDirectory) {
+          await cellsStore.addCell({
+            type: 'file-editor-v2',
+            initial_data: {
+              fileName,
+              filePath: dirPath || 'docs',
+              language: getLanguageFromExtension(fileName),
+              readOnly: false,
+              category: 'efemera',
+              icon: '📄'
+            }
+          })
+        }
+      }
+      
+      successMessage.value = `✅ ${selectedFiles.value.length} arquivo(s) aberto(s)`
+      setTimeout(() => {
+        successMessage.value = ''
+      }, 2000)
+      
+      // Clear selection after opening
+      clearSelection()
+    } catch (err) {
+      errorMessage.value = '❌ Erro ao abrir arquivos'
+      console.error('Error opening files:', err)
+    }
+  }
+  
+  /**
+   * Find tree node by path
+   */
+  function findNodeByPath(nodes: FileTreeNode[], path: string): FileTreeNode | null {
+    for (const node of nodes) {
+      if (node.path === path) {
+        return node
+      }
+      if (node.children) {
+        const found = findNodeByPath(node.children, path)
+        if (found) return found
+      }
+    }
+    return null
+  }
+  
+  /**
+   * Get language/syntax from file extension
+   */
+  function getLanguageFromExtension(fileName: string): string {
+    const ext = fileName.split('.').pop()?.toLowerCase()
+    const langMap: Record<string, string> = {
+      'md': 'markdown',
+      'js': 'javascript',
+      'ts': 'typescript',
+      'vue': 'vue',
+      'py': 'python',
+      'json': 'json',
+      'yaml': 'yaml',
+      'yml': 'yaml',
+      'html': 'html',
+      'css': 'css',
+      'sh': 'shell'
+    }
+    return langMap[ext || ''] || 'plaintext'
+  }
+  
+  /**
+   * Create new file
+   */
+  async function createNewFile(fileName: string, folder: string = 'docs'): Promise<void> {
+    if (!fileName || !fileName.trim()) {
+      errorMessage.value = '❌ Nome do arquivo é obrigatório'
+      return
+    }
+    
+    try {
+      // Create FileEditorCell for the new file
+      await cellsStore.addCell({
+        type: 'file-editor-v2',
+        initial_data: {
+          fileName: fileName.trim(),
+          filePath: folder,
+          language: getLanguageFromExtension(fileName),
+          readOnly: false,
+          category: 'efemera',
+          icon: '📄'
+        }
+      })
+      
+      successMessage.value = `✅ Célula criada para ${fileName}`
+      setTimeout(() => {
+        successMessage.value = ''
+        // Refresh tree after creation
+        refreshTree()
+      }, 1500)
+    } catch (err) {
+      errorMessage.value = '❌ Erro ao criar arquivo'
+      console.error('Error creating file:', err)
+    }
+  }
+  
+  /**
+   * Move file or directory
+   */
+  async function moveItem(sourcePath: string, destPath: string): Promise<void> {
+    // TODO: Implement move functionality
+    // This would call backend endpoint for moving files
+    console.log('Move not yet implemented:', sourcePath, destPath)
+  }
+  
+  /**
+   * Delete file or directory
+   */
+  async function deleteItem(path: string): Promise<void> {
+    // TODO: Implement delete functionality
+    // This would call backend endpoint for deleting files
+    console.log('Delete not yet implemented:', path)
+  }
+  
+  return {
+    // State
+    tree,
+    displayTree,
+    selectedFiles,
+    expandedPaths,
+    searchQuery,
+    isLoading,
+    errorMessage,
+    successMessage,
+    
+    // Computed
+    selectedCount,
+    hasNoMatches,
+    
+    // Actions
+    refreshTree,
+    toggleSelection,
+    clearSelection,
+    toggleExpanded,
+    collapseAll,
+    updateSearchQuery,
+    openSelectedFiles,
+    createNewFile,
+    moveItem,
+    deleteItem
+  }
+}
