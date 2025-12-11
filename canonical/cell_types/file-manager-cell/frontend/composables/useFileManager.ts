@@ -265,6 +265,9 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
         const node = findNodeByPath(tree.value, filePath)
         if (node && !node.isDirectory) {
           // Step 1: Create cell in backend
+          // Note: FileEditorCell is persistent (NOT ephemeral) because users need
+          // their file editing sessions to survive page refreshes. The `category`
+          // field is intentionally omitted here to allow backend default behavior.
           const createResponse = await apiService.fetch(ENDPOINTS.createCell, {
             method: 'POST',
             headers: { 
@@ -377,6 +380,8 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
       }
       
       // Step 1: Create cell in backend
+      // Note: FileEditorCell is persistent (NOT ephemeral) so users can resume
+      // editing after page refresh. The `category` field is intentionally omitted.
       const createResponse = await apiService.fetch(ENDPOINTS.createCell, {
         method: 'POST',
         headers: { 
