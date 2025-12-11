@@ -146,7 +146,9 @@ const {
   isNewCell,
   memoryFragments,
   fragmentCount,
-  saveCell,
+  prepareForSave,
+  onSaveComplete,
+  onSaveError,
   closeCell,
   sendFragmentToChat,
   formatDate,
@@ -171,10 +173,37 @@ function onClose(): void {
 
 /**
  * Handle save button click
+ * 
+ * FIX for Issue #1206: Now orchestrates save between useUnclassifiedCell
+ * and useBaseCellFeatures, passing the cell instance directly to avoid
+ * dependency on global "active cell" state.
  */
 async function handleSave(): Promise<void> {
-  console.log('[UnclassifiedCellView] 💾 Save button clicked')
-  await saveCell()
+  console.group('[UnclassifiedCellView] 💾 Save button clicked')
+  
+  try {
+    // Step 1: Prepare updated cell data from useUnclassifiedCell
+    const updatedCell = prepareForSave()
+    console.log('📦 Cell data prepared:', {
+      id: updatedCell.id,
+      hasInitialData: !!updatedCell.initial_data,
+      fragmentsCount: updatedCell.fragments?.length || 0,
+    })
+    
+    // Step 2: Save via baseCellApi with the updated cell instance
+    // This calls the backend PUT API directly with the cell context
+    console.log('📤 Calling baseCellApi.saveCell with cell instance')
+    await baseCellApi.saveCell(updatedCell)
+    
+    // Step 3: Notify success
+    console.log('✅ Save completed successfully')
+    onSaveComplete()
+  } catch (error: any) {
+    console.error('❌ Save failed:', error)
+    onSaveError(error)
+  } finally {
+    console.groupEnd()
+  }
 }
 
 /**
@@ -182,7 +211,7 @@ async function handleSave(): Promise<void> {
  */
 async function onSave(): Promise<void> {
   console.log('[UnclassifiedCellView] 💾 Save triggered from toolbar')
-  await saveCell()
+  await handleSave()
 }
 
 /**

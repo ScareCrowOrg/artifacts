@@ -174,45 +174,62 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
 
   /**
    * Save cell data to backend
-   * Delegates to the store's cellDataBuffer for persistence via useCellManagement
-   * This ensures proper handling of new cells vs. existing cells
+   * 
+   * FIX for Issue #1206: This now returns the updated cell data
+   * to be used by the caller (View component) which will pass it
+   * to baseCellApi.saveCell() with the cell instance.
+   * 
+   * This removes the dependency on global "active cell" and store indirection.
    */
-  async function saveCell(): Promise<void> {
-    console.group('[useUnclassifiedCell] 💾 Saving cell')
+  function prepareForSave(): UnclassifiedCell {
+    console.group('[useUnclassifiedCell] 📦 Preparing cell data for save')
     
     isSaving.value = true
     errorMessage.value = null
     successMessage.value = null
 
     try {
-      console.log('📤 Preparing cell data for save:', cellData.value)
+      console.log('📤 Preparing cell data:', cellData.value)
       console.log('📦 Cell ID:', cell.value?.id || 'NEW CELL')
       console.log('🧩 Fragments count:', cell.value?.fragments?.length || 0)
       
-      // Update the cell data buffer in the store
-      // This will be picked up by useCellManagement.saveCell() via App.vue
-      cellsStore.updateCellDataBuffer(cellData.value)
-      console.log('✅ Cell data buffer updated in store')
+      // Create updated cell object with new data
+      const updatedCell: UnclassifiedCell = {
+        ...cell.value,
+        initial_data: cellData.value,
+        data: cellData.value, // Also update legacy data field
+      }
       
-      // Trigger the save operation through the store
-      // This will invoke the proper save flow in useCellManagement
-      cellsStore.triggerSaveCell()
-      console.log('✅ Save cell triggered via store')
-      
-      // Note: The actual save and success feedback will be handled by
-      // useCellManagement.saveCell() and App.vue's handleSaveCell()
-      // This ensures consistent behavior across all cell types
-      
-      // Show temporary feedback (will be replaced by actual save result)
-      successMessage.value = 'Salvando célula...'
-      console.log('✅ Save initiated')
-    } catch (error: any) {
-      console.error('❌ Error initiating save:', error)
-      errorMessage.value = error.message || 'Erro ao iniciar salvamento'
-    } finally {
-      isSaving.value = false
+      console.log('✅ Cell prepared for save')
       console.groupEnd()
+      
+      return updatedCell
+    } catch (error: any) {
+      console.error('❌ Error preparing cell:', error)
+      errorMessage.value = error.message || 'Erro ao preparar salvamento'
+      console.groupEnd()
+      throw error
     }
+  }
+  
+  /**
+   * Handle save completion
+   * Called by View component after successful save
+   */
+  function onSaveComplete(): void {
+    console.log('[useUnclassifiedCell] ✅ Save completed successfully')
+    successMessage.value = 'Célula salva com sucesso!'
+    isSaving.value = false
+  }
+  
+  /**
+   * Handle save error
+   * Called by View component if save fails
+   */
+  function onSaveError(error: any): void {
+    console.error('[useUnclassifiedCell] ❌ Save failed:', error)
+    errorMessage.value = error.message || 'Erro ao salvar célula'
+    isSaving.value = false
   }
 
   /**
@@ -321,7 +338,9 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
     
     // Methods
     loadCellData,
-    saveCell,
+    prepareForSave,
+    onSaveComplete,
+    onSaveError,
     closeCell,
     sendFragmentToChat,
     formatDate,
