@@ -163,13 +163,12 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
    * Protected against concurrent calls to prevent infinite loops
    */
   async function refreshTree(): Promise<void> {
-    const callStack = new Error().stack
     const timestamp = new Date().toISOString()
     
     console.group(`[useFileManager] 🔄 refreshTree() called at ${timestamp}`)
-    console.log('Call stack:', callStack)
     console.log('isRefreshing:', isRefreshing)
     console.log('isLoading:', isLoading.value)
+    console.trace('Call stack trace')
     
     // Guard against concurrent refresh operations
     if (isRefreshing) {
