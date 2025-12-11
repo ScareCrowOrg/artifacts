@@ -1,3 +1,18 @@
+---
+processed: true
+processed_date: 2025-12-11
+themes:
+  - cell-types
+  - frontend
+  - typescript
+  - vue-composables
+modules:
+  - cockpit-vue
+generated_docs:
+  - docs/official/cockpit-vue/cell-lifecycle/file-manager-cell.md
+code_verified: true
+dead_docs_found: false
+---
 # Frontend Implementation
 
 ## Overview
