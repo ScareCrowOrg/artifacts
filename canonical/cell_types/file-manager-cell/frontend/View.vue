@@ -113,7 +113,7 @@
 import { ref, onMounted } from 'vue'
 import { useFileManager } from './composables/useFileManager'
 import type { FileManagerCell } from './types'
-import FileTreeNode from '@/components/FileTreeNode.vue'
+import FileTreeNode from './components/FileTreeNode.vue'
 
 /**
  * Props interface for File Manager View
