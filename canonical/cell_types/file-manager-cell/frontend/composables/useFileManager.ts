@@ -5,7 +5,7 @@
  * Handles file tree loading, selection, search, and file operations.
  */
 
-import { ref, computed, watch, type Ref } from 'vue'
+import { ref, computed, type Ref } from 'vue'
 import type {
   FileManagerCell,
   FileTreeNode,
@@ -14,7 +14,9 @@ import type {
 } from '../types'
 import { ENDPOINTS } from '@/config/endpoints'
 import apiService, { SessionExpiredError } from '@/services/apiService'
-import { useCellsStore } from '@/stores/cells'
+import { useDynamicLayout } from '@/composables/useDynamicLayout'
+import { useNotebookStore } from '@/stores/useNotebookStore'
+import { useAuthStore } from '@/stores/auth'
 
 /**
  * File Manager composable
@@ -23,8 +25,10 @@ import { useCellsStore } from '@/stores/cells'
  * @returns File manager state and actions
  */
 export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn {
-  // Stores
-  const cellsStore = useCellsStore()
+  // Composables & Stores
+  const { addCell } = useDynamicLayout()
+  const notebookStore = useNotebookStore()
+  const authStore = useAuthStore()
   
   // State
   const tree = ref<FileTreeNode[]>([])
@@ -49,29 +53,8 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     return searchQuery.value.trim() !== '' && displayTree.value.length === 0
   })
   
-  // Watch for search query changes to update cell data
-  watch(searchQuery, (newQuery) => {
-    if (cell.value) {
-      cellsStore.updateCell(cell.value.id, {
-        initial_data: {
-          ...cell.value.initial_data,
-          searchQuery: newQuery
-        }
-      })
-    }
-  })
-  
-  // Watch for selection changes to update cell data
-  watch(selectedFiles, (newSelection) => {
-    if (cell.value) {
-      cellsStore.updateCell(cell.value.id, {
-        initial_data: {
-          ...cell.value.initial_data,
-          selectedFiles: newSelection
-        }
-      })
-    }
-  }, { deep: true })
+  // Note: FileManagerCell is ephemeral and should NOT persist state changes.
+  // State like selectedFiles, searchQuery, expandedPaths are kept in memory only.
   
   /**
    * Filter tree nodes by search query
@@ -231,18 +214,20 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
    * Toggle directory expansion
    */
   function toggleExpanded(path: string): void {
-    if (expandedPaths.value.has(path)) {
-      expandedPaths.value.delete(path)
+    const newExpandedPaths = new Set(expandedPaths.value)
+    if (newExpandedPaths.has(path)) {
+      newExpandedPaths.delete(path)
     } else {
-      expandedPaths.value.add(path)
+      newExpandedPaths.add(path)
     }
+    expandedPaths.value = newExpandedPaths
   }
   
   /**
    * Collapse all directories
    */
   function collapseAll(): void {
-    expandedPaths.value.clear()
+    expandedPaths.value = new Set()
   }
   
   /**
@@ -262,7 +247,14 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     }
     
     try {
-      // Create FileEditorCell instances for each selected file
+      // Get current user ID
+      const userId = authStore.user?.id || notebookStore.getUserId()
+      
+      if (!userId) {
+        throw new Error('User not authenticated')
+      }
+      
+      // Create FileEditorCell instances for each selected file via backend API
       for (const filePath of selectedFiles.value) {
         // Extract file name and directory
         const parts = filePath.split('/')
@@ -272,17 +264,48 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
         // Only open files, not directories
         const node = findNodeByPath(tree.value, filePath)
         if (node && !node.isDirectory) {
-          await cellsStore.addCell({
-            type: 'file-editor-v2',
-            initial_data: {
-              fileName,
-              filePath: dirPath || 'docs',
-              language: getLanguageFromExtension(fileName),
-              readOnly: false,
-              category: 'efemera',
-              icon: '📄'
-            }
+          // Step 1: Create cell in backend
+          const createResponse = await apiService.fetch(ENDPOINTS.createCell, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              notebook_item_type_id: 'file-editor-v2',
+              assignee_id: userId,
+              initial_data: {
+                fileName,
+                filePath: dirPath || 'docs',
+                language: getLanguageFromExtension(fileName),
+                readOnly: false,
+                icon: '📄'
+              }
+            })
           })
+          
+          if (!createResponse.ok) {
+            const errorText = await createResponse.text()
+            console.error('❌ Backend cell creation failed:', errorText)
+            throw new Error(`Backend cell creation failed: ${createResponse.statusText}`)
+          }
+          
+          const newCell = await createResponse.json()
+          
+          // Step 2: Add to local layout with backend-assigned ID
+          const cellData = {
+            cellId: newCell.id,
+            type: newCell.notebook_item_type_id,
+            title: fileName,
+            state: {
+              cellInstance: newCell,
+              initial_data: newCell.initial_data || {},
+            }
+          }
+          
+          addCell(cellData)
+          
+          // Step 3: Add to notebook store
+          notebookStore.cells[newCell.id] = newCell
         }
       }
       
@@ -346,18 +369,55 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     }
     
     try {
-      // Create FileEditorCell for the new file
-      await cellsStore.addCell({
-        type: 'file-editor-v2',
-        initial_data: {
-          fileName: fileName.trim(),
-          filePath: folder,
-          language: getLanguageFromExtension(fileName),
-          readOnly: false,
-          category: 'efemera',
-          icon: '📄'
-        }
+      // Get current user ID
+      const userId = authStore.user?.id || notebookStore.getUserId()
+      
+      if (!userId) {
+        throw new Error('User not authenticated')
+      }
+      
+      // Step 1: Create cell in backend
+      const createResponse = await apiService.fetch(ENDPOINTS.createCell, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          notebook_item_type_id: 'file-editor-v2',
+          assignee_id: userId,
+          initial_data: {
+            fileName: fileName.trim(),
+            filePath: folder,
+            language: getLanguageFromExtension(fileName),
+            readOnly: false,
+            icon: '📄'
+          }
+        })
       })
+      
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text()
+        console.error('❌ Backend cell creation failed:', errorText)
+        throw new Error(`Backend cell creation failed: ${createResponse.statusText}`)
+      }
+      
+      const newCell = await createResponse.json()
+      
+      // Step 2: Add to local layout
+      const cellData = {
+        cellId: newCell.id,
+        type: newCell.notebook_item_type_id,
+        title: fileName.trim(),
+        state: {
+          cellInstance: newCell,
+          initial_data: newCell.initial_data || {},
+        }
+      }
+      
+      addCell(cellData)
+      
+      // Step 3: Add to notebook store
+      notebookStore.cells[newCell.id] = newCell
       
       successMessage.value = `✅ Célula criada para ${fileName}`
       setTimeout(() => {
