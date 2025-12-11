@@ -14,12 +14,32 @@
 
 import { ref, computed, type Ref } from 'vue'
 import type { BaseCellAPI, CellFragment, BaseCellFeaturesOptions, SubViewConfig, ParentCellContext } from '@/types/baseCell'
+import type { CompleteCell } from '@/types/cell'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useCellsStore } from '@/stores/cells'
 import { useChatStore } from '@/stores/chat'
 import { useLayoutStore } from '@/stores/layout'
 import apiService from '@/services/apiService.js'
 import { ENDPOINTS } from '@/config/endpoints.js'
+
+/**
+ * Build complete cell payload for API persistence
+ * Ensures all cell fields are included in the save operation
+ * 
+ * @param cell - Complete cell instance
+ * @returns Payload object with all cell fields
+ */
+function buildCellPayload(cell: CompleteCell): Record<string, unknown> {
+  return {
+    initial_data: cell.initial_data || cell.data || {},
+    fragments: cell.fragments || [],
+    metadata: cell.metadata || {},
+    status: cell.status,
+    history: cell.history || [],
+    title: cell.title,
+    content: cell.content,
+  }
+}
 
 /**
  * Base cell features composable
@@ -58,7 +78,7 @@ export function useBaseCellFeatures(
   cellId: Ref<string>,
   cellType: Ref<string>,
   options: BaseCellFeaturesOptions = {},
-  cellInstance?: Ref<any>
+  cellInstance?: Ref<CompleteCell>
 ): BaseCellAPI {
   console.group('[useBaseCellFeatures] 🏗️ Initializing base cell features')
   console.log('📦 Cell ID:', cellId.value)
@@ -129,8 +149,10 @@ export function useBaseCellFeatures(
    * 
    * FIX for Issue #1206: Now accepts cell instance as parameter
    * and sends complete cell object (not just initial_data and fragments)
+   * 
+   * @param cellInstance - Optional cell instance to save (overrides store lookup)
    */
-  async function saveCell(cellInstance?: any): Promise<void> {
+  async function saveCell(cellInstance?: CompleteCell): Promise<void> {
     console.group('[useBaseCellFeatures] 💾 Saving cell')
     console.log('📦 Cell ID:', cellId.value)
     console.log('🏷️ Cell Type:', cellType.value)
@@ -181,16 +203,8 @@ export function useBaseCellFeatures(
           content: cell.content,
         })
 
-        // ✅ FIX: Send complete cell object (not just initial_data and fragments)
-        const payload = {
-          initial_data: cell.initial_data || cell.data || {},
-          fragments: cell.fragments || [],
-          metadata: cell.metadata || {},
-          status: cell.status,
-          history: cell.history || [],
-          title: cell.title,
-          content: cell.content,
-        }
+        // ✅ FIX: Use helper function to build complete cell payload
+        const payload = buildCellPayload(cell)
         
         console.log('📤 Sending complete payload to backend:', {
           keys: Object.keys(payload),
@@ -368,7 +382,7 @@ export function useBaseCellFeatures(
    * @param cellInstance - The cell instance to add the fragment to
    * @param fragmentData - The fragment data to add
    */
-  async function addFragment(cellInstance: any, fragmentData: CellFragment): Promise<void> {
+  async function addFragment(cellInstance: CompleteCell, fragmentData: CellFragment): Promise<void> {
     console.group('[useBaseCellFeatures] ➕ Adding fragment')
     console.log('📦 Cell ID:', cellId.value)
     console.log('🧩 Fragment data:', fragmentData)
