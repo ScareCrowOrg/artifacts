@@ -18,6 +18,11 @@ import { useDynamicLayout } from '@/composables/useDynamicLayout'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useAuthStore } from '@/stores/auth'
 
+// Global guard to prevent concurrent refresh operations across all FileManagerCell instances
+// This prevents infinite loops when async component loading causes component re-creation
+let globalRefreshInProgress = false
+let globalRefreshPromise: Promise<void> | null = null
+
 /**
  * File Manager composable
  * 
@@ -38,9 +43,6 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   const isLoading = ref<boolean>(false)
   const errorMessage = ref<string>('')
   const successMessage = ref<string>('')
-  
-  // Guard to prevent concurrent refresh operations
-  let isRefreshing = false
   
   // Computed
   const selectedCount = computed<number>(() => selectedFiles.value.length)
@@ -161,63 +163,80 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   /**
    * Load or refresh the file tree with cache invalidation
    * Protected against concurrent calls to prevent infinite loops
+   * Uses global guard to prevent multiple component instances from refreshing simultaneously
    */
   async function refreshTree(): Promise<void> {
     const timestamp = new Date().toISOString()
     
     console.group(`[useFileManager] 🔄 refreshTree() called at ${timestamp}`)
-    console.log('isRefreshing:', isRefreshing)
+    console.log('globalRefreshInProgress:', globalRefreshInProgress)
     console.log('isLoading:', isLoading.value)
     console.trace('Call stack trace')
     
-    // Guard against concurrent refresh operations
-    if (isRefreshing) {
-      console.warn('[FileManagerCell] ⚠️ refreshTree() called while already refreshing - skipping to prevent loop')
+    // Global guard: If ANY instance is already refreshing, wait for it or skip
+    if (globalRefreshInProgress) {
+      console.warn('[FileManagerCell] ⚠️ Global refresh already in progress - reusing existing refresh')
       console.groupEnd()
+      
+      // Wait for the ongoing refresh to complete, then update local state
+      if (globalRefreshPromise) {
+        try {
+          await globalRefreshPromise
+          console.log('[FileManagerCell] ✅ Global refresh completed, local state should be updated')
+        } catch (err) {
+          console.error('[FileManagerCell] ❌ Global refresh failed:', err)
+        }
+      }
       return
     }
     
     console.log('✅ Guard passed - proceeding with refresh')
-    isRefreshing = true
+    globalRefreshInProgress = true
     isLoading.value = true
     errorMessage.value = ''
     successMessage.value = ''
     
-    try {
-      // Step 1: Invalidate backend cache
-      console.log('📡 Step 1: Calling tree-refresh endpoint...')
-      const refreshUrl = `${ENDPOINTS.treeRefresh}`
-      await apiService.fetch(refreshUrl, { method: 'POST' })
-      console.log('✅ Cache refresh completed')
-      
-      // Step 2: Load fresh tree data
-      console.log('📡 Step 2: Loading tree data...')
-      const url = `${ENDPOINTS.tree}?format=flat&include_hidden=true`
-      const response = await apiService.fetch(url)
-      const data = await response.json()
-      
-      const items = data.data || []
-      console.log(`📊 Loaded ${items.length} items from backend`)
-      tree.value = buildTreeFromFlatList(items)
-      console.log(`🌳 Built tree with ${tree.value.length} root nodes`)
-      
-      successMessage.value = '✅ Árvore de arquivos atualizada'
-      setTimeout(() => {
-        successMessage.value = ''
-      }, 2000)
-    } catch (err) {
-      console.error('❌ Error during refresh:', err)
-      if (err instanceof SessionExpiredError) {
-        throw err
+    // Create a promise that other instances can await
+    globalRefreshPromise = (async () => {
+      try {
+        // Step 1: Invalidate backend cache
+        console.log('📡 Step 1: Calling tree-refresh endpoint...')
+        const refreshUrl = `${ENDPOINTS.treeRefresh}`
+        await apiService.fetch(refreshUrl, { method: 'POST' })
+        console.log('✅ Cache refresh completed')
+        
+        // Step 2: Load fresh tree data
+        console.log('📡 Step 2: Loading tree data...')
+        const url = `${ENDPOINTS.tree}?format=flat&include_hidden=true`
+        const response = await apiService.fetch(url)
+        const data = await response.json()
+        
+        const items = data.data || []
+        console.log(`📊 Loaded ${items.length} items from backend`)
+        tree.value = buildTreeFromFlatList(items)
+        console.log(`🌳 Built tree with ${tree.value.length} root nodes`)
+        
+        successMessage.value = '✅ Árvore de arquivos atualizada'
+        setTimeout(() => {
+          successMessage.value = ''
+        }, 2000)
+      } catch (err) {
+        console.error('❌ Error during refresh:', err)
+        if (err instanceof SessionExpiredError) {
+          throw err
+        }
+        errorMessage.value = '❌ Erro ao carregar árvore de arquivos'
+        console.error('Error loading file tree:', err)
+      } finally {
+        isLoading.value = false
+        globalRefreshInProgress = false
+        globalRefreshPromise = null
+        console.log('🏁 refreshTree() completed')
+        console.groupEnd()
       }
-      errorMessage.value = '❌ Erro ao carregar árvore de arquivos'
-      console.error('Error loading file tree:', err)
-    } finally {
-      isLoading.value = false
-      isRefreshing = false
-      console.log('🏁 refreshTree() completed')
-      console.groupEnd()
-    }
+    })()
+    
+    await globalRefreshPromise
   }
   
   /**
