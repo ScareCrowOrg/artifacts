@@ -94,7 +94,7 @@ export function useFileEditor(cell: Ref<FileEditorCell> | FileEditorCell): UseFi
       
       // Load file content from backend
       const response = await apiService.fetch(
-        `${ENDPOINTS.carregarArquivo}?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(filename)}`
+        `${ENDPOINTS.loadFile}?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(filename)}`
       )
       
       if (!response.ok) {
@@ -133,7 +133,7 @@ export function useFileEditor(cell: Ref<FileEditorCell> | FileEditorCell): UseFi
       const filename = fileName.value
       
       // Save file content via backend API
-      const response = await apiService.fetch(ENDPOINTS.salvar, {
+      const response = await apiService.fetch(ENDPOINTS.saveFile, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
