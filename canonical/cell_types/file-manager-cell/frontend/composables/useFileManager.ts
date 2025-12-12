@@ -337,7 +337,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
               assignee_id: userId,
               initial_data: {
                 fileName,
-                filePath: dirPath || 'docs',
+                filePath: dirPath,  // Use actual directory path (empty string for root)
                 language: getLanguageFromExtension(fileName),
                 readOnly: false,
                 icon: '📄'
