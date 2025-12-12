@@ -15,6 +15,7 @@
     "filePath": "docs",
     "language": "markdown",
     "readOnly": false,
+    "category": "efemera",
     "icon": "📄"
   },
   "allow_instance_override_refs": true
