@@ -102,11 +102,11 @@ export function useFileEditor(cell: Ref<FileEditorCell> | FileEditorCell): UseFi
       }
       
       const data = await response.json()
-      fileContent.value = data.conteudo || ''
+      fileContent.value = data.content || ''
       
       // Sync to cell object via store for CellToolbar access
       if (cellRef.value) {
-        cellsStore.updateCell(cellRef.value.id, {
+        cellsStore.updateCellData(cellRef.value.id, {
           content: fileContent.value,
           filename: fileName.value,
         })
