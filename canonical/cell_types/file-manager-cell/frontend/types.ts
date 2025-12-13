@@ -36,8 +36,8 @@ export interface FileManagerInitialData {
   selectedFiles?: string[]
   /** Array of expanded directory paths */
   expandedPaths?: string[]
-  /** Cell category (always "efemera") */
-  category: 'efemera'
+  /** Cell category (always "ephemeral") */
+  category: 'ephemeral'
   /** Cell icon */
   icon: string
 }
