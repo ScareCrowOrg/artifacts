@@ -315,7 +315,9 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
       
       console.log('[FILE-MANAGER] Opening files:', selectedFiles.value)
       
-      // Create FileEditorCell instances for each selected file via backend API
+      // Create ephemeral FileEditorCell instances for each selected file (client-side only)
+      // Note: file-editor-v2 cells are ephemeral - they are UI components for editing files,
+      // not persistent entities. The Save button saves FILE content, not the cell itself.
       for (const filePath of selectedFiles.value) {
         console.log('[FILE-MANAGER] Processing file path:', filePath)
         
@@ -335,59 +337,48 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
         // Only open files, not directories
         const node = findNodeByPath(tree.value, filePath)
         if (node && !node.isDirectory) {
-          // Step 1: Create cell in backend
-          // Note: FileEditorCell is persistent (NOT ephemeral) because users need
-          // their file editing sessions to survive page refreshes. The `category`
-          // field is intentionally omitted here to allow backend default behavior.
-          const requestBody = {
+          // Create ephemeral cell client-side (no backend call, no DB persistence)
+          const ephemeralCellId = `ephemeral-file-editor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          
+          const initial_data = {
+            fileName,
+            filePath: dirPath,  // Use actual directory path (empty string for root)
+            language: getLanguageFromExtension(fileName),
+            readOnly: false,
+            icon: '📄'
+          }
+          
+          const ephemeralCell = {
+            id: ephemeralCellId,
             notebook_item_type_id: 'file-editor-v2',
             assignee_id: userId,
-            initial_data: {
-              fileName,
-              filePath: dirPath,  // Use actual directory path (empty string for root)
-              language: getLanguageFromExtension(fileName),
-              readOnly: false,
-              icon: '📄'
-            }
+            initial_data,
+            category: 'ephemeral',
+            status: 'PENDING',
+            fragments: [],
+            refs: {},
           }
           
-          console.log('[FILE-MANAGER] Creating cell with request:', requestBody)
-          
-          const createResponse = await apiService.fetch(ENDPOINTS.createCell, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody)
+          console.log('[FILE-MANAGER] Created ephemeral cell (client-side, not persisted):', {
+            cellId: ephemeralCell.id,
+            initial_data: ephemeralCell.initial_data
           })
           
-          if (!createResponse.ok) {
-            const errorText = await createResponse.text()
-            console.error('[FILE-MANAGER] ❌ Backend cell creation failed:', errorText)
-            throw new Error(`Backend cell creation failed: ${createResponse.statusText}`)
-          }
-          
-          const newCell = await createResponse.json()
-          console.log('[FILE-MANAGER] Cell created successfully:', {
-            cellId: newCell.id,
-            initial_data: newCell.initial_data
-          })
-          
-          // Step 2: Add to local layout with backend-assigned ID
+          // Add to local layout
           const cellData = {
-            cellId: newCell.id,
-            type: newCell.notebook_item_type_id,
+            cellId: ephemeralCell.id,
+            type: ephemeralCell.notebook_item_type_id,
             title: fileName,
             state: {
-              cellInstance: newCell,
-              initial_data: newCell.initial_data || {},
+              cellInstance: ephemeralCell,
+              initial_data: ephemeralCell.initial_data,
             }
           }
           
           addCell(cellData)
           
-          // Step 3: Add to notebook store
-          notebookStore.cells[newCell.id] = newCell
+          // Add to notebook store (in-memory only, not persisted)
+          notebookStore.cells[ephemeralCell.id] = ephemeralCell
         }
       }
       
