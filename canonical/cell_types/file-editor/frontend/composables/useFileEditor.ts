@@ -45,12 +45,12 @@ export interface UseFileEditorReturn {
 /**
  * File Editor Composable
  * 
- * @param cell - The file editor cell instance
+ * @param cell - The file editor cell instance (as a Ref)
  * @returns File editor state and methods
  */
-export function useFileEditor(cell: Ref<FileEditorCell> | FileEditorCell): UseFileEditorReturn {
-  // Handle both direct cell and ref to cell
-  const cellRef = ref(cell) as Ref<FileEditorCell>
+export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
+  // Use the cell ref directly without additional wrapping
+  const cellRef = cell
   
   // Stores
   const cellsStore = useCellsStore()
@@ -92,16 +92,31 @@ export function useFileEditor(cell: Ref<FileEditorCell> | FileEditorCell): UseFi
       const folder = filePath.value
       const filename = fileName.value
       
+      console.log('[FILE-EDITOR] Loading file:', { 
+        folder, 
+        filename, 
+        folderLength: folder.length,
+        fullPath: fullPath.value 
+      })
+      
       // Load file content from backend
-      const response = await apiService.fetch(
-        `${ENDPOINTS.loadFile}?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(filename)}`
-      )
+      const url = `${ENDPOINTS.loadFile}?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(filename)}`
+      console.log('[FILE-EDITOR] Request URL:', url)
+      
+      const response = await apiService.fetch(url)
       
       if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[FILE-EDITOR] ❌ File load failed:', { 
+          status: response.status, 
+          statusText: response.statusText,
+          errorText 
+        })
         throw new Error('Falha ao carregar arquivo')
       }
       
       const data = await response.json()
+      console.log('[FILE-EDITOR] File loaded successfully, content length:', data.content?.length || 0)
       fileContent.value = data.content || ''
       
       // Sync to cell object via store for CellToolbar access

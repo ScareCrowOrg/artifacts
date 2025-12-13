@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, toRef } from 'vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { useFileEditor } from './composables/useFileEditor'
 import { useCellsStore } from '@/stores/cells'
@@ -87,7 +87,7 @@ const props = defineProps<Props>()
 // Stores
 const cellsStore = useCellsStore()
 
-// Use file editor composable
+// Use file editor composable - pass the cell as a ref using toRef to maintain reactivity
 const {
   fileContent,
   isLoading,
@@ -101,7 +101,7 @@ const {
   saveFile,
   deleteEphemeral,
   sendToChat,
-} = useFileEditor(ref(props.cell))
+} = useFileEditor(toRef(props, 'cell'))
 
 // Sync file content to cell object for CellToolbar access
 watch(fileContent, (newContent) => {
@@ -130,6 +130,14 @@ function handleSendToChat(): void {
 
 // Load file on mount
 onMounted(async () => {
+  console.log('[FILE-EDITOR] Component mounted, cell data:', {
+    cellId: props.cell?.id,
+    cellType: props.cell?.notebook_item_type_id,
+    initial_data: props.cell?.initial_data,
+    fileName: fileName.value,
+    filePath: filePath.value,
+    fullPath: fullPath.value
+  })
   await loadFile()
 })
 

@@ -313,12 +313,24 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
         throw new Error('User not authenticated')
       }
       
+      console.log('[FILE-MANAGER] Opening files:', selectedFiles.value)
+      
       // Create FileEditorCell instances for each selected file via backend API
       for (const filePath of selectedFiles.value) {
+        console.log('[FILE-MANAGER] Processing file path:', filePath)
+        
         // Extract file name and directory
         const parts = filePath.split('/')
         const fileName = parts[parts.length - 1]
         const dirPath = parts.slice(0, -1).join('/')
+        
+        console.log('[FILE-MANAGER] Path extraction:', { 
+          filePath, 
+          parts, 
+          fileName, 
+          dirPath,
+          dirPathLength: dirPath.length 
+        })
         
         // Only open files, not directories
         const node = findNodeByPath(tree.value, filePath)
@@ -327,31 +339,39 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
           // Note: FileEditorCell is persistent (NOT ephemeral) because users need
           // their file editing sessions to survive page refreshes. The `category`
           // field is intentionally omitted here to allow backend default behavior.
+          const requestBody = {
+            notebook_item_type_id: 'file-editor-v2',
+            assignee_id: userId,
+            initial_data: {
+              fileName,
+              filePath: dirPath,  // Use actual directory path (empty string for root)
+              language: getLanguageFromExtension(fileName),
+              readOnly: false,
+              icon: '📄'
+            }
+          }
+          
+          console.log('[FILE-MANAGER] Creating cell with request:', requestBody)
+          
           const createResponse = await apiService.fetch(ENDPOINTS.createCell, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              notebook_item_type_id: 'file-editor-v2',
-              assignee_id: userId,
-              initial_data: {
-                fileName,
-                filePath: dirPath,  // Use actual directory path (empty string for root)
-                language: getLanguageFromExtension(fileName),
-                readOnly: false,
-                icon: '📄'
-              }
-            })
+            body: JSON.stringify(requestBody)
           })
           
           if (!createResponse.ok) {
             const errorText = await createResponse.text()
-            console.error('❌ Backend cell creation failed:', errorText)
+            console.error('[FILE-MANAGER] ❌ Backend cell creation failed:', errorText)
             throw new Error(`Backend cell creation failed: ${createResponse.statusText}`)
           }
           
           const newCell = await createResponse.json()
+          console.log('[FILE-MANAGER] Cell created successfully:', {
+            cellId: newCell.id,
+            initial_data: newCell.initial_data
+          })
           
           // Step 2: Add to local layout with backend-assigned ID
           const cellData = {
