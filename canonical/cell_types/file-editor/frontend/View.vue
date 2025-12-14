@@ -107,7 +107,7 @@ const {
 watch(fileContent, (newContent) => {
   if (props.cell) {
     // Update cell via store instead of mutating props
-    cellsStore.updateCell(props.cell.id, {
+    cellsStore.updateCellData(props.cell.id, {
       content: newContent,
       filename: fileName.value,
     })
