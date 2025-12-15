@@ -178,25 +178,6 @@ const chat = useChatIA(
   scrollToBottom,
 )
 
-// Initialize from cell data if available
-if (props.cell.initial_data) {
-  const { selectedModel, enableIntentionClassification, selectedCollections, conversationId } = props.cell.initial_data
-  
-  if (selectedModel) {
-    chat.selectedModel.value = selectedModel
-  }
-  if (enableIntentionClassification !== undefined) {
-    chat.enableIntentionClassification.value = enableIntentionClassification
-  }
-  if (selectedCollections) {
-    chat.selectedCollections.value = selectedCollections
-  }
-  if (conversationId) {
-    // Load the specific conversation
-    chat.loadConversation(conversationId)
-  }
-}
-
 // Methods
 function handleEnter(event: KeyboardEvent): void {
   if (event.shiftKey || event.ctrlKey || event.metaKey) {
@@ -310,6 +291,21 @@ const chatComponentAPI: ChatComponentAPI = {
 // Register component with store on mount
 onMounted(() => {
   chatStore.registerChatComponent(chatComponentAPI)
+  
+  // Initialize from cell data if available
+  if (props.cell.initial_data) {
+    const { selectedModel, enableIntentionClassification, selectedCollections, conversationId } = props.cell.initial_data
+    
+    if (selectedModel) {
+      chat.selectedModel.value = selectedModel
+    }
+    if (enableIntentionClassification !== undefined) {
+      chat.enableIntentionClassification.value = enableIntentionClassification
+    }
+    if (selectedCollections) {
+      chat.selectedCollections.value = selectedCollections
+    }
+  }
   
   // Fetch models and load conversation
   chat.fetchModels()

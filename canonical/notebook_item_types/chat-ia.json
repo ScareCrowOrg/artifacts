@@ -43,7 +43,7 @@
       "description": "Custom system prompt for the conversation"
     },
     "conversationId": {
-      "type": "string",
+      "type": ["string", "null"],
       "default": null,
       "description": "ID of the current conversation for persistence"
     }
