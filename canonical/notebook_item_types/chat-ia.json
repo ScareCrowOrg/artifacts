@@ -1,0 +1,51 @@
+{
+  "id": "chat-ia",
+  "name": "Chat IA",
+  "description": "AI-powered chat interface with multi-model support, file attachments, conversation history, and file proposal capabilities",
+  "version": "1.0.0",
+  "category": "ai-interaction",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "docs": ["docs/README.md"],
+    "composables": ["frontend/composables/useChatIA.ts"]
+  },
+  "default_initial_data": {
+    "selectedModel": "gpt-4",
+    "enableIntentionClassification": false,
+    "selectedCollections": [],
+    "systemPrompt": "",
+    "conversationId": null
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "selectedModel": {
+      "type": "string",
+      "default": "gpt-4",
+      "description": "AI model to use for chat interactions"
+    },
+    "enableIntentionClassification": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable intention classification for advanced routing"
+    },
+    "selectedCollections": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Selected RAG collections for context"
+    },
+    "systemPrompt": {
+      "type": "string",
+      "default": "",
+      "description": "Custom system prompt for the conversation"
+    },
+    "conversationId": {
+      "type": "string",
+      "default": null,
+      "description": "ID of the current conversation for persistence"
+    }
+  }
+}
