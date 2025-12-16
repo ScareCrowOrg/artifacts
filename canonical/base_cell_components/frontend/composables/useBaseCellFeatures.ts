@@ -438,26 +438,39 @@ export function useBaseCellFeatures(
    * Send a fragment to chat as an attachment
    */
   function sendFragmentToChat(fragment: CellFragment, index: number): void {
-    console.group('[useBaseCellFeatures] 💬 Sending fragment to chat')
+    console.group('[useBaseCellFeatures] 💬 Sending fragment to chat - ITERATION 2 FIX')
     console.log('📦 Cell ID:', cellId.value)
     console.log('🧩 Fragment index:', index)
     console.log('📝 Fragment type:', fragment.type)
+    console.log('📄 Fragment content length:', fragment.conteudo?.length)
 
     try {
-      // Add fragment as attachment to chat
-      chatStore.addAttachment({
-        type: 'fragment',
-        content: fragment.conteudo,
-        metadata: {
-          fragmentIndex: index,
-          cellId: cellId.value,
-          cellType: cellType.value,
-          fragmentType: fragment.type,
-        },
+      // Create descriptive filename for the fragment
+      const fragmentName = `Fragment #${index + 1} - ${fragment.type || 'unknown'}`
+      
+      console.log('[useBaseCellFeatures] 🚀 Calling chatStore.addAttachment with correct signature')
+      console.log('Parameters:', {
+        filename: fragmentName,
+        contentLength: (fragment.conteudo || '').length,
+        type: 'text'
       })
+      
+      // FIX: Use correct API signature (filename, content, type) instead of object
+      // This was the bug causing "Missing filename or content" error
+      const success = chatStore.addAttachment(
+        fragmentName,
+        fragment.conteudo || '',
+        'text'
+      )
+      
+      console.log('[useBaseCellFeatures] Result:', success)
 
-      showSuccess(`Fragmento #${index + 1} enviado para o chat!`)
-      console.log('✅ Fragment sent to chat')
+      if (success) {
+        showSuccess(`Fragmento #${index + 1} enviado para o chat!`)
+        console.log('✅ Fragment sent to chat successfully')
+      } else {
+        throw new Error('chatStore.addAttachment returned false')
+      }
     } catch (error: any) {
       console.error('❌ Error sending fragment to chat:', error)
       showError(error.message || 'Erro ao enviar fragmento para o chat')
