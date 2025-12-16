@@ -265,19 +265,23 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
     console.log('📦 Fragment:', { index, type: fragment.type, contentLength: fragment.conteudo?.length })
 
     try {
-      // Add fragment as attachment to chat
-      chatStore.addAttachment({
-        type: 'fragment',
-        content: fragment.conteudo,
-        metadata: {
-          fragmentIndex: index,
-          cellId: cell.value?.id,
-          fragmentType: fragment.type,
-        },
-      })
+      // Create descriptive filename for the fragment
+      const fragmentName = `Fragment #${index + 1} - ${fragment.type || 'unknown'}`
+      
+      // Add fragment as attachment to chat with correct signature
+      // chatStore.addAttachment expects (filename: string, content: string, type: string)
+      const success = chatStore.addAttachment(
+        fragmentName,
+        fragment.conteudo || '',
+        'text'
+      )
 
-      successMessage.value = `Fragmento #${index + 1} enviado para o chat!`
-      console.log('✅ Fragment sent to chat')
+      if (success) {
+        successMessage.value = `Fragmento #${index + 1} enviado para o chat!`
+        console.log('✅ Fragment sent to chat')
+      } else {
+        throw new Error('Failed to add attachment to chat')
+      }
       
       // Clear success message after 3 seconds
       setTimeout(() => {

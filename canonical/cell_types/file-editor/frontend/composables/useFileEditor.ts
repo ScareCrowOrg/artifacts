@@ -200,13 +200,12 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
    * Send file content to chat as attachment
    */
   function sendToChat(): void {
+    // chatStore.addAttachment expects (filename: string, content: string, type: string)
+    // Note: Metadata like filePath is not supported in current API
     chatStore.addAttachment(
       fileName.value,
       fileContent.value,
-      'file',
-      {
-        filePath: fullPath.value,
-      }
+      'text'
     )
   }
   
