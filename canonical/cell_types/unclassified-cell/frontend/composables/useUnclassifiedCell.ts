@@ -66,6 +66,7 @@ export interface UseUnclassifiedCellReturn {
   saveCell: () => Promise<void>
   closeCell: () => void
   sendFragmentToChat: (fragment: any, index: number) => void
+  sendCellToChat: () => void  // ITERATION 3: Added for main view Send to Chat
   formatDate: (dateString: string | undefined) => string
 }
 
@@ -261,23 +262,43 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
    * @param index - Fragment index
    */
   function sendFragmentToChat(fragment: any, index: number): void {
-    console.group('[useUnclassifiedCell] 💬 Sending fragment to chat')
-    console.log('📦 Fragment:', { index, type: fragment.type, contentLength: fragment.conteudo?.length })
+    console.group('[useUnclassifiedCell] 💬 sendFragmentToChat - DEBUG ITERATION 1')
+    console.log('📦 Fragment:', { 
+      index, 
+      type: fragment.type, 
+      contentLength: fragment.conteudo?.length,
+      fragment_keys: Object.keys(fragment || {})
+    })
 
     try {
-      // Add fragment as attachment to chat
-      chatStore.addAttachment({
-        type: 'fragment',
-        content: fragment.conteudo,
-        metadata: {
-          fragmentIndex: index,
-          cellId: cell.value?.id,
-          fragmentType: fragment.type,
-        },
+      // Default fragment type constant
+      const DEFAULT_FRAGMENT_TYPE = 'unknown'
+      
+      // Create descriptive filename for the fragment
+      const fragmentName = `Fragment #${index + 1} - ${fragment.type || DEFAULT_FRAGMENT_TYPE}`
+      
+      console.log('[useUnclassifiedCell] 🚀 Calling chatStore.addAttachment with:', {
+        fragmentName,
+        contentLength: (fragment.conteudo || '').length,
+        type: 'text'
       })
+      
+      // Add fragment as attachment to chat with correct signature
+      // chatStore.addAttachment expects (filename: string, content: string, type: string)
+      const success = chatStore.addAttachment(
+        fragmentName,
+        fragment.conteudo || '',
+        'text'
+      )
 
-      successMessage.value = `Fragmento #${index + 1} enviado para o chat!`
-      console.log('✅ Fragment sent to chat')
+      console.log('[useUnclassifiedCell] Result:', success)
+
+      if (success) {
+        successMessage.value = `Fragmento #${index + 1} enviado para o chat!`
+        console.log('✅ Fragment sent to chat')
+      } else {
+        throw new Error('Failed to add attachment to chat')
+      }
       
       // Clear success message after 3 seconds
       setTimeout(() => {
@@ -286,6 +307,62 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
     } catch (error: any) {
       console.error('❌ Error sending fragment to chat:', error)
       errorMessage.value = error.message || 'Erro ao enviar fragmento para o chat'
+    }
+    
+    console.groupEnd()
+  }
+
+  /**
+   * Send cell content to chat as attachment
+   * ITERATION 3: Added for main view Send to Chat functionality
+   */
+  function sendCellToChat(): void {
+    console.group('[useUnclassifiedCell] 💬 sendCellToChat - ITERATION 3')
+    console.log('📦 Cell data:', {
+      title: cellData.value.title,
+      contentLength: cellData.value.content?.length,
+    })
+
+    try {
+      // Create filename from title
+      const fileName = cellData.value.title 
+        ? `${cellData.value.title}.md`
+        : 'Célula Sem Título.md'
+      
+      // Create content with title and content
+      const fullContent = cellData.value.title
+        ? `# ${cellData.value.title}\n\n${cellData.value.content || ''}`
+        : cellData.value.content || ''
+      
+      console.log('[useUnclassifiedCell] 🚀 Calling chatStore.addAttachment with:', {
+        fileName,
+        contentLength: fullContent.length,
+        type: 'text'
+      })
+      
+      // Send to chat with correct API signature
+      const success = chatStore.addAttachment(
+        fileName,
+        fullContent,
+        'text'
+      )
+
+      console.log('[useUnclassifiedCell] Result:', success)
+
+      if (success) {
+        successMessage.value = 'Célula enviada para o chat!'
+        console.log('✅ Cell sent to chat')
+      } else {
+        throw new Error('Failed to add cell to chat')
+      }
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        successMessage.value = null
+      }, 3000)
+    } catch (error: any) {
+      console.error('❌ Error sending cell to chat:', error)
+      errorMessage.value = error.message || 'Erro ao enviar célula para o chat'
     }
     
     console.groupEnd()
@@ -352,6 +429,7 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
     onSaveError,
     closeCell,
     sendFragmentToChat,
+    sendCellToChat,  // ITERATION 3: Added
     formatDate,
   }
 }

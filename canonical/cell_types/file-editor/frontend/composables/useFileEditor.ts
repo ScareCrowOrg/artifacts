@@ -200,14 +200,32 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
    * Send file content to chat as attachment
    */
   function sendToChat(): void {
-    chatStore.addAttachment(
+    console.group('[useFileEditor] 📤 sendToChat - DEBUG ITERATION 1')
+    console.log('File info:', {
+      fileName: fileName.value,
+      filePath: filePath.value,
+      fullPath: fullPath.value,
+      contentLength: fileContent.value?.length,
+    })
+    
+    // chatStore.addAttachment expects (filename: string, content: string, type: string)
+    // Note: Using 'text' type for consistency across all cell types.
+    // The chat system currently treats all attachments uniformly regardless of type.
+    // Metadata like filePath is not supported in current API.
+    console.log('[useFileEditor] 🚀 Calling chatStore.addAttachment with:', {
+      filename: fileName.value,
+      contentLength: fileContent.value?.length,
+      type: 'text'
+    })
+    
+    const result = chatStore.addAttachment(
       fileName.value,
       fileContent.value,
-      'file',
-      {
-        filePath: fullPath.value,
-      }
+      'text'
     )
+    
+    console.log('[useFileEditor] Result:', result)
+    console.groupEnd()
   }
   
   return {

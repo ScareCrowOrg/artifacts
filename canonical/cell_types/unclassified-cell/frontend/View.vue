@@ -27,6 +27,15 @@
       >
         {{ isSaving ? '⏳ Salvando...' : '💾 Salvar Célula' }}
       </button>
+      <!-- ITERATION 3: Send to Chat button -->
+      <button
+        class="btn btn-secondary"
+        :disabled="isSaving || (!cellData.title && !cellData.content)"
+        :title="'Enviar título e conteúdo da célula para o chat'"
+        @click="handleSendCellToChat"
+      >
+        💬 Enviar para Chat
+      </button>
       <button
         class="btn btn-secondary"
         @click="handleShowFragmentsManager"
@@ -152,6 +161,7 @@ const {
   onSaveError,
   closeCell,
   sendFragmentToChat,
+  sendCellToChat,  // ITERATION 3: Added
   formatDate,
 } = useUnclassifiedCell(ref(props.cell))
 
@@ -234,6 +244,15 @@ function handleAddFragment(): void {
   // For now, just open the fragments manager
   // In the future, this could open a dedicated "add fragment" modal
   baseCellApi.showCellFragmentsManager()
+}
+
+/**
+ * Handle send cell to chat button click
+ * ITERATION 3: Added for main view Send to Chat functionality
+ */
+function handleSendCellToChat(): void {
+  console.log('[UnclassifiedCellView] 💬 Send cell to chat clicked')
+  sendCellToChat()
 }
 
 // Expose methods for parent component (CellToolbar) to call

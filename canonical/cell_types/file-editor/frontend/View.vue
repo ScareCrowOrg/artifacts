@@ -45,16 +45,30 @@
         <span class="whitespace-nowrap">Arquivo: {{ fileName }}</span>
       </div>
       
-      <!-- Save Button -->
-      <button
-        class="px-4 py-2 text-sm font-medium text-white bg-success rounded-md cursor-pointer transition-all duration-200 hover:bg-success/80 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-        :disabled="isSaving || isLoading"
-        :title="isSaving ? 'Salvando...' : 'Salvar alterações no arquivo'"
-        :aria-label="'Salvar arquivo ' + fileName"
-        @click="saveFile"
-      >
-        {{ isSaving ? '⏳ Salvando...' : '💾 Salvar' }}
-      </button>
+      <!-- Action Buttons -->
+      <div class="flex gap-2">
+        <!-- Send to Chat Button -->
+        <button
+          class="px-4 py-2 text-sm font-medium text-primary bg-white border border-primary rounded-md cursor-pointer transition-all duration-200 hover:bg-primary/10 hover:border-primary-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          :disabled="isSaving || isLoading || !fileContent"
+          :title="'Enviar arquivo para o chat'"
+          :aria-label="'Enviar arquivo ' + fileName + ' para o chat'"
+          @click="handleSendToChat"
+        >
+          💬 Enviar para Chat
+        </button>
+        
+        <!-- Save Button -->
+        <button
+          class="px-4 py-2 text-sm font-medium text-white bg-success rounded-md cursor-pointer transition-all duration-200 hover:bg-success/80 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          :disabled="isSaving || isLoading"
+          :title="isSaving ? 'Salvando...' : 'Salvar alterações no arquivo'"
+          :aria-label="'Salvar arquivo ' + fileName"
+          @click="saveFile"
+        >
+          {{ isSaving ? '⏳ Salvando...' : '💾 Salvar' }}
+        </button>
+      </div>
     </div>
 
     <!-- Error/Success Messages -->
@@ -125,7 +139,16 @@ function handleDeleteEphemeral(): void {
  * Handle send to chat (exposed for CellToolbar)
  */
 function handleSendToChat(): void {
+  console.group('[FILE-EDITOR] 📤 handleSendToChat - DEBUG ITERATION 1')
+  console.log('Cell data:', {
+    cellId: props.cell?.id,
+    fileName: fileName.value,
+    contentLength: fileContent.value?.length,
+  })
+  console.log('[FILE-EDITOR] Calling sendToChat() from composable...')
   sendToChat()
+  console.log('[FILE-EDITOR] ✅ sendToChat() completed')
+  console.groupEnd()
 }
 
 // Load file on mount
@@ -137,6 +160,10 @@ onMounted(async () => {
     fileName: fileName.value,
     filePath: filePath.value,
     fullPath: fullPath.value
+  })
+  console.log('[FILE-EDITOR] 📋 Exposing methods via defineExpose:', {
+    onSave: 'function',
+    onSendToChat: 'function'
   })
   await loadFile()
 })

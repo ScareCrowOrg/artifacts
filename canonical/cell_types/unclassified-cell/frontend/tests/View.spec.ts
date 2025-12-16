@@ -300,15 +300,12 @@ describe('Unclassified Cell View', () => {
       
       await sendButtons[0].trigger('click')
 
-      expect(mockChatStore.addAttachment).toHaveBeenCalledWith({
-        type: 'fragment',
-        content: 'Fragment 1 content',
-        metadata: {
-          fragmentIndex: 0,
-          cellId: 'test-cell-123',
-          fragmentType: 'memoria',
-        },
-      })
+      // Verify correct chatStore.addAttachment signature: (filename, content, type)
+      expect(mockChatStore.addAttachment).toHaveBeenCalledWith(
+        'Fragment #1 - memoria',
+        'Fragment 1 content',
+        'text'
+      )
     })
 
     it('should display success message after sending fragment', async () => {
