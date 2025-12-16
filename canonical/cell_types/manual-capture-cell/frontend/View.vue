@@ -85,11 +85,17 @@
 <script setup lang="ts">
 import { ref, computed, inject, nextTick, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
+import { useLayoutStore } from '@/stores/layout'
 import { useManualCapture } from './composables/useManualCapture'
 import type { CellProps, ManualCaptureCellData } from './types'
 
 // Props
 const props = defineProps<CellProps>()
+
+// Stores
+const authStore = useAuthStore()
+const layoutStore = useLayoutStore()
 
 // i18n
 const { t } = useI18n()
@@ -139,8 +145,8 @@ const dynamicLayout = inject<{
   }) => boolean
 } | null>('dynamicLayout', null)
 
-// Get user ID from auth (simplified - in real app would use authStore)
-const userId = 'default-user-id'
+// Get user ID from auth store (fallback to default if not authenticated)
+const userId = computed(() => authStore.user?.id || 'default-user-id')
 
 /**
  * Create a file-editor-v2 cell with the given content
@@ -167,7 +173,7 @@ async function createFileEditorCell(
       cellInstance: {
         id: tempCellId,
         notebook_item_type_id: 'file-editor-v2',
-        assignee_id: userId,
+        assignee_id: userId.value,
         initial_data: {
           fileName: fileName,
           filePath: 'captured',
@@ -215,10 +221,20 @@ async function handleCaptureContent(): Promise<void> {
   try {
     await captureContent(createFileEditorCell)
     console.log('[ManualCaptureCell] Content captured successfully')
+    
+    // Show success notification
+    layoutStore.addStatusMessage({
+      text: t('manualCapture.captureSuccess'),
+      type: 'success',
+    })
   } catch (error) {
     console.error('[ManualCaptureCell] Error capturing content:', error)
-    // In production, would show user-friendly error message
-    alert(t('manualCapture.captureError'))
+    
+    // Show error notification via layout store
+    layoutStore.addStatusMessage({
+      text: t('manualCapture.captureError'),
+      type: 'error',
+    })
   }
 }
 
@@ -229,10 +245,20 @@ async function handleGenerateWireframe(): Promise<void> {
   try {
     await generateWireframe(createFileEditorCell)
     console.log('[ManualCaptureCell] Wireframe generated successfully')
+    
+    // Show success notification
+    layoutStore.addStatusMessage({
+      text: t('manualCapture.wireframeSuccess'),
+      type: 'success',
+    })
   } catch (error) {
     console.error('[ManualCaptureCell] Error generating wireframe:', error)
-    // In production, would show user-friendly error message
-    alert(t('manualCapture.wireframeError'))
+    
+    // Show error notification via layout store
+    layoutStore.addStatusMessage({
+      text: t('manualCapture.wireframeError'),
+      type: 'error',
+    })
   }
 }
 
