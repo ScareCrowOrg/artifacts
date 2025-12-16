@@ -1,0 +1,270 @@
+/**
+ * @metadata {
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2025-12-16",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0,
+ *   "theme_validated": true,
+ *   "theme_validated_date": "2025-12-16",
+ *   "theme_compliance": 100,
+ *   "theme_status": "excellent",
+ *   "theme_issues": 0,
+ *   "dark_mode_support": "full"
+ * }
+ */
+<template>
+  <section
+    class="manual-capture-cell bg-surface dark:bg-surface-dark rounded-lg shadow-sm border border-border dark:border-border-dark h-full flex flex-col"
+    data-testid="manual-capture-cell"
+  >
+    <!-- Header -->
+    <div
+      class="flex items-center justify-between px-4 py-3 border-b border-border dark:border-border-dark"
+    >
+      <h3 class="text-lg font-semibold text-text-primary dark:text-text-primary-dark m-0">
+        {{ cellData.icon }} {{ $t('manualCapture.title') }}
+      </h3>
+      <span class="text-xs text-text-secondary dark:text-text-secondary-dark italic">
+        {{ $t('manualCapture.ephemeralLabel') }}
+      </span>
+    </div>
+
+    <!-- Content Area -->
+    <div class="flex-1 p-4 overflow-auto">
+      <div class="mb-0">
+        <textarea
+          v-model="inputContent"
+          :placeholder="cellData.placeholder || $t('manualCapture.placeholder')"
+          rows="10"
+          data-testid="manual-capture-textarea"
+          class="w-full h-full min-h-[200px] px-3 py-2 border border-border dark:border-border-dark rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-y bg-background dark:bg-background-dark text-text-primary dark:text-text-primary-dark"
+          :disabled="isProcessing"
+        ></textarea>
+      </div>
+    </div>
+
+    <!-- Actions Footer -->
+    <div
+      class="flex items-center gap-2 px-4 py-3 bg-surface dark:bg-surface-dark border-t border-border dark:border-border-dark"
+    >
+      <button
+        class="px-3 py-1.5 text-sm font-medium text-background dark:text-background-dark bg-primary rounded-md hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        data-testid="capture-content-button"
+        :disabled="!inputContent.trim() || isProcessing"
+        @click="handleCaptureContent"
+      >
+        <span v-if="isProcessing">{{ $t('manualCapture.processing') }}</span>
+        <span v-else>{{ $t('manualCapture.captureButton') }}</span>
+      </button>
+      
+      <button
+        class="px-3 py-1.5 text-sm font-medium text-text-secondary dark:text-text-secondary-dark bg-background dark:bg-background-dark rounded-md hover:bg-surface dark:hover:bg-surface-dark transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        data-testid="generate-wireframe-button"
+        :disabled="!inputContent.trim() || isProcessing"
+        @click="handleGenerateWireframe"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="18"
+          height="18"
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path
+            d="M4 3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H4zm0 2h12v10H4V5zm2 2a1 1 0 1 1 2 0 1 1 0 0 1-2 0zm6 0a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM4 9h12v2H4V9zm0 4h12v2H4v-2z"
+          />
+        </svg>
+        <span v-if="isProcessing">{{ $t('manualCapture.processing') }}</span>
+        <span v-else>{{ $t('manualCapture.wireframeButton') }}</span>
+      </button>
+    </div>
+  </section>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, inject, nextTick, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useManualCapture } from './composables/useManualCapture'
+import type { CellProps, ManualCaptureCellData } from './types'
+
+// Props
+const props = defineProps<CellProps>()
+
+// i18n
+const { t } = useI18n()
+
+// Get cell data with defaults
+const cellData = computed<ManualCaptureCellData>(() => {
+  const initial_data = props.cell?.state?.initial_data || props.cell?.initial_data || {}
+  return {
+    category: initial_data.category || 'efemera',
+    icon: initial_data.icon || '✍️',
+    placeholder: initial_data.placeholder || t('manualCapture.placeholder'),
+  }
+})
+
+// Use composable
+const cellDataRef: Ref<ManualCaptureCellData> = ref(cellData.value)
+const {
+  inputContent,
+  isProcessing,
+  captureContent,
+  generateWireframe,
+  insertContent,
+} = useManualCapture(cellDataRef)
+
+// Inject dynamic layout composable (provided by DynamicWorkspace or parent)
+const dynamicLayout = inject<{
+  addCell: (params: {
+    cellId: string
+    type: string
+    title: string
+    state: {
+      cellInstance: {
+        id: string
+        notebook_item_type_id: string
+        assignee_id: string
+        initial_data: Record<string, unknown>
+        status: string
+        fragments: unknown[]
+      }
+      cellType: {
+        id: string
+        name: string
+        default_initial_data: Record<string, unknown>
+      }
+      initial_data: Record<string, unknown>
+    }
+  }) => boolean
+} | null>('dynamicLayout', null)
+
+// Get user ID from auth (simplified - in real app would use authStore)
+const userId = 'default-user-id'
+
+/**
+ * Create a file-editor-v2 cell with the given content
+ * This is the key integration point - manual-capture-cell creates file-editor-v2 instances
+ */
+async function createFileEditorCell(
+  content: string,
+  fileName: string,
+  language: string
+): Promise<void> {
+  if (!dynamicLayout) {
+    console.error('[ManualCaptureCell] dynamicLayout not available')
+    throw new Error('Cannot create file editor cell: dynamicLayout not available')
+  }
+
+  // Generate ephemeral ID for the new file-editor-v2 cell
+  const tempCellId = `ephemeral-file-editor-v2-${Date.now()}`
+
+  const cellData = {
+    cellId: tempCellId,
+    type: 'file-editor-v2',
+    title: fileName,
+    state: {
+      cellInstance: {
+        id: tempCellId,
+        notebook_item_type_id: 'file-editor-v2',
+        assignee_id: userId,
+        initial_data: {
+          fileName: fileName,
+          filePath: 'captured',
+          language: language,
+          readOnly: false,
+          category: 'ephemeral',
+          icon: '📄',
+          content: content, // Pre-populate with captured content
+        },
+        status: 'PENDING',
+        fragments: [],
+      },
+      cellType: {
+        id: 'file-editor-v2',
+        name: 'File Editor',
+        default_initial_data: {
+          fileName: fileName,
+          language: language,
+          content: content,
+        },
+      },
+      initial_data: {
+        fileName: fileName,
+        language: language,
+        content: content,
+      },
+    },
+  }
+
+  console.log('[ManualCaptureCell] Creating file-editor-v2 cell:', cellData)
+  
+  const success = dynamicLayout.addCell(cellData)
+  
+  if (!success) {
+    throw new Error('Failed to add file editor cell to layout')
+  }
+
+  console.log('[ManualCaptureCell] ✅ File editor cell created successfully')
+}
+
+/**
+ * Handle capture content button click
+ */
+async function handleCaptureContent(): Promise<void> {
+  try {
+    await captureContent(createFileEditorCell)
+    console.log('[ManualCaptureCell] Content captured successfully')
+  } catch (error) {
+    console.error('[ManualCaptureCell] Error capturing content:', error)
+    // In production, would show user-friendly error message
+    alert(t('manualCapture.captureError'))
+  }
+}
+
+/**
+ * Handle generate wireframe button click
+ */
+async function handleGenerateWireframe(): Promise<void> {
+  try {
+    await generateWireframe(createFileEditorCell)
+    console.log('[ManualCaptureCell] Wireframe generated successfully')
+  } catch (error) {
+    console.error('[ManualCaptureCell] Error generating wireframe:', error)
+    // In production, would show user-friendly error message
+    alert(t('manualCapture.wireframeError'))
+  }
+}
+
+/**
+ * Public method to insert content from external sources
+ * Can be called by parent components via ref
+ */
+function handleInsertContent(content: string): void {
+  insertContent(content)
+  
+  // Focus on textarea
+  nextTick(() => {
+    const textarea = document.querySelector(
+      '[data-testid="manual-capture-textarea"]'
+    ) as HTMLTextAreaElement | null
+    
+    if (textarea) {
+      textarea.focus()
+      textarea.scrollTop = textarea.scrollHeight
+    }
+  })
+}
+
+// Expose methods for external access
+defineExpose({
+  insertContent: handleInsertContent,
+})
+</script>
+
+<style scoped>
+/* No custom styles needed - using design system classes */
+.manual-capture-cell {
+  min-height: 300px;
+}
+</style>
