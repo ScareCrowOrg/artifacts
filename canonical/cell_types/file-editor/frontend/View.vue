@@ -125,7 +125,16 @@ function handleDeleteEphemeral(): void {
  * Handle send to chat (exposed for CellToolbar)
  */
 function handleSendToChat(): void {
+  console.group('[FILE-EDITOR] 📤 handleSendToChat - DEBUG ITERATION 1')
+  console.log('Cell data:', {
+    cellId: props.cell?.id,
+    fileName: fileName.value,
+    contentLength: fileContent.value?.length,
+  })
+  console.log('[FILE-EDITOR] Calling sendToChat() from composable...')
   sendToChat()
+  console.log('[FILE-EDITOR] ✅ sendToChat() completed')
+  console.groupEnd()
 }
 
 // Load file on mount
@@ -137,6 +146,10 @@ onMounted(async () => {
     fileName: fileName.value,
     filePath: filePath.value,
     fullPath: fullPath.value
+  })
+  console.log('[FILE-EDITOR] 📋 Exposing methods via defineExpose:', {
+    onSave: 'function',
+    onSendToChat: 'function'
   })
   await loadFile()
 })

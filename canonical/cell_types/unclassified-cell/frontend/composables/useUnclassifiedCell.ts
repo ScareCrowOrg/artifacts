@@ -261,8 +261,13 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
    * @param index - Fragment index
    */
   function sendFragmentToChat(fragment: any, index: number): void {
-    console.group('[useUnclassifiedCell] 💬 Sending fragment to chat')
-    console.log('📦 Fragment:', { index, type: fragment.type, contentLength: fragment.conteudo?.length })
+    console.group('[useUnclassifiedCell] 💬 sendFragmentToChat - DEBUG ITERATION 1')
+    console.log('📦 Fragment:', { 
+      index, 
+      type: fragment.type, 
+      contentLength: fragment.conteudo?.length,
+      fragment_keys: Object.keys(fragment || {})
+    })
 
     try {
       // Default fragment type constant
@@ -271,6 +276,12 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
       // Create descriptive filename for the fragment
       const fragmentName = `Fragment #${index + 1} - ${fragment.type || DEFAULT_FRAGMENT_TYPE}`
       
+      console.log('[useUnclassifiedCell] 🚀 Calling chatStore.addAttachment with:', {
+        fragmentName,
+        contentLength: (fragment.conteudo || '').length,
+        type: 'text'
+      })
+      
       // Add fragment as attachment to chat with correct signature
       // chatStore.addAttachment expects (filename: string, content: string, type: string)
       const success = chatStore.addAttachment(
@@ -278,6 +289,8 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
         fragment.conteudo || '',
         'text'
       )
+
+      console.log('[useUnclassifiedCell] Result:', success)
 
       if (success) {
         successMessage.value = `Fragmento #${index + 1} enviado para o chat!`
