@@ -201,7 +201,9 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
    */
   function sendToChat(): void {
     // chatStore.addAttachment expects (filename: string, content: string, type: string)
-    // Note: Metadata like filePath is not supported in current API
+    // Note: Using 'text' type for consistency across all cell types.
+    // The chat system currently treats all attachments uniformly regardless of type.
+    // Metadata like filePath is not supported in current API.
     chatStore.addAttachment(
       fileName.value,
       fileContent.value,

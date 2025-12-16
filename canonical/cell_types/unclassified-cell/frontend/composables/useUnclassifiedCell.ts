@@ -265,8 +265,11 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
     console.log('📦 Fragment:', { index, type: fragment.type, contentLength: fragment.conteudo?.length })
 
     try {
+      // Default fragment type constant
+      const DEFAULT_FRAGMENT_TYPE = 'unknown'
+      
       // Create descriptive filename for the fragment
-      const fragmentName = `Fragment #${index + 1} - ${fragment.type || 'unknown'}`
+      const fragmentName = `Fragment #${index + 1} - ${fragment.type || DEFAULT_FRAGMENT_TYPE}`
       
       // Add fragment as attachment to chat with correct signature
       // chatStore.addAttachment expects (filename: string, content: string, type: string)
