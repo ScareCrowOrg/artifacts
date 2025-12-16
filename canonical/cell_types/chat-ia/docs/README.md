@@ -1,3 +1,11 @@
+---
+processed: true
+processed_date: 2025-12-16
+generated_docs:
+  - docs/official/backend/architecture/cell-type-symlink-architecture.md
+code_verified: true
+dead_docs_found: false
+---
 # Chat IA Cell Type
 
 ## Overview
