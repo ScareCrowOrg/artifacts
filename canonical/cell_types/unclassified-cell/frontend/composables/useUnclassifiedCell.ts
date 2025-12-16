@@ -367,8 +367,6 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
     
     console.groupEnd()
   }
-    console.groupEnd()
-  }
 
   /**
    * Format date string for display
