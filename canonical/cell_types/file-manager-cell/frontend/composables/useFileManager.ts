@@ -549,14 +549,26 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
         console.log(`📄 Processing file: ${filePath}`)
         
         try {
-          // Read file content from backend
-          const response = await apiService.get(
-            ENDPOINTS.FILES.READ.replace(':filepath', encodeURIComponent(filePath)),
-            { responseType: 'text' }
-          )
+          // Parse folder and filename from filePath
+          const pathParts = filePath.split('/')
+          const fileName = pathParts.pop() || filePath
+          const folder = pathParts.join('/') || ''
+          
+          console.log(`📂 Parsed path:`, {
+            filePath,
+            folder,
+            fileName
+          })
+          
+          // Read file content from backend using loadFile endpoint
+          // Format: /api/files/load?folder=...&filename=...
+          const url = `${ENDPOINTS.loadFile}?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(fileName)}`
+          
+          console.log(`🔗 Fetching from:`, url)
+          
+          const response = await apiService.get(url, { responseType: 'text' })
           
           const content = typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
-          const fileName = filePath.split('/').pop() || filePath
           
           console.log(`🚀 Sending to chat:`, {
             filename: fileName,

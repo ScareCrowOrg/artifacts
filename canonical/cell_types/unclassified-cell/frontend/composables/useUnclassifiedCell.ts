@@ -66,6 +66,7 @@ export interface UseUnclassifiedCellReturn {
   saveCell: () => Promise<void>
   closeCell: () => void
   sendFragmentToChat: (fragment: any, index: number) => void
+  sendCellToChat: () => void  // ITERATION 3: Added for main view Send to Chat
   formatDate: (dateString: string | undefined) => string
 }
 
@@ -312,6 +313,64 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
   }
 
   /**
+   * Send cell content to chat as attachment
+   * ITERATION 3: Added for main view Send to Chat functionality
+   */
+  function sendCellToChat(): void {
+    console.group('[useUnclassifiedCell] 💬 sendCellToChat - ITERATION 3')
+    console.log('📦 Cell data:', {
+      title: cellData.value.title,
+      contentLength: cellData.value.content?.length,
+    })
+
+    try {
+      // Create filename from title
+      const fileName = cellData.value.title 
+        ? `${cellData.value.title}.md`
+        : 'Célula Sem Título.md'
+      
+      // Create content with title and content
+      const fullContent = cellData.value.title
+        ? `# ${cellData.value.title}\n\n${cellData.value.content || ''}`
+        : cellData.value.content || ''
+      
+      console.log('[useUnclassifiedCell] 🚀 Calling chatStore.addAttachment with:', {
+        fileName,
+        contentLength: fullContent.length,
+        type: 'text'
+      })
+      
+      // Send to chat with correct API signature
+      const success = chatStore.addAttachment(
+        fileName,
+        fullContent,
+        'text'
+      )
+
+      console.log('[useUnclassifiedCell] Result:', success)
+
+      if (success) {
+        successMessage.value = 'Célula enviada para o chat!'
+        console.log('✅ Cell sent to chat')
+      } else {
+        throw new Error('Failed to add cell to chat')
+      }
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        successMessage.value = null
+      }, 3000)
+    } catch (error: any) {
+      console.error('❌ Error sending cell to chat:', error)
+      errorMessage.value = error.message || 'Erro ao enviar célula para o chat'
+    }
+    
+    console.groupEnd()
+  }
+    console.groupEnd()
+  }
+
+  /**
    * Format date string for display
    * @param dateString - ISO date string
    * @returns Formatted date string
@@ -372,6 +431,7 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
     onSaveError,
     closeCell,
     sendFragmentToChat,
+    sendCellToChat,  // ITERATION 3: Added
     formatDate,
   }
 }
