@@ -566,9 +566,14 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
           
           console.log(`🔗 Fetching from:`, url)
           
-          const response = await apiService.get(url, { responseType: 'text' })
+          // ITERATION 4 FIX: Use apiService.fetch instead of apiService.get
+          const response = await apiService.fetch(url, { method: 'GET' })
           
-          const content = typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          }
+          
+          const content = await response.text()
           
           console.log(`🚀 Sending to chat:`, {
             filename: fileName,
