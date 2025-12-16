@@ -17,6 +17,7 @@ import apiService, { SessionExpiredError } from '@/services/apiService'
 import { useDynamicLayout } from '@/composables/useDynamicLayout'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 
 // Global state to prevent concurrent refresh operations across all FileManagerCell instances
 // This prevents infinite loops when async component loading causes component re-creation
@@ -524,6 +525,85 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     console.log('Delete not yet implemented:', path)
   }
   
+  /**
+   * Send selected files to chat as attachments
+   * ITERATION 2: Added for file-manager-cell Send to Chat functionality
+   */
+  async function sendSelectedToChat(): Promise<void> {
+    console.group('[useFileManager] 💬 Sending selected files to chat')
+    console.log('📦 Selected files:', selectedFiles.value)
+    
+    if (selectedFiles.value.length === 0) {
+      errorMessage.value = 'Nenhum arquivo selecionado'
+      console.warn('⚠️ No files selected')
+      console.groupEnd()
+      return
+    }
+    
+    const chatStore = useChatStore()
+    let successCount = 0
+    let failCount = 0
+    
+    try {
+      for (const filePath of selectedFiles.value) {
+        console.log(`📄 Processing file: ${filePath}`)
+        
+        try {
+          // Read file content from backend
+          const response = await apiService.get(
+            ENDPOINTS.FILES.READ.replace(':filepath', encodeURIComponent(filePath)),
+            { responseType: 'text' }
+          )
+          
+          const content = typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
+          const fileName = filePath.split('/').pop() || filePath
+          
+          console.log(`🚀 Sending to chat:`, {
+            filename: fileName,
+            contentLength: content.length,
+            type: 'text'
+          })
+          
+          // Send to chat with correct API signature
+          const success = chatStore.addAttachment(fileName, content, 'text')
+          
+          if (success) {
+            successCount++
+            console.log(`✅ File sent: ${fileName}`)
+          } else {
+            failCount++
+            console.warn(`⚠️ Failed to send: ${fileName}`)
+          }
+        } catch (fileError: any) {
+          failCount++
+          console.error(`❌ Error reading/sending file ${filePath}:`, fileError)
+        }
+      }
+      
+      // Show result message
+      if (successCount > 0 && failCount === 0) {
+        successMessage.value = `✅ ${successCount} arquivo(s) enviado(s) para o chat!`
+      } else if (successCount > 0 && failCount > 0) {
+        successMessage.value = `⚠️ ${successCount} enviado(s), ${failCount} falhou(falharam)`
+      } else {
+        errorMessage.value = `❌ Falha ao enviar ${failCount} arquivo(s)`
+      }
+      
+      // Auto-clear message
+      setTimeout(() => {
+        successMessage.value = ''
+        errorMessage.value = ''
+      }, 3000)
+      
+      console.log(`📊 Result: ${successCount} success, ${failCount} failed`)
+    } catch (error: any) {
+      console.error('❌ Error in sendSelectedToChat:', error)
+      errorMessage.value = error.message || 'Erro ao enviar arquivos para o chat'
+    }
+    
+    console.groupEnd()
+  }
+  
   return {
     // State
     tree,
@@ -549,6 +629,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     openSelectedFiles,
     createNewFile,
     moveItem,
-    deleteItem
+    deleteItem,
+    sendSelectedToChat  // ITERATION 2: Added send to chat functionality
   }
 }

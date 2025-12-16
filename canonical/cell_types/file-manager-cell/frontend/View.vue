@@ -68,6 +68,22 @@
         </span>
       </button>
       
+      <!-- ITERATION 2: Send to Chat button -->
+      <button
+        class="px-3 py-2 text-sm font-medium text-white dark:text-text-primary-dark bg-primary dark:bg-primary-dark rounded-md hover:bg-primary-hover dark:hover:bg-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        :disabled="selectedCount === 0"
+        title="Enviar arquivo(s) selecionado(s) para o chat"
+        @click="handleSendToChat"
+      >
+        💬 Enviar para Chat
+        <span
+          v-if="selectedCount > 0"
+          class="ml-1 px-2 py-0.5 text-xs bg-white dark:bg-gray-800 text-primary dark:text-primary-light rounded-full"
+        >
+          {{ selectedCount }}
+        </span>
+      </button>
+      
       <button
         class="px-3 py-2 text-sm font-medium text-text-secondary dark:text-text-secondary-dark bg-surface dark:bg-surface-dark rounded-md hover:bg-surface-hover dark:hover:bg-surface-dark border border-border dark:border-border-dark focus:outline-none focus:ring-2 focus:ring-border focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="selectedCount === 0"
@@ -154,7 +170,8 @@ const {
   collapseAll,
   updateSearchQuery,
   openSelectedFiles,
-  createNewFile
+  createNewFile,
+  sendSelectedToChat  // ITERATION 2: Added send to chat function
 } = useFileManager(ref(props.cell))
 
 /**
@@ -169,6 +186,14 @@ async function handleRefresh(): Promise<void> {
  */
 async function handleOpenSelected(): Promise<void> {
   await openSelectedFiles()
+}
+
+/**
+ * Handle send to chat
+ * ITERATION 2: Added for file-manager-cell Send to Chat functionality
+ */
+async function handleSendToChat(): Promise<void> {
+  await sendSelectedToChat()
 }
 
 /**

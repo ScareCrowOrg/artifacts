@@ -119,4 +119,6 @@ export interface UseFileManagerReturn {
   moveItem: (sourcePath: string, destPath: string) => Promise<void>
   /** Delete file or directory */
   deleteItem: (path: string) => Promise<void>
+  /** Send selected files to chat as attachments - ITERATION 2 */
+  sendSelectedToChat: () => Promise<void>
 }
