@@ -5,7 +5,12 @@
  *   "theme_compliance": 95,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2025-12-17",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
@@ -17,20 +22,20 @@
     >
       <div class="text-center border-2 border-error/30 dark:border-error/40 rounded-lg p-6 bg-error/10 dark:bg-error/20 max-w-md">
         <span class="text-5xl mb-3 block">⚠️</span>
-        <p class="font-bold text-lg text-error dark:text-error-light mb-2">Erro de Configuração</p>
+        <p class="font-bold text-lg text-error dark:text-error-light mb-2">{{ $t('fragmentsManager.configError') }}</p>
         <p class="text-sm text-error dark:text-error-light mb-2">
-          Não foi possível identificar a célula para gerenciar fragmentos.
+          {{ $t('fragmentsManager.noCellId') }}
         </p>
         <p class="text-xs text-error/80 dark:text-error-light/80">
-          O objeto da célula deve conter <code class="px-1 py-0.5 bg-error/20 dark:bg-error/30 rounded">state.sourceCellId</code>,
-          <code class="px-1 py-0.5 bg-error/20 dark:bg-error/30 rounded">id</code>, ou
+          {{ $t('fragmentsManager.cellIdRequirement') }} <code class="px-1 py-0.5 bg-error/20 dark:bg-error/30 rounded">state.sourceCellId</code>,
+          <code class="px-1 py-0.5 bg-error/20 dark:bg-error/30 rounded">id</code>, {{ $t('common.or') }}
           <code class="px-1 py-0.5 bg-error/20 dark:bg-error/30 rounded">cellId</code>.
         </p>
         <button
           class="mt-4 px-4 py-2 border border-error rounded-md bg-white dark:bg-gray-900 text-error text-sm font-medium cursor-pointer transition-all hover:bg-error hover:text-white"
           @click="handleClose"
         >
-          Fechar
+          {{ $t('common.close') }}
         </button>
       </div>
     </div>
@@ -40,11 +45,11 @@
       <!-- Header -->
       <div class="flex justify-between items-center pb-4 border-b-2 border-gray-200 dark:border-gray-700">
         <h2 class="m-0 text-2xl text-gray-900 dark:text-gray-100 font-semibold">
-          📚 Gerenciador de Fragmentos
+          📚 {{ $t('fragmentsManager.title') }}
         </h2>
         <button
           class="w-6 h-6 text-lg border-0 bg-background hover:bg-background cursor-pointer rounded flex items-center justify-center transition-colors"
-          title="Fechar"
+          :title="$t('common.close')"
           @click="handleClose"
         >
           ×
@@ -54,7 +59,7 @@
     <!-- Cell Info -->
     <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
       <div class="flex items-center gap-3">
-        <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Célula:</span>
+        <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ $t('fragmentsManager.cellLabel') }}</span>
         <code class="px-2 py-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs font-mono text-primary">
           {{ cellId }}
         </code>
@@ -64,37 +69,37 @@
     <!-- Add Fragment Section -->
     <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
       <h3 class="m-0 mb-3 text-lg font-semibold text-gray-900 dark:text-gray-100">
-        ➕ Adicionar Novo Fragmento
+        ➕ {{ $t('fragmentsManager.addNewFragment') }}
       </h3>
       
       <div class="flex flex-col gap-3">
         <!-- Fragment Type -->
         <div class="flex flex-col gap-1">
           <label for="fragment-type" class="font-semibold text-sm text-gray-600 dark:text-gray-400">
-            Tipo do Fragmento
+            {{ $t('fragmentsManager.fragmentType') }}
           </label>
           <select
             id="fragment-type"
             v-model="newFragmentType"
             class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
           >
-            <option value="memoria">📝 Memória</option>
-            <option value="code">💻 Código</option>
-            <option value="note">📄 Nota</option>
-            <option value="reference">🔗 Referência</option>
+            <option value="memoria">📝 {{ $t('fragmentsManager.fragmentTypes.memoria') }}</option>
+            <option value="code">💻 {{ $t('fragmentsManager.fragmentTypes.code') }}</option>
+            <option value="note">📄 {{ $t('fragmentsManager.fragmentTypes.note') }}</option>
+            <option value="reference">🔗 {{ $t('fragmentsManager.fragmentTypes.reference') }}</option>
           </select>
         </div>
 
         <!-- Fragment Content -->
         <div class="flex flex-col gap-1">
           <label for="fragment-content" class="font-semibold text-sm text-gray-600 dark:text-gray-400">
-            Conteúdo (Markdown)
+            {{ $t('fragmentsManager.fragmentContent') }}
           </label>
           <textarea
             id="fragment-content"
             v-model="newFragmentContent"
             class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-h-[150px] font-mono text-sm"
-            placeholder="Digite o conteúdo do fragmento em Markdown..."
+            :placeholder="$t('fragmentsManager.contentPlaceholder')"
           />
         </div>
 
@@ -104,7 +109,7 @@
           :disabled="!canAddFragment || isAdding"
           @click="handleAddFragment"
         >
-          {{ isAdding ? '⏳ Adicionando...' : '➕ Adicionar Fragmento' }}
+          {{ isAdding ? `⏳ ${$t('fragmentsManager.adding')}` : `➕ ${$t('fragmentsManager.addFragment')}` }}
         </button>
       </div>
     </div>
@@ -113,14 +118,13 @@
     <div class="flex flex-col gap-3">
       <div class="flex justify-between items-center">
         <h3 class="m-0 text-lg font-semibold text-gray-900 dark:text-gray-100">
-          📋 Fragmentos Existentes
+          📋 {{ $t('fragmentsManager.existingFragments') }}
         </h3>
         <span
           class="px-3 py-1 bg-primary text-white rounded-full text-xs font-semibold"
-          :aria-label="`${fragmentCount} fragmentos`"
+          :aria-label="$t('fragmentsManager.fragmentCount', { count: fragmentCount })"
         >
-          {{ fragmentCount }}
-          {{ fragmentCount === 1 ? 'fragmento' : 'fragmentos' }}
+          {{ $t('fragmentsManager.fragmentCount', { count: fragmentCount }) }}
         </span>
       </div>
 
@@ -129,7 +133,7 @@
         v-if="isLoading"
         class="flex items-center justify-center py-12"
       >
-        <div class="text-gray-600 dark:text-gray-400">⏳ Carregando fragmentos...</div>
+        <div class="text-gray-600 dark:text-gray-400">⏳ {{ $t('fragmentsManager.loadingFragments') }}</div>
       </div>
 
       <!-- Empty State -->
@@ -139,10 +143,10 @@
       >
         <div class="text-4xl mb-3">📭</div>
         <p class="text-gray-600 dark:text-gray-400 m-0">
-          Nenhum fragmento encontrado para esta célula.
+          {{ $t('fragmentsManager.noFragments') }}
         </p>
         <p class="text-sm text-gray-500 dark:text-gray-500 mt-2 m-0">
-          Use o formulário acima para adicionar fragmentos.
+          {{ $t('fragmentsManager.useFormAbove') }}
         </p>
       </div>
 
@@ -170,10 +174,10 @@
             </div>
             <button
               class="px-3 py-2 border border-primary rounded-md bg-white text-primary text-xs font-medium cursor-pointer transition-all whitespace-nowrap hover:bg-primary hover:text-white hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(98,0,234,0.3)]"
-              :title="`Enviar fragmento #${index + 1} para o chat`"
+              :title="$t('fragmentsManager.sendToChatTooltip', { index: index + 1 })"
               @click="handleSendToChat(fragment, index)"
             >
-              💬 Enviar para Chat
+              💬 {{ $t('fragmentsManager.sendToChat') }}
             </button>
           </div>
 
@@ -183,7 +187,7 @@
               <MarkdownRenderer :content="fragment.conteudo" />
             </div>
             <div v-else class="text-gray-500 dark:text-gray-500 italic text-center py-3">
-              <em>Sem conteúdo</em>
+              <em>{{ $t('fragmentsManager.noContent') }}</em>
             </div>
           </div>
         </div>
@@ -209,11 +213,14 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useBaseCellFeatures } from '../composables/useBaseCellFeatures.ts'
 import { useParentCellContext } from '@/composables/useParentCellContext'
 import type { CellFragment } from '@/types/baseCell'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+
+const { t } = useI18n()
 
 /**
  * Props interface for BaseFragmentsManager
@@ -340,10 +347,10 @@ const canAddFragment = computed(() => {
  */
 function getFragmentTypeLabel(type: string): string {
   const labels: Record<string, string> = {
-    'memoria': '📝 Memória',
-    'code': '💻 Código',
-    'note': '📄 Nota',
-    'reference': '🔗 Referência',
+    'memoria': `📝 ${t('fragmentsManager.fragmentTypes.memoria')}`,
+    'code': `💻 ${t('fragmentsManager.fragmentTypes.code')}`,
+    'note': `📄 ${t('fragmentsManager.fragmentTypes.note')}`,
+    'reference': `🔗 ${t('fragmentsManager.fragmentTypes.reference')}`,
   }
   return labels[type] || `📋 ${type}`
 }
