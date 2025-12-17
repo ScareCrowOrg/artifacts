@@ -1,3 +1,23 @@
+---
+processed: true
+processed_date: 2025-12-17
+updated_docs:
+  - docs/official/frontend/architecture/ephemeral-cell-architecture.md
+themes:
+  - frontend
+  - cell-types
+  - ephemeral
+  - typescript
+  - i18n
+  - wireframe-generation
+  - content-capture
+modules:
+  - frontend
+  - cockpit-vue
+  - artifacts
+code_verified: true
+dead_docs_found: false
+---
 # Manual Capture Cell
 
 ## Overview
