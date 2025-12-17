@@ -83,10 +83,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject, nextTick, type Ref } from 'vue'
+import { ref, computed, nextTick, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useLayoutStore } from '@/stores/layout'
+import { useDynamicLayout } from '@/composables/useDynamicLayout'
 import { useManualCapture } from './composables/useManualCapture'
 import type { CellProps, ManualCaptureCellData } from './types'
 
@@ -99,6 +100,9 @@ const layoutStore = useLayoutStore()
 
 // i18n
 const { t } = useI18n()
+
+// Use dynamic layout composable (standard pattern - same as file-manager-cell)
+const { addCell: addCellToLayout } = useDynamicLayout()
 
 // Get cell data with defaults
 const cellData = computed<ManualCaptureCellData>(() => {
@@ -120,31 +124,6 @@ const {
   insertContent,
 } = useManualCapture(cellDataRef)
 
-// Inject dynamic layout composable (provided by DynamicWorkspace or parent)
-const dynamicLayout = inject<{
-  addCell: (params: {
-    cellId: string
-    type: string
-    title: string
-    state: {
-      cellInstance: {
-        id: string
-        notebook_item_type_id: string
-        assignee_id: string
-        initial_data: Record<string, unknown>
-        status: string
-        fragments: unknown[]
-      }
-      cellType: {
-        id: string
-        name: string
-        default_initial_data: Record<string, unknown>
-      }
-      initial_data: Record<string, unknown>
-    }
-  }) => boolean
-} | null>('dynamicLayout', null)
-
 // Get user ID from auth store (fallback to default if not authenticated)
 const userId = computed(() => authStore.user?.id || 'default-user-id')
 
@@ -157,10 +136,11 @@ async function createFileEditorCell(
   fileName: string,
   language: string
 ): Promise<void> {
-  if (!dynamicLayout) {
-    console.error('[ManualCaptureCell] dynamicLayout not available')
-    throw new Error('Cannot create file editor cell: dynamicLayout not available')
-  }
+  // DEBUG ITERATION 2: Verify useDynamicLayout is available
+  console.group('[ManualCaptureCell] 🔍 DEBUG ITERATION 2 - useDynamicLayout Check')
+  console.log('✅ addCellToLayout available:', !!addCellToLayout)
+  console.log('✅ Using standard pattern (same as file-manager-cell)')
+  console.groupEnd()
 
   // Generate ephemeral ID for the new file-editor-v2 cell
   const tempCellId = `ephemeral-file-editor-v2-${Date.now()}`
@@ -216,7 +196,7 @@ async function createFileEditorCell(
   console.log('cellData.state.initial_data:', cellData.state.initial_data)
   console.groupEnd()
   
-  const success = dynamicLayout.addCell(cellData)
+  const success = addCellToLayout(cellData)
   
   if (!success) {
     throw new Error('Failed to add file editor cell to layout')
