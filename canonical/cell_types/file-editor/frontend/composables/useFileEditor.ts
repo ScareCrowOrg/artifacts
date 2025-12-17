@@ -89,6 +89,33 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
     errorMessage.value = null
     
     try {
+      // ITERATION 3 FIX: Check if content is pre-provided (e.g., from manual-capture-cell)
+      const cellData = cellRef.value?.initial_data as FileEditorCellData
+      
+      if (cellData?.content !== undefined && cellData?.content !== null) {
+        // Content was pre-provided - use it directly without backend call
+        // This supports creating new files with initial content (manual-capture-cell use case)
+        console.log('[FILE-EDITOR] 🔍 DEBUG ITERATION 3 - Using pre-provided content')
+        console.log('[FILE-EDITOR] Pre-provided content length:', cellData.content.length)
+        console.log('[FILE-EDITOR] Skipping backend load for new file creation')
+        
+        fileContent.value = cellData.content
+        
+        // Sync to cell object via store for CellToolbar access
+        if (cellRef.value) {
+          cellsStore.updateCellData(cellRef.value.id, {
+            content: fileContent.value,
+            filename: fileName.value,
+          })
+        }
+        
+        isLoading.value = false
+        return  // Early return - skip backend load
+      }
+      
+      // No pre-provided content - load from backend (existing file scenario)
+      console.log('[FILE-EDITOR] 🔍 DEBUG ITERATION 3 - No pre-provided content, loading from backend')
+      
       const folder = filePath.value
       const filename = fileName.value
       
@@ -115,9 +142,9 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
         throw new Error('Falha ao carregar arquivo')
       }
       
-      const data = await response.json()
-      console.log('[FILE-EDITOR] File loaded successfully, content length:', data.content?.length || 0)
-      fileContent.value = data.content || ''
+      const responseData = await response.json()
+      console.log('[FILE-EDITOR] File loaded successfully, content length:', responseData.content?.length || 0)
+      fileContent.value = responseData.content || ''
       
       // Sync to cell object via store for CellToolbar access
       if (cellRef.value) {
