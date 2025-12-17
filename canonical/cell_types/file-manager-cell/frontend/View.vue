@@ -1,8 +1,8 @@
 /**
  * @metadata {
  *   "theme_validated": true,
- *   "theme_validated_date": "2025-12-16",
- *   "theme_compliance": 98,
+ *   "theme_validated_date": "2025-12-17",
+ *   "theme_compliance": 100,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
  *   "dark_mode_support": "full",
@@ -77,7 +77,7 @@
         {{ $t('fileManager.openButton') }}
         <span
           v-if="selectedCount > 0"
-          class="ml-1 px-2 py-0.5 text-xs bg-white dark:bg-gray-800 text-primary dark:text-primary-light rounded-full"
+          class="ml-1 px-2 py-0.5 text-xs bg-surface dark:bg-surface-dark text-primary dark:text-primary-light rounded-full"
         >
           {{ $t('fileManager.selectedCount', { count: selectedCount }) }}
         </span>
@@ -93,7 +93,7 @@
         {{ $t('fileManager.sendToChat') }}
         <span
           v-if="selectedCount > 0"
-          class="ml-1 px-2 py-0.5 text-xs bg-white dark:bg-gray-800 text-primary dark:text-primary-light rounded-full"
+          class="ml-1 px-2 py-0.5 text-xs bg-surface dark:bg-surface-dark text-primary dark:text-primary-light rounded-full"
         >
           {{ $t('fileManager.selectedCount', { count: selectedCount }) }}
         </span>
@@ -118,7 +118,7 @@
       <p>{{ $t('fileManager.noMatchesFound', { query: searchQuery }) }}</p>
     </div>
     
-    <div v-else class="flex-1 overflow-y-auto border border-border dark:border-border-dark rounded-md p-4 bg-white dark:bg-gray-900">
+    <div v-else class="flex-1 overflow-y-auto border border-border dark:border-border-dark rounded-md p-4 bg-surface dark:bg-surface-dark">
       <FileTreeNode
         v-for="node in displayTree"
         :key="node.path"
@@ -288,19 +288,19 @@ watch(
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--color-border);
   border-radius: 4px;
 }
 
 .dark .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-border-dark);
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-border);
 }
 
 .dark .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--color-border-dark);
 }
 </style>

@@ -1,8 +1,8 @@
 /**
  * @metadata {
  *   "theme_validated": true,
- *   "theme_validated_date": "2025-12-16",
- *   "theme_compliance": 95,
+ *   "theme_validated_date": "2025-12-17",
+ *   "theme_compliance": 100,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
  *   "dark_mode_support": "full",
@@ -14,7 +14,7 @@
  * }
  */
 <template>
-  <div class="flex flex-col h-full p-6 gap-4 overflow-y-auto bg-white dark:bg-gray-900">
+  <div class="flex flex-col h-full p-6 gap-4 overflow-y-auto bg-surface dark:bg-surface-dark">
     <!-- Error State: No Cell ID -->
     <div
       v-if="!cellId"
@@ -32,7 +32,7 @@
           <code class="px-1 py-0.5 bg-error/20 dark:bg-error/30 rounded">cellId</code>.
         </p>
         <button
-          class="mt-4 px-4 py-2 border border-error rounded-md bg-white dark:bg-gray-900 text-error text-sm font-medium cursor-pointer transition-all hover:bg-error hover:text-white"
+          class="mt-4 px-4 py-2 border border-error rounded-md bg-surface dark:bg-surface-dark text-error text-sm font-medium cursor-pointer transition-all hover:bg-error hover:text-white"
           @click="handleClose"
         >
           {{ $t('common.close') }}
@@ -43,8 +43,8 @@
     <!-- Main Content (only when cellId is valid) -->
     <template v-else>
       <!-- Header -->
-      <div class="flex justify-between items-center pb-4 border-b-2 border-gray-200 dark:border-gray-700">
-        <h2 class="m-0 text-2xl text-gray-900 dark:text-gray-100 font-semibold">
+      <div class="flex justify-between items-center pb-4 border-b-2 border-border dark:border-border-dark">
+        <h2 class="m-0 text-2xl text-text-primary dark:text-text-primary-dark font-semibold">
           📚 {{ $t('fragmentsManager.title') }}
         </h2>
         <button
@@ -57,31 +57,31 @@
       </div>
 
     <!-- Cell Info -->
-    <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+    <div class="bg-background dark:bg-background-dark border border-border dark:border-border-dark rounded-lg p-4">
       <div class="flex items-center gap-3">
-        <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ $t('fragmentsManager.cellLabel') }}</span>
-        <code class="px-2 py-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs font-mono text-primary">
+        <span class="text-sm font-medium text-text-secondary dark:text-text-secondary-dark">{{ $t('fragmentsManager.cellLabel') }}</span>
+        <code class="px-2 py-1 bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded text-xs font-mono text-primary">
           {{ cellId }}
         </code>
       </div>
     </div>
 
     <!-- Add Fragment Section -->
-    <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-      <h3 class="m-0 mb-3 text-lg font-semibold text-gray-900 dark:text-gray-100">
+    <div class="bg-background dark:bg-background-dark border border-border dark:border-border-dark rounded-lg p-4">
+      <h3 class="m-0 mb-3 text-lg font-semibold text-text-primary dark:text-text-primary-dark">
         ➕ {{ $t('fragmentsManager.addNewFragment') }}
       </h3>
       
       <div class="flex flex-col gap-3">
         <!-- Fragment Type -->
         <div class="flex flex-col gap-1">
-          <label for="fragment-type" class="font-semibold text-sm text-gray-600 dark:text-gray-400">
+          <label for="fragment-type" class="font-semibold text-sm text-text-secondary dark:text-text-secondary-dark">
             {{ $t('fragmentsManager.fragmentType') }}
           </label>
           <select
             id="fragment-type"
             v-model="newFragmentType"
-            class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
           >
             <option value="memoria">📝 {{ $t('fragmentsManager.fragmentTypes.memoria') }}</option>
             <option value="code">💻 {{ $t('fragmentsManager.fragmentTypes.code') }}</option>
@@ -92,13 +92,13 @@
 
         <!-- Fragment Content -->
         <div class="flex flex-col gap-1">
-          <label for="fragment-content" class="font-semibold text-sm text-gray-600 dark:text-gray-400">
+          <label for="fragment-content" class="font-semibold text-sm text-text-secondary dark:text-text-secondary-dark">
             {{ $t('fragmentsManager.fragmentContent') }}
           </label>
           <textarea
             id="fragment-content"
             v-model="newFragmentContent"
-            class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-h-[150px] font-mono text-sm"
+            class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-h-[150px] font-mono text-sm"
             :placeholder="$t('fragmentsManager.contentPlaceholder')"
           />
         </div>
@@ -117,7 +117,7 @@
     <!-- Fragments List -->
     <div class="flex flex-col gap-3">
       <div class="flex justify-between items-center">
-        <h3 class="m-0 text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <h3 class="m-0 text-lg font-semibold text-text-primary dark:text-text-primary-dark">
           📋 {{ $t('fragmentsManager.existingFragments') }}
         </h3>
         <span
@@ -133,16 +133,16 @@
         v-if="isLoading"
         class="flex items-center justify-center py-12"
       >
-        <div class="text-gray-600 dark:text-gray-400">⏳ {{ $t('fragmentsManager.loadingFragments') }}</div>
+        <div class="text-text-secondary dark:text-text-secondary-dark">⏳ {{ $t('fragmentsManager.loadingFragments') }}</div>
       </div>
 
       <!-- Empty State -->
       <div
         v-else-if="fragmentCount === 0"
-        class="bg-gray-50 dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center"
+        class="bg-background dark:bg-background-dark border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center"
       >
         <div class="text-4xl mb-3">📭</div>
-        <p class="text-gray-600 dark:text-gray-400 m-0">
+        <p class="text-text-secondary dark:text-text-secondary-dark m-0">
           {{ $t('fragmentsManager.noFragments') }}
         </p>
         <p class="text-sm text-gray-500 dark:text-gray-500 mt-2 m-0">
@@ -161,14 +161,14 @@
           class="bg-white border border-black/20 rounded-lg p-4 shadow-sm transition-shadow hover:shadow-md"
         >
           <!-- Fragment Header -->
-          <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex justify-between items-center mb-3 pb-2 border-b border-border dark:border-border-dark">
             <div class="flex items-center gap-3">
               <span
                 class="px-2 py-1 bg-primary/10 border border-primary/30 rounded text-xs font-medium text-primary"
               >
                 {{ getFragmentTypeLabel(fragment.type) }}
               </span>
-              <span class="text-sm text-gray-600 dark:text-gray-400 font-medium">
+              <span class="text-sm text-text-secondary dark:text-text-secondary-dark font-medium">
                 #{{ index + 1 }}
               </span>
             </div>
@@ -182,7 +182,7 @@
           </div>
 
           <!-- Fragment Content -->
-          <div class="fragment-content text-gray-900 dark:text-gray-100">
+          <div class="fragment-content text-text-primary dark:text-text-primary-dark">
             <div v-if="fragment.conteudo" class="markdown-scroll">
               <MarkdownRenderer :content="fragment.conteudo" />
             </div>

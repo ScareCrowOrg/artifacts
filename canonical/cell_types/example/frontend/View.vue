@@ -1,8 +1,8 @@
 /**
  * @metadata {
  *   "theme_validated": true,
- *   "theme_validated_date": "2025-12-16",
- *   "theme_compliance": 98,
+ *   "theme_validated_date": "2025-12-17",
+ *   "theme_compliance": 100,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
  *   "dark_mode_support": "full",
@@ -14,7 +14,7 @@
  * }
  */
 <template>
-  <div class="example-cell bg-surface dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg p-4 shadow-sm">
+  <div class="example-cell bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-lg p-4 shadow-sm">
     <div class="cell-header mb-3">
       <h3 class="text-lg font-semibold text-primary dark:text-primary-light">
         {{ cell.initial_data?.message || $t('exampleCell.defaultTitle') }}
@@ -24,7 +24,7 @@
     <div class="cell-content space-y-4">
       <!-- Counter Display -->
       <div class="counter-section">
-        <label class="block text-sm font-medium text-text-secondary dark:text-gray-400 mb-1">
+        <label class="block text-sm font-medium text-text-secondary dark:text-text-secondary-dark mb-1">
           {{ $t('exampleCell.counter') }}
         </label>
         <div class="flex items-center gap-2">
@@ -42,19 +42,19 @@
 
       <!-- Message Editor -->
       <div class="message-section">
-        <label class="block text-sm font-medium text-text-secondary dark:text-gray-400 mb-1">
+        <label class="block text-sm font-medium text-text-secondary dark:text-text-secondary-dark mb-1">
           {{ $t('exampleCell.message') }}
         </label>
         <input
           v-model="message"
           type="text"
-          class="w-full px-3 py-2 border border-border dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+          class="w-full px-3 py-2 border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark rounded focus:outline-none focus:ring-2 focus:ring-primary"
           @change="updateCell"
         />
       </div>
 
       <!-- Cell Info -->
-      <div class="info-section text-xs text-text-secondary dark:text-gray-400">
+      <div class="info-section text-xs text-text-secondary dark:text-text-secondary-dark">
         <p>{{ $t('exampleCell.cellId') }} {{ cell.id }}</p>
         <p>{{ $t('exampleCell.type') }} {{ cell.notebook_item_type_id }}</p>
       </div>

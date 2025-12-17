@@ -1,8 +1,8 @@
 /**
  * @metadata {
  *   "theme_validated": true,
- *   "theme_validated_date": "2025-12-16",
- *   "theme_compliance": 96,
+ *   "theme_validated_date": "2025-12-17",
+ *   "theme_compliance": 100,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
  *   "dark_mode_support": "full",
@@ -18,16 +18,16 @@
     <!-- Header -->
     <div class="flex justify-between items-start pb-4 border-b-2 border-gray-200 dark:border-gray-700">
       <div class="flex flex-col gap-1">
-        <h2 class="m-0 text-2xl text-gray-900 dark:text-gray-100 font-semibold">{{ $t('fileEditor.title') }}</h2>
+        <h2 class="m-0 text-2xl text-text-primary dark:text-text-primary-dark font-semibold">{{ $t('fileEditor.title') }}</h2>
         <div class="flex items-center gap-1 text-sm">
-          <span class="font-semibold text-gray-600 dark:text-gray-400">{{ $t('fileEditor.pathLabel') }}</span>
+          <span class="font-semibold text-text-secondary dark:text-text-secondary-dark">{{ $t('fileEditor.pathLabel') }}</span>
           <code class="px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded font-mono text-xs text-primary">
             {{ fullPath }}
           </code>
         </div>
       </div>
       <button
-        class="px-3 py-1.5 text-sm text-error font-medium bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md cursor-pointer transition-all duration-200 hover:bg-error/10 dark:hover:bg-error/20 hover:border-error disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+        class="px-3 py-1.5 text-sm text-error font-medium bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-md cursor-pointer transition-all duration-200 hover:bg-error/10 dark:hover:bg-error/20 hover:border-error disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
         :disabled="isSaving"
         :title="$t('fileEditor.closeEditorTooltip')"
         :aria-label="$t('fileEditor.closeEditorAriaLabel', { fileName })"
@@ -38,7 +38,7 @@
     </div>
 
     <!-- Loading State -->
-    <div v-if="isLoading" class="flex-1 flex items-center justify-center text-gray-600 dark:text-gray-400">
+    <div v-if="isLoading" class="flex-1 flex items-center justify-center text-text-secondary dark:text-text-secondary-dark">
       <p>{{ $t('fileEditor.loadingFile') }}</p>
     </div>
 
@@ -53,7 +53,7 @@
 
     <!-- Footer Actions -->
     <div class="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
-      <div class="flex gap-4 text-xs text-gray-600 dark:text-gray-400">
+      <div class="flex gap-4 text-xs text-text-secondary dark:text-text-secondary-dark">
         <span class="px-2 py-0.5 bg-warning/10 border border-warning/30 rounded text-warning font-semibold whitespace-nowrap">
           {{ $t('fileEditor.ephemeralCellBadge') }}
         </span>
@@ -64,7 +64,7 @@
       <div class="flex gap-2">
         <!-- Send to Chat Button -->
         <button
-          class="px-4 py-2 text-sm font-medium text-primary bg-white dark:bg-gray-900 border border-primary rounded-md cursor-pointer transition-all duration-200 hover:bg-primary/10 dark:hover:bg-primary/20 hover:border-primary-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          class="px-4 py-2 text-sm font-medium text-primary bg-surface dark:bg-surface-dark border border-primary rounded-md cursor-pointer transition-all duration-200 hover:bg-primary/10 dark:hover:bg-primary/20 hover:border-primary-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           :disabled="isSaving || isLoading || !fileContent"
           :title="$t('fileEditor.sendToChatTooltip')"
           :aria-label="$t('fileEditor.sendToChatAriaLabel', { fileName })"

@@ -1,8 +1,8 @@
 /**
  * @metadata {
  *   "theme_validated": true,
- *   "theme_validated_date": "2025-12-16",
- *   "theme_compliance": 99,
+ *   "theme_validated_date": "2025-12-17",
+ *   "theme_compliance": 100,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
  *   "dark_mode_support": "full",
@@ -26,7 +26,7 @@
         'flex items-center gap-1 px-2 py-1 rounded transition-colors cursor-pointer',
         {
           'bg-primary-light/15 dark:bg-primary-dark/20 text-primary dark:text-primary-light font-medium': isSelected,
-          'hover:bg-gray-100 dark:hover:bg-gray-800': !isSelected,
+          'hover:bg-surface-hover dark:hover:bg-surface-hover-dark': !isSelected,
         },
       ]"
       @click="handleClick"
@@ -34,7 +34,7 @@
       <!-- Expansion Toggle for Directories -->
       <button
         v-if="node.isDirectory"
-        class="p-0 min-w-[20px] w-5 h-5 border-none bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+        class="p-0 min-w-[20px] w-5 h-5 border-none bg-transparent hover:bg-surface-hover dark:hover:bg-surface-hover-dark rounded transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
         @click.stop="handleToggleExpanded"
       >
         <span class="text-xs block">{{ isExpanded ? '▼' : '▶' }}</span>
@@ -149,6 +149,6 @@ function formatFileSize(bytes: number): string {
 <style scoped>
 /* Dark mode support for text */
 .dark .text-text-secondary {
-  @apply text-gray-400;
+  @apply text-text-secondary-dark;
 }
 </style>
