@@ -5,7 +5,12 @@
  *   "theme_compliance": 96,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2025-12-17",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
@@ -13,15 +18,11 @@
     <!-- Header with Toolbar Integration -->
     <div class="flex justify-between items-center pb-4 border-b-2 border-gray-200 dark:border-gray-700">
       <h2 class="m-0 text-2xl text-gray-900 dark:text-gray-100 font-semibold">
-        {{
-          isNewCell
-            ? '📝 Nova Célula Não Classificada'
-            : '📝 Editando Célula Não Classificada'
-        }}
+        {{ isNewCell ? $t('unclassifiedCell.newTitle') : $t('unclassifiedCell.editTitle') }}
       </h2>
       <button
         class="w-6 h-6 text-lg border-0 bg-background hover:bg-background cursor-pointer rounded flex items-center justify-center transition-colors"
-        title="Fechar"
+        :title="$t('unclassifiedCell.closeTooltip')"
         @click="onClose"
       >
         ×
@@ -35,52 +36,52 @@
         :disabled="isSaving"
         @click="handleSave"
       >
-        {{ isSaving ? '⏳ Salvando...' : '💾 Salvar Célula' }}
+        {{ isSaving ? $t('unclassifiedCell.saving') : $t('unclassifiedCell.saveButton') }}
       </button>
       <!-- ITERATION 3: Send to Chat button -->
       <button
         class="btn btn-secondary"
         :disabled="isSaving || (!cellData.title && !cellData.content)"
-        :title="'Enviar título e conteúdo da célula para o chat'"
+        :title="$t('unclassifiedCell.sendToChatTooltip')"
         @click="handleSendCellToChat"
       >
-        💬 Enviar para Chat
+        {{ $t('unclassifiedCell.sendToChat') }}
       </button>
       <button
         class="btn btn-secondary"
         @click="handleShowFragmentsManager"
       >
-        📚 Gerenciar Fragmentos
+        {{ $t('unclassifiedCell.manageFragments') }}
       </button>
       <button
         class="btn btn-secondary"
         @click="handleAddFragment"
       >
-        ➕ Adicionar Fragmento
+        {{ $t('unclassifiedCell.addFragment') }}
       </button>
     </div>
 
     <!-- Title Input -->
     <div class="flex flex-col gap-1">
       <label for="cell-title" class="font-semibold text-sm text-gray-600 dark:text-gray-400">
-        >Título da Célula</label
+        {{ $t('unclassifiedCell.titleLabel') }}</label
       >
       <input
         id="cell-title"
         v-model="cellData.title"
         type="text"
         class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-60 disabled:cursor-not-allowed"
-        placeholder="Digite o título da célula"
+        :placeholder="$t('unclassifiedCell.titlePlaceholder')"
         :disabled="isSaving"
       />
     </div>
 
     <!-- Content Editor -->
     <div class="flex flex-col gap-1 flex-1 min-h-[300px]">
-      <label class="font-semibold text-sm text-gray-600 dark:text-gray-400">Conteúdo</label>
+      <label class="font-semibold text-sm text-gray-600 dark:text-gray-400">{{ $t('unclassifiedCell.contentLabel') }}</label>
       <MarkdownEditor
         v-model="cellData.content"
-        placeholder="Digite o conteúdo da célula em Markdown..."
+        :placeholder="$t('unclassifiedCell.contentPlaceholder')"
         :readonly="isSaving"
       />
     </div>
@@ -91,16 +92,15 @@
       class="bg-[#f9f9fb] border border-black/10 rounded-lg p-3"
     >
       <div class="flex justify-between items-center">
-        <span class="text-sm text-gray-600 dark:text-gray-400">
-          📚 Esta célula possui
-          <strong class="text-primary">{{ fragmentCount }}</strong>
-          {{ fragmentCount === 1 ? 'fragmento' : 'fragmentos' }}
-        </span>
+        <span class="text-sm text-gray-600 dark:text-gray-400" v-html="$t('unclassifiedCell.fragmentSummary', { 
+          count: fragmentCount,
+          fragmentText: fragmentCount === 1 ? $t('unclassifiedCell.fragmentSingular') : $t('unclassifiedCell.fragmentPlural')
+        })"></span>
         <button
           class="px-3 py-1 border border-primary rounded-md bg-white dark:bg-gray-900 text-primary text-xs font-medium cursor-pointer transition-all hover:bg-primary hover:text-white"
           @click="handleShowFragmentsManager"
         >
-          Ver Fragmentos
+          {{ $t('unclassifiedCell.viewFragments') }}
         </button>
       </div>
     </div>
@@ -109,10 +109,10 @@
     <div class="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
       <div v-if="!isNewCell && cell" class="flex gap-4 text-xs text-gray-600 dark:text-gray-400">
         <span class="whitespace-nowrap"
-          >Criada: {{ formatDate(cell.created_at) }}</span
+          >{{ $t('unclassifiedCell.createdLabel') }} {{ formatDate(cell.created_at) }}</span
         >
         <span class="whitespace-nowrap"
-          >Atualizada: {{ formatDate(cell.updated_at) }}</span
+          >{{ $t('unclassifiedCell.updatedLabel') }} {{ formatDate(cell.updated_at) }}</span
         >
       </div>
     </div>
@@ -135,9 +135,12 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { useUnclassifiedCell, type UnclassifiedCell } from './composables/useUnclassifiedCell'
 import { useBaseCellFeatures } from '#artifacts/canonical/base_cell_components/frontend/composables/useBaseCellFeatures.ts'
+
+const { t: $t } = useI18n()
 
 /**
  * Props interface for Unclassified Cell View

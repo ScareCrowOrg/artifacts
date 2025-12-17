@@ -5,14 +5,19 @@
  *   "theme_compliance": 98,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2025-12-17",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
   <div class="example-cell bg-surface dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg p-4 shadow-sm">
     <div class="cell-header mb-3">
       <h3 class="text-lg font-semibold text-primary dark:text-primary-light">
-        {{ cell.initial_data?.message || 'Example Cell' }}
+        {{ cell.initial_data?.message || $t('exampleCell.defaultTitle') }}
       </h3>
     </div>
 
@@ -20,7 +25,7 @@
       <!-- Counter Display -->
       <div class="counter-section">
         <label class="block text-sm font-medium text-text-secondary dark:text-gray-400 mb-1">
-          Counter
+          {{ $t('exampleCell.counter') }}
         </label>
         <div class="flex items-center gap-2">
           <span class="text-2xl font-bold text-primary dark:text-primary-light">
@@ -30,7 +35,7 @@
             class="px-3 py-1 bg-primary dark:bg-primary-hover text-white rounded hover:bg-primary-hover dark:hover:bg-primary-light transition"
             @click="incrementCounter"
           >
-            Increment
+            {{ $t('exampleCell.increment') }}
           </button>
         </div>
       </div>
@@ -38,7 +43,7 @@
       <!-- Message Editor -->
       <div class="message-section">
         <label class="block text-sm font-medium text-text-secondary dark:text-gray-400 mb-1">
-          Message
+          {{ $t('exampleCell.message') }}
         </label>
         <input
           v-model="message"
@@ -50,8 +55,8 @@
 
       <!-- Cell Info -->
       <div class="info-section text-xs text-text-secondary dark:text-gray-400">
-        <p>Cell ID: {{ cell.id }}</p>
-        <p>Type: {{ cell.notebook_item_type_id }}</p>
+        <p>{{ $t('exampleCell.cellId') }} {{ cell.id }}</p>
+        <p>{{ $t('exampleCell.type') }} {{ cell.notebook_item_type_id }}</p>
       </div>
     </div>
   </div>
@@ -59,6 +64,9 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t: $t } = useI18n()
 
 const props = defineProps({
   cell: {

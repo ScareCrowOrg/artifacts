@@ -5,7 +5,12 @@
  *   "theme_compliance": 96,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2025-12-17",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
@@ -13,9 +18,9 @@
     <!-- Header -->
     <div class="flex justify-between items-start pb-4 border-b-2 border-gray-200 dark:border-gray-700">
       <div class="flex flex-col gap-1">
-        <h2 class="m-0 text-2xl text-gray-900 dark:text-gray-100 font-semibold">📄 Editando Arquivo</h2>
+        <h2 class="m-0 text-2xl text-gray-900 dark:text-gray-100 font-semibold">{{ $t('fileEditor.title') }}</h2>
         <div class="flex items-center gap-1 text-sm">
-          <span class="font-semibold text-gray-600 dark:text-gray-400">Caminho:</span>
+          <span class="font-semibold text-gray-600 dark:text-gray-400">{{ $t('fileEditor.pathLabel') }}</span>
           <code class="px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded font-mono text-xs text-primary">
             {{ fullPath }}
           </code>
@@ -24,24 +29,24 @@
       <button
         class="px-3 py-1.5 text-sm text-error font-medium bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md cursor-pointer transition-all duration-200 hover:bg-error/10 dark:hover:bg-error/20 hover:border-error disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
         :disabled="isSaving"
-        :title="'Fechar editor (não afeta o arquivo)'"
-        :aria-label="'Fechar editor do arquivo ' + fileName"
+        :title="$t('fileEditor.closeEditorTooltip')"
+        :aria-label="$t('fileEditor.closeEditorAriaLabel', { fileName })"
         @click="handleDeleteEphemeral"
       >
-        ❌ Fechar Editor
+        {{ $t('fileEditor.closeEditorButton') }}
       </button>
     </div>
 
     <!-- Loading State -->
     <div v-if="isLoading" class="flex-1 flex items-center justify-center text-gray-600 dark:text-gray-400">
-      <p>⏳ Carregando arquivo...</p>
+      <p>{{ $t('fileEditor.loadingFile') }}</p>
     </div>
 
     <!-- Editor -->
     <div v-else class="flex-1 min-h-[400px] flex w-full max-w-full">
       <MarkdownEditor
         v-model="fileContent"
-        :placeholder="`Editando ${fileName}...`"
+        :placeholder="$t('fileEditor.editingPlaceholder', { fileName })"
         :readonly="isSaving"
       />
     </div>
@@ -50,9 +55,9 @@
     <div class="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
       <div class="flex gap-4 text-xs text-gray-600 dark:text-gray-400">
         <span class="px-2 py-0.5 bg-warning/10 border border-warning/30 rounded text-warning font-semibold whitespace-nowrap">
-          ⚡ Célula Efêmera
+          {{ $t('fileEditor.ephemeralCellBadge') }}
         </span>
-        <span class="whitespace-nowrap">Arquivo: {{ fileName }}</span>
+        <span class="whitespace-nowrap">{{ $t('fileEditor.fileLabel') }} {{ fileName }}</span>
       </div>
       
       <!-- Action Buttons -->
@@ -61,22 +66,22 @@
         <button
           class="px-4 py-2 text-sm font-medium text-primary bg-white dark:bg-gray-900 border border-primary rounded-md cursor-pointer transition-all duration-200 hover:bg-primary/10 dark:hover:bg-primary/20 hover:border-primary-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           :disabled="isSaving || isLoading || !fileContent"
-          :title="'Enviar arquivo para o chat'"
-          :aria-label="'Enviar arquivo ' + fileName + ' para o chat'"
+          :title="$t('fileEditor.sendToChatTooltip')"
+          :aria-label="$t('fileEditor.sendToChatAriaLabel', { fileName })"
           @click="handleSendToChat"
         >
-          💬 Enviar para Chat
+          {{ $t('fileEditor.sendToChat') }}
         </button>
         
         <!-- Save Button -->
         <button
           class="px-4 py-2 text-sm font-medium text-white bg-success rounded-md cursor-pointer transition-all duration-200 hover:bg-success/80 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           :disabled="isSaving || isLoading"
-          :title="isSaving ? 'Salvando...' : 'Salvar alterações no arquivo'"
-          :aria-label="'Salvar arquivo ' + fileName"
+          :title="isSaving ? $t('fileEditor.saving') : $t('fileEditor.saveButton')"
+          :aria-label="$t('fileEditor.saveButton') + ' ' + fileName"
           @click="saveFile"
         >
-          {{ isSaving ? '⏳ Salvando...' : '💾 Salvar' }}
+          {{ isSaving ? $t('fileEditor.saving') : $t('fileEditor.saveButton') }}
         </button>
       </div>
     </div>
@@ -93,10 +98,13 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, toRef } from 'vue'
+import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { useFileEditor } from './composables/useFileEditor'
 import { useCellsStore } from '@/stores/cells'
 import type { FileEditorCell } from '@/types'
+
+const { t: $t } = useI18n()
 
 /**
  * Props interface for File Editor View

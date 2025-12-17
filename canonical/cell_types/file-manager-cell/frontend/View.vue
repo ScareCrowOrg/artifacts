@@ -5,7 +5,12 @@
  *   "theme_compliance": 98,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2025-12-17",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
@@ -14,12 +19,12 @@
     <div class="flex justify-between items-start pb-4 border-b-2 border-gray-200 dark:border-gray-700">
       <div class="flex flex-col gap-1">
         <h2 class="m-0 text-2xl text-text-primary dark:text-text-primary-dark font-semibold">
-          📁 Gerenciador de Arquivos
+          {{ $t('fileManager.title') }}
         </h2>
         <div class="flex items-center gap-1 text-sm text-text-secondary dark:text-text-secondary-dark">
-          <span class="font-semibold">Célula Efêmera</span>
+          <span class="font-semibold">{{ $t('fileManager.ephemeralCell') }}</span>
           <span class="px-2 py-0.5 bg-warning/10 border border-warning/30 rounded text-warning font-semibold">
-            ⚡ Não Persistida
+            {{ $t('fileManager.notPersisted') }}
           </span>
         </div>
       </div>
@@ -30,9 +35,9 @@
       <input
         v-model="searchQuery"
         type="text"
-        placeholder="🔍 Buscar arquivos por nome..."
+        :placeholder="$t('fileManager.searchPlaceholder')"
         class="flex-1 px-3 py-2 border border-border dark:border-border-dark rounded-md bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark placeholder:text-text-secondary dark:placeholder:text-text-secondary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-        aria-label="Buscar arquivos por nome"
+        :aria-label="$t('fileManager.searchAriaLabel')"
         @input="updateSearchQuery(($event.target as HTMLInputElement).value)"
       />
     </div>
@@ -41,40 +46,40 @@
     <div class="flex gap-2 flex-wrap">
       <button
         class="px-3 py-2 text-sm font-medium text-white dark:text-text-primary-dark bg-primary dark:bg-primary-dark rounded-md hover:bg-primary-hover dark:hover:bg-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
-        title="Atualizar árvore de arquivos e invalidar cache"
+        :title="$t('fileManager.refreshTooltip')"
         :disabled="isLoading"
         @click="handleRefresh"
       >
-        🔄 {{ isLoading ? 'Atualizando...' : 'Atualizar' }}
+        {{ isLoading ? $t('fileManager.refreshing') : $t('fileManager.refreshButton') }}
       </button>
       
       <button
         class="px-3 py-2 text-sm font-medium text-text-secondary dark:text-text-secondary-dark bg-surface dark:bg-surface-dark rounded-md hover:bg-surface-hover dark:hover:bg-surface-dark border border-border dark:border-border-dark focus:outline-none focus:ring-2 focus:ring-border focus:ring-offset-2 transition-colors"
-        title="Recolher todos os diretórios"
+        :title="$t('fileManager.collapseAllTooltip')"
         @click="collapseAll"
       >
-        📁 Recolher Tudo
+        {{ $t('fileManager.collapseAll') }}
       </button>
       
       <button
         class="px-3 py-2 text-sm font-medium text-white dark:text-text-primary-dark bg-success dark:bg-green-700 rounded-md hover:bg-green-600 dark:hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2 transition-colors"
         @click="handleCreateNew"
       >
-        + Novo
+        {{ $t('fileManager.newButton') }}
       </button>
       
       <button
         class="px-3 py-2 text-sm font-medium text-white dark:text-text-primary-dark bg-primary dark:bg-primary-dark rounded-md hover:bg-primary-hover dark:hover:bg-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="selectedCount === 0"
-        title="Abrir arquivo(s) como célula(s) de edição"
+        :title="$t('fileManager.openTooltip')"
         @click="handleOpenSelected"
       >
-        📄 Abrir
+        {{ $t('fileManager.openButton') }}
         <span
           v-if="selectedCount > 0"
           class="ml-1 px-2 py-0.5 text-xs bg-white dark:bg-gray-800 text-primary dark:text-primary-light rounded-full"
         >
-          {{ selectedCount }}
+          {{ $t('fileManager.selectedCount', { count: selectedCount }) }}
         </span>
       </button>
       
@@ -82,35 +87,35 @@
       <button
         class="px-3 py-2 text-sm font-medium text-white dark:text-text-primary-dark bg-primary dark:bg-primary-dark rounded-md hover:bg-primary-hover dark:hover:bg-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="selectedCount === 0"
-        title="Enviar arquivo(s) selecionado(s) para o chat"
+        :title="$t('fileManager.sendToChatTooltip')"
         @click="handleSendToChat"
       >
-        💬 Enviar para Chat
+        {{ $t('fileManager.sendToChat') }}
         <span
           v-if="selectedCount > 0"
           class="ml-1 px-2 py-0.5 text-xs bg-white dark:bg-gray-800 text-primary dark:text-primary-light rounded-full"
         >
-          {{ selectedCount }}
+          {{ $t('fileManager.selectedCount', { count: selectedCount }) }}
         </span>
       </button>
       
       <button
         class="px-3 py-2 text-sm font-medium text-text-secondary dark:text-text-secondary-dark bg-surface dark:bg-surface-dark rounded-md hover:bg-surface-hover dark:hover:bg-surface-dark border border-border dark:border-border-dark focus:outline-none focus:ring-2 focus:ring-border focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="selectedCount === 0"
-        title="Limpar seleção de arquivos"
+        :title="$t('fileManager.clearTooltip')"
         @click="clearSelection"
       >
-        🗑️ Limpar
+        {{ $t('fileManager.clearButton') }}
       </button>
     </div>
 
     <!-- File Tree -->
     <div v-if="isLoading" class="flex-1 flex items-center justify-center text-text-secondary dark:text-text-secondary-dark">
-      <p>⏳ Carregando árvore de arquivos...</p>
+      <p>{{ $t('fileManager.loadingTree') }}</p>
     </div>
     
     <div v-else-if="hasNoMatches" class="flex-1 flex items-center justify-center text-text-secondary dark:text-text-secondary-dark">
-      <p>🔍 Nenhum arquivo encontrado para "{{ searchQuery }}"</p>
+      <p>{{ $t('fileManager.noMatchesFound', { query: searchQuery }) }}</p>
     </div>
     
     <div v-else class="flex-1 overflow-y-auto border border-border dark:border-border-dark rounded-md p-4 bg-white dark:bg-gray-900">
@@ -137,9 +142,12 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeMount, onBeforeUnmount, onUnmounted, onUpdated } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFileManager } from './composables/useFileManager'
 import type { FileManagerCell } from './types'
 import FileTreeNode from './components/FileTreeNode.vue'
+
+const { t: $t } = useI18n()
 
 // Generate unique instance ID for this component instance to track re-mounts
 // Using timestamp with random suffix for reliable uniqueness
@@ -210,9 +218,9 @@ async function handleSendToChat(): Promise<void> {
  * Handle create new file
  */
 function handleCreateNew(): void {
-  const fileName = prompt('Nome do arquivo (com extensão):')
+  const fileName = prompt($t('fileManager.newFilePrompt'))
   if (fileName && fileName.trim()) {
-    const folder = prompt('Pasta (deixe vazio para "docs"):', 'docs')
+    const folder = prompt($t('fileManager.folderPrompt'), 'docs')
     createNewFile(fileName.trim(), folder || 'docs')
   }
 }
