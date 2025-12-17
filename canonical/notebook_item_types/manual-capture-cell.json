@@ -1,0 +1,36 @@
+{
+  "id": "manual-capture-cell",
+  "name": "Manual Capture",
+  "description": "Ephemeral cell for manual content capture and wireframe generation. Creates file-editor-v2 cells with captured content.",
+  "version": "1.0.0",
+  "category": "utility",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "docs": ["docs/README.md"],
+    "composables": ["frontend/composables/useManualCapture.ts"]
+  },
+  "default_initial_data": {
+    "category": "efemera",
+    "icon": "✍️",
+    "placeholder": "Enter content to capture or HTML to generate wireframe..."
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "efemera",
+      "description": "Cell category - 'efemera' marks this as ephemeral (not persisted)"
+    },
+    "icon": {
+      "type": "string",
+      "default": "✍️",
+      "description": "Icon displayed for the cell"
+    },
+    "placeholder": {
+      "type": "string",
+      "default": "Enter content to capture or HTML to generate wireframe...",
+      "description": "Placeholder text for the textarea"
+    }
+  }
+}
