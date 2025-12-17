@@ -11,6 +11,7 @@
     "composables": ["frontend/composables/useChatIA.ts"]
   },
   "default_initial_data": {
+    "category": "ephemeral",
     "selectedModel": "gpt-4",
     "enableIntentionClassification": false,
     "selectedCollections": [],
@@ -19,6 +20,11 @@
   },
   "allow_instance_override_refs": true,
   "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' marks this as ephemeral (not persisted)"
+    },
     "selectedModel": {
       "type": "string",
       "default": "gpt-4",

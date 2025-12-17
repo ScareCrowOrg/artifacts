@@ -12,18 +12,26 @@ dead_docs_found: false
 
 The Chat IA cell type provides an AI-powered chat interface integrated into the ScareVerse notebook environment. It enables rich conversational interactions with multiple AI models, supports file attachments, maintains conversation history, and offers advanced features like file proposals and trace timelines.
 
+**⚡ Ephemeral Cell**: This cell type is ephemeral (non-persistent). Cell instances are not saved to the database and will disappear on page refresh. This design prevents cluttering the database with temporary chat sessions. Conversation history is managed separately through the conversationId property.
+
 ## Features
 
 - **Multi-Model Support**: Choose from various AI models (GPT-4, GPT-3.5, local models via Ollama, BYOK)
 - **File Attachments**: Attach files and code snippets to provide context to the AI
-- **Conversation Persistence**: Automatic saving and loading of conversation history
+- **Conversation Persistence**: Automatic saving and loading of conversation history (separate from cell persistence)
 - **File Proposals**: AI can propose file edits with accept/reject workflow
 - **Trace Timeline**: View execution traces and debug AI processing
 - **RAG Integration**: Select document collections for context-aware responses
 - **Intention Classification**: Advanced routing based on detected user intent
 - **Dark Mode Support**: Full theming and dark mode compatibility
+- **Ephemeral by Design**: No cell persistence to avoid database clutter
 
 ## Properties
+
+### category (string)
+- **Description**: Cell category - 'ephemeral' marks this as ephemeral (not persisted)
+- **Default**: "ephemeral"
+- **Effect**: Prevents the cell from being saved to the database
 
 ### selectedModel (string)
 - **Description**: AI model to use for chat interactions

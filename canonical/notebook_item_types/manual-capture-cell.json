@@ -11,7 +11,7 @@
     "composables": ["frontend/composables/useManualCapture.ts"]
   },
   "default_initial_data": {
-    "category": "efemera",
+    "category": "ephemeral",
     "icon": "✍️",
     "placeholder": "Enter content to capture or HTML to generate wireframe..."
   },
@@ -19,8 +19,8 @@
   "properties_schema": {
     "category": {
       "type": "string",
-      "default": "efemera",
-      "description": "Cell category - 'efemera' marks this as ephemeral (not persisted)"
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' marks this as ephemeral (not persisted)"
     },
     "icon": {
       "type": "string",
