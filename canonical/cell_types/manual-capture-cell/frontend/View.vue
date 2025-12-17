@@ -205,6 +205,17 @@ async function createFileEditorCell(
 
   console.log('[ManualCaptureCell] Creating file-editor-v2 cell:', cellData)
   
+  // DEBUG ITERATION 1: Detailed logging of cellData structure
+  console.group('[ManualCaptureCell] 🔍 DEBUG ITERATION 1 - cellData Analysis')
+  console.log('Complete cellData object:', JSON.stringify(cellData, null, 2))
+  console.log('cellData.state.cellInstance.initial_data:', cellData.state.cellInstance.initial_data)
+  console.log('  ↳ content:', cellData.state.cellInstance.initial_data.content?.substring(0, 50) + '...')
+  console.log('  ↳ language:', cellData.state.cellInstance.initial_data.language)
+  console.log('  ↳ fileName:', cellData.state.cellInstance.initial_data.fileName)
+  console.log('cellData.state.cellType.default_initial_data:', cellData.state.cellType.default_initial_data)
+  console.log('cellData.state.initial_data:', cellData.state.initial_data)
+  console.groupEnd()
+  
   const success = dynamicLayout.addCell(cellData)
   
   if (!success) {
