@@ -291,10 +291,36 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   }
   
   /**
-   * Update search query
+   * Collect all directory paths from a tree recursively
+   */
+  function collectAllDirectoryPaths(nodes: FileTreeNode[]): string[] {
+    const paths: string[] = []
+    
+    for (const node of nodes) {
+      if (node.isDirectory) {
+        paths.push(node.path)
+        if (node.children && node.children.length > 0) {
+          paths.push(...collectAllDirectoryPaths(node.children))
+        }
+      }
+    }
+    
+    return paths
+  }
+  
+  /**
+   * Update search query and auto-expand filtered tree
    */
   function updateSearchQuery(query: string): void {
     searchQuery.value = query
+    
+    // Auto-expand all nodes when filtering
+    if (query && query.trim() !== '') {
+      const filteredTree = filterTree(tree.value, query.toLowerCase())
+      const allDirPaths = collectAllDirectoryPaths(filteredTree)
+      expandedPaths.value = new Set(allDirPaths)
+      console.log(`🔍 Filter applied: "${query}" - expanded ${allDirPaths.length} directories`)
+    }
   }
   
   /**
@@ -613,6 +639,12 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
       }, 3000)
       
       console.log(`📊 Result: ${successCount} success, ${failCount} failed`)
+      
+      // Clear selection after sending files to chat
+      if (successCount > 0) {
+        clearSelection()
+        console.log('🧹 Selection cleared after sending files')
+      }
     } catch (error: any) {
       console.error('❌ Error in sendSelectedToChat:', error)
       errorMessage.value = error.message || 'Erro ao enviar arquivos para o chat'
