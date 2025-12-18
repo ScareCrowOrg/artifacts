@@ -146,9 +146,4 @@ function formatFileSize(bytes: number): string {
 }
 </script>
 
-<style scoped>
-/* Dark mode support for text */
-.dark .text-text-secondary {
-  @apply text-text-secondary-dark;
-}
-</style>
+
