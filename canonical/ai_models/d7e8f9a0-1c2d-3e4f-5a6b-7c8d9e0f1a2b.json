@@ -1,0 +1,35 @@
+{
+  "id": "d7e8f9a0-1c2d-3e4f-5a6b-7c8d9e0f1a2b",
+  "name": "gemini-2.5-flash-lite",
+  "description": "Modelo cloud de alta eficiência do Google, otimizado para velocidade e custo-benefício. Suporta BYOK (Bring Your Own Key) para configuração individual por usuário.",
+  "type": "cloud",
+  "provider": "gemini",
+  "modelId": "gemini-2.5-flash-lite",
+  "apiKey": null,
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
+    "timeout": 30,
+    "requiresApiKey": true,
+    "apiKey": "AIzaSyCQmgErURaotwWeZvOsqPF4xiJtBHOvkbs",
+    "temperature": 0.7,
+    "max_tokens": 2048
+  },
+  "metadata": {
+    "contexto": "1M tokens",
+    "multimodal": true,
+    "especialidade": "Processamento de grandes contextos, análise rápida",
+    "linguagens": [
+      "pt",
+      "en",
+      "es",
+      "fr",
+      "de",
+      "ja",
+      "ko"
+    ],
+    "byok": true
+  },
+  "createdAt": "2024-07-30T15:00:00Z",
+  "updatedAt": "2024-07-30T15:00:00Z"
+}
