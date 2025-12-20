@@ -1,3 +1,17 @@
+---
+processed: true
+processed_date: 2025-12-20
+updated_docs:
+  - docs/official/features/workspace/layout-books.md
+themes:
+  - cell-types
+  - artifacts
+modules:
+  - backend
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # Layout Book Cell Type
 
 ## Overview
