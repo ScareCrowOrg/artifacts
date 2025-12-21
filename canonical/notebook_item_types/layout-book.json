@@ -1,0 +1,33 @@
+{
+  "id": "layout-book",
+  "name": "Layout Book",
+  "description": "Save and restore complete workspace layouts",
+  "default_refs": {
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "default_initial_data": {
+    "layout_version": "1.0.0",
+    "cells": [],
+    "grid_config": {
+      "cols": 12,
+      "rowHeight": 30,
+      "margin": [
+        10,
+        10
+      ]
+    },
+    "metadata": {
+      "cell_count": 0,
+      "persistent_count": 0,
+      "ephemeral_count": 0,
+      "last_applied": null,
+      "created_from_layout": true
+    }
+  },
+  "allow_instance_override_refs": true,
+  "can_render_dynamically": false,
+  "created_at": "2025-12-21T07:21:17.063627",
+  "updated_at": "2025-12-21T07:21:17.063628"
+}
