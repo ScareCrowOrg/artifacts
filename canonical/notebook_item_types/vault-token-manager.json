@@ -2,9 +2,6 @@
   "id": "vault-token-manager",
   "name": "Vault Token Manager",
   "description": "Secure interface for managing encrypted tokens in the Wasm Sidecar Vault",
-  "version": "1.0.0",
-  "category": "security",
-  "icon": "🔐",
   "default_refs": {
     "view": [
       "frontend/View.vue"
@@ -20,32 +17,5 @@
     "sortOrder": "desc"
   },
   "allow_instance_override_refs": false,
-  "properties_schema": {
-    "autoLockEnabled": {
-      "type": "boolean",
-      "default": true,
-      "description": "Enable automatic vault locking after timeout"
-    },
-    "showExpired": {
-      "type": "boolean",
-      "default": false,
-      "description": "Show expired tokens in the list"
-    },
-    "sortBy": {
-      "type": "string",
-      "default": "createdAt",
-      "enum": ["createdAt", "provider", "vaultRef"],
-      "description": "Sort tokens by field"
-    },
-    "sortOrder": {
-      "type": "string",
-      "default": "desc",
-      "enum": ["asc", "desc"],
-      "description": "Sort order"
-    }
-  },
-  "can_render_dynamically": true,
-  "requires_backend": false,
-  "security_level": "high",
-  "tags": ["security", "vault", "credentials", "tokens", "encryption"]
+  "can_render_dynamically": true
 }
