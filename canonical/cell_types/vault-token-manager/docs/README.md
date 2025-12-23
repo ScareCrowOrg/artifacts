@@ -1,3 +1,18 @@
+---
+processed: true
+processed_date: 2025-12-23
+updated_docs:
+  - docs/official/frontend/security/vault-token-manager.md
+themes:
+  - security
+  - encryption
+  - technical
+modules:
+  - frontend
+  - security
+code_verified: true
+dead_docs_found: false
+---
 # Vault Token Manager Cell
 
 ## Overview
