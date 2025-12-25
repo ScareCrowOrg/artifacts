@@ -165,9 +165,20 @@ await cellsStore.addCell({
 
 #### Create New File
 1. Click "+ Novo" button
-2. Enter filename (with extension) in prompt
-3. Enter folder path (defaults to "docs")
+2. A modal dialog opens with:
+   - Filename input field with validation
+   - File extension selector (dropdown with common types)
+   - Directory picker with visual tree navigation
+   - Full path preview
+3. Fill in the details and click "Criar Arquivo"
 4. New FileEditorCell opens for the file
+
+**Features of File Creation Dialog:**
+- **Filename validation**: Prevents invalid characters and reserved names
+- **Extension selector**: Choose from .md, .txt, .py, .js, .ts, .vue, .json, .yaml, etc.
+- **Visual directory picker**: Browse and select target directory using file tree
+- **Path preview**: See complete file path before creation
+- **i18n support**: Available in Portuguese (pt-BR) and English (en-US)
 
 ## Integration with FileEditorCell
 
