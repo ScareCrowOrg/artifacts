@@ -20,50 +20,22 @@
       <div class="flex flex-col gap-2 flex-1">
         <h2 class="m-0 text-2xl text-text-primary dark:text-text-primary-dark font-semibold">{{ $t('fileEditor.title') }}</h2>
         
-        <!-- Editable File Path Section -->
+        <!-- File Path Display with Edit Button -->
         <div class="flex flex-col gap-2">
-          <!-- Directory Path Input -->
           <div class="flex items-center gap-2">
-            <label 
-              for="file-path-input" 
-              class="text-sm font-semibold text-text-secondary dark:text-text-secondary-dark whitespace-nowrap"
-            >
-              {{ $t('fileEditor.directoryLabel') }}
-            </label>
-            <input
-              id="file-path-input"
-              v-model="editableFilePath"
-              type="text"
-              placeholder="docs"
-              class="flex-1 px-2 py-1 text-xs border border-border dark:border-border-dark rounded bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-              :class="{ 'border-warning': isNewFile }"
-            />
-          </div>
-          
-          <!-- Filename Input -->
-          <div class="flex items-center gap-2">
-            <label 
-              for="file-name-input" 
-              class="text-sm font-semibold text-text-secondary dark:text-text-secondary-dark whitespace-nowrap"
-            >
-              {{ $t('fileEditor.filenameLabel') }}
-            </label>
-            <input
-              id="file-name-input"
-              v-model="editableFileName"
-              type="text"
-              placeholder="arquivo.md"
-              class="flex-1 px-2 py-1 text-xs border border-border dark:border-border-dark rounded bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-              :class="{ 'border-warning': isNewFile }"
-            />
-          </div>
-          
-          <!-- Full Path Preview -->
-          <div class="flex items-center gap-1 text-xs">
-            <span class="font-semibold text-text-secondary dark:text-text-secondary-dark">{{ $t('fileEditor.fullPathLabel') }}</span>
-            <code class="px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded font-mono text-primary">
+            <span class="text-sm font-semibold text-text-secondary dark:text-text-secondary-dark">
+              {{ $t('fileEditor.pathLabel') }}
+            </span>
+            <code class="px-2 py-1 bg-primary/10 border border-primary/20 rounded font-mono text-xs text-primary">
               {{ editableFullPath }}
             </code>
+            <button
+              class="px-3 py-1 text-xs font-medium text-primary bg-surface dark:bg-surface-dark border border-primary rounded-md cursor-pointer transition-all duration-200 hover:bg-primary/10 dark:hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              :title="$t('fileEditor.configurePathTooltip')"
+              @click="openConfigDialog"
+            >
+              ⚙️ {{ $t('fileEditor.configurePathButton') }}
+            </button>
             <span 
               v-if="isNewFile"
               class="ml-2 px-2 py-0.5 bg-warning/10 border border-warning/30 rounded text-warning font-semibold text-xs"
@@ -140,6 +112,14 @@
     <div v-if="successMessage" class="p-3 rounded-md text-sm bg-success/10 border border-success/20 text-success">
       {{ successMessage }}
     </div>
+
+    <!-- File Configuration Dialog -->
+    <FileConfigDialog
+      v-model:is-open="isConfigDialogOpen"
+      :initial-filename="editableFileName"
+      :initial-directory="editableFilePath"
+      @confirm="handleConfigConfirm"
+    />
   </div>
 </template>
 
@@ -147,6 +127,7 @@
 import { ref, watch, onMounted, toRef, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import FileConfigDialog from '@/components/FileConfigDialog.vue'
 import { useFileEditor } from './composables/useFileEditor'
 import { useCellsStore } from '@/stores/cells'
 import type { FileEditorCell } from '@/types'
@@ -185,6 +166,9 @@ const {
 // Editable filename and path (separate from readonly computed values)
 const editableFileName = ref<string>(fileName.value)
 const editableFilePath = ref<string>(filePath.value)
+
+// File configuration dialog state
+const isConfigDialogOpen = ref<boolean>(false)
 
 // Check if this is a new file creation
 const isNewFile = computed<boolean>(() => {
@@ -256,6 +240,26 @@ function handleSendToChat(): void {
   sendToChat()
   console.log('[FILE-EDITOR] ✅ sendToChat() completed')
   console.groupEnd()
+}
+
+/**
+ * Open the file configuration dialog
+ */
+function openConfigDialog(): void {
+  isConfigDialogOpen.value = true
+}
+
+/**
+ * Handle file configuration confirmation from dialog
+ */
+function handleConfigConfirm(data: { filename: string; directory: string }): void {
+  console.log('[FILE-EDITOR] Config confirmed:', data)
+  
+  // Update editable fields with values from dialog
+  editableFileName.value = data.filename
+  editableFilePath.value = data.directory
+  
+  // The watchers will automatically update the cell data
 }
 
 // Load file on mount
