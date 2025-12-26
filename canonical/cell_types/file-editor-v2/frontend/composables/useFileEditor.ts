@@ -5,7 +5,7 @@
  * Handles file loading, saving, and state management.
  */
 
-import { ref, computed, type Ref } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
 import apiService from '@/services/apiService.js'
 import { ENDPOINTS } from '@/config/endpoints.js'
 import { useCellsStore } from '@/stores/cells.js'
@@ -34,7 +34,7 @@ export interface UseFileEditorReturn {
   fullPath: Ref<string>
   /** Load file content from backend */
   loadFile: () => Promise<void>
-  /** Save file content to backend */
+  /** Save file content to backend using current cell data */
   saveFile: () => Promise<void>
   /** Delete ephemeral cell (close editor) */
   deleteEphemeral: () => void
@@ -163,7 +163,8 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
   }
   
   /**
-   * Save file content to backend
+   * Save file content to backend using current cell data
+   * This reads filename and path from cell's initial_data which is updated by the View
    */
   async function saveFile(): Promise<void> {
     isSaving.value = true
@@ -171,8 +172,24 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
     successMessage.value = null
     
     try {
-      const folder = filePath.value
-      const filename = fileName.value
+      // Get current filename and path from cell data (may have been edited)
+      const currentData = cellRef.value?.initial_data as FileEditorCellData
+      const folder = currentData?.filePath || filePath.value
+      const filename = currentData?.fileName || fileName.value
+      
+      console.log('[FILE-EDITOR] Saving file with current values:', {
+        folder,
+        filename,
+        fullPath: folder ? `${folder}/${filename}` : filename,
+        contentLength: fileContent.value.length
+      })
+      
+      // Validate filename
+      if (!filename || !filename.trim()) {
+        errorMessage.value = 'Nome do arquivo não pode estar vazio'
+        isSaving.value = false
+        return
+      }
       
       // Save file content via backend API
       const response = await apiService.fetch(ENDPOINTS.saveFile, {
@@ -182,7 +199,7 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
         },
         body: JSON.stringify({
           folder: folder,
-          filename: filename,
+          filename: filename.trim(),
           content: fileContent.value,
         }),
       })

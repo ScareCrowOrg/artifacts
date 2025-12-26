@@ -115,6 +115,8 @@ export interface UseFileManagerReturn {
   openSelectedFiles: () => Promise<void>
   /** Create new file */
   createNewFile: (fileName: string, folder?: string) => Promise<void>
+  /** Create new file editor directly with editable filename/path */
+  createNewFileEditor: () => Promise<void>
   /** Move file or directory */
   moveItem: (sourcePath: string, destPath: string) => Promise<void>
   /** Delete file or directory */

@@ -653,6 +653,75 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     console.groupEnd()
   }
   
+  /**
+   * Create new file editor without dialog
+   * Opens a file-editor-v2 cell with editable filename and directory
+   */
+  async function createNewFileEditor(): Promise<void> {
+    try {
+      // Get current user ID
+      const userId = authStore.user?.id || notebookStore.getUserId()
+      
+      if (!userId) {
+        throw new Error('User not authenticated')
+      }
+      
+      // Create an ephemeral file-editor-v2 cell with default/empty values
+      // The user will configure filename and directory within the editor itself
+      const ephemeralCellId = `ephemeral-file-editor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      
+      const initial_data = {
+        fileName: 'novo_arquivo.md',  // Default filename, editable in editor
+        filePath: 'docs',  // Default directory, editable in editor
+        content: '',  // Empty content for new file
+        language: 'markdown',
+        readOnly: false,
+        icon: '📄',
+        isNewFile: true  // Flag to indicate this is a new file creation
+      }
+      
+      const ephemeralCell = {
+        id: ephemeralCellId,
+        notebook_item_type_id: 'file-editor-v2',
+        assignee_id: userId,
+        initial_data,
+        category: 'ephemeral',
+        status: 'PENDING',
+        fragments: [],
+        refs: {},
+      }
+      
+      console.log('[FILE-MANAGER] Created ephemeral cell for new file (editable filename/path):', {
+        cellId: ephemeralCell.id,
+        initial_data: ephemeralCell.initial_data
+      })
+      
+      // Add to local layout
+      const cellData = {
+        cellId: ephemeralCell.id,
+        type: ephemeralCell.notebook_item_type_id,
+        title: '📄 Novo Arquivo',
+        state: {
+          cellInstance: ephemeralCell,
+          initial_data: ephemeralCell.initial_data,
+        }
+      }
+      
+      addCell(cellData)
+      
+      // Add to notebook store (in-memory only, not persisted)
+      notebookStore.cells[ephemeralCell.id] = ephemeralCell
+      
+      successMessage.value = '✅ Editor de novo arquivo aberto'
+      setTimeout(() => {
+        successMessage.value = ''
+      }, 2000)
+    } catch (err) {
+      errorMessage.value = '❌ Erro ao criar editor de arquivo'
+      console.error('Error creating file editor:', err)
+    }
+  }
+  
   return {
     // State
     tree,
@@ -677,6 +746,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     updateSearchQuery,
     openSelectedFiles,
     createNewFile,
+    createNewFileEditor,  // New function for creating file editor directly
     moveItem,
     deleteItem,
     sendSelectedToChat  // ITERATION 2: Added send to chat functionality

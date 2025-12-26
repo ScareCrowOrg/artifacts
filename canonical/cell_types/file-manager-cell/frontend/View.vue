@@ -63,7 +63,7 @@
       
       <button
         class="px-3 py-2 text-sm font-medium text-white dark:text-text-primary-dark bg-success dark:bg-green-700 rounded-md hover:bg-green-600 dark:hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2 transition-colors"
-        @click="openFileCreationDialog"
+        @click="handleCreateNewFile"
       >
         {{ $t('fileManager.newButton') }}
       </button>
@@ -137,13 +137,6 @@
     <div v-if="successMessage" class="p-3 rounded-md text-sm bg-success/10 border border-success/20 text-success">
       {{ successMessage }}
     </div>
-
-    <!-- File Creation Dialog -->
-    <FileCreationDialog
-      v-model:is-open="isFileCreationDialogOpen"
-      :default-directory="defaultDirectory"
-      @create="handleFileCreation"
-    />
   </div>
 </template>
 
@@ -153,7 +146,6 @@ import { useI18n } from 'vue-i18n'
 import { useFileManager } from './composables/useFileManager'
 import type { FileManagerCell } from './types'
 import FileTreeNode from './components/FileTreeNode.vue'
-import FileCreationDialog from '@/components/FileCreationDialog.vue'
 
 const { t: $t } = useI18n()
 
@@ -197,12 +189,9 @@ const {
   updateSearchQuery,
   openSelectedFiles,
   createNewFile,
-  sendSelectedToChat  // ITERATION 2: Added send to chat function
+  sendSelectedToChat,  // ITERATION 2: Added send to chat function
+  createNewFileEditor  // New function to create file editor directly
 } = useFileManager(ref(props.cell))
-
-// State for file creation dialog
-const isFileCreationDialogOpen = ref<boolean>(false)
-const defaultDirectory = ref<string>('docs')
 
 /**
  * Handle refresh button click
@@ -227,17 +216,11 @@ async function handleSendToChat(): Promise<void> {
 }
 
 /**
- * Open file creation dialog
+ * Handle create new file
+ * Creates a file-editor-v2 cell directly with editable filename/path
  */
-function openFileCreationDialog(): void {
-  isFileCreationDialogOpen.value = true
-}
-
-/**
- * Handle file creation from dialog
- */
-function handleFileCreation(data: { filename: string; directory: string }): void {
-  createNewFile(data.filename, data.directory)
+async function handleCreateNewFile(): Promise<void> {
+  await createNewFileEditor()
 }
 
 // Lifecycle hooks for debugging
