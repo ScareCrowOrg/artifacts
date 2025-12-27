@@ -14,7 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, VueWrapper } from '@vue/test-utils'
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import View from '../View.vue'
 import type { UnclassifiedCell } from '../composables/useUnclassifiedCell'
 
