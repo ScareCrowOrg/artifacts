@@ -35,9 +35,49 @@ vi.mock('@/components/MarkdownRenderer.vue', () => ({
   },
 }))
 
+// Mock composables
+const mockCellFactory = {
+  isGenerating: ref(false),
+  resetGeneration: vi.fn(),
+  generateCellCode: vi.fn(),
+  cancelGeneration: vi.fn(),
+  progressPercentage: ref(0),
+  streamingContent: ref(''),
+  renderedContent: computed(() => ''),
+  generatedRefs: ref([]),
+  hasGeneratedCode: computed(() => false),
+}
+
+vi.mock('@/composables/useCellFactory', () => ({
+  useCellFactory: () => mockCellFactory,
+}))
+
+const mockTransmutation = {
+  isTransmuted: vi.fn(() => false),
+  isTransmuting: ref(false),
+  currentCellId: ref(null),
+  transmutationProgress: ref(0),
+  getBook: vi.fn(),
+  navigateToSubCell: vi.fn(),
+}
+
+vi.mock('@/composables/useTransmutation', () => ({
+  useTransmutation: () => mockTransmutation,
+}))
+
+const mockBaseCellFeatures = {
+  saveCell: vi.fn(),
+  showCellFragmentsManager: vi.fn(),
+}
+
+vi.mock('#artifacts/canonical/base_cell_components/frontend/composables/useBaseCellFeatures.ts', () => ({
+  useBaseCellFeatures: () => mockBaseCellFeatures,
+}))
+
 // Mock stores
 const mockCellsStore = {
   updateCellData: vi.fn(),
+  updateCellDataBuffer: vi.fn(),
   closeCellView: vi.fn(),
 }
 
@@ -106,6 +146,16 @@ describe('Unclassified Cell View', () => {
       })
 
       expect(wrapper.exists()).toBe(true)
+    })
+
+    it('should reset cell factory state on mount', () => {
+      wrapper = mount(View, {
+        props: {
+          cell: mockCell,
+        },
+      })
+
+      expect(mockCellFactory.resetGeneration).toHaveBeenCalled()
     })
 
     it('should load cell data on mount', () => {
@@ -285,6 +335,68 @@ describe('Unclassified Cell View', () => {
       await closeButton.trigger('click')
 
       expect(mockCellsStore.closeCellView).toHaveBeenCalledWith('test-cell-123')
+    })
+
+    it('should disable generate button for new cells without ID', async () => {
+      const newCell = {
+        ...mockCell,
+        id: '', // No ID - new cell
+        initial_data: {
+          title: 'Test',
+          content: 'Test content',
+        },
+      }
+
+      wrapper = mount(View, {
+        props: {
+          cell: newCell,
+        },
+      })
+
+      const generateButton = wrapper.findAll('button').find(btn => 
+        btn.text().includes('Generate') || btn.text().includes('🤖')
+      )
+      
+      expect(generateButton.exists()).toBe(true)
+      expect(generateButton.attributes('disabled')).toBeDefined()
+    })
+
+    it('should enable generate button for persisted cells with content', async () => {
+      wrapper = mount(View, {
+        props: {
+          cell: mockCell, // Has ID and content
+        },
+      })
+
+      const generateButton = wrapper.findAll('button').find(btn => 
+        btn.text().includes('Generate') || btn.text().includes('🤖')
+      )
+      
+      expect(generateButton.exists()).toBe(true)
+      expect(generateButton.attributes('disabled')).toBeUndefined()
+    })
+
+    it('should disable generate button for persisted cells without content', async () => {
+      const cellWithoutContent = {
+        ...mockCell,
+        initial_data: {
+          title: 'Test',
+          content: '', // No content
+        },
+      }
+
+      wrapper = mount(View, {
+        props: {
+          cell: cellWithoutContent,
+        },
+      })
+
+      const generateButton = wrapper.findAll('button').find(btn => 
+        btn.text().includes('Generate') || btn.text().includes('🤖')
+      )
+      
+      expect(generateButton.exists()).toBe(true)
+      expect(generateButton.attributes('disabled')).toBeDefined()
     })
 
     it('should send fragment to chat when button clicked', async () => {
