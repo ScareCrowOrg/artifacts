@@ -104,7 +104,7 @@
       <div class="flex gap-2 items-center">
         <button
           class="px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:bg-primary-dark dark:hover:bg-primary-hover-dark"
-          :disabled="!cellData.content || cellFactory.isGenerating || isSaving"
+          :disabled="isNewCell || !cellData.content || cellFactory.isGenerating || isSaving"
           @click="onGenerate"
         >
           <span v-if="!cellFactory.isGenerating">🤖 {{ $t('unclassifiedCell.generateButton') }}</span>
@@ -258,7 +258,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import SandboxPreview from '@/components/SandboxPreview.vue'
@@ -293,6 +293,12 @@ const cellsStore = useCellsStore()
 
 // Cell Factory composable for AI generation
 const cellFactory = useCellFactory()
+
+// Reset cell factory state on mount to ensure clean initial state
+onMounted(() => {
+  log.debug('Resetting cell factory state on mount')
+  cellFactory.resetGeneration()
+})
 
 // Transmutation composable for cell → book transformations
 const transmutation = useTransmutation()
