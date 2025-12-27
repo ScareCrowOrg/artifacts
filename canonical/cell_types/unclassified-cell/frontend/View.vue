@@ -306,25 +306,8 @@ console.log('[UnclassifiedCellView] ✅ useCellFactory RETURNED', {
   hasGeneratedCode: cellFactory.hasGeneratedCode.value
 })
 
-// Reset cell factory state on mount to ensure clean initial state
-onMounted(() => {
-  // DEBUG LOG #9: onMounted - before reset
-  console.log('[UnclassifiedCellView] 🔄 onMounted FIRED - BEFORE RESET', {
-    isGenerating: cellFactory.isGenerating.value,
-    generationState: cellFactory.generationState.value,
-    timestamp: new Date().toISOString()
-  })
-
-  log.debug('Resetting cell factory state on mount')
-  cellFactory.resetGeneration()
-
-  // DEBUG LOG #10: onMounted - after reset
-  console.log('[UnclassifiedCellView] ✅ onMounted - AFTER RESET', {
-    isGenerating: cellFactory.isGenerating.value,
-    generationState: cellFactory.generationState.value,
-    timestamp: new Date().toISOString()
-  })
-})
+// Note: onMounted hook removed - reset now happens immediately in setup phase
+// This prevents timing issues where template renders before state is properly initialized
 
 // Transmutation composable for cell → book transformations
 const transmutation = useTransmutation()
