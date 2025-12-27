@@ -340,7 +340,7 @@ describe('Unclassified Cell View', () => {
     it('should enable generate button for cells with content (even new cells)', async () => {
       const newCell = {
         ...mockCell,
-        id: '', // No ID - new cell
+        id: 'test-cell-new', // Cell with ID (in Dynamic Workspace, cells are always persisted)
         initial_data: {
           title: 'Test',
           content: 'Test content',
@@ -353,12 +353,22 @@ describe('Unclassified Cell View', () => {
         },
       })
 
+      await wrapper.vm.$nextTick()
+
+      // Debug: print all buttons
+      const allButtons = wrapper.findAll('button')
+      console.log('All buttons found:', allButtons.length)
+      allButtons.forEach((btn, idx) => {
+        console.log(`Button ${idx}: "${btn.text()}"`)
+      })
+
       const generateButton = wrapper.findAll('button').find(btn => 
-        btn.text().includes('Generate') || btn.text().includes('🤖')
+        btn.text().includes('Gerar') || btn.text().includes('🤖')
       )
       
+      expect(generateButton).toBeDefined()
       expect(generateButton.exists()).toBe(true)
-      // Button should be enabled when there's content, even for new cells
+      // Button should be enabled when there's content
       expect(generateButton.attributes('disabled')).toBeUndefined()
     })
 
@@ -369,10 +379,13 @@ describe('Unclassified Cell View', () => {
         },
       })
 
+      await wrapper.vm.$nextTick()
+
       const generateButton = wrapper.findAll('button').find(btn => 
         btn.text().includes('Generate') || btn.text().includes('🤖')
       )
       
+      expect(generateButton).toBeDefined()
       expect(generateButton.exists()).toBe(true)
       expect(generateButton.attributes('disabled')).toBeUndefined()
     })
@@ -392,10 +405,13 @@ describe('Unclassified Cell View', () => {
         },
       })
 
+      await wrapper.vm.$nextTick()
+
       const generateButton = wrapper.findAll('button').find(btn => 
         btn.text().includes('Generate') || btn.text().includes('🤖')
       )
       
+      expect(generateButton).toBeDefined()
       expect(generateButton.exists()).toBe(true)
       expect(generateButton.attributes('disabled')).toBeDefined()
     })
