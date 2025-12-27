@@ -102,6 +102,9 @@
     <!-- AI Generation Section -->
     <div class="flex flex-col gap-2">
       <div class="flex gap-2 items-center">
+        <!-- DEBUG ITER3 - LOG #4: Track what template sees -->
+        <span style="display: none;">{{ debugTemplateRender }}</span>
+        
         <button
           class="px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:bg-primary-dark dark:hover:bg-primary-hover-dark"
           :disabled="!cellData.content || cellFactory.isGenerating || isSaving"
@@ -340,6 +343,20 @@ const baseCellApi = useBaseCellFeatures(
   {}, // options
   ref(props.cell) // Pass cell instance directly
 )
+
+// DEBUG ITERATION 3 - LOG #4: Template render tracking
+const renderCount = ref(0)
+const debugTemplateRender = computed(() => {
+  renderCount.value++
+  console.log('[DEBUG ITER3] 🎨 TEMPLATE RENDERING #' + renderCount.value, {
+    cellId: props.cell?.id,
+    isGenerating: cellFactory.isGenerating.value,
+    generationState: cellFactory.generationState.value,
+    hasContent: !!cellData.content,
+    timestamp: new Date().toISOString()
+  })
+  return renderCount.value
+})
 
 // DEBUG LOG #11: Watch isGenerating for any changes
 watch(() => cellFactory.isGenerating.value, (newVal, oldVal) => {
