@@ -355,13 +355,6 @@ describe('Unclassified Cell View', () => {
 
       await wrapper.vm.$nextTick()
 
-      // Debug: print all buttons
-      const allButtons = wrapper.findAll('button')
-      console.log('All buttons found:', allButtons.length)
-      allButtons.forEach((btn, idx) => {
-        console.log(`Button ${idx}: "${btn.text()}"`)
-      })
-
       const generateButton = wrapper.findAll('button').find(btn => 
         btn.text().includes('Gerar') || btn.text().includes('🤖')
       )
