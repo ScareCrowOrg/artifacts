@@ -14,7 +14,45 @@
  * }
  */
 <template>
-  <div class="flex flex-col h-full p-6 gap-4 overflow-y-auto">
+  <div class="flex flex-col h-full p-6 gap-4 overflow-y-auto bg-surface text-text-primary dark:bg-surface-dark dark:text-text-primary-dark">
+    <!-- Transmutation Status (if cell is transmuted) -->
+    <transition name="fade">
+      <BookContainer
+        v-if="transmutation.isTransmuted(cell?.id)"
+        :book="transmutation.getBook(cell?.id)"
+        :initial-expanded="true"
+        class="mb-4"
+        @navigate-to-sub-cell="onNavigateToSubCell"
+        @toggle-expanded="onBookToggleExpanded"
+      />
+    </transition>
+
+    <!-- Transmutation Progress (if transmuting) -->
+    <transition name="slide-fade">
+      <div
+        v-if="transmutation.isTransmuting && transmutation.currentCellId === cell?.id"
+        class="transmutation-banner p-4 rounded-lg border-2 border-primary/50 bg-gradient-to-r from-primary/10 to-primary/20 dark:from-primary/20 dark:to-primary/30 mb-4"
+        role="alert"
+        aria-live="polite"
+      >
+        <div class="flex items-center gap-3 mb-2">
+          <div class="spinner"></div>
+          <span class="text-lg font-semibold text-text-primary dark:text-text-primary-dark">
+            {{ $t('transmutation.transmutationInProgress') }}
+          </span>
+        </div>
+        <div class="w-full bg-surface-hover rounded-full h-2 dark:bg-surface-hover-dark">
+          <div
+            class="bg-primary h-2 rounded-full transition-all duration-300 dark:bg-primary-dark"
+            :style="{ width: transmutation.transmutationProgress + '%' }"
+          ></div>
+        </div>
+        <p class="text-sm text-text-secondary dark:text-text-secondary-dark mt-2 m-0">
+          {{ $t('transmutation.progress', { percentage: transmutation.transmutationProgress }) }}
+        </p>
+      </div>
+    </transition>
+
     <!-- Header with Toolbar Integration -->
     <div class="flex justify-between items-center pb-4 border-b-2 border-gray-200 dark:border-gray-700">
       <h2 class="m-0 text-2xl text-text-primary dark:text-text-primary-dark font-semibold">
@@ -30,7 +68,7 @@
     </div>
 
     <!-- Toolbar Actions -->
-    <div class="flex gap-2 mb-2">
+    <div class="flex gap-2 mb-2 flex-wrap">
       <button
         class="btn btn-primary"
         :disabled="isSaving"
@@ -60,6 +98,92 @@
         {{ $t('unclassifiedCell.addFragment') }}
       </button>
     </div>
+
+    <!-- AI Generation Section -->
+    <div class="flex flex-col gap-2">
+      <div class="flex gap-2 items-center">
+        <button
+          class="px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:bg-primary-dark dark:hover:bg-primary-hover-dark"
+          :disabled="!cellData.content || cellFactory.isGenerating || isSaving"
+          @click="onGenerate"
+        >
+          <span v-if="!cellFactory.isGenerating">🤖 {{ $t('unclassifiedCell.generateButton') }}</span>
+          <span v-else>⏳ {{ $t('unclassifiedCell.generating') }}</span>
+        </button>
+        
+        <button
+          v-if="cellFactory.isGenerating"
+          class="px-4 py-2 bg-error text-white rounded-md font-medium hover:bg-error-hover focus:outline-none focus:ring-2 focus:ring-error focus:ring-offset-2 transition-colors dark:bg-error-dark dark:hover:bg-error-hover-dark"
+          @click="cellFactory.cancelGeneration"
+        >
+          {{ $t('unclassifiedCell.cancelButton') }}
+        </button>
+      </div>
+
+      <!-- Generation Progress -->
+      <div
+        v-if="cellFactory.isGenerating"
+        class="flex flex-col gap-2 p-4 rounded-md bg-surface border border-border dark:bg-surface-dark dark:border-border-dark"
+      >
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-medium text-text-primary dark:text-text-primary-dark">
+            {{ $t('unclassifiedCell.generationProgress') }}
+          </span>
+          <span class="text-sm text-text-secondary dark:text-text-secondary-dark">
+            {{ cellFactory.progressPercentage }}%
+          </span>
+        </div>
+        <div class="w-full bg-surface-hover rounded-full h-2 dark:bg-surface-hover-dark">
+          <div
+            class="bg-primary h-2 rounded-full transition-all duration-300 dark:bg-primary-dark"
+            :style="{ width: cellFactory.progressPercentage + '%' }"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Streaming Preview -->
+      <div
+        v-if="cellFactory.streamingContent"
+        class="flex flex-col gap-2 flex-1 min-h-[200px]"
+      >
+        <label class="font-semibold text-sm text-text-secondary dark:text-text-secondary-dark">
+          {{ $t('unclassifiedCell.previewLabel') }}
+        </label>
+        <div
+          class="flex-1 p-4 border border-border rounded-md overflow-y-auto bg-background prose prose-sm dark:prose-invert dark:bg-background-dark dark:border-border-dark"
+          v-html="cellFactory.renderedContent"
+        ></div>
+      </div>
+
+      <!-- Generated Code Summary -->
+      <div
+        v-if="cellFactory.hasGeneratedCode"
+        class="p-4 rounded-md bg-success/10 border border-success/20 dark:bg-success/20 dark:border-success/30"
+      >
+        <h3 class="text-sm font-semibold text-success mb-2 dark:text-success-light">
+          ✅ {{ $t('unclassifiedCell.codeGenerated') }}
+        </h3>
+        <ul class="text-sm space-y-1">
+          <li
+            v-for="ref in cellFactory.generatedRefs"
+            :key="ref.id"
+            class="text-text-secondary dark:text-text-secondary-dark"
+          >
+            <span class="font-mono">{{ ref.filename }}</span> ({{ ref.lang }})
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Sandbox Preview -->
+    <SandboxPreview
+      v-if="cellFactory.hasGeneratedCode && cellFactory.generatedRefs.length > 0"
+      :cell-id="cell?.id || 'temp-cell'"
+      :dynamic-refs="cellFactory.generatedRefs"
+      :loading="cellFactory.isGenerating"
+      class="mt-4"
+      data-testid="sandbox-preview-component"
+    />
 
     <!-- Title Input -->
     <div class="flex flex-col gap-1">
@@ -134,12 +258,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import SandboxPreview from '@/components/SandboxPreview.vue'
+import BookContainer from '@/components/BookContainer.vue'
 import { useUnclassifiedCell, type UnclassifiedCell } from './composables/useUnclassifiedCell'
 import { useBaseCellFeatures } from '#artifacts/canonical/base_cell_components/frontend/composables/useBaseCellFeatures.ts'
+import { useCellFactory } from '@/composables/useCellFactory.js'
+import { useTransmutation } from '@/composables/useTransmutation.js'
+import { useCellsStore } from '@/stores/cells.js'
+import { createLogger } from '@/utils/logger.js'
 
+const log = createLogger('component:UnclassifiedCellView')
 const { t: $t } = useI18n()
 
 /**
@@ -157,6 +288,14 @@ console.log('📦 Cell ID:', props.cell?.id || 'NEW')
 console.log('📊 Initial data:', props.cell?.initial_data || props.cell?.data)
 console.log('🧩 Fragments:', props.cell?.fragments?.length || 0)
 console.groupEnd()
+
+const cellsStore = useCellsStore()
+
+// Cell Factory composable for AI generation
+const cellFactory = useCellFactory()
+
+// Transmutation composable for cell → book transformations
+const transmutation = useTransmutation()
 
 // Use unclassified cell composable for cell-specific logic
 const {
@@ -187,12 +326,77 @@ const baseCellApi = useBaseCellFeatures(
   ref(props.cell) // Pass cell instance directly
 )
 
+// Update cell data in store and cell object when changed
+watch(cellData, (newData) => {
+  log.debug('Cell data changed', newData)
+  
+  // Update cell data through store for UI state tracking
+  if (props.cell?.id) {
+    cellsStore.updateCellData(props.cell.id, newData)
+  }
+  
+  // CRITICAL: Update cell data buffer for persistence
+  // This ensures that when save is triggered, the latest data is available
+  cellsStore.updateCellDataBuffer(newData)
+  log.debug('Cell data buffer updated for save')
+}, { deep: true })
+
 /**
  * Handle close button click
  */
 function onClose(): void {
-  console.log('[UnclassifiedCellView] ❌ Close button clicked')
+  log.info('Close button clicked')
   closeCell()
+}
+
+/**
+ * Handle AI generation
+ */
+async function onGenerate(): Promise<void> {
+  if (!props.cell?.id || !cellData.value.content) {
+    errorMessage.value = 'Please enter content before generating'
+    return
+  }
+
+  log.info('Triggering AI generation')
+  
+  try {
+    errorMessage.value = null
+    const result = await cellFactory.generateCellCode(
+      props.cell.id,
+      cellData.value.content,
+      'auto',
+      {
+        model: 'gpt-4',
+        conversationId: null,
+        useRag: false
+      }
+    )
+
+    if (result.success) {
+      successMessage.value = 'Generation started! Watch the preview below.'
+    } else {
+      errorMessage.value = result.error || 'Failed to start generation'
+    }
+  } catch (error: any) {
+    log.error('Generation error', error)
+    errorMessage.value = error.message || 'Failed to generate code'
+  }
+}
+
+/**
+ * Handle navigation to sub-cell from transmuted book
+ */
+function onNavigateToSubCell({ bookId, subCellId }: { bookId: string; subCellId: string }): void {
+  log.info('Navigating to sub-cell', { bookId, subCellId })
+  transmutation.navigateToSubCell(bookId, subCellId)
+}
+
+/**
+ * Handle book expansion toggle
+ */
+function onBookToggleExpanded({ bookId, expanded }: { bookId: string; expanded: boolean }): void {
+  log.debug('Book expansion toggled', { bookId, expanded })
 }
 
 /**
@@ -327,5 +531,61 @@ defineExpose({
 
 .btn-secondary:hover {
   @apply bg-primary text-white -translate-y-px shadow-md dark:bg-primary-hover;
+}
+
+/* Fade transition for book container */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Slide-fade transition for transmutation banner */
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-fade-leave-active {
+  transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1);
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  transform: translateY(-10px);
+  opacity: 0;
+}
+
+/* Spinner animation for transmutation progress */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--color-surface-hover);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Transmutation banner pulse effect */
+.transmutation-banner {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(98, 0, 234, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(98, 0, 234, 0);
+  }
 }
 </style>
