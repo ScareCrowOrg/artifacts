@@ -283,21 +283,47 @@ interface Props {
 
 const props = defineProps<Props>()
 
-console.group('[UnclassifiedCellView] 🎨 Component mounted')
+// DEBUG LOG #6: Component initialization
+console.group('[UnclassifiedCellView] 🎨 Component SETUP PHASE')
 console.log('📦 Cell ID:', props.cell?.id || 'NEW')
 console.log('📊 Initial data:', props.cell?.initial_data || props.cell?.data)
 console.log('🧩 Fragments:', props.cell?.fragments?.length || 0)
+console.log('⏰ Timestamp:', new Date().toISOString())
 console.groupEnd()
 
 const cellsStore = useCellsStore()
 
+// DEBUG LOG #7: Before useCellFactory call
+console.log('[UnclassifiedCellView] 🏭 CALLING useCellFactory()')
+
 // Cell Factory composable for AI generation
 const cellFactory = useCellFactory()
 
+// DEBUG LOG #8: After useCellFactory call - check initial state
+console.log('[UnclassifiedCellView] ✅ useCellFactory RETURNED', {
+  isGenerating: cellFactory.isGenerating.value,
+  generationState: cellFactory.generationState.value,
+  hasGeneratedCode: cellFactory.hasGeneratedCode.value
+})
+
 // Reset cell factory state on mount to ensure clean initial state
 onMounted(() => {
+  // DEBUG LOG #9: onMounted - before reset
+  console.log('[UnclassifiedCellView] 🔄 onMounted FIRED - BEFORE RESET', {
+    isGenerating: cellFactory.isGenerating.value,
+    generationState: cellFactory.generationState.value,
+    timestamp: new Date().toISOString()
+  })
+
   log.debug('Resetting cell factory state on mount')
   cellFactory.resetGeneration()
+
+  // DEBUG LOG #10: onMounted - after reset
+  console.log('[UnclassifiedCellView] ✅ onMounted - AFTER RESET', {
+    isGenerating: cellFactory.isGenerating.value,
+    generationState: cellFactory.generationState.value,
+    timestamp: new Date().toISOString()
+  })
 })
 
 // Transmutation composable for cell → book transformations
@@ -331,6 +357,27 @@ const baseCellApi = useBaseCellFeatures(
   {}, // options
   ref(props.cell) // Pass cell instance directly
 )
+
+// DEBUG LOG #11: Watch isGenerating for any changes
+watch(() => cellFactory.isGenerating.value, (newVal, oldVal) => {
+  console.log('[UnclassifiedCellView] 🔔 isGenerating CHANGED', {
+    from: oldVal,
+    to: newVal,
+    generationState: cellFactory.generationState.value,
+    timestamp: new Date().toISOString(),
+    stack: new Error().stack?.split('\n').slice(2, 4).join('\n')
+  })
+}, { immediate: true })
+
+// DEBUG LOG #12: Watch generationState for any changes
+watch(() => cellFactory.generationState.value, (newVal, oldVal) => {
+  console.log('[UnclassifiedCellView] 🔔 generationState CHANGED', {
+    from: oldVal,
+    to: newVal,
+    isGenerating: cellFactory.isGenerating.value,
+    timestamp: new Date().toISOString()
+  })
+}, { immediate: true })
 
 // Update cell data in store and cell object when changed
 watch(cellData, (newData) => {
