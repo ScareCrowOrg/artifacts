@@ -337,7 +337,7 @@ describe('Unclassified Cell View', () => {
       expect(mockCellsStore.closeCellView).toHaveBeenCalledWith('test-cell-123')
     })
 
-    it('should disable generate button for new cells without ID', async () => {
+    it('should enable generate button for cells with content (even new cells)', async () => {
       const newCell = {
         ...mockCell,
         id: '', // No ID - new cell
@@ -358,7 +358,8 @@ describe('Unclassified Cell View', () => {
       )
       
       expect(generateButton.exists()).toBe(true)
-      expect(generateButton.attributes('disabled')).toBeDefined()
+      // Button should be enabled when there's content, even for new cells
+      expect(generateButton.attributes('disabled')).toBeUndefined()
     })
 
     it('should enable generate button for persisted cells with content', async () => {
