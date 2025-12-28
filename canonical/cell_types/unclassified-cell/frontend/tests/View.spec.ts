@@ -156,8 +156,7 @@ describe('Unclassified Cell View', () => {
         },
       })
 
-      // Factory should be initialized with idle state (not generating)
-      // No need to call resetGeneration() as factory starts clean
+      // Factory should start with idle state, no reset needed
       expect(mockCellFactory.isGenerating.value).toBe(false)
       expect(mockCellFactory.generationState.value).toBe('idle')
     })

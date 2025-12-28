@@ -312,10 +312,7 @@ console.log('[UnclassifiedCellView] ✅ useCellFactory RETURNED', {
   hasGeneratedCode: cellFactory.hasGeneratedCode.value
 })
 
-// NOTE: Factory already starts with IDLE state from createCellFactoryInstance()
-// Calling resetGeneration() here is redundant and can cause reactivity issues
-// during initial render. The factory-per-ID pattern ensures each cell gets
-// a fresh instance with clean state.
+// Factory starts with clean IDLE state - no reset needed (factory-per-ID pattern ensures isolation)
 log.debug('Cell factory initialized with clean state', { cellId: props.cell?.id, state: cellFactory.generationState.value })
 
 // Transmutation composable for cell → book transformations
