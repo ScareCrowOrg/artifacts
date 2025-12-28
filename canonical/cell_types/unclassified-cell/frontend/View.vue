@@ -297,20 +297,25 @@ console.groupEnd()
 const cellsStore = useCellsStore()
 
 // DEBUG LOG #7: Before useCellFactory call
-console.log('[UnclassifiedCellView] 🏭 CALLING useCellFactory()')
+console.log('[UnclassifiedCellView] 🏭 CALLING useCellFactory() with cellId:', props.cell?.id)
 
-// Cell Factory composable for AI generation
-const cellFactory = useCellFactory()
+// Factory-per-ID Pattern: Each cell gets its own isolated factory instance
+// This prevents state pollution between multiple cells operating simultaneously.
+// Pass the cell's UUID to ensure proper state isolation.
+const cellFactory = useCellFactory(props.cell?.id)
 
 // DEBUG LOG #8: After useCellFactory call - check initial state
 console.log('[UnclassifiedCellView] ✅ useCellFactory RETURNED', {
+  cellId: props.cell?.id,
   isGenerating: cellFactory.isGenerating.value,
   generationState: cellFactory.generationState.value,
   hasGeneratedCode: cellFactory.hasGeneratedCode.value
 })
 
-// Note: onMounted hook removed - reset now happens immediately in setup phase
-// This prevents timing issues where template renders before state is properly initialized
+// Reset generation state immediately after creation, before template rendering
+// This ensures clean state for the initial render and prevents showing "Gerando..." prematurely
+cellFactory.resetGeneration()
+log.debug('Cell factory reset immediately after creation', { cellId: props.cell?.id })
 
 // Transmutation composable for cell → book transformations
 const transmutation = useTransmutation()
