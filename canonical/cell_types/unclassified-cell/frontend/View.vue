@@ -107,15 +107,15 @@
         
         <button
           class="px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:bg-primary-dark dark:hover:bg-primary-hover-dark"
-          :disabled="!cellData.content || cellFactory.isGenerating || isSaving"
+          :disabled="!cellData.content || cellFactory.isGenerating.value || isSaving"
           @click="onGenerate"
         >
-          <span v-if="!cellFactory.isGenerating">🤖 {{ $t('unclassifiedCell.generateButton') }}</span>
+          <span v-if="!cellFactory.isGenerating.value">🤖 {{ $t('unclassifiedCell.generateButton') }}</span>
           <span v-else>⏳ {{ $t('unclassifiedCell.generating') }}</span>
         </button>
         
         <button
-          v-if="cellFactory.isGenerating"
+          v-if="cellFactory.isGenerating.value"
           class="px-4 py-2 bg-error text-white rounded-md font-medium hover:bg-error-hover focus:outline-none focus:ring-2 focus:ring-error focus:ring-offset-2 transition-colors dark:bg-error-dark dark:hover:bg-error-hover-dark"
           @click="cellFactory.cancelGeneration"
         >
@@ -125,7 +125,7 @@
 
       <!-- Generation Progress -->
       <div
-        v-if="cellFactory.isGenerating"
+        v-if="cellFactory.isGenerating.value"
         class="flex flex-col gap-2 p-4 rounded-md bg-surface border border-border dark:bg-surface-dark dark:border-border-dark"
       >
         <div class="flex justify-between items-center">
@@ -146,7 +146,7 @@
 
       <!-- Streaming Preview -->
       <div
-        v-if="cellFactory.streamingContent"
+        v-if="cellFactory.streamingContent.length > 0"
         class="flex flex-col gap-2 flex-1 min-h-[200px]"
       >
         <label class="font-semibold text-sm text-text-secondary dark:text-text-secondary-dark">
@@ -160,12 +160,9 @@
 
       <!-- Generated Code Summary -->
       <div
-        v-if="cellFactory.hasGeneratedCode"
+        v-if="cellFactory.hasGeneratedCode.value"
         class="p-4 rounded-md bg-success/10 border border-success/20 dark:bg-success/20 dark:border-success/30"
       >
-        <h3 class="text-sm font-semibold text-success mb-2 dark:text-success-light">
-          ✅ {{ $t('unclassifiedCell.codeGenerated') }}
-        </h3>
         <ul class="text-sm space-y-1">
           <li
             v-for="ref in cellFactory.generatedRefs"
@@ -180,10 +177,10 @@
 
     <!-- Sandbox Preview -->
     <SandboxPreview
-      v-if="cellFactory.hasGeneratedCode && cellFactory.generatedRefs.length > 0"
+      v-if="cellFactory.hasGeneratedCode.value && cellFactory.generatedRefs.length > 0"
       :cell-id="cell?.id || 'temp-cell'"
       :dynamic-refs="cellFactory.generatedRefs"
-      :loading="cellFactory.isGenerating"
+      :loading="cellFactory.isGenerating.value"
       class="mt-4"
       data-testid="sandbox-preview-component"
     />
@@ -349,17 +346,6 @@ const baseCellApi = useBaseCellFeatures(
 
 // DEBUG ITERATION 3 - LOG #4: Template render tracking
 const renderCount = ref(0)
-const debugTemplateRender = computed(() => {
-  renderCount.value++
-  console.log('[DEBUG ITER3] 🎨 TEMPLATE RENDERING #' + renderCount.value, {
-    cellId: props.cell?.id,
-    isGenerating: cellFactory.isGenerating.value,
-    generationState: cellFactory.generationState.value,
-    hasContent: !!cellData.content,
-    timestamp: new Date().toISOString()
-  })
-  return renderCount.value
-})
 
 // DEBUG LOG #11: Watch isGenerating for any changes
 watch(() => cellFactory.isGenerating.value, (newVal, oldVal) => {
