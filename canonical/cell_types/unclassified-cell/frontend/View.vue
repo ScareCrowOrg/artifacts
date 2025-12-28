@@ -300,7 +300,8 @@ const cellsStore = useCellsStore()
 console.log('[UnclassifiedCellView] 🏭 CALLING useCellFactory()')
 
 // Cell Factory composable for AI generation
-const cellFactory = useCellFactory()
+// IMPORTANT: useCellFactory requires cellUuid parameter for proper state isolation
+const cellFactory = useCellFactory(props.cell?.id || 'NEW')
 
 // DEBUG LOG #8: After useCellFactory call - check initial state
 console.log('[UnclassifiedCellView] ✅ useCellFactory RETURNED', {

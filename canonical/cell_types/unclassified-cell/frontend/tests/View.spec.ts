@@ -38,6 +38,7 @@ vi.mock('@/components/MarkdownRenderer.vue', () => ({
 // Mock composables
 const mockCellFactory = {
   isGenerating: ref(false),
+  generationState: ref('idle'),
   resetGeneration: vi.fn(),
   generateCellCode: vi.fn(),
   cancelGeneration: vi.fn(),
