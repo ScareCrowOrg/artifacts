@@ -149,14 +149,17 @@ describe('Unclassified Cell View', () => {
       expect(wrapper.exists()).toBe(true)
     })
 
-    it('should reset cell factory state on mount', () => {
+    it('should initialize cell factory with clean state', () => {
       wrapper = mount(View, {
         props: {
           cell: mockCell,
         },
       })
 
-      expect(mockCellFactory.resetGeneration).toHaveBeenCalled()
+      // Factory should be initialized with idle state (not generating)
+      // No need to call resetGeneration() as factory starts clean
+      expect(mockCellFactory.isGenerating.value).toBe(false)
+      expect(mockCellFactory.generationState.value).toBe('idle')
     })
 
     it('should load cell data on mount', () => {

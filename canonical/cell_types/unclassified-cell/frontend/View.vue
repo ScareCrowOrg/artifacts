@@ -312,10 +312,11 @@ console.log('[UnclassifiedCellView] ✅ useCellFactory RETURNED', {
   hasGeneratedCode: cellFactory.hasGeneratedCode.value
 })
 
-// Reset generation state immediately after creation, before template rendering
-// This ensures clean state for the initial render and prevents showing "Gerando..." prematurely
-cellFactory.resetGeneration()
-log.debug('Cell factory reset immediately after creation', { cellId: props.cell?.id })
+// NOTE: Factory already starts with IDLE state from createCellFactoryInstance()
+// Calling resetGeneration() here is redundant and can cause reactivity issues
+// during initial render. The factory-per-ID pattern ensures each cell gets
+// a fresh instance with clean state.
+log.debug('Cell factory initialized with clean state', { cellId: props.cell?.id, state: cellFactory.generationState.value })
 
 // Transmutation composable for cell → book transformations
 const transmutation = useTransmutation()
