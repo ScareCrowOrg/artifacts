@@ -1,7 +1,7 @@
 {
   "id": "vault-token-manager",
   "name": "Vault Token Manager",
-  "description": "Secure interface for managing encrypted tokens in the Wasm Sidecar Vault",
+  "description": "Secure interface for managing encrypted tokens in the ScareVerse Browser Extension Vault",
   "default_refs": {
     "view": [
       "frontend/View.vue"
