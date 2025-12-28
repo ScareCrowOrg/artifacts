@@ -17,7 +17,7 @@ dead_docs_found: false
 
 ## Overview
 
-The **Vault Token Manager** is an ephemeral cell type designed to provide a secure, user-friendly interface for managing encrypted tokens stored in the Wasm Sidecar Vault. It replaces the insecure `window.prompt()` mechanism with a dedicated UI for vault operations.
+The **Vault Token Manager** is an ephemeral cell type designed to provide a secure, user-friendly interface for managing encrypted tokens stored in the ScareVerse Browser Extension Vault. It replaces the insecure `window.prompt()` mechanism with a dedicated UI for vault operations.
 
 ## Features
 
@@ -60,9 +60,9 @@ vault-token-manager/
 ### Data Flow
 
 ```
-User → VaultUnlockModal → useVault composable → Wasm Sidecar Vault
+User → VaultUnlockModal → useVault composable → Browser Extension Vault
                                 ↓
-                        IndexedDB (encrypted)
+                        Chrome Storage (encrypted)
 ```
 
 1. **Unlock**: User enters master password in secure modal
