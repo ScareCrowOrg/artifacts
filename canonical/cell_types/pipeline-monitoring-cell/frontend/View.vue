@@ -247,7 +247,8 @@ const availableActions = computed(() => [
   { 
     id: 'restart-health-checks', 
     label: 'Restart Health Checks', 
-    icon: 'refresh'
+    icon: 'refresh',
+    requiresConfirmation: true
   },
   { 
     id: 'export-metrics', 

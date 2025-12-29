@@ -73,13 +73,13 @@ const lastError: Ref<string | null> = ref(null)
 
 /**
  * Fetch monitoring data from backend API
+ * Attempts real API call first, falls back to mock data on failure
  */
 async function fetchMonitoringData(): Promise<MonitoringResponse> {
   try {
     log.debug('Fetching monitoring data from backend...')
     
-    // TODO: Replace with actual API endpoint when backend is deployed
-    // For now, return mock data structure for development
+    // Attempt real API call to backend
     const response = await fetch('/api/pipeline/monitoring', {
       method: 'GET',
       headers: {
