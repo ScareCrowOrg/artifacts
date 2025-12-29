@@ -392,7 +392,19 @@ function onClose(): void {
  * Handle AI generation
  */
 async function onGenerate(): Promise<void> {
+  console.group('[UnclassifiedCellView] 🚀 onGenerate TRIGGERED')
+  console.log('📍 Cell ID:', props.cell?.id)
+  console.log('📝 Content available:', !!cellData.value.content)
+  console.log('📝 Content length:', cellData.value.content?.length || 0)
+  console.log('🔄 Current factory state:', cellFactory.generationState.value)
+  console.log('🔄 isGenerating (before):', cellFactory.isGenerating.value)
+  console.groupEnd()
+  
   if (!props.cell?.id || !cellData.value.content) {
+    console.error('[UnclassifiedCellView] ❌ Validation FAILED', {
+      hasCellId: !!props.cell?.id,
+      hasContent: !!cellData.value.content
+    })
     errorMessage.value = 'Please enter content before generating'
     return
   }
@@ -401,6 +413,8 @@ async function onGenerate(): Promise<void> {
   
   try {
     errorMessage.value = null
+    
+    console.log('[UnclassifiedCellView] 📞 Calling cellFactory.generateCellCode')
     const result = await cellFactory.generateCellCode(
       props.cell.id,
       cellData.value.content,
@@ -412,12 +426,27 @@ async function onGenerate(): Promise<void> {
       }
     )
 
+    console.group('[UnclassifiedCellView] 📬 generateCellCode RETURNED')
+    console.log('✅ Success:', result.success)
+    console.log('📊 Full result:', result)
+    console.log('🔄 Factory state after:', cellFactory.generationState.value)
+    console.log('🔄 isGenerating after:', cellFactory.isGenerating.value)
+    console.groupEnd()
+
     if (result.success) {
       successMessage.value = 'Generation started! Watch the preview below.'
+      console.log('[UnclassifiedCellView] ✅ Generation started successfully')
     } else {
       errorMessage.value = result.error || 'Failed to start generation'
+      console.error('[UnclassifiedCellView] ❌ Generation failed with error:', result.error)
     }
   } catch (error: any) {
+    console.group('[UnclassifiedCellView] 💥 EXCEPTION CAUGHT in onGenerate')
+    console.error('Error object:', error)
+    console.error('Error message:', error.message)
+    console.error('Error stack:', error.stack)
+    console.groupEnd()
+    
     log.error('Generation error', error)
     errorMessage.value = error.message || 'Failed to generate code'
   }
