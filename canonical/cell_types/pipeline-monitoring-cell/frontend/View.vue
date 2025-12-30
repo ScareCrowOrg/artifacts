@@ -145,6 +145,7 @@ import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
 import { useMonitoring } from './composables/useMonitoring'
 import { useHealthChecks } from './composables/useHealthChecks'
 import { useAlerts } from './composables/useAlerts'
+import { useMonitoringWebSocket } from './composables/useMonitoringWebSocket'
 import PrerequisiteCard from './components/PrerequisiteCard.vue'
 import ComponentHealthIndicator from './components/ComponentHealthIndicator.vue'
 import MetricsChart from './components/MetricsChart.vue'
@@ -196,6 +197,14 @@ const {
   dismissAlert: dismissAlertInternal,
   clearAllAlerts
 } = useAlerts()
+
+// WebSocket for real-time updates (Sprint 3)
+const {
+  connectionState: wsConnectionState,
+  lastError: wsError,
+  connect: connectWebSocket,
+  disconnect: disconnectWebSocket
+} = useMonitoringWebSocket()
 
 // State
 const lastUpdate: Ref<number> = ref(Date.now())
@@ -375,11 +384,46 @@ onMounted(async () => {
   if (autoRefreshEnabled.value) {
     startHealthChecks()
   }
+  
+  // Initialize WebSocket connection for real-time updates (Sprint 3)
+  try {
+    connectWebSocket({
+      onHealthUpdate: (payload) => {
+        log.debug('Received health update via WebSocket', payload)
+      },
+      onMetricsUpdate: (payload) => {
+        log.debug('Received metrics update via WebSocket', payload)
+      },
+      onPrerequisiteUpdate: (payload) => {
+        log.debug('Received prerequisite update via WebSocket', payload)
+      },
+      onAlertTriggered: (payload) => {
+        log.info('Alert triggered via WebSocket', payload)
+        const { addAlert } = useAlerts()
+        addAlert(
+          payload.severity || 'warning',
+          payload.title || 'Alert',
+          payload.message || 'A monitoring alert was triggered',
+          {
+            dismissible: true,
+            ...payload.details
+          }
+        )
+      },
+      onAlertResolved: (payload) => {
+        log.info('Alert resolved via WebSocket', payload)
+      }
+    })
+    log.info('WebSocket connection initiated')
+  } catch (error) {
+    log.error('Failed to initialize WebSocket', { error })
+  }
 })
 
 onUnmounted(() => {
   log.info('Pipeline Monitoring Cell unmounted')
   stopHealthChecks()
+  disconnectWebSocket()
 })
 </script>
 

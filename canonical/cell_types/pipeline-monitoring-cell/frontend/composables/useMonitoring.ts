@@ -79,8 +79,8 @@ async function fetchMonitoringData(): Promise<MonitoringResponse> {
   try {
     log.debug('Fetching monitoring data from backend...')
     
-    // Attempt real API call to backend
-    const response = await fetch('/api/pipeline/monitoring', {
+    // Attempt real API call to backend - updated endpoint for Sprint 3
+    const response = await fetch('/api/v1/monitoring/pipeline', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -91,13 +91,24 @@ async function fetchMonitoringData(): Promise<MonitoringResponse> {
       throw new Error(`API error: ${response.status} ${response.statusText}`)
     }
     
-    const data: MonitoringResponse = await response.json()
+    const data = await response.json()
     log.info('Monitoring data fetched successfully', { 
-      prerequisiteCount: data.prerequisites.length,
-      componentCount: data.components.length
+      prerequisiteCount: data.prerequisites?.length || 0,
+      componentCount: data.components?.length || 0
     })
     
-    return data
+    // Transform API response to match expected format
+    return {
+      prerequisites: data.prerequisites || [],
+      components: data.components || [],
+      metrics: {
+        generation_success_rate: data.metrics?.generation_metrics?.success_rate || 0,
+        avg_generation_time_ms: data.metrics?.generation_metrics?.avg_generation_time_ms || 0,
+        active_generations: data.metrics?.generation_metrics?.active_generations || 0,
+        latency_history: data.metrics?.latency_metrics?.history || [],
+        quota_history: data.metrics?.resource_metrics?.quota_history || []
+      }
+    }
   } catch (error) {
     log.error('Failed to fetch monitoring data', { error })
     
