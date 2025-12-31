@@ -1,0 +1,60 @@
+{
+  "id": "pipeline-monitoring-cell",
+  "name": "Pipeline Monitoring Cell",
+  "description": "Real-time monitoring and validation of code generation pipeline prerequisites and health",
+  "version": "1.0.0",
+  "category": "observability",
+  "can_render_dynamically": false,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "docs": ["docs/README.md"],
+    "composables": [
+      "frontend/composables/useMonitoring.ts",
+      "frontend/composables/useHealthChecks.ts",
+      "frontend/composables/useAlerts.ts"
+    ]
+  },
+  "default_initial_data": {
+    "refresh_interval_seconds": 30,
+    "alert_threshold_critical": 3,
+    "alert_threshold_warning": 5,
+    "enable_auto_refresh": true,
+    "enable_alerts": true,
+    "history_retention_count": 100
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "refresh_interval_seconds": {
+      "type": "integer",
+      "default": 30,
+      "description": "Auto-refresh interval in seconds",
+      "minimum": 10,
+      "maximum": 300
+    },
+    "alert_threshold_critical": {
+      "type": "integer",
+      "default": 3,
+      "description": "Number of consecutive failures before critical alert"
+    },
+    "alert_threshold_warning": {
+      "type": "integer",
+      "default": 5,
+      "description": "Number of warnings before escalation"
+    },
+    "enable_auto_refresh": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable automatic metric refreshing"
+    },
+    "enable_alerts": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable alert notifications"
+    },
+    "history_retention_count": {
+      "type": "integer",
+      "default": 100,
+      "description": "Number of historical readings to retain"
+    }
+  }
+}

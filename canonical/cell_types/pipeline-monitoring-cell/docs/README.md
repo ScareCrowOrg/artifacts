@@ -10,6 +10,22 @@
 
 The **Pipeline Monitoring Cell** is a specialized observability component designed to provide real-time monitoring and validation of the ScareVerse code generation pipeline. It offers a comprehensive dashboard that tracks all 24 critical prerequisites, component health, and performance metrics required for reliable code generation.
 
+## 🔗 Type Definition Architecture
+
+**Architecture**: This cell follows the **symlink-based canonical architecture**.
+
+The `type.json` in this directory is a symlink to:
+```
+../../notebook_item_types/pipeline-monitoring-cell.json
+```
+
+**To modify the type definition**, edit the canonical file at:
+```
+artifacts/canonical/notebook_item_types/pipeline-monitoring-cell.json
+```
+
+**Reference**: See [Cell Type Symlink Architecture](../../../../docs/official/backend/architecture/cell-type-symlink-architecture.md) for complete details on this architecture pattern.
+
 ### Key Features
 
 - ✅ **Real-time Monitoring**: Continuously tracks all pipeline prerequisites and components
