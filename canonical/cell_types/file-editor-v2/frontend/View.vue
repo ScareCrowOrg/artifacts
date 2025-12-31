@@ -218,8 +218,14 @@ watch([editableFileName, editableFilePath], ([newFileName, newFilePath]) => {
       oldInitialData: { ...props.cell.initial_data }
     })
     
-    // Directly update cell's initial_data so saveFile() can read the new values
-    // This ensures the updated path/filename are persisted when saving
+    // INTENTIONAL PROPS MUTATION:
+    // We directly update cell's initial_data to ensure saveFile() reads the new values.
+    // This is necessary because:
+    // 1. The cell object comes from a Pinia store (not a pure Vue prop)
+    // 2. cellsStore.updateCellData() stores changes separately in cellDataUpdates
+    // 3. The composable's saveFile() reads from cellRef.value?.initial_data
+    // 4. Without this direct update, the old values would be used when saving
+    // Alternative: Refactor entire cell management (out of scope for minimal fix)
     if (props.cell.initial_data) {
       props.cell.initial_data.fileName = newFileName
       props.cell.initial_data.filePath = newFilePath
