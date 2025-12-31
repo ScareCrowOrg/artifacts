@@ -211,7 +211,26 @@ watch(fileContent, (newContent) => {
 // Watch editable fields and update cell initial_data
 watch([editableFileName, editableFilePath], ([newFileName, newFilePath]) => {
   if (props.cell) {
-    // Update cell's initial_data with new filename/path
+    console.log('[FILE-EDITOR] Watcher triggered - updating cell data:', {
+      cellId: props.cell.id,
+      newFileName,
+      newFilePath,
+      oldInitialData: { ...props.cell.initial_data }
+    })
+    
+    // Directly update cell's initial_data so saveFile() can read the new values
+    // This ensures the updated path/filename are persisted when saving
+    if (props.cell.initial_data) {
+      props.cell.initial_data.fileName = newFileName
+      props.cell.initial_data.filePath = newFilePath
+    }
+    
+    console.log('[FILE-EDITOR] Cell initial_data updated:', {
+      cellId: props.cell.id,
+      updatedInitialData: { ...props.cell.initial_data }
+    })
+    
+    // Also update via store for other consumers
     cellsStore.updateCellData(props.cell.id, {
       fileName: newFileName,
       filePath: newFilePath,
@@ -254,10 +273,20 @@ function openConfigDialog(): void {
  */
 function handleConfigConfirm(data: { filename: string; directory: string }): void {
   console.log('[FILE-EDITOR] Config confirmed:', data)
+  console.log('[FILE-EDITOR] Current values before update:', {
+    fileName: editableFileName.value,
+    filePath: editableFilePath.value
+  })
   
   // Update editable fields with values from dialog
   editableFileName.value = data.filename
   editableFilePath.value = data.directory
+  
+  console.log('[FILE-EDITOR] Updated values:', {
+    fileName: editableFileName.value,
+    filePath: editableFilePath.value,
+    fullPath: editableFullPath.value
+  })
   
   // The watchers will automatically update the cell data
 }
