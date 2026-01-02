@@ -1,9 +1,17 @@
 <template>
-  <div 
-    v-if="alerts.length > 0"
-    class="alert-banner mb-6"
-    :class="getBannerClass()"
+  <Transition
+    enter-active-class="transition-all duration-300"
+    enter-from-class="opacity-0 -translate-y-4"
+    enter-to-class="opacity-100 translate-y-0"
+    leave-active-class="transition-all duration-300"
+    leave-from-class="opacity-100 translate-y-0"
+    leave-to-class="opacity-0 -translate-y-4"
   >
+    <div 
+      v-if="alerts.length > 0"
+      class="alert-banner mb-6"
+      :class="getBannerClass()"
+    >
     <div class="flex items-start gap-3">
       <div class="alert-icon mt-0.5">
         <component :is="getIcon()" class="w-5 h-5" />
@@ -62,7 +70,8 @@
         Dismiss All
       </button>
     </div>
-  </div>
+    </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -153,10 +162,6 @@ function toggleShowAll(): void {
 </script>
 
 <style scoped>
-.alert-banner {
-  @apply animate-in slide-in-from-top duration-300;
-}
-
 .alert-icon {
   @apply flex-shrink-0;
 }

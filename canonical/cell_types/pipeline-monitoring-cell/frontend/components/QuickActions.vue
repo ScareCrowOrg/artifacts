@@ -23,33 +23,51 @@
     </div>
     
     <!-- Action confirmation modal (if needed) -->
-    <div 
-      v-if="showConfirmation"
-      class="confirmation-overlay fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      @click.self="cancelAction"
+    <Transition
+      enter-active-class="transition-opacity duration-200"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition-opacity duration-200"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
     >
-      <div class="confirmation-dialog bg-surface border border-border rounded-lg p-6 max-w-md">
-        <h4 class="text-lg font-semibold mb-2">Confirm Action</h4>
-        <p class="text-sm text-muted-foreground mb-4">
-          Are you sure you want to {{ pendingAction?.label.toLowerCase() }}?
-        </p>
-        
-        <div class="flex gap-2 justify-end">
-          <button
-            @click="cancelAction"
-            class="btn btn-sm btn-secondary"
-          >
-            Cancel
-          </button>
-          <button
-            @click="confirmAction"
-            class="btn btn-sm btn-primary"
-          >
-            Confirm
-          </button>
-        </div>
+      <div 
+        v-if="showConfirmation"
+        class="confirmation-overlay fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+        @click.self="cancelAction"
+      >
+        <Transition
+          enter-active-class="transition-all duration-200"
+          enter-from-class="opacity-0 scale-95"
+          enter-to-class="opacity-100 scale-100"
+          leave-active-class="transition-all duration-200"
+          leave-from-class="opacity-100 scale-100"
+          leave-to-class="opacity-0 scale-95"
+        >
+          <div v-if="showConfirmation" class="confirmation-dialog bg-surface border border-border rounded-lg p-6 max-w-md shadow-2xl">
+            <h4 class="text-lg font-semibold mb-2">Confirm Action</h4>
+            <p class="text-sm text-muted-foreground mb-4">
+              Are you sure you want to {{ pendingAction?.label.toLowerCase() }}?
+            </p>
+            
+            <div class="flex gap-2 justify-end">
+              <button
+                @click="cancelAction"
+                class="btn btn-sm btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                @click="confirmAction"
+                class="btn btn-sm btn-primary"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </Transition>
       </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
@@ -158,13 +176,5 @@ function executeAction(actionId: string): void {
 
 .action-button:not(:disabled):hover {
   @apply transform scale-105;
-}
-
-.confirmation-overlay {
-  @apply animate-in fade-in duration-200;
-}
-
-.confirmation-dialog {
-  @apply animate-in zoom-in-95 duration-200 shadow-2xl;
 }
 </style>

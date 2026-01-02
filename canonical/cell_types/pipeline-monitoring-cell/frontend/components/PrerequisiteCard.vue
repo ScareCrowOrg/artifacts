@@ -43,7 +43,15 @@
     </div>
     
     <!-- Details (collapsible) -->
-    <div v-if="showDetails && hasDetails" class="details-section mt-3 pt-3 border-t border-border">
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0 max-h-0"
+      enter-to-class="opacity-100 max-h-96"
+      leave-active-class="transition-all duration-200"
+      leave-from-class="opacity-100 max-h-96"
+      leave-to-class="opacity-0 max-h-0"
+    >
+      <div v-if="showDetails && hasDetails" class="details-section mt-3 pt-3 border-t border-border overflow-hidden">
       <p class="text-xs text-muted-foreground mb-1">Details:</p>
       <div class="text-xs font-mono bg-background/50 rounded p-2">
         <div v-for="(value, key) in prerequisite.details" :key="key" class="detail-row">
@@ -51,7 +59,8 @@
           <span class="ml-2">{{ formatValue(value) }}</span>
         </div>
       </div>
-    </div>
+      </div>
+    </Transition>
     
     <div class="flex justify-between items-center mt-2">
       <span class="text-xs text-muted-foreground">
@@ -197,10 +206,6 @@ function handleFix(): void {
 
 .status-indicator {
   @apply w-2 h-2 rounded-full;
-}
-
-.details-section {
-  @apply animate-in fade-in duration-200;
 }
 
 .detail-row {

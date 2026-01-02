@@ -102,7 +102,7 @@
 - ✅ Status colors: `bg-success`, `bg-warning`, `bg-error`
 - ✅ Badge styles: `badge-success`, `badge-warning`, `badge-error`
 - ✅ Interactive states: `hover:`, `active:`, `disabled:`
-- ✅ Animations: `animate-spin`, `animate-in`, `fade-in`
+- ✅ Animations: `animate-spin`, Vue `<Transition>` with Tailwind utilities
 
 ---
 
