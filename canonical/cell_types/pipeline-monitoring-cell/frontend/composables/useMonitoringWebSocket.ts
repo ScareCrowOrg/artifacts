@@ -11,6 +11,7 @@
 
 import { ref, onUnmounted, type Ref } from 'vue'
 import { createLogger } from '@/utils/logger'
+import authService from '@/services/authService.js'
 
 const log = createLogger('composable:useMonitoringWebSocket')
 
@@ -70,9 +71,8 @@ export function useMonitoringWebSocket() {
     lastError.value = null
     
     try {
-      // Get auth token from localStorage
-      // The token is stored by authService.js under the key 'scareverse_token'
-      const token = localStorage.getItem('scareverse_token')
+      // Get auth token from authService for consistency and maintainability
+      const token = authService.getToken()
       
       if (!token) {
         log.error('No auth token found')

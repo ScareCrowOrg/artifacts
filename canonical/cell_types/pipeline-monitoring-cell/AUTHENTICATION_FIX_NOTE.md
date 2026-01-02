@@ -12,29 +12,29 @@ Fixed WebSocket authentication error that prevented the pipeline monitoring cell
 
 ### Root Cause
 
-The `useMonitoringWebSocket` composable was attempting to retrieve the authentication token using an incorrect localStorage key:
+The `useMonitoringWebSocket` composable was directly accessing localStorage with an incorrect key, violating the centralized service pattern:
 
 ```typescript
-// BEFORE (incorrect)
+// BEFORE (incorrect - direct localStorage access)
 const token = localStorage.getItem('auth_token')
 
-// AFTER (correct)
-const token = localStorage.getItem('scareverse_token')
+// AFTER (correct - uses centralized authService)
+import authService from '@/services/authService.js'
+// ...
+const token = authService.getToken()
 ```
 
 ### Why This Matters
 
-The ScareVerse authentication service (`authService.js`) stores the JWT token under the key `scareverse_token`. Using the wrong key meant:
-- WebSocket connection always failed
-- No real-time monitoring updates
-- No alert notifications
-- Console errors on every cell initialization
+1. **Wrong key**: Used `auth_token` instead of `scareverse_token`
+2. **Wrong pattern**: Direct localStorage access instead of using `authService`
+3. **Impact**: WebSocket connection always failed, no real-time monitoring
 
 ## Files Changed
 
 | File | Change | Lines |
 |------|--------|-------|
-| `frontend/composables/useMonitoringWebSocket.ts` | Token key correction | 1 |
+| `frontend/composables/useMonitoringWebSocket.ts` | Import authService + use getToken() | 3 |
 
 ## Testing
 
@@ -62,17 +62,25 @@ For complete analysis, see:
 
 ## Token Storage Convention
 
-For future reference, the official token storage keys in ScareVerse are:
+For future reference, **always use `authService.getToken()` instead of direct localStorage access**.
+
+The `authService` is the centralized service for authentication in ScareVerse:
 
 ```javascript
 // Defined in: cockpit-vue/src/services/authService.js
-const TOKEN_KEY = 'scareverse_token'
-const USER_KEY = 'scareverse_user'
-const SESSION_KEY = 'scareverse_session'
-const TOKEN_EXPIRY_KEY = 'scareverse_token_expiry'
+import authService from '@/services/authService.js'
+
+// Get token
+const token = authService.getToken()
+
+// Get user
+const user = authService.getUser()
+
+// Check authentication
+const isAuth = authService.isAuthenticated()
 ```
 
-**Best Practice**: Import and use `authService.getToken()` instead of accessing localStorage directly.
+**Best Practice**: Import and use `authService` methods instead of accessing localStorage directly.
 
 ## Compatibility
 
