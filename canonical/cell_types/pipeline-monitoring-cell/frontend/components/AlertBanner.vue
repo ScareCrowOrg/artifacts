@@ -177,14 +177,16 @@ function toggleShowAll(): void {
 }
 
 .alert-item {
-  @apply pb-2 last:pb-0 border-b last:border-b-0 border-current/20;
+  @apply pb-2 last:pb-0 border-b last:border-b-0;
+  border-color: rgba(currentColor, 0.2);
 }
 
 .btn-dismiss {
-  @apply p-1 rounded hover:bg-current/10 transition-colors flex-shrink-0;
+  @apply p-1 rounded transition-colors flex-shrink-0;
+  background-color: transparent;
 }
 
 .btn-dismiss:hover {
-  @apply bg-current/20;
+  background-color: rgba(currentColor, 0.1);
 }
 </style>
