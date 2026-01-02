@@ -70,8 +70,9 @@ export function useMonitoringWebSocket() {
     lastError.value = null
     
     try {
-      // Get auth token from localStorage (assuming it's stored there)
-      const token = localStorage.getItem('auth_token')
+      // Get auth token from localStorage
+      // The token is stored by authService.js under the key 'scareverse_token'
+      const token = localStorage.getItem('scareverse_token')
       
       if (!token) {
         log.error('No auth token found')
