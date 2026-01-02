@@ -1,3 +1,13 @@
+/**
+ * @metadata {
+ *   "theme_validated": true,
+ *   "theme_validated_date": "2026-01-02",
+ *   "theme_compliance": 90,
+ *   "theme_status": "good",
+ *   "theme_issues": 1,
+ *   "dark_mode_support": "full"
+ * }
+ */
 <template>
   <div class="quick-actions bg-surface border border-border rounded-lg p-4">
     <h3 class="text-sm font-semibold mb-3 text-foreground">Quick Actions</h3>
