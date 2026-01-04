@@ -80,7 +80,7 @@ async function fetchMonitoringData(): Promise<MonitoringResponse> {
     log.debug('Fetching monitoring data from backend...')
     
     // Attempt real API call to backend - updated endpoint for Sprint 3
-    const response = await fetch('/api/v1/monitoring/pipeline', {
+    const response = await fetch('/monitoring/pipeline', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
