@@ -1,3 +1,20 @@
+---
+processed: true
+processed_date: 2026-01-05
+generated_docs:
+  - docs/official/backend/cell-types/pipeline-monitoring-cell.md
+themes:
+  - sprint-completion
+  - frontend
+  - dashboard
+  - components
+modules:
+  - frontend
+  - artifacts
+code_verified: true
+dead_docs_found: false
+---
+
 # Sprint 2 Completion Report: Frontend Dashboard for Pipeline Monitoring Cell
 
 **Date**: 2025-12-29  

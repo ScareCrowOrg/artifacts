@@ -1,3 +1,20 @@
+---
+processed: true
+processed_date: 2026-01-05
+generated_docs:
+  - docs/official/backend/cell-types/pipeline-monitoring-cell.md
+themes:
+  - implementation
+  - frontend
+  - components
+  - testing
+modules:
+  - frontend
+  - artifacts
+code_verified: true
+dead_docs_found: false
+---
+
 # Pipeline Monitoring Cell - Implementation Summary
 
 **Date**: 2025-12-29  

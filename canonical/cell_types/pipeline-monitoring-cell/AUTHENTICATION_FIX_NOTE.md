@@ -1,3 +1,19 @@
+---
+processed: true
+processed_date: 2026-01-05
+generated_docs:
+  - docs/official/backend/cell-types/pipeline-monitoring-cell.md
+themes:
+  - authentication
+  - websocket
+  - bugfix
+modules:
+  - frontend
+  - backend
+code_verified: true
+dead_docs_found: false
+---
+
 # Pipeline Monitoring Cell - Authentication Fix
 
 ## Change Summary

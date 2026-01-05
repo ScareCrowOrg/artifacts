@@ -1,3 +1,20 @@
+---
+processed: true
+processed_date: 2026-01-05
+generated_docs:
+  - docs/official/backend/cell-types/pipeline-monitoring-cell.md
+themes:
+  - sprint-completion
+  - api-integration
+  - websocket
+  - real-time
+modules:
+  - backend
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
+
 # Sprint 3 Implementation Report: API Integration, WebSocket Streaming, and UI Alerts
 
 **Date**: 2025-12-30  
