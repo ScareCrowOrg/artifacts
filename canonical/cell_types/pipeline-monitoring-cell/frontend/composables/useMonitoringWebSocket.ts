@@ -84,7 +84,7 @@ export function useMonitoringWebSocket() {
       // Build WebSocket URL
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       const host = window.location.host
-      const wsUrl = `${protocol}//${host}/api/v1/ws/event-bus?token=${encodeURIComponent(token)}`
+      const wsUrl = `${protocol}//${host}/ws/event-bus?token=${encodeURIComponent(token)}`
       
       log.info('Connecting to WebSocket', { url: wsUrl.replace(/token=[^&]+/, 'token=***') })
       
