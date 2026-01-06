@@ -413,17 +413,53 @@ onMounted(async () => {
     startHealthChecks()
   }
   
-  // Initialize WebSocket connection for real-time updates (Sprint 3)
+  // Initialize WebSocket connection for real-time updates (Sprint 4 - Enhanced)
   try {
     connectWebSocket({
       onHealthUpdate: (payload) => {
         log.debug('Received health update via WebSocket', payload)
+        
+        // Update component health in real-time
+        if (payload.component && payload.status) {
+          const componentIndex = components.value.findIndex(c => c.component === payload.component)
+          if (componentIndex >= 0) {
+            components.value[componentIndex] = {
+              ...components.value[componentIndex],
+              ...payload,
+              timestamp: Date.now()
+            }
+          }
+        }
       },
       onMetricsUpdate: (payload) => {
         log.debug('Received metrics update via WebSocket', payload)
+        
+        // Update metrics in real-time
+        if (payload.generation_success_rate !== undefined) {
+          metrics.value.generation_success_rate = payload.generation_success_rate
+        }
+        if (payload.avg_generation_time_ms !== undefined) {
+          metrics.value.avg_generation_time_ms = payload.avg_generation_time_ms
+        }
+        if (payload.active_generations !== undefined) {
+          metrics.value.active_generations = payload.active_generations
+        }
       },
       onPrerequisiteUpdate: (payload) => {
         log.debug('Received prerequisite update via WebSocket', payload)
+        
+        // Update specific prerequisite in real-time
+        if (payload.id) {
+          const prereqIndex = prerequisites.value.findIndex(p => p.id === payload.id)
+          if (prereqIndex >= 0) {
+            prerequisites.value[prereqIndex] = {
+              ...prerequisites.value[prereqIndex],
+              ...payload,
+              timestamp: Date.now()
+            }
+            log.info('Updated prerequisite via WebSocket', { id: payload.id, status: payload.status })
+          }
+        }
       },
       onAlertTriggered: (payload) => {
         log.info('Alert triggered via WebSocket', payload)

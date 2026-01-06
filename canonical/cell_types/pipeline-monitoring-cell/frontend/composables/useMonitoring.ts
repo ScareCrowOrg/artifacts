@@ -9,6 +9,7 @@
 
 import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/logger'
+import { useClientSideValidation } from './useClientSideValidation'
 
 const log = createLogger('composable:useMonitoring')
 
@@ -455,6 +456,7 @@ function getMockMonitoringData(): MonitoringResponse {
 
 /**
  * Refresh all monitoring data
+ * Combines server-side and client-side validation results
  */
 async function refreshData(): Promise<void> {
   if (isRefreshing.value) {
@@ -466,23 +468,52 @@ async function refreshData(): Promise<void> {
   lastError.value = null
   
   try {
-    const data = await fetchMonitoringData()
+    // Fetch server-side data and client-side validation in parallel
+    const clientValidation = useClientSideValidation()
     
-    prerequisites.value = data.prerequisites
-    components.value = data.components
-    metrics.value = data.metrics
+    const [serverData, clientResults] = await Promise.all([
+      fetchMonitoringData(),
+      clientValidation.validateAll()
+    ])
     
-    log.info('Monitoring data refreshed', {
-      prerequisites: prerequisites.value.length,
-      components: components.value.length
+    // Merge client-side results with server-side results
+    // Client-side results override server-side for items that can be validated client-side
+    const mergedPrerequisites = mergeValidationResults(serverData.prerequisites, clientResults)
+    
+    prerequisites.value = mergedPrerequisites
+    components.value = serverData.components
+    metrics.value = serverData.metrics
+    
+    log.info('Monitoring data refreshed (server + client)', {
+      serverPrerequisites: serverData.prerequisites.length,
+      clientPrerequisites: clientResults.length,
+      totalPrerequisites: mergedPrerequisites.length,
+      components: serverData.components.length
     })
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     lastError.value = errorMessage
     log.error('Failed to refresh monitoring data', { error: errorMessage })
     
-    // Clear data to show that monitoring is unavailable
-    prerequisites.value = []
+    // Try client-side validation even if server fails
+    try {
+      const clientValidation = useClientSideValidation()
+      const clientResults = await clientValidation.validateAll()
+      
+      if (clientResults.length > 0) {
+        prerequisites.value = clientResults
+        log.info('Using client-side validation only (server unavailable)', {
+          clientPrerequisites: clientResults.length
+        })
+      } else {
+        // Clear data to show that monitoring is unavailable
+        prerequisites.value = []
+      }
+    } catch (clientError) {
+      log.error('Client-side validation also failed', { error: clientError })
+      prerequisites.value = []
+    }
+    
     components.value = []
     metrics.value = {
       generation_success_rate: 0,
@@ -494,6 +525,44 @@ async function refreshData(): Promise<void> {
   } finally {
     isRefreshing.value = false
   }
+}
+
+/**
+ * Merge server-side and client-side validation results
+ * Client-side results take precedence for items they can validate
+ */
+function mergeValidationResults(
+  serverResults: PrerequisiteResult[],
+  clientResults: PrerequisiteResult[]
+): PrerequisiteResult[] {
+  // Create a map of client results by ID for quick lookup
+  const clientResultsMap = new Map(
+    clientResults.map(result => [result.id, result])
+  )
+  
+  // Start with server results and replace with client results where available
+  const merged = serverResults.map(serverResult => {
+    const clientResult = clientResultsMap.get(serverResult.id)
+    
+    if (clientResult) {
+      // Client-side validation available - use it
+      log.debug('Using client-side result for', { id: serverResult.id })
+      return clientResult
+    }
+    
+    // Use server-side result
+    return serverResult
+  })
+  
+  // Add any client-only results that weren't in server results
+  clientResults.forEach(clientResult => {
+    if (!merged.find(r => r.id === clientResult.id)) {
+      log.debug('Adding client-only result', { id: clientResult.id })
+      merged.push(clientResult)
+    }
+  })
+  
+  return merged
 }
 
 /**
