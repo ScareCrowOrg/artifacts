@@ -104,7 +104,10 @@ describe('useMonitoring', () => {
 
       vi.mocked(global.fetch).mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse
+        json: async () => mockResponse,
+        headers: {
+          get: (name: string) => name === 'content-type' ? 'application/json' : null
+        }
       } as Response)
 
       const { refreshData, prerequisites } = useMonitoring()
@@ -143,7 +146,10 @@ describe('useMonitoring', () => {
 
       vi.mocked(global.fetch).mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse
+        json: async () => mockResponse,
+        headers: {
+          get: (name: string) => name === 'content-type' ? 'application/json' : null
+        }
       } as Response)
 
       const { refreshData, components } = useMonitoring()
@@ -178,7 +184,10 @@ describe('useMonitoring', () => {
 
       vi.mocked(global.fetch).mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse
+        json: async () => mockResponse,
+        headers: {
+          get: (name: string) => name === 'content-type' ? 'application/json' : null
+        }
       } as Response)
 
       const { refreshData, metrics } = useMonitoring()
@@ -193,25 +202,32 @@ describe('useMonitoring', () => {
       vi.mocked(global.fetch).mockResolvedValueOnce({
         ok: false,
         status: 500,
-        statusText: 'Internal Server Error'
+        statusText: 'Internal Server Error',
+        headers: {
+          get: (name: string) => name === 'content-type' ? 'application/json' : null
+        },
+        json: async () => ({}),
+        text: async () => ''
       } as Response)
 
       const { refreshData, lastError } = useMonitoring()
       await refreshData()
 
-      // Should fall back to mock data, not throw
-      expect(lastError.value).toBeNull() // Mock data fallback succeeds
+      // API error should set lastError, not fall back to mock data
+      expect(lastError.value).not.toBeNull()
+      expect(lastError.value).toContain('API error: 500')
     })
 
     it('should handle network errors gracefully', async () => {
       vi.mocked(global.fetch).mockRejectedValueOnce(new Error('Network error'))
 
-      const { refreshData, prerequisites } = useMonitoring()
+      const { refreshData, prerequisites, lastError } = useMonitoring()
       await refreshData()
 
-      // Should fall back to mock data
-      expect(prerequisites.value).toBeInstanceOf(Array)
-      expect(prerequisites.value.length).toBeGreaterThan(0)
+      // Network error should set lastError, not fall back to mock data
+      expect(prerequisites.value).toHaveLength(0)
+      expect(lastError.value).not.toBeNull()
+      expect(lastError.value).toContain('Network error')
     })
 
     it('should not allow concurrent refreshes', async () => {
@@ -227,62 +243,65 @@ describe('useMonitoring', () => {
   })
 
   describe('Mock Data', () => {
-    it('should provide mock data with all 25 prerequisites', async () => {
+    it('should NOT provide fallback mock data when API fails - must show real status', async () => {
       vi.mocked(global.fetch).mockRejectedValueOnce(new Error('No API'))
 
-      const { refreshData, prerequisites } = useMonitoring()
+      const { refreshData, lastError } = useMonitoring()
       await refreshData()
 
-      expect(prerequisites.value).toHaveLength(25)
+      // The composable does NOT fall back to mock data
+      // It sets an error instead
+      expect(lastError.value).not.toBeNull()
+      expect(lastError.value).toContain('No API')
     })
 
-    it('should provide mock data with 7 components', async () => {
+    it('should NOT fall back to mock components - error should be set', async () => {
       vi.mocked(global.fetch).mockRejectedValueOnce(new Error('No API'))
 
-      const { refreshData, components } = useMonitoring()
+      const { refreshData, components, lastError } = useMonitoring()
       await refreshData()
 
-      expect(components.value).toHaveLength(7)
+      // No mock data fallback - error is set
+      expect(components.value).toHaveLength(0)
+      expect(lastError.value).not.toBeNull()
     })
 
-    it('should provide mock metrics with history', async () => {
+    it('should NOT fall back to mock metrics - error should be set', async () => {
       vi.mocked(global.fetch).mockRejectedValueOnce(new Error('No API'))
 
-      const { refreshData, metrics } = useMonitoring()
+      const { refreshData, metrics, lastError } = useMonitoring()
       await refreshData()
 
-      expect(metrics.value.latency_history).toHaveLength(20)
-      expect(metrics.value.quota_history).toHaveLength(20)
+      // No mock data - metrics remain at defaults
+      expect(metrics.value.latency_history).toHaveLength(0)
+      expect(metrics.value.quota_history).toHaveLength(0)
+      expect(lastError.value).not.toBeNull()
     })
 
-    it('should have all prerequisite categories', async () => {
+    it('should NOT have fallback prerequisite categories - no mock data', async () => {
       vi.mocked(global.fetch).mockRejectedValueOnce(new Error('No API'))
 
-      const { refreshData, prerequisites } = useMonitoring()
+      const { refreshData, prerequisites, lastError } = useMonitoring()
       await refreshData()
 
-      const categories = new Set(prerequisites.value.map(p => p.category))
-      
-      expect(categories).toContain('frontend')
-      expect(categories).toContain('extension')
-      expect(categories).toContain('wasm')
-      expect(categories).toContain('backend')
-      expect(categories).toContain('infrastructure')
-      expect(categories).toContain('configuration')
-      expect(categories).toContain('runtime')
+      // No mock data fallback
+      expect(prerequisites.value).toHaveLength(0)
+      expect(lastError.value).not.toBeNull()
     })
 
-    it('should have critical prerequisites', async () => {
+    it('should NOT have fallback critical prerequisites - no mock data', async () => {
       vi.mocked(global.fetch).mockRejectedValueOnce(new Error('No API'))
 
-      const { refreshData, prerequisites } = useMonitoring()
+      const { refreshData, prerequisites, lastError } = useMonitoring()
       await refreshData()
 
       const criticalPrereqs = prerequisites.value.filter(
         p => p.criticality === 'critical'
       )
       
-      expect(criticalPrereqs.length).toBeGreaterThan(0)
+      // No mock data - should be empty
+      expect(criticalPrereqs.length).toBe(0)
+      expect(lastError.value).not.toBeNull()
     })
   })
 
