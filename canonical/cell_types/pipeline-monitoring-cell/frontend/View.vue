@@ -50,6 +50,23 @@
       @dismiss-all="dismissAllAlerts"
     />
     
+    <!-- Error Banner for Backend Connection -->
+    <div v-if="lastError" class="alert alert-error mb-6">
+      <div class="flex items-start">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 flex-shrink-0 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <div class="flex-1">
+          <h3 class="font-bold text-lg mb-1">⚠️ Monitoring Backend Unavailable</h3>
+          <p class="text-sm mb-2">{{ lastError }}</p>
+          <p class="text-sm opacity-90">
+            <strong>This monitoring cell cannot function without backend connection.</strong>
+            All displayed status information would be unreliable. Please check that the backend API is running and accessible.
+          </p>
+        </div>
+      </div>
+    </div>
+    
     <!-- Overall Status Cards -->
     <div class="grid grid-cols-4 gap-4 mb-6">
       <div class="stat-card">
@@ -193,7 +210,8 @@ const {
   components,
   metrics,
   refreshData,
-  isRefreshing
+  isRefreshing,
+  lastError
 } = useMonitoring()
 
 const {

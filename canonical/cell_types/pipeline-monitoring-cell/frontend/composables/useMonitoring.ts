@@ -73,7 +73,7 @@ const lastError: Ref<string | null> = ref(null)
 
 /**
  * Fetch monitoring data from backend API
- * Attempts real API call first, falls back to mock data on failure
+ * NO FALLBACK TO MOCK DATA - must show real status or error
  */
 async function fetchMonitoringData(): Promise<MonitoringResponse> {
   try {
@@ -110,19 +110,26 @@ async function fetchMonitoringData(): Promise<MonitoringResponse> {
       }
     }
   } catch (error) {
-    log.error('Failed to fetch monitoring data', { error })
+    log.error('Failed to fetch monitoring data from backend', { error })
     
-    // Return mock data for development when API is not available
-    return getMockMonitoringData()
+    // DO NOT return mock data - this cell must show the truth
+    // Return empty data with error indication
+    throw error
   }
 }
 
 /**
- * Mock monitoring data for development
+ * DEPRECATED: Mock monitoring data
+ * This function should NOT be used in production.
+ * Kept only for reference of data structure.
  */
 function getMockMonitoringData(): MonitoringResponse {
-  log.warn('Using mock data - backend API not available')
+  log.error('⚠️ USING MOCK DATA - THIS SHOULD NOT HAPPEN IN PRODUCTION ⚠️')
+  log.error('Mock data always shows healthy status - NOT reflecting reality!')
   
+  throw new Error('Mock data is disabled. Backend API must be available for monitoring to work.')
+  
+  // Code below is unreachable but kept for reference
   return {
     prerequisites: [
       // Frontend Prerequisites (Category 1)
@@ -473,6 +480,17 @@ async function refreshData(): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     lastError.value = errorMessage
     log.error('Failed to refresh monitoring data', { error: errorMessage })
+    
+    // Clear data to show that monitoring is unavailable
+    prerequisites.value = []
+    components.value = []
+    metrics.value = {
+      generation_success_rate: 0,
+      avg_generation_time_ms: 0,
+      active_generations: 0,
+      latency_history: [],
+      quota_history: []
+    }
   } finally {
     isRefreshing.value = false
   }

@@ -118,7 +118,7 @@ function getStatusClass(status: string): string {
     healthy: 'border-success/30 bg-success/5',
     degraded: 'border-warning/30 bg-warning/5',
     unhealthy: 'border-error/30 bg-error/5',
-    unknown: 'border-border bg-background'
+    unknown: 'border-muted/50 bg-muted/10 opacity-75'  // More distinct for unknown
   }
   return classes[status] || classes.unknown
 }
@@ -148,7 +148,7 @@ function getStatusLabel(status: string): string {
     healthy: 'Healthy',
     degraded: 'Degraded',
     unhealthy: 'Unhealthy',
-    unknown: 'Unknown'
+    unknown: 'Not Validated'  // More descriptive
   }
   return labels[status] || 'Unknown'
 }
