@@ -45,7 +45,9 @@ export function useClientSideValidation() {
    */
   async function validateAll(): Promise<ClientValidationResult[]> {
     if (isValidating.value) {
-      log.warn('Validation already in progress')
+      log.debug('Validation already in progress, returning cached results', {
+        cachedCount: validationResults.value.length
+      })
       return validationResults.value
     }
     

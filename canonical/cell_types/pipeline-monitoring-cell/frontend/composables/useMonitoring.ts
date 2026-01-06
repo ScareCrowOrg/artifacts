@@ -78,7 +78,7 @@ const lastError: Ref<string | null> = ref(null)
  */
 async function fetchMonitoringData(): Promise<MonitoringResponse> {
   try {
-    log.debug('Fetching monitoring data from backend...')
+    log.info('Fetching monitoring data from backend API', { endpoint: '/monitoring/pipeline' })
     
     // Attempt real API call to backend - updated endpoint for Sprint 3
     const response = await fetch('/monitoring/pipeline', {
@@ -88,8 +88,47 @@ async function fetchMonitoringData(): Promise<MonitoringResponse> {
       }
     })
     
+    log.debug('Backend response received', { 
+      status: response.status, 
+      statusText: response.statusText,
+      contentType: response.headers.get('content-type')
+    })
+    
     if (!response.ok) {
+      // Log response body for debugging when status is not OK
+      const contentType = response.headers.get('content-type') || ''
+      let errorBody = 'Unable to read response body'
+      
+      try {
+        if (contentType.includes('application/json')) {
+          errorBody = JSON.stringify(await response.json())
+        } else if (contentType.includes('text/')) {
+          errorBody = await response.text()
+        }
+      } catch (parseErr) {
+        log.warn('Could not parse error response body', { error: parseErr })
+      }
+      
+      log.error('Backend API error response', {
+        status: response.status,
+        statusText: response.statusText,
+        contentType,
+        bodyPreview: errorBody.substring(0, 200)
+      })
+      
       throw new Error(`API error: ${response.status} ${response.statusText}`)
+    }
+    
+    // Check content type before parsing JSON
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      const textBody = await response.text()
+      log.error('Backend returned non-JSON response', {
+        contentType,
+        bodyPreview: textBody.substring(0, 200),
+        expectedContentType: 'application/json'
+      })
+      throw new Error(`Expected JSON response but received ${contentType}. Backend may be returning an error page.`)
     }
     
     const data = await response.json()
