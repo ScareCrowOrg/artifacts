@@ -88,11 +88,17 @@ describe('useMonitoring', () => {
         ],
         components: [],
         metrics: {
-          generation_success_rate: 95,
-          avg_generation_time_ms: 1000,
-          active_generations: 1,
-          latency_history: [],
-          quota_history: []
+          generation_metrics: {
+            success_rate: 95,
+            avg_generation_time_ms: 1000,
+            active_generations: 1
+          },
+          latency_metrics: {
+            history: []
+          },
+          resource_metrics: {
+            quota_history: []
+          }
         }
       }
 
@@ -121,11 +127,17 @@ describe('useMonitoring', () => {
           }
         ],
         metrics: {
-          generation_success_rate: 95,
-          avg_generation_time_ms: 1000,
-          active_generations: 1,
-          latency_history: [],
-          quota_history: []
+          generation_metrics: {
+            success_rate: 95,
+            avg_generation_time_ms: 1000,
+            active_generations: 1
+          },
+          latency_metrics: {
+            history: []
+          },
+          resource_metrics: {
+            quota_history: []
+          }
         }
       }
 
@@ -146,15 +158,21 @@ describe('useMonitoring', () => {
         prerequisites: [],
         components: [],
         metrics: {
-          generation_success_rate: 98.5,
-          avg_generation_time_ms: 1250,
-          active_generations: 3,
-          latency_history: [
-            { timestamp: Date.now(), value: 45 }
-          ],
-          quota_history: [
-            { timestamp: Date.now(), value: 25 }
-          ]
+          generation_metrics: {
+            success_rate: 98.5,
+            avg_generation_time_ms: 1250,
+            active_generations: 3
+          },
+          latency_metrics: {
+            history: [
+              { timestamp: Date.now(), value: 45 }
+            ]
+          },
+          resource_metrics: {
+            quota_history: [
+              { timestamp: Date.now(), value: 25 }
+            ]
+          }
         }
       }
 
@@ -209,13 +227,13 @@ describe('useMonitoring', () => {
   })
 
   describe('Mock Data', () => {
-    it('should provide mock data with all 24 prerequisites', async () => {
+    it('should provide mock data with all 25 prerequisites', async () => {
       vi.mocked(global.fetch).mockRejectedValueOnce(new Error('No API'))
 
       const { refreshData, prerequisites } = useMonitoring()
       await refreshData()
 
-      expect(prerequisites.value).toHaveLength(24)
+      expect(prerequisites.value).toHaveLength(25)
     })
 
     it('should provide mock data with 7 components', async () => {
