@@ -4,9 +4,14 @@ Tests for svg-generator-cell backend scripts.
 
 import pytest
 import json
-from artifacts.canonical.cell_types.svg_generator_cell.backend.scripts.main import (
-    execute_cell,
-)
+import sys
+from pathlib import Path
+
+# Add the cell scripts directory to Python path
+cell_scripts_dir = Path(__file__).parent.parent / "scripts"
+sys.path.insert(0, str(cell_scripts_dir))
+
+from main import execute_cell
 
 
 class TestExecuteCell:
@@ -68,19 +73,20 @@ class TestExecuteCell:
 class TestGenerateSvgFromPrompt:
     """Tests for SVG generation function."""
     
-    async def test_generate_svg_basic_shape(self, mocker):
+    @pytest.mark.skip(reason="Requires LLM service mock - future enhancement")
+    async def test_generate_svg_basic_shape(self):
         """Test generating SVG for a basic shape."""
-        # This would require mocking the LLM service
-        # For now, we'll test the structure
-        pytest.skip("Requires LLM service mock")
+        pass
     
-    async def test_generate_svg_complex_prompt(self, mocker):
+    @pytest.mark.skip(reason="Requires LLM service mock - future enhancement")
+    async def test_generate_svg_complex_prompt(self):
         """Test generating SVG for a complex prompt."""
-        pytest.skip("Requires LLM service mock")
+        pass
     
-    async def test_generate_svg_error_handling(self, mocker):
+    @pytest.mark.skip(reason="Requires LLM service mock - future enhancement")
+    async def test_generate_svg_error_handling(self):
         """Test error handling in SVG generation."""
-        pytest.skip("Requires LLM service mock")
+        pass
 
 
 class TestCellDataStructure:
