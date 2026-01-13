@@ -116,7 +116,10 @@ import type { Ref, ComputedRef } from 'vue'
 // Note: In a real Vue 3 SFC setup, você deve importar apiService para garantir headers de autenticação
 import apiService from '@/services/apiService'
 // Import logger runtime configuration functions
-import { setDebugPattern, getDebugPatternValue, getRegisteredNamespaces } from '@/utils/logger'
+import { setDebugPattern, getDebugPatternValue, getRegisteredNamespaces, createLogger } from '@/utils/logger'
+
+// Create logger for this component
+const cellLog = createLogger('log-toggle-cell')
 
 // Define props interface
 interface CellData {
@@ -234,7 +237,8 @@ function applyChanges(): void {
     }
   })
   
-  console.log(`[log-toggle-cell] Applied DEBUG pattern: ${pattern || '(none)'}`)
+  // Log the applied pattern using the logger system
+  cellLog.info(`Applied DEBUG pattern: ${pattern || '(none)'}`)
 }
 
 // Fetch available namespaces from backend API
