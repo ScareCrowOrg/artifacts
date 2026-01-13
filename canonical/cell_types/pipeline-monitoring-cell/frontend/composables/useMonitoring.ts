@@ -9,7 +9,7 @@
 
 import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/logger'
-import { useClientSideValidation } from './useClientSideValidation'
+import { useFrontendHealthChecks } from '@/composables/useFrontendHealthChecks'
 import apiService from '@/services/apiService'
 
 const log = createLogger('composable:useMonitoring')
@@ -495,7 +495,7 @@ function getMockMonitoringData(): MonitoringResponse {
 
 /**
  * Refresh all monitoring data
- * Combines server-side and client-side validation results
+ * Combines backend and frontend health check results
  */
 async function refreshData(): Promise<void> {
   if (isRefreshing.value) {
@@ -507,49 +507,53 @@ async function refreshData(): Promise<void> {
   lastError.value = null
   
   try {
-    // Fetch server-side data and client-side validation in parallel
-    const clientValidation = useClientSideValidation()
+    // Fetch backend and frontend health checks in parallel
+    const frontendHealthChecks = useFrontendHealthChecks()
     
-    const [serverData, clientResults] = await Promise.all([
+    const [backendData, frontendResults] = await Promise.all([
       fetchMonitoringData(),
-      clientValidation.validateAll()
+      frontendHealthChecks.validateAll()
     ])
     
-    // Merge client-side results with server-side results
-    // Client-side results override server-side for items that can be validated client-side
-    const mergedPrerequisites = mergeValidationResults(serverData.prerequisites, clientResults)
+    // Merge frontend results with backend results
+    // Both sources provide complementary data (backend: 10 checks, frontend: 14 checks)
+    const allPrerequisites = [...backendData.prerequisites, ...frontendResults]
     
-    prerequisites.value = mergedPrerequisites
-    components.value = serverData.components
-    metrics.value = serverData.metrics
+    prerequisites.value = allPrerequisites
+    components.value = backendData.components
+    metrics.value = backendData.metrics
     
-    log.info('Monitoring data refreshed (server + client)', {
-      serverPrerequisites: serverData.prerequisites.length,
-      clientPrerequisites: clientResults.length,
-      totalPrerequisites: mergedPrerequisites.length,
-      components: serverData.components.length
+    log.info('Monitoring data refreshed (backend + frontend)', {
+      backendPrerequisites: backendData.prerequisites.length,
+      frontendPrerequisites: frontendResults.length,
+      totalPrerequisites: allPrerequisites.length,
+      scope: {
+        backend: 'backend',
+        frontend: 'client-side'
+      }
     })
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     lastError.value = errorMessage
     log.error('Failed to refresh monitoring data', { error: errorMessage })
     
-    // Try client-side validation even if server fails
+    // Try frontend validation even if backend fails (graceful degradation)
     try {
-      const clientValidation = useClientSideValidation()
-      const clientResults = await clientValidation.validateAll()
+      const frontendHealthChecks = useFrontendHealthChecks()
+      const frontendResults = await frontendHealthChecks.validateAll()
       
-      if (clientResults.length > 0) {
-        prerequisites.value = clientResults
-        log.info('Using client-side validation only (server unavailable)', {
-          clientPrerequisites: clientResults.length
+      if (frontendResults.length > 0) {
+        prerequisites.value = frontendResults
+        log.info('Using frontend validation only (backend unavailable)', {
+          frontendPrerequisites: frontendResults.length,
+          note: 'Backend checks unavailable - showing frontend checks only'
         })
       } else {
         // Clear data to show that monitoring is unavailable
         prerequisites.value = []
       }
-    } catch (clientError) {
-      log.error('Client-side validation also failed', { error: clientError })
+    } catch (frontendError) {
+      log.error('Frontend validation also failed', { error: frontendError })
       prerequisites.value = []
     }
     
@@ -564,44 +568,6 @@ async function refreshData(): Promise<void> {
   } finally {
     isRefreshing.value = false
   }
-}
-
-/**
- * Merge server-side and client-side validation results
- * Client-side results take precedence for items they can validate
- */
-function mergeValidationResults(
-  serverResults: PrerequisiteResult[],
-  clientResults: PrerequisiteResult[]
-): PrerequisiteResult[] {
-  // Create a map of client results by ID for quick lookup
-  const clientResultsMap = new Map(
-    clientResults.map(result => [result.id, result])
-  )
-  
-  // Start with server results and replace with client results where available
-  const merged = serverResults.map(serverResult => {
-    const clientResult = clientResultsMap.get(serverResult.id)
-    
-    if (clientResult) {
-      // Client-side validation available - use it
-      log.debug('Using client-side result for', { id: serverResult.id })
-      return clientResult
-    }
-    
-    // Use server-side result
-    return serverResult
-  })
-  
-  // Add any client-only results that weren't in server results
-  clientResults.forEach(clientResult => {
-    if (!merged.find(r => r.id === clientResult.id)) {
-      log.debug('Adding client-only result', { id: clientResult.id })
-      merged.push(clientResult)
-    }
-  })
-  
-  return merged
 }
 
 /**
