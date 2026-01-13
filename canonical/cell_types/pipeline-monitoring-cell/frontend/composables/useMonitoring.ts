@@ -529,7 +529,7 @@ async function refreshData(): Promise<void> {
       totalPrerequisites: allPrerequisites.length,
       scope: {
         backend: 'backend',
-        frontend: 'client-side'
+        frontend: 'frontend'
       }
     })
   } catch (error) {
