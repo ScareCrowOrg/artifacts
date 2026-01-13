@@ -193,9 +193,9 @@ IMPORTANT: Return ONLY the SVG code, no explanations. Start with <svg> and end w
 Include proper viewBox and dimensions. Keep it simple and readable.`
 
     // Call the chat API with the prompt
+    // Note: assignee_id is not required - backend uses authenticated user from JWT token
     const response = await processMessage({
       intention: svgPrompt,
-      assignee_id: 'current-user', // This should be replaced with actual user ID
       history: [],
       model: 'gpt-4',
       classifyIntention: false,
