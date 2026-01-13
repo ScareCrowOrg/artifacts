@@ -10,6 +10,7 @@
 import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { useClientSideValidation } from './useClientSideValidation'
+import apiService from '@/services/apiService'
 
 const log = createLogger('composable:useMonitoring')
 
@@ -78,10 +79,9 @@ const lastError: Ref<string | null> = ref(null)
  */
 async function fetchMonitoringData(): Promise<MonitoringResponse> {
   try {
-    log.info('Fetching monitoring data from backend API', { endpoint: '/monitoring/pipeline' })
-    
-    // Attempt real API call to backend - updated endpoint for Sprint 3
-    const response = await fetch('/monitoring/pipeline', {
+    log.info('Fetching monitoring data from backend API', { endpoint: '/api/monitoring/pipeline' })
+    // Usar apiService para garantir autenticação e prefixo correto
+    const response = await apiService.fetch('/api/monitoring/pipeline', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
