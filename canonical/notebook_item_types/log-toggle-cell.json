@@ -1,0 +1,45 @@
+{
+  "id": "log-toggle-cell",
+  "name": "Log Toggle Cell",
+  "description": "Temporarily enable/disable specific log namespaces during a session for debugging and analysis",
+  "version": "1.0.0",
+  "category": "debugging",
+  "can_render_dynamically": false,
+  "default_refs": {
+    "view": [
+      "frontend/View.vue"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "default_initial_data": {
+    "category": "ephemeral",
+    "enabled_namespaces": [],
+    "debug_pattern": ""
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' marks this as ephemeral (not persisted)"
+    },
+    "enabled_namespaces": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "List of log namespaces currently enabled"
+    },
+    "debug_pattern": {
+      "type": "string",
+      "default": "",
+      "description": "Current DEBUG pattern (e.g., 'auth:*', 'api,store')"
+    }
+  }
+}

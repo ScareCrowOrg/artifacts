@@ -6,6 +6,10 @@ The **Log Toggle Cell** provides a user-friendly interface for temporarily enabl
 
 **⚠️ Important**: This cell currently controls **frontend browser console logs only** (Vue.js application). It does not affect backend Python logging, which uses a different system.
 
+**🔄 Ephemeral Cell**: This cell is marked as `"category": "ephemeral"`, which means instances created from this cell type will **NOT persist in the database**. Cell configuration exists only during the active session and is automatically cleared when the session ends or the service restarts. This is intentional for debugging/utility cells.
+
+**🔗 Symlink Architecture**: Following ScareVerse conventions, the canonical cell type definition is stored in `artifacts/canonical/notebook_item_types/log-toggle-cell.json` and symlinked from `artifacts/canonical/cell_types/log-toggle-cell/type.json`.
+
 **Key Features**:
 - ✅ Temporarily activate/deactivate log namespaces
 - ✅ Session-based configuration (non-persistent)
@@ -13,8 +17,17 @@ The **Log Toggle Cell** provides a user-friendly interface for temporarily enabl
 - ✅ Search and filter namespaces
 - ✅ Bulk enable/disable operations
 - ✅ Visual feedback for active logs
+- ✅ Ephemeral instances (no database persistence)
 
 ## Properties
+
+### category (string)
+
+- **Type**: String
+- **Default**: `"ephemeral"`
+- **Description**: Cell category marker - `"ephemeral"` indicates this cell does not persist in the database
+- **Values**: `"ephemeral"` (non-persistent), `"persistida"` (persistent), `"volatil"` (volatile)
+- **Note**: Log toggle cells should always remain ephemeral for debugging purposes
 
 ### enabled_namespaces (array)
 
