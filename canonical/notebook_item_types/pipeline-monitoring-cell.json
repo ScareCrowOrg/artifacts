@@ -12,8 +12,7 @@
       "frontend/composables/useMonitoring.ts",
       "frontend/composables/useHealthChecks.ts",
       "frontend/composables/useAlerts.ts"
-    ],
-    "category": "ephemeral"
+    ]
   },
   "default_initial_data": {
     "refresh_interval_seconds": 30,
@@ -21,7 +20,8 @@
     "alert_threshold_warning": 5,
     "enable_auto_refresh": true,
     "enable_alerts": true,
-    "history_retention_count": 100
+    "history_retention_count": 100,
+    "category": "ephemeral"
   },
   "allow_instance_override_refs": true,
   "properties_schema": {

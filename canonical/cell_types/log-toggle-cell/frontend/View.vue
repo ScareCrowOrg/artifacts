@@ -248,7 +248,7 @@ async function fetchAvailableNamespaces(): Promise<void> {
   
   try {
     // Usando apiService para garantir headers de autenticação e tratamento de sessão expirada
-    const response = await apiService.fetch('/api/logs/namespaces', {
+    const response = await apiService.fetch('/api/logs/namespaces?discover=true', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
