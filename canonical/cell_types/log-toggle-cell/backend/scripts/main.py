@@ -57,11 +57,15 @@ def get_available_namespaces() -> List[str]:
     This function would ideally scan the codebase or maintain a registry
     of known log namespaces.
     
+    Note: This list is currently duplicated in frontend/View.vue.
+    Future enhancement: Implement backend API endpoint to serve this
+    dynamically and eliminate duplication.
+    
     Returns:
         List of available log namespace strings
     """
     # Common namespaces in ScareVerse frontend
-    # This should be dynamically discovered or maintained in a registry
+    # TODO: Replace with dynamic discovery or centralized registry
     return [
         "app",
         "auth",

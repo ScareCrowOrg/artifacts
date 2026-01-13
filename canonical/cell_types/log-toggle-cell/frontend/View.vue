@@ -116,7 +116,9 @@ const emit = defineEmits<{
   'update:cell': [cell: Props['cell']]
 }>()
 
-// Available log namespaces (could be fetched from backend)
+// Available log namespaces
+// Note: This list is duplicated in backend/scripts/main.py
+// TODO: Replace with API call to GET /api/v1/logs/namespaces
 const availableNamespaces: Ref<string[]> = ref([
   'app',
   'auth',

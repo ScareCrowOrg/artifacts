@@ -4,6 +4,8 @@
 
 The **Log Toggle Cell** provides a user-friendly interface for temporarily enabling/disabling specific log namespaces during a session. This is particularly useful for debugging, performance analysis, and focusing on specific logs without being overwhelmed by irrelevant information.
 
+**⚠️ Important**: This cell currently controls **frontend browser console logs only** (Vue.js application). It does not affect backend Python logging, which uses a different system.
+
 **Key Features**:
 - ✅ Temporarily activate/deactivate log namespaces
 - ✅ Session-based configuration (non-persistent)
