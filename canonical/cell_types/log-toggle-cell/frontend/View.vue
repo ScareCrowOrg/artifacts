@@ -51,11 +51,27 @@
         type="text"
         placeholder="Search namespaces..."
         class="w-full px-3 py-2 border border-border rounded bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+        :disabled="namespacesLoading"
       />
     </div>
 
+    <!-- Loading State -->
+    <div v-if="namespacesLoading" class="text-center py-8 text-text-secondary">
+      <div class="animate-pulse">Loading namespaces...</div>
+    </div>
+
+    <!-- Error State -->
+    <div v-else-if="namespacesError" class="mb-4 p-3 bg-error bg-opacity-10 border border-error rounded">
+      <p class="text-sm text-error">
+        Failed to load namespaces from API: {{ namespacesError }}
+      </p>
+      <p class="text-xs text-text-secondary mt-1">
+        Using fallback namespace list
+      </p>
+    </div>
+
     <!-- Namespace List -->
-    <div class="space-y-2 max-h-96 overflow-y-auto">
+    <div v-else class="space-y-2 max-h-96 overflow-y-auto">
       <div
         v-for="namespace in filteredNamespaces"
         :key="namespace"
@@ -117,27 +133,10 @@ const emit = defineEmits<{
 }>()
 
 // Available log namespaces
-// Note: This list is duplicated in backend/scripts/main.py
-// TODO: Replace with API call to GET /api/v1/logs/namespaces
-const availableNamespaces: Ref<string[]> = ref([
-  'app',
-  'auth',
-  'auth:login',
-  'auth:logout',
-  'api',
-  'api:cells',
-  'api:books',
-  'store',
-  'store:cells',
-  'store:books',
-  'store:auth',
-  'component:cell',
-  'component:book',
-  'service:websocket',
-  'service:http',
-  'router',
-  'debug'
-])
+// Fetched dynamically from backend API
+const availableNamespaces: Ref<string[]> = ref([])
+const namespacesLoading: Ref<boolean> = ref(false)
+const namespacesError: Ref<string | null> = ref(null)
 
 // State
 const activeNamespaces: Ref<string[]> = ref(props.cell.initial_data?.enabled_namespaces || [])
@@ -231,11 +230,49 @@ function applyChanges(): void {
   // await updateLogConfiguration(currentPattern.value)
 }
 
+// Fetch available namespaces from backend API
+async function fetchAvailableNamespaces(): Promise<void> {
+  namespacesLoading.value = true
+  namespacesError.value = null
+  
+  try {
+    // Use the centralized API endpoint
+    const response = await fetch('/api/v1/logs/namespaces', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        // Authorization header will be added by interceptor
+      },
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch namespaces: ${response.statusText}`)
+    }
+    
+    const namespaces = await response.json()
+    availableNamespaces.value = namespaces
+  } catch (error) {
+    console.error('Error fetching log namespaces:', error)
+    namespacesError.value = error instanceof Error ? error.message : 'Unknown error'
+    
+    // Fallback to minimal default list
+    availableNamespaces.value = [
+      'app',
+      'auth',
+      'api',
+      'store',
+      'router',
+      'debug'
+    ]
+  } finally {
+    namespacesLoading.value = false
+  }
+}
+
 // Lifecycle
 onMounted(() => {
-  // Could fetch available namespaces from backend here
-  // const namespaces = await fetchAvailableNamespaces()
-  // availableNamespaces.value = namespaces
+  // Fetch available namespaces from backend
+  fetchAvailableNamespaces()
 })
 </script>
 

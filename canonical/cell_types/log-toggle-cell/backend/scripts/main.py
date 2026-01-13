@@ -54,37 +54,25 @@ def get_available_namespaces() -> List[str]:
     """
     Get list of available log namespaces in the application.
     
-    This function would ideally scan the codebase or maintain a registry
-    of known log namespaces.
+    DEPRECATED: This function is deprecated. Use the centralized API endpoint
+    GET /api/v1/logs/namespaces instead for a single source of truth.
     
-    Note: This list is currently duplicated in frontend/View.vue.
-    Future enhancement: Implement backend API endpoint to serve this
-    dynamically and eliminate duplication.
+    This function now returns an empty list with a deprecation notice.
+    The actual namespace list should be fetched from the API.
     
     Returns:
-        List of available log namespace strings
+        Empty list (namespaces should be fetched from API)
     """
-    # Common namespaces in ScareVerse frontend
-    # TODO: Replace with dynamic discovery or centralized registry
-    return [
-        "app",
-        "auth",
-        "auth:login",
-        "auth:logout",
-        "api",
-        "api:cells",
-        "api:books",
-        "store",
-        "store:cells",
-        "store:books",
-        "store:auth",
-        "component:cell",
-        "component:book",
-        "service:websocket",
-        "service:http",
-        "router",
-        "debug"
-    ]
+    import warnings
+    warnings.warn(
+        "get_available_namespaces() is deprecated. "
+        "Use GET /api/v1/logs/namespaces API endpoint instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
+    # Return empty list - namespaces should come from API
+    return []
 
 
 def validate_namespace(namespace: str) -> bool:

@@ -140,15 +140,32 @@ Logs are controlled by the `VITE_DEBUG` or `DEBUG` environment variable:
 - `DEBUG=auth:*` - Enable all auth sub-namespaces
 - Production builds automatically disable all logs
 
+### Centralized Namespace Management
+
+The Log Toggle Cell fetches available namespaces from the backend API endpoint:
+
+**API Endpoint**: `GET /api/v1/logs/namespaces`
+
+This provides a single source of truth for log namespaces, eliminating duplication
+between frontend and backend code.
+
+The API can either return a curated default list or perform dynamic discovery
+by scanning the frontend codebase for `createLogger()` calls:
+
+- `GET /api/v1/logs/namespaces` - Returns default curated list (fast)
+- `GET /api/v1/logs/namespaces?discover=true` - Scans codebase (slower but complete)
+
 ### Temporary Session-Based Configuration
 
 The Log Toggle Cell allows runtime modification of log settings:
 
-1. User selects namespaces in the UI
-2. Click "Apply Changes" to activate
-3. Settings stored in session (Redis or in-memory)
-4. Middleware applies DEBUG pattern to current session
-5. Configuration cleared on session end or restart
+1. User opens the Log Toggle Cell
+2. Cell fetches available namespaces from API automatically
+3. User selects namespaces in the UI
+4. Click "Apply Changes" to activate
+5. Settings stored in session (Redis or in-memory)
+6. Middleware applies DEBUG pattern to current session
+7. Configuration cleared on session end or restart
 
 ## Usage Example
 
@@ -188,9 +205,61 @@ Pattern: *
 
 ## Integration Requirements
 
-### Backend API Endpoints (To Be Implemented)
+### Backend API Endpoints (Implemented ✅)
 
-The following endpoints should be added to support full functionality:
+The following endpoints have been implemented to support centralized namespace management:
+
+#### `GET /api/v1/logs/namespaces`
+
+Returns list of available log namespaces.
+
+**Query Parameters**:
+- `discover` (boolean, optional): If true, scans codebase for namespaces. Default: false.
+
+**Response**:
+```json
+[
+  "app",
+  "auth",
+  "auth:login",
+  "api",
+  "store",
+  "component:cell",
+  "service:websocket",
+  "router",
+  "debug"
+]
+```
+
+#### `GET /api/v1/logs/namespaces/stats`
+
+Returns statistics about log namespaces (default vs discovered).
+
+**Response**:
+```json
+{
+  "default_count": 28,
+  "discovered_count": 45,
+  "default_namespaces": ["app", "auth", ...],
+  "discovered_namespaces": ["app", "auth", "feature:new", ...]
+}
+```
+
+### Automatic Registry Discovery (Implemented ✅)
+
+Cell type registry discovery is now automatically triggered when loading notebook item types.
+
+**Integration Point**: `cockpit-vue/src/stores/notebookCells.js`
+
+The `loadNotebookItemTypes()` function now:
+1. Calls `POST /api/v1/notebook-item-types/registry/discover` automatically
+2. Logs discovery results in development mode
+3. Continues gracefully if discovery fails (non-critical)
+4. Fetches updated list of notebook item types
+
+This eliminates the need for manual registry discovery via action links or API calls.
+
+### Future API Endpoints (To Be Implemented)
 
 #### `GET /api/v1/logs/namespaces`
 
