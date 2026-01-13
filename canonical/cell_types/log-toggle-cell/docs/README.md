@@ -1,3 +1,19 @@
+---
+processed: true
+processed_date: 2026-01-13
+updated_docs:
+  - docs/official/frontend/features/log-toggle-cell.md
+themes:
+  - cell-types
+  - debugging
+  - logging
+  - frontend
+modules:
+  - frontend
+  - cell-types
+code_verified: true
+dead_docs_found: false
+---
 # Log Toggle Cell
 
 ## Overview
