@@ -113,9 +113,8 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 
-// Note: In a real Vue 3 SFC setup, you would import apiService like this:
-// import apiService from '@/services/apiService'
-// For this cell's context, we'll use fetch with proper error handling
+// Note: In a real Vue 3 SFC setup, você deve importar apiService para garantir headers de autenticação
+import apiService from '@/services/apiService'
 
 // Define props interface
 interface CellData {
@@ -240,22 +239,17 @@ async function fetchAvailableNamespaces(): Promise<void> {
   namespacesError.value = null
   
   try {
-    // TODO: Use apiService when available in cell context
-    // For now, using fetch with proper configuration
-    const response = await fetch('/api/logs/namespaces', {
+    // Usando apiService para garantir headers de autenticação e tratamento de sessão expirada
+    const response = await apiService.fetch('/api/logs/namespaces', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        // Note: Authorization header should be added by HTTP interceptor
-        // or apiService. If not available, this will fail with 401.
       },
-      credentials: 'include', // Include cookies for session-based auth
+      credentials: 'include',
     })
-    
     if (!response.ok) {
       throw new Error(`Failed to fetch namespaces: ${response.statusText}`)
     }
-    
     const namespaces = await response.json()
     availableNamespaces.value = namespaces
   } catch (error) {
