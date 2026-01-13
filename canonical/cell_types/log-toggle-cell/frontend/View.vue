@@ -115,6 +115,8 @@ import type { Ref, ComputedRef } from 'vue'
 
 // Note: In a real Vue 3 SFC setup, você deve importar apiService para garantir headers de autenticação
 import apiService from '@/services/apiService'
+// Import logger runtime configuration functions
+import { setDebugPattern, getDebugPatternValue, getRegisteredNamespaces } from '@/utils/logger'
 
 // Define props interface
 interface CellData {
@@ -219,18 +221,20 @@ function disableAll(): void {
 function applyChanges(): void {
   originalNamespaces.value = [...activeNamespaces.value]
   
+  // Update the runtime DEBUG pattern in localStorage
+  const pattern = currentPattern.value
+  setDebugPattern(pattern)
+  
   emit('update:cell', {
     ...props.cell,
     initial_data: {
       ...props.cell.initial_data,
       enabled_namespaces: activeNamespaces.value,
-      debug_pattern: currentPattern.value
+      debug_pattern: pattern
     }
   })
   
-  // Here you would typically make an API call to update the backend
-  // For example:
-  // await updateLogConfiguration(currentPattern.value)
+  console.log(`[log-toggle-cell] Applied DEBUG pattern: ${pattern || '(none)'}`)
 }
 
 // Fetch available namespaces from backend API
@@ -256,15 +260,23 @@ async function fetchAvailableNamespaces(): Promise<void> {
     console.error('Error fetching log namespaces:', error)
     namespacesError.value = error instanceof Error ? error.message : 'Unknown error'
     
-    // Fallback to minimal default list
-    availableNamespaces.value = [
+    // Fallback: Use registered namespaces from logger + common defaults
+    const registeredNamespaces = getRegisteredNamespaces()
+    const defaultNamespaces = [
       'app',
       'auth',
       'api',
       'store',
       'router',
-      'debug'
+      'debug',
+      'component',
+      'websocket',
+      'extension'
     ]
+    
+    // Merge and deduplicate
+    const combined = [...new Set([...registeredNamespaces, ...defaultNamespaces])]
+    availableNamespaces.value = combined.sort()
   } finally {
     namespacesLoading.value = false
   }
@@ -274,6 +286,18 @@ async function fetchAvailableNamespaces(): Promise<void> {
 onMounted(() => {
   // Fetch available namespaces from backend
   fetchAvailableNamespaces()
+  
+  // Load current DEBUG pattern from localStorage
+  const currentDebug = getDebugPatternValue()
+  if (currentDebug) {
+    // Parse current pattern to initialize active namespaces
+    if (currentDebug === '*') {
+      // Will be set after namespaces are loaded
+    } else {
+      activeNamespaces.value = currentDebug.split(',').map(ns => ns.trim()).filter(Boolean)
+      originalNamespaces.value = [...activeNamespaces.value]
+    }
+  }
 })
 </script>
 
