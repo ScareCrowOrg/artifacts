@@ -226,7 +226,20 @@ function applyChanges(): void {
   
   // Update the runtime DEBUG pattern in localStorage
   const pattern = currentPattern.value
+  
+  // DEBUG INSTRUMENTATION - ITERATION 1
+  console.log('DEBUG: [log-toggle-cell] applyChanges() called')
+  console.log('DEBUG: [log-toggle-cell] activeNamespaces:', activeNamespaces.value)
+  console.log('DEBUG: [log-toggle-cell] activeNamespaces.length:', activeNamespaces.value.length)
+  console.log('DEBUG: [log-toggle-cell] computed pattern:', pattern)
+  console.log('DEBUG: [log-toggle-cell] pattern type:', typeof pattern)
+  console.log('DEBUG: [log-toggle-cell] pattern is empty string?', pattern === '')
+  console.log('DEBUG: [log-toggle-cell] calling setDebugPattern with:', pattern)
+  
   setDebugPattern(pattern)
+  
+  // DEBUG INSTRUMENTATION - Verify localStorage after setDebugPattern
+  console.log('DEBUG: [log-toggle-cell] localStorage DEBUG after setDebugPattern:', localStorage.getItem('DEBUG'))
   
   emit('update:cell', {
     ...props.cell,
@@ -239,6 +252,9 @@ function applyChanges(): void {
   
   // Log the applied pattern using the logger system
   cellLog.info(`Applied DEBUG pattern: ${pattern || '(none)'}`)
+  
+  // DEBUG INSTRUMENTATION - This log should NOT appear if pattern is empty
+  console.log('DEBUG: [log-toggle-cell] cellLog.info was called - if you see this with empty pattern, isNamespaceEnabled returned true incorrectly')
 }
 
 // Fetch available namespaces from backend API
