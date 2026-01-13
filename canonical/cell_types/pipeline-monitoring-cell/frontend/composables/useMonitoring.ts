@@ -319,7 +319,7 @@ function getMockMonitoringData(): MonitoringResponse {
         criticality: 'critical',
         validation_method: 'Health endpoint',
         monitoring_available: true,
-        details: { endpoint: '/api/v1/generation/health' },
+        details: { endpoint: '/api/generation/health' },
         timestamp: Date.now()
       },
       {

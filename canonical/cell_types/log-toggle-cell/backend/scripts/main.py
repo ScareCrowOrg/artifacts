@@ -55,7 +55,7 @@ def get_available_namespaces() -> List[str]:
     Get list of available log namespaces in the application.
     
     DEPRECATED: This function is deprecated. Use the centralized API endpoint
-    GET /api/v1/logs/namespaces instead for a single source of truth.
+    GET /api/logs/namespaces instead for a single source of truth.
     
     This function now returns an empty list with a deprecation notice.
     The actual namespace list should be fetched from the API.
@@ -66,7 +66,7 @@ def get_available_namespaces() -> List[str]:
     import warnings
     warnings.warn(
         "get_available_namespaces() is deprecated. "
-        "Use GET /api/v1/logs/namespaces API endpoint instead.",
+        "Use GET /api/logs/namespaces API endpoint instead.",
         DeprecationWarning,
         stacklevel=2
     )

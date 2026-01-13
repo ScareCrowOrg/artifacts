@@ -242,7 +242,7 @@ async function fetchAvailableNamespaces(): Promise<void> {
   try {
     // TODO: Use apiService when available in cell context
     // For now, using fetch with proper configuration
-    const response = await fetch('/api/v1/logs/namespaces', {
+    const response = await fetch('/api/logs/namespaces', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
