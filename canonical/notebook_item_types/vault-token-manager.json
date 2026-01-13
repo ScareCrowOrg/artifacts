@@ -14,7 +14,8 @@
     "autoLockEnabled": true,
     "showExpired": false,
     "sortBy": "createdAt",
-    "sortOrder": "desc"
+    "sortOrder": "desc",
+    "category": "ephemeral"
   },
   "allow_instance_override_refs": false,
   "can_render_dynamically": true

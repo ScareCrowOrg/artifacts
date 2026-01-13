@@ -12,7 +12,8 @@
       "frontend/composables/useMonitoring.ts",
       "frontend/composables/useHealthChecks.ts",
       "frontend/composables/useAlerts.ts"
-    ]
+    ],
+    "category": "ephemeral"
   },
   "default_initial_data": {
     "refresh_interval_seconds": 30,

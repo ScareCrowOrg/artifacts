@@ -4,7 +4,7 @@
   "description": "Temporarily enable/disable specific log namespaces during a session for debugging and analysis",
   "version": "1.0.0",
   "category": "debugging",
-  "can_render_dynamically": false,
+  "can_render_dynamically": true,
   "default_refs": {
     "view": [
       "frontend/View.vue"
