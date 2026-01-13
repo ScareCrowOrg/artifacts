@@ -420,7 +420,7 @@ async function onGenerate(): Promise<void> {
       cellData.value.content,
       'auto',
       {
-        model: 'gpt-4',
+        model: 'mistral',
         conversationId: null,
         useRag: false
       }
