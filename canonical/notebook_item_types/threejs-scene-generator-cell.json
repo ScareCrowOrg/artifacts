@@ -1,0 +1,54 @@
+{
+  "id": "threejs-scene-generator-cell",
+  "name": "Three.js Scene Generator Cell",
+  "description": "Interactive cell for generating and prototyping 3D scenes using Three.js from text prompts with AI",
+  "version": "1.0.0",
+  "category": "prototyping",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "scripts": ["backend/scripts/main.py"],
+    "docs": ["docs/README.md"]
+  },
+  "default_initial_data": {
+    "category": "ephemeral",
+    "prompt": "",
+    "generatedScript": null,
+    "isGenerating": false,
+    "error": null,
+    "selectedModel": "mistral"
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' marks this as ephemeral (not persisted)"
+    },
+    "prompt": {
+      "type": "string",
+      "default": "",
+      "description": "Text description of the desired 3D scene"
+    },
+    "generatedScript": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Generated Three.js JavaScript code"
+    },
+    "isGenerating": {
+      "type": "boolean",
+      "default": false,
+      "description": "Flag indicating if scene generation is in progress"
+    },
+    "error": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Error message if generation fails"
+    },
+    "selectedModel": {
+      "type": "string",
+      "default": "mistral",
+      "description": "Selected AI model for code generation"
+    }
+  }
+}
