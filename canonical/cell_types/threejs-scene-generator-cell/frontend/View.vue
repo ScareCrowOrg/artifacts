@@ -138,19 +138,34 @@
           </div>
         </div>
         
-        <!-- Three.js Canvas Container -->
+        <!-- Status messages OUTSIDE canvas container to avoid Vue/Three.js DOM conflict -->
         <div 
-          ref="canvasContainer" 
-          class="scene-container border border-border dark:border-border-dark rounded bg-gray-900 flex items-center justify-center"
-          style="min-height: 400px; position: relative;"
+          v-if="!sceneInitialized && !sceneError" 
+          class="status-message border border-border dark:border-border-dark rounded bg-gray-900 flex items-center justify-center text-white text-center p-4"
+          style="min-height: 400px"
         >
-          <div v-if="!sceneInitialized" class="text-white text-center p-4">
-            <p>{{ $t('threejsSceneGeneratorCell.initializingScene') }}</p>
-          </div>
-          <div v-if="sceneError" class="text-red-400 text-center p-4">
+          <p>{{ $t('threejsSceneGeneratorCell.initializingScene') }}</p>
+        </div>
+        
+        <div 
+          v-if="sceneError" 
+          class="error-message border border-border dark:border-border-dark rounded bg-gray-900 flex items-center justify-center text-red-400 text-center p-4"
+          style="min-height: 400px"
+        >
+          <div>
             <p>{{ $t('threejsSceneGeneratorCell.sceneError') }}</p>
             <p class="text-sm mt-2">{{ sceneError }}</p>
           </div>
+        </div>
+        
+        <!-- Three.js Canvas Container - NO Vue-managed children to avoid DOM conflicts -->
+        <div 
+          v-show="sceneInitialized && !sceneError"
+          ref="canvasContainer" 
+          class="scene-container border border-border dark:border-border-dark rounded bg-gray-900"
+          style="min-height: 400px; position: relative;"
+        >
+          <!-- INTENTIONALLY EMPTY - Three.js will populate this via imperative DOM manipulation -->
         </div>
 
         <!-- Script Code Display (collapsible) -->
