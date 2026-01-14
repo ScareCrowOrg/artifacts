@@ -4,7 +4,7 @@
   "description": "Interactive cell for generating SVG visualizations from text prompts using AI",
   "version": "1.0.0",
   "category": "visualization",
-  "can_render_dynamically": false,
+  "can_render_dynamically": true,
   "default_refs": {
     "view": ["frontend/View.vue"],
     "scripts": ["backend/scripts/main.py"],
