@@ -45,7 +45,7 @@ def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-async def generate_svg_from_prompt(prompt: str, model: str = "gpt-4") -> Dict[str, Any]:
+async def generate_svg_from_prompt(prompt: str, model: str = "mistral") -> Dict[str, Any]:
     """
     Generate SVG code from a text prompt using LLM.
     
