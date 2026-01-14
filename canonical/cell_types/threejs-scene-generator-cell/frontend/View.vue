@@ -318,7 +318,13 @@ onMounted(async () => {
 
 // Handle scene generation
 async function handleGenerate(): Promise<void> {
+  console.log('[DEBUG] handleGenerate called')
+  console.log('[DEBUG] Prompt value:', prompt.value)
+  console.log('[DEBUG] Selected model:', selectedModel.value)
+  console.log('[DEBUG] Is generating:', isGenerating.value)
+  
   if (!prompt.value.trim() || isGenerating.value) {
+    console.log('[DEBUG] Early return - empty prompt or already generating')
     return
   }
 
@@ -329,6 +335,8 @@ async function handleGenerate(): Promise<void> {
     sceneInitialized.value = false
     sceneError.value = null
     updateCell()
+    
+    console.log('[DEBUG] State reset complete, calling processMessage')
 
     // Create a specialized prompt for Three.js generation
     const threejsPrompt = `Generate a complete, self-contained Three.js 3D scene based on this description: "${prompt.value}"
@@ -363,6 +371,8 @@ function animate() {
 }
 animate();`
 
+    console.log('[DEBUG] Three.js prompt created, length:', threejsPrompt.length)
+
     // Call the chat API with the prompt
     const response = await processMessage({
       intention: threejsPrompt,
@@ -371,9 +381,16 @@ animate();`
       classifyIntention: false,
       attachments: [],
     })
+    
+    console.log('[DEBUG] Response received from processMessage')
+    console.log('[DEBUG] Response type:', typeof response)
+    console.log('[DEBUG] Response keys:', Object.keys(response))
+    console.log('[DEBUG] Full response:', JSON.stringify(response, null, 2))
 
     // Extract code from response
     const content = response.message || response.response || ''
+    console.log('[DEBUG] Extracted content length:', content.length)
+    console.log('[DEBUG] Content preview (first 500 chars):', content.substring(0, 500))
     
     // Try to extract code from response
     let extractedCode = content
@@ -382,28 +399,45 @@ animate();`
     const codeMatch = content.match(/```(?:javascript|js)?\s*\n?([\s\S]*?)\n?```/)
     
     if (codeMatch) {
+      console.log('[DEBUG] Code block found, extracting code')
       extractedCode = codeMatch[1]
+      console.log('[DEBUG] Extracted code length:', extractedCode.length)
+    } else {
+      console.log('[DEBUG] No code block markers found, using content as-is')
     }
+    
+    console.log('[DEBUG] Final extracted code preview (first 500 chars):', extractedCode.substring(0, 500))
     
     // Validate that we have Three.js code
     if (!extractedCode.includes('THREE')) {
+      console.error('[DEBUG] Validation failed: code does not contain THREE namespace')
       throw new Error('Generated content does not appear to be Three.js code')
     }
+    
+    console.log('[DEBUG] Validation passed: THREE namespace found in code')
 
     generatedScript.value = extractedCode.trim()
     error.value = null
+    
+    console.log('[DEBUG] Generated script stored, length:', generatedScript.value.length)
 
     // Initialize the scene
+    console.log('[DEBUG] Waiting for nextTick before initializing scene')
     await nextTick()
+    console.log('[DEBUG] nextTick complete, calling initializeThreeJSScene')
     initializeThreeJSScene(generatedScript.value)
 
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred'
     error.value = $t('threejsSceneGeneratorCell.errorGeneration', { error: errorMessage })
-    console.error('Three.js generation error:', err)
+    console.error('[DEBUG] Error in handleGenerate:', err)
+    console.error('[DEBUG] Error type:', err instanceof Error ? err.constructor.name : typeof err)
+    console.error('[DEBUG] Error message:', errorMessage)
+    console.error('[DEBUG] Error stack:', err instanceof Error ? err.stack : 'No stack trace')
   } finally {
     isGenerating.value = false
     updateCell()
+    console.log('[DEBUG] handleGenerate complete, isGenerating set to false')
   }
 }
 
