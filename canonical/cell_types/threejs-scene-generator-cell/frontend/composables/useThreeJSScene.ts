@@ -113,45 +113,134 @@ export function useThreeJSScene(): UseThreeJSSceneReturn {
 
   /**
    * Execute Three.js code in a controlled manner.
+   * 
+   * IMPORTANT: Container must be visible and have dimensions before script execution.
+   * This is achieved by setting sceneInitialized=true first, then waiting for browser layout.
    */
   function executeThreeJSCode(script: string): void {
     console.log('[DEBUG] executeThreeJSCode called')
-    console.log('[DEBUG] Full generated script:')
-    console.log('--- SCRIPT START ---')
-    console.log(script)
-    console.log('--- SCRIPT END ---')
+    console.log('[DEBUG] Script length:', script?.length)
     
     try {
       const container = canvasContainer.value
-      console.log('[DEBUG] Container state in executeThreeJSCode:', container ? 'EXISTS' : 'NULL')
-      console.log('[DEBUG] Container details:', {
-        tagName: container?.tagName,
-        clientWidth: container?.clientWidth,
-        clientHeight: container?.clientHeight,
-        childCount: container?.children.length
-      })
-      
       if (!container) {
         console.error('[DEBUG] Container not available in executeThreeJSCode')
         throw new Error('Container not available')
       }
 
-      // Simplified approach: Create a function with named parameters
-      // This avoids the complex IIFE wrapping and is more reliable
-      console.log('[DEBUG] Creating function with named parameters')
+      // Log container state BEFORE making it visible
+      console.log('[DEBUG] Container state BEFORE making visible:', {
+        exists: !!container,
+        tagName: container.tagName,
+        clientWidth: container.clientWidth,
+        clientHeight: container.clientHeight,
+        offsetWidth: container.offsetWidth,
+        offsetHeight: container.offsetHeight,
+        display: window.getComputedStyle(container).display,
+        visibility: window.getComputedStyle(container).visibility
+      })
+
+      // ✅ FIX: Make container visible FIRST
+      // This triggers Vue reactivity → v-show becomes true → display:block
+      sceneInitialized.value = true
+      console.log('[DEBUG] Set sceneInitialized=true to make container visible')
+      
+      // Log dimensions immediately (will still be 0 - Vue hasn't updated DOM yet)
+      console.log('[DEBUG] Container dimensions IMMEDIATELY after setting sceneInitialized:', {
+        clientWidth: container.clientWidth,
+        clientHeight: container.clientHeight,
+        display: window.getComputedStyle(container).display
+      })
+      
+      // ✅ FIX: Wait for browser layout calculation
+      // requestAnimationFrame runs before next paint, after layout
+      requestAnimationFrame(() => {
+        console.log('[DEBUG] Inside first requestAnimationFrame')
+        console.log('[DEBUG] Container dimensions after RAF:', {
+          clientWidth: container.clientWidth,
+          clientHeight: container.clientHeight,
+          offsetWidth: container.offsetWidth,
+          offsetHeight: container.offsetHeight,
+          display: window.getComputedStyle(container).display,
+          computedHeight: window.getComputedStyle(container).height,
+          computedMinHeight: window.getComputedStyle(container).minHeight
+        })
+        
+        // ✅ FIX: Validate dimensions
+        if (container.clientWidth === 0 || container.clientHeight === 0) {
+          console.warn('[DEBUG] Container STILL has zero dimensions after first RAF')
+          console.warn('[DEBUG] Waiting for second requestAnimationFrame...')
+          
+          // ✅ FIX: Fallback - wait one more frame
+          requestAnimationFrame(() => {
+            console.log('[DEBUG] Inside SECOND requestAnimationFrame (fallback)')
+            console.log('[DEBUG] Container dimensions after 2nd RAF:', {
+              clientWidth: container.clientWidth,
+              clientHeight: container.clientHeight,
+              display: window.getComputedStyle(container).display
+            })
+            
+            if (container.clientWidth === 0 || container.clientHeight === 0) {
+              const error = `Container STILL has zero dimensions after 2 frames: ${container.clientWidth}x${container.clientHeight}`
+              console.error('[DEBUG] ❌', error)
+              throw new Error(error)
+            }
+            
+            console.log('[DEBUG] ✅ Container has valid dimensions on 2nd frame, proceeding')
+            executeActualScript(container, script)
+          })
+        } else {
+          console.log('[DEBUG] ✅ Container has valid dimensions, proceeding with execution')
+          executeActualScript(container, script)
+        }
+      })
+    } catch (err) {
+      sceneError.value = err instanceof Error ? err.message : 'Failed to execute scene code'
+      sceneInitialized.value = false  // Rollback on error
+      console.error('[DEBUG] ❌ Three.js execution error:', err)
+      console.error('[DEBUG] Error type:', err instanceof Error ? err.constructor.name : typeof err)
+      console.error('[DEBUG] Error message:', err instanceof Error ? err.message : String(err))
+      console.error('[DEBUG] Error stack:', err instanceof Error ? err.stack : 'No stack trace')
+      console.error('[DEBUG] Rolled back sceneInitialized to false')
+    }
+  }
+
+  /**
+   * Execute the actual Three.js script after container has dimensions.
+   * Separated into its own function for clarity and testing.
+   */
+  function executeActualScript(container: HTMLElement, script: string): void {
+    console.log('[DEBUG] ═══ EXECUTING SCRIPT ═══')
+    console.log('[DEBUG] Final container dimensions before script execution:', {
+      clientWidth: container.clientWidth,
+      clientHeight: container.clientHeight,
+      aspectRatio: (container.clientWidth / container.clientHeight).toFixed(2)
+    })
+    
+    console.log('[DEBUG] Generated script preview (first 300 chars):')
+    console.log(script.substring(0, 300) + '...')
+    
+    try {
+      // Create and execute the scene function
       const executeScene = new Function('container', 'THREE', script)
-      
-      console.log('[DEBUG] Function created successfully')
-      console.log('[DEBUG] Executing scene code with container and THREE as parameters')
-      
-      // Execute the function with container and THREE as arguments
       executeScene(container, (window as any).THREE)
       
-      console.log('[DEBUG] Scene execution completed successfully')
-
-      sceneInitialized.value = true
-      console.log('[DEBUG] Scene initialized successfully, sceneInitialized set to true')
-
+      console.log('[DEBUG] ✅ Script execution completed successfully')
+      
+      // Verify canvas was added
+      console.log('[DEBUG] Canvas element added to container:', container.children.length > 0)
+      if (container.children.length > 0) {
+        const canvas = container.querySelector('canvas')
+        if (canvas) {
+          console.log('[DEBUG] Canvas dimensions:', {
+            width: canvas.width,
+            height: canvas.height,
+            styleWidth: canvas.style.width,
+            styleHeight: canvas.style.height
+          })
+        }
+      }
+      
       // Store cleanup function
       cleanupThreeJS = () => {
         console.log('[DEBUG] Cleanup function called')
@@ -164,11 +253,8 @@ export function useThreeJSScene(): UseThreeJSSceneReturn {
         }
       }
     } catch (err) {
-      sceneError.value = err instanceof Error ? err.message : 'Failed to execute scene code'
-      console.error('[DEBUG] Three.js execution error:', err)
-      console.error('[DEBUG] Error type:', err instanceof Error ? err.constructor.name : typeof err)
-      console.error('[DEBUG] Error message:', err instanceof Error ? err.message : String(err))
-      console.error('[DEBUG] Error stack:', err instanceof Error ? err.stack : 'No stack trace')
+      // Re-throw to be caught by parent try-catch
+      throw err
     }
   }
 

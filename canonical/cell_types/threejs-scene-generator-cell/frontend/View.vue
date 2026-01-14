@@ -331,6 +331,22 @@ onMounted(async () => {
   }
 })
 
+// Watch sceneInitialized for debugging container visibility
+watch(sceneInitialized, (newVal, oldVal) => {
+  console.log('[DEBUG] [View.vue] sceneInitialized changed:', oldVal, '→', newVal)
+  
+  if (canvasContainer.value) {
+    // Use nextTick to check dimensions after Vue updates DOM
+    nextTick(() => {
+      console.log('[DEBUG] [View.vue] After nextTick, container dimensions:', {
+        clientWidth: canvasContainer.value?.clientWidth,
+        clientHeight: canvasContainer.value?.clientHeight,
+        display: canvasContainer.value ? window.getComputedStyle(canvasContainer.value).display : 'N/A'
+      })
+    })
+  }
+})
+
 // Handle scene generation
 async function handleGenerate(): Promise<void> {
   console.log('[DEBUG] handleGenerate called')
@@ -349,6 +365,17 @@ async function handleGenerate(): Promise<void> {
     generatedScript.value = null
     sceneInitialized.value = false
     sceneError.value = null
+    
+    // Debug logging: Track container state after reset
+    console.log('[DEBUG] [View.vue] handleGenerate: State reset, sceneInitialized set to false')
+    console.log('[DEBUG] [View.vue] Container should now be hidden (v-show=false)')
+    if (canvasContainer.value) {
+      console.log('[DEBUG] [View.vue] Container dimensions after reset:', {
+        clientWidth: canvasContainer.value.clientWidth,
+        clientHeight: canvasContainer.value.clientHeight
+      })
+    }
+    
     updateCell()
     
     console.log('[DEBUG] State reset complete, calling processMessage')
