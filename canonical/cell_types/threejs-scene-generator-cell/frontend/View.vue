@@ -184,12 +184,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onBeforeUnmount, nextTick, type Ref, type ComputedRef } from 'vue'
+import { ref, watch, computed, onMounted, nextTick, type Ref, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { processMessage, fetchAvailableModels } from '@/services/aiChatService.js'
+import { useThreeJSScene } from './composables/useThreeJSScene'
 
 // i18n
 const { t: $t } = useI18n()
+
+// Use Three.js scene composable
+const {
+  sceneInitialized,
+  sceneError,
+  canvasContainer,
+  loadThreeJS,
+  initializeThreeJSScene
+} = useThreeJSScene()
 
 // AI Model interface
 interface AIModel {
@@ -230,17 +240,11 @@ const isGenerating: Ref<boolean> = ref(props.cell.initial_data?.isGenerating || 
 const error: Ref<string | null> = ref(props.cell.initial_data?.error || null)
 const showCode: Ref<boolean> = ref(false)
 const copiedScript: Ref<boolean> = ref(false)
-const canvasContainer: Ref<HTMLElement | null> = ref(null)
-const sceneInitialized: Ref<boolean> = ref(false)
-const sceneError: Ref<string | null> = ref(null)
 
 // Model selection state
 const availableModels: Ref<AIModel[]> = ref([])
 const selectedModel: Ref<string> = ref(props.cell.initial_data?.selectedModel || 'mistral')
 const isLoadingModels: Ref<boolean> = ref(true)
-
-// Three.js cleanup function
-let cleanupThreeJS: (() => void) | null = null
 
 // Computed properties for model groups
 const localModels: ComputedRef<AIModel[]> = computed(() =>
@@ -311,106 +315,6 @@ onMounted(async () => {
     initializeThreeJSScene(generatedScript.value)
   }
 })
-
-// Cleanup on unmount
-onBeforeUnmount(() => {
-  if (cleanupThreeJS) {
-    cleanupThreeJS()
-  }
-})
-
-// Load Three.js library
-function loadThreeJS(): void {
-  if (typeof (window as any).THREE !== 'undefined') {
-    return // Already loaded
-  }
-
-  const script = document.createElement('script')
-  script.src = 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js'
-  script.async = true
-  script.onload = () => {
-    console.log('Three.js loaded successfully')
-  }
-  script.onerror = () => {
-    sceneError.value = 'Failed to load Three.js library'
-  }
-  document.head.appendChild(script)
-}
-
-// Initialize Three.js scene with generated code
-function initializeThreeJSScene(script: string): void {
-  if (!canvasContainer.value) {
-    sceneError.value = 'Canvas container not available'
-    return
-  }
-
-  // Clear previous scene
-  if (cleanupThreeJS) {
-    cleanupThreeJS()
-  }
-  canvasContainer.value.innerHTML = ''
-  sceneError.value = null
-  sceneInitialized.value = false
-
-  try {
-    // Wait for Three.js to be available
-    const checkThreeJS = setInterval(() => {
-      if (typeof (window as any).THREE !== 'undefined') {
-        clearInterval(checkThreeJS)
-        executeThreeJSCode(script)
-      }
-    }, 100)
-
-    // Timeout after 5 seconds
-    setTimeout(() => {
-      clearInterval(checkThreeJS)
-      if (!sceneInitialized.value) {
-        sceneError.value = 'Timeout loading Three.js'
-      }
-    }, 5000)
-  } catch (err) {
-    sceneError.value = err instanceof Error ? err.message : 'Failed to initialize scene'
-    console.error('Three.js initialization error:', err)
-  }
-}
-
-// Execute Three.js code in a controlled manner
-function executeThreeJSCode(script: string): void {
-  try {
-    const container = canvasContainer.value
-    if (!container) {
-      throw new Error('Container not available')
-    }
-
-    // Create a wrapper function to execute the code with container context
-    const wrappedCode = `
-      (function() {
-        const container = arguments[0];
-        const THREE = window.THREE;
-        ${script}
-      })
-    `
-
-    // Execute the code
-    const executeScene = new Function('return ' + wrappedCode)()
-    executeScene(container)
-
-    sceneInitialized.value = true
-
-    // Store cleanup function (if the generated code provides one)
-    cleanupThreeJS = () => {
-      // Basic cleanup: remove all children from container
-      if (container) {
-        while (container.firstChild) {
-          container.removeChild(container.firstChild)
-        }
-      }
-    }
-  } catch (err) {
-    sceneError.value = err instanceof Error ? err.message : 'Failed to execute scene code'
-    console.error('Three.js execution error:', err)
-  }
-}
 
 // Handle scene generation
 async function handleGenerate(): Promise<void> {
