@@ -25,6 +25,53 @@
     </div>
 
     <div class="cell-content space-y-4">
+      <!-- Model Selection -->
+      <div class="model-selection">
+        <label class="block text-sm font-medium text-text-secondary dark:text-text-secondary-dark mb-2">
+          {{ $t('svgGeneratorCell.modelLabel', 'AI Model') }}
+        </label>
+        <select
+          v-model="selectedModel"
+          :disabled="isGenerating || isLoadingModels"
+          class="w-full px-3 py-2 border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark rounded focus:outline-none focus:ring-2 focus:ring-primary"
+        >
+          <option v-if="isLoadingModels" disabled value="">
+            {{ $t('svgGeneratorCell.loadingModels', 'Loading models...') }}
+          </option>
+          <optgroup
+            v-if="!isLoadingModels && localModels.length > 0"
+            :label="$t('svgGeneratorCell.localModelsGroup', 'Local Models')"
+          >
+            <option
+              v-for="model in localModels"
+              :key="model.value"
+              :value="model.value"
+            >
+              {{ model.label }}
+            </option>
+          </optgroup>
+          <optgroup
+            v-if="!isLoadingModels && externalModels.length > 0"
+            :label="$t('svgGeneratorCell.externalModelsGroup', 'External Models')"
+          >
+            <option
+              v-for="model in externalModels"
+              :key="model.value"
+              :value="model.value"
+            >
+              {{ model.label }}
+            </option>
+          </optgroup>
+          <option
+            v-if="!isLoadingModels && availableModels.length === 0"
+            disabled
+            value=""
+          >
+            {{ $t('svgGeneratorCell.noModelsAvailable', 'No models available') }}
+          </option>
+        </select>
+      </div>
+
       <!-- Prompt Input Section -->
       <div class="prompt-section">
         <label class="block text-sm font-medium text-text-secondary dark:text-text-secondary-dark mb-2">
@@ -44,7 +91,7 @@
       <!-- Generate Button -->
       <div class="action-section">
         <button
-          :disabled="!prompt.trim() || isGenerating"
+          :disabled="!prompt.trim() || isGenerating || !selectedModel"
           class="px-4 py-2 bg-primary dark:bg-primary-hover text-white rounded hover:bg-primary-hover dark:hover:bg-primary-light transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           @click="handleGenerate"
         >
@@ -126,12 +173,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, type Ref } from 'vue'
+import { ref, watch, computed, onMounted, type Ref, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { processMessage, prepareConversationHistory } from '@/services/aiChatService.js'
+import { processMessage, fetchAvailableModels } from '@/services/aiChatService.js'
 
 // i18n
 const { t: $t } = useI18n()
+
+// AI Model interface
+interface AIModel {
+  value: string
+  label: string
+  type: 'local' | 'cloud' | 'byok'
+  provider: string
+}
 
 // Define props interface
 interface CellData {
@@ -142,6 +197,7 @@ interface CellData {
     generatedSvg?: string | null
     isGenerating?: boolean
     error?: string | null
+    selectedModel?: string
   }
 }
 
@@ -164,6 +220,20 @@ const error: Ref<string | null> = ref(props.cell.initial_data?.error || null)
 const showCode: Ref<boolean> = ref(false)
 const copiedSvg: Ref<boolean> = ref(false)
 
+// Model selection state
+const availableModels: Ref<AIModel[]> = ref([])
+const selectedModel: Ref<string> = ref(props.cell.initial_data?.selectedModel || 'mistral')
+const isLoadingModels: Ref<boolean> = ref(true)
+
+// Computed properties for model groups
+const localModels: ComputedRef<AIModel[]> = computed(() =>
+  availableModels.value.filter((m) => m.type === 'local')
+)
+
+const externalModels: ComputedRef<AIModel[]> = computed(() =>
+  availableModels.value.filter((m) => m.type === 'cloud' || m.type === 'byok')
+)
+
 // Watch for external cell changes
 watch(() => props.cell.initial_data, (newData) => {
   if (newData) {
@@ -171,8 +241,39 @@ watch(() => props.cell.initial_data, (newData) => {
     generatedSvg.value = newData.generatedSvg || generatedSvg.value
     isGenerating.value = newData.isGenerating || false
     error.value = newData.error || null
+    if (newData.selectedModel) {
+      selectedModel.value = newData.selectedModel
+    }
   }
 }, { deep: true })
+
+// Watch for model changes to update cell data
+watch(selectedModel, () => {
+  updateCell()
+})
+
+// Fetch available models on mount
+onMounted(async () => {
+  try {
+    availableModels.value = await fetchAvailableModels()
+    
+    // Validate selected model exists, otherwise use first available
+    if (availableModels.value.length > 0) {
+      const modelExists = availableModels.value.some(m => m.value === selectedModel.value)
+      if (!modelExists) {
+        selectedModel.value = availableModels.value[0].value
+      }
+    }
+  } catch (err) {
+    console.error('Failed to fetch models:', err)
+    // Fallback to default
+    availableModels.value = [
+      { value: 'mistral', label: '🏠 Mistral (Ollama)', type: 'local', provider: 'ollama' }
+    ]
+  } finally {
+    isLoadingModels.value = false
+  }
+})
 
 // Handle SVG generation
 async function handleGenerate(): Promise<void> {
@@ -193,11 +294,12 @@ IMPORTANT: Return ONLY the SVG code, no explanations. Start with <svg> and end w
 Include proper viewBox and dimensions. Keep it simple and readable.`
 
     // Call the chat API with the prompt
+    // Note: assignee_id is not required - backend uses authenticated user from JWT token
+    // Use the selected model from the dropdown
     const response = await processMessage({
       intention: svgPrompt,
-      assignee_id: 'current-user', // This should be replaced with actual user ID
       history: [],
-      model: 'gpt-4',
+      model: selectedModel.value,
       classifyIntention: false,
       attachments: [],
     })
@@ -273,7 +375,8 @@ function updateCell(): void {
       prompt: prompt.value,
       generatedSvg: generatedSvg.value,
       isGenerating: isGenerating.value,
-      error: error.value
+      error: error.value,
+      selectedModel: selectedModel.value
     }
   }
   emit('update:cell', updatedCell)
