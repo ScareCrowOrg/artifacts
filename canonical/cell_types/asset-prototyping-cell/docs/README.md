@@ -31,7 +31,7 @@ Generate a base image using AI:
 
 ### Step 2: SVG Vectorization
 
-Convert the PNG to vector format:
+Convert the PNG to vector format using production-quality pipeline:
 
 1. Review the selected PNG image
 2. Click "Vectorize to SVG"
@@ -39,10 +39,15 @@ Convert the PNG to vector format:
 4. Click "Continue to 3D Prototyping"
 
 **Technical Details:**
-- Applies threshold-based binary conversion
-- Extracts contours from the image
-- Generates clean SVG paths
-- Simplifies paths for better 3D extrusion
+- **Production Pipeline**: OpenCV + Potrace for professional results
+- **OpenCV Processing**: 
+  - Otsu's automatic thresholding for optimal binary conversion
+  - Morphological operations to remove noise and artifacts
+- **Potrace Vectorization**:
+  - Generates smooth Bézier curves ideal for 3D extrusion
+  - Curve smoothing (alphamax 1.0) avoids sharp corners
+  - Noise suppression removes small pixel islands
+- **Output**: Clean SVG with Bézier paths optimized for Three.js ExtrudeGeometry
 
 ### Step 3: 3D Prototyping
 
@@ -117,8 +122,10 @@ Configuration for Three.js ExtrudeGeometry:
 
 **SVGVectorizationService**
 - Location: `backend/app/services/svg_vectorization_service.py`
-- Performs image-to-SVG conversion
-- Uses PIL and numpy for image processing
+- **Production Pipeline**: OpenCV + Potrace
+- **Image Processing**: Otsu thresholding + morphological noise removal
+- **Vectorization**: Potrace with Bézier curve smoothing
+- **Output**: High-quality SVG optimized for 3D extrusion
 
 ### Cell Execution
 
@@ -138,12 +145,28 @@ STABLE_DIFFUSION_URL=http://localhost:7860
 STABLE_DIFFUSION_TIMEOUT=120
 ```
 
+### System Requirements
+
+**potrace Installation:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install potrace
+
+# macOS
+brew install potrace
+
+# Windows
+# Download from: http://potrace.sourceforge.net/
+```
+
 ### Dependencies
 
 **Backend (Python):**
 - httpx - HTTP client for API calls
-- Pillow (PIL) - Image processing
+- opencv-python-headless - Image processing (binarization, morphology)
+- Pillow (PIL) - Image I/O operations
 - numpy - Numerical operations
+- **potrace** - Binary executable for Bézier vectorization (system package)
 
 **Frontend (JavaScript/TypeScript):**
 - three - 3D rendering library
@@ -195,22 +218,20 @@ This ensures quality control and prevents automatic pipeline execution without h
 
 ## Limitations
 
-1. **SVG Vectorization**: Current implementation uses simplified contour detection. For production use, consider integrating opencv or potrace for better results.
+1. **3D Export**: Export to Unity Addressables is planned but not yet implemented.
 
-2. **3D Export**: Export to Unity Addressables is planned but not yet implemented.
+2. **Stable Diffusion Availability**: Requires a running Stable Diffusion instance on the configured port.
 
-3. **Stable Diffusion Availability**: Requires a running Stable Diffusion instance on the configured port.
-
-4. **Complex Shapes**: Very complex SVG paths may result in heavy 3D meshes. Simplification is applied automatically.
+3. **Complex Shapes**: Very complex SVG paths may result in heavy 3D meshes. The pipeline applies automatic simplification and noise removal.
 
 ## Future Enhancements
 
 - [ ] Export to Unity Addressables format
 - [ ] Support for texture mapping
-- [ ] Advanced SVG vectorization algorithms
 - [ ] Material and color customization
 - [ ] Batch processing multiple assets
 - [ ] Integration with 3D asset libraries
+- [ ] Advanced color vectorization (currently grayscale)
 
 ## References
 
