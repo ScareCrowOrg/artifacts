@@ -1,0 +1,96 @@
+{
+  "id": "asset-prototyping-cell",
+  "name": "Asset Prototyping Cell",
+  "description": "Complete pipeline for creating 3D assets: AI image generation → SVG vectorization → 3D prototyping with human validation checkpoints",
+  "version": "1.0.0",
+  "category": "prototyping",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "scripts": ["backend/scripts/main.py"],
+    "docs": ["docs/README.md"]
+  },
+  "default_initial_data": {
+    "category": "ephemeral",
+    "currentStep": 1,
+    "prompt": "",
+    "generatedPng": null,
+    "selectedPng": null,
+    "generatedSvg": null,
+    "mesh3dConfig": {
+      "depth": 10,
+      "bevelEnabled": true,
+      "bevelThickness": 2,
+      "bevelSize": 1,
+      "bevelSegments": 3
+    },
+    "isGenerating": false,
+    "isVectorizing": false,
+    "error": null,
+    "selectedModel": "mistral"
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' marks this as ephemeral (not persisted)"
+    },
+    "currentStep": {
+      "type": "integer",
+      "default": 1,
+      "description": "Current step in the prototyping workflow (1: PNG Generation, 2: SVG Vectorization, 3: 3D Prototyping)"
+    },
+    "prompt": {
+      "type": "string",
+      "default": "",
+      "description": "Text prompt for AI image generation"
+    },
+    "generatedPng": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Base64-encoded PNG image data or URL"
+    },
+    "selectedPng": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "User-selected PNG for vectorization (after validation)"
+    },
+    "generatedSvg": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Generated SVG markup code"
+    },
+    "mesh3dConfig": {
+      "type": "object",
+      "default": {
+        "depth": 10,
+        "bevelEnabled": true,
+        "bevelThickness": 2,
+        "bevelSize": 1,
+        "bevelSegments": 3
+      },
+      "description": "Configuration for Three.js ExtrudeGeometry parameters"
+    },
+    "isGenerating": {
+      "type": "boolean",
+      "default": false,
+      "description": "Flag indicating if PNG generation is in progress"
+    },
+    "isVectorizing": {
+      "type": "boolean",
+      "default": false,
+      "description": "Flag indicating if SVG vectorization is in progress"
+    },
+    "error": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Error message if any operation fails"
+    },
+    "selectedModel": {
+      "type": "string",
+      "default": "mistral",
+      "description": "Selected AI model for prompt engineering"
+    }
+  }
+}
