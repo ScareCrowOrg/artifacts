@@ -1,3 +1,19 @@
+---
+processed: true
+processed_date: 2026-01-15
+generated_docs:
+  - docs/official/backend/cell-types/asset-prototyping-cell.md
+themes:
+  - cell-types
+  - 3d
+  - threejs
+  - scene-generation
+modules:
+  - artifacts
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # Three.js Scene Generator Cell
 
 ## Overview

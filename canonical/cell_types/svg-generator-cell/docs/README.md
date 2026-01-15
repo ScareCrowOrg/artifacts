@@ -1,3 +1,19 @@
+---
+processed: true
+processed_date: 2026-01-15
+generated_docs:
+  - docs/official/backend/cell-types/asset-prototyping-cell.md
+themes:
+  - cell-types
+  - vectorization
+  - svg
+  - image-processing
+modules:
+  - artifacts
+  - backend
+code_verified: true
+dead_docs_found: false
+---
 # SVG Generator Cell
 
 ## Overview

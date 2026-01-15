@@ -1,3 +1,18 @@
+---
+processed: true
+processed_date: 2026-01-15
+updated_docs:
+  - docs/official/backend/cell-types/asset-prototyping-cell.md
+themes:
+  - cell-types
+  - 3d-assets
+  - ai-integration
+  - documentation
+modules:
+  - artifacts
+code_verified: true
+dead_docs_found: false
+---
 # Asset Prototyping Cell
 
 ## Overview

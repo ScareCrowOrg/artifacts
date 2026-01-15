@@ -1,3 +1,19 @@
+---
+processed: true
+processed_date: 2026-01-15
+generated_docs:
+  - docs/official/backend/cell-types/png-generator-cell.md
+themes:
+  - cell-types
+  - ai-integration
+  - image-generation
+  - stable-diffusion
+modules:
+  - artifacts
+  - backend
+code_verified: true
+dead_docs_found: false
+---
 # PNG Generator Cell
 
 ## Overview
