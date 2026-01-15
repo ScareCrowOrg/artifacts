@@ -242,8 +242,8 @@
 <script setup lang="ts">
 import { ref, reactive, watch, onMounted, onBeforeUnmount, type Ref } from 'vue'
 import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 
 // Define props interface
 interface Props {
@@ -548,7 +548,7 @@ function cleanupThreeJS(): void {
 }
 
 function handleExport(): void {
-  alert('Export functionality to be implemented')
+  error.value = 'Export functionality not yet implemented. This feature will export assets to Unity Addressables format.'
   // TODO: Implement export to Unity Addressables
 }
 
