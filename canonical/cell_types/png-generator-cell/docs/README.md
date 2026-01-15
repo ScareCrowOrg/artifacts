@@ -163,7 +163,7 @@ The cell integrates with the existing Stable Diffusion service through the `Stab
 
 ```
 png-generator-cell/
-├── type.json                    # Cell type definition and schema
+├── type.json                    # 🔗 SYMLINK → ../../notebook_item_types/png-generator-cell.json
 ├── backend/
 │   ├── scripts/
 │   │   ├── __init__.py
@@ -177,6 +177,23 @@ png-generator-cell/
 └── docs/
     └── README.md               # This file
 ```
+
+### Type Definition (Symlink Architecture)
+
+The `type.json` in this directory is a **symlink** pointing to the canonical definition:
+```
+../../notebook_item_types/png-generator-cell.json
+```
+
+**Important**: To modify the cell type definition, edit the canonical file in `notebook_item_types/`, not the symlink. This ensures consistency and follows the ScareVerse symlink architecture pattern.
+
+**Why Symlinks?**
+- **Single Source of Truth**: The canonical definition in `notebook_item_types/` is the only place to edit
+- **Automatic Propagation**: Changes are immediately reflected everywhere via symlink
+- **Clear Ownership**: Registry reads from canonical source
+- **No Duplication**: Eliminates sync issues between multiple definitions
+
+For more information, see [Cell Type Symlink Architecture](../../../../docs/official/backend/architecture/cell-type-symlink-architecture.md).
 
 ## Testing
 
