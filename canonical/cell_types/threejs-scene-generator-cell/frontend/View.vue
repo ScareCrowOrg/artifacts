@@ -163,7 +163,7 @@
           v-show="sceneInitialized && !sceneError"
           ref="canvasContainer" 
           class="scene-container border border-border dark:border-border-dark rounded bg-gray-900"
-          style="min-height: 400px; position: relative;"
+          style="min-height: 400px; width: 100%; position: relative;"
         >
           <!-- INTENTIONALLY EMPTY - Three.js will populate this via imperative DOM manipulation -->
         </div>

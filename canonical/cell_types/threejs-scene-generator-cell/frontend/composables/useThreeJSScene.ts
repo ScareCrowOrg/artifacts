@@ -157,8 +157,23 @@ export function useThreeJSScene(): UseThreeJSSceneReturn {
         console.log('[DEBUG] After nextTick, container dimensions:', {
           clientWidth: container.clientWidth,
           clientHeight: container.clientHeight,
-          display: window.getComputedStyle(container).display
+          offsetWidth: container.offsetWidth,
+          offsetHeight: container.offsetHeight,
+          display: window.getComputedStyle(container).display,
+          width: window.getComputedStyle(container).width,
+          height: window.getComputedStyle(container).height
         })
+        
+        // ✅ NEW: Log parent dimensions to identify width inheritance issues
+        if (container.parentElement) {
+          console.log('[DEBUG] Parent element dimensions:', {
+            tagName: container.parentElement.tagName,
+            clientWidth: container.parentElement.clientWidth,
+            clientHeight: container.parentElement.clientHeight,
+            display: window.getComputedStyle(container.parentElement).display,
+            width: window.getComputedStyle(container.parentElement).width
+          })
+        }
         
         // ✅ FIX: Wait for browser layout calculation
         // requestAnimationFrame runs before next paint, after layout
