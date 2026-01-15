@@ -303,7 +303,8 @@ Potential improvements for future versions:
 - [RULESET.md](../../../docs/official/RULESET.md) - Project rules and standards
 - [TEAM.md](../../../docs/official/TEAM.md) - Team workflow and responsibilities
 - [Stable Diffusion Service](../../../backend/app/services/stable_diffusion_service.py) - Service implementation
-- [Asset Prototyping Cell](../asset-prototyping-cell/docs/README.md) - Related cell type
+- [SVG Generator Cell](../svg-generator-cell/docs/README.md) - Related cell type
+- [Asset Prototyping Cell](../../notebook_item_types/asset-prototyping-cell.json) - Related asset type
 
 ## Support
 
