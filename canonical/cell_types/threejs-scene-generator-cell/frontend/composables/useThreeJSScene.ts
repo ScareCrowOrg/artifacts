@@ -155,43 +155,61 @@ export function useThreeJSScene(): UseThreeJSSceneReturn {
       // ✅ FIX: Wait for browser layout calculation
       // requestAnimationFrame runs before next paint, after layout
       requestAnimationFrame(() => {
-        console.log('[DEBUG] Inside first requestAnimationFrame')
-        console.log('[DEBUG] Container dimensions after RAF:', {
-          clientWidth: container.clientWidth,
-          clientHeight: container.clientHeight,
-          offsetWidth: container.offsetWidth,
-          offsetHeight: container.offsetHeight,
-          display: window.getComputedStyle(container).display,
-          computedHeight: window.getComputedStyle(container).height,
-          computedMinHeight: window.getComputedStyle(container).minHeight
-        })
-        
-        // ✅ FIX: Validate dimensions
-        if (container.clientWidth === 0 || container.clientHeight === 0) {
-          console.warn('[DEBUG] Container STILL has zero dimensions after first RAF')
-          console.warn('[DEBUG] Waiting for second requestAnimationFrame...')
-          
-          // ✅ FIX: Fallback - wait one more frame
-          requestAnimationFrame(() => {
-            console.log('[DEBUG] Inside SECOND requestAnimationFrame (fallback)')
-            console.log('[DEBUG] Container dimensions after 2nd RAF:', {
-              clientWidth: container.clientWidth,
-              clientHeight: container.clientHeight,
-              display: window.getComputedStyle(container).display
-            })
-            
-            if (container.clientWidth === 0 || container.clientHeight === 0) {
-              const error = `Container STILL has zero dimensions after 2 frames: ${container.clientWidth}x${container.clientHeight}`
-              console.error('[DEBUG] ❌', error)
-              throw new Error(error)
-            }
-            
-            console.log('[DEBUG] ✅ Container has valid dimensions on 2nd frame, proceeding')
-            executeActualScript(container, script)
+        try {
+          console.log('[DEBUG] Inside first requestAnimationFrame')
+          console.log('[DEBUG] Container dimensions after RAF:', {
+            clientWidth: container.clientWidth,
+            clientHeight: container.clientHeight,
+            offsetWidth: container.offsetWidth,
+            offsetHeight: container.offsetHeight,
+            display: window.getComputedStyle(container).display,
+            computedHeight: window.getComputedStyle(container).height,
+            computedMinHeight: window.getComputedStyle(container).minHeight
           })
-        } else {
-          console.log('[DEBUG] ✅ Container has valid dimensions, proceeding with execution')
-          executeActualScript(container, script)
+          
+          // ✅ FIX: Validate dimensions
+          if (container.clientWidth === 0 || container.clientHeight === 0) {
+            console.warn('[DEBUG] Container STILL has zero dimensions after first RAF')
+            console.warn('[DEBUG] Waiting for second requestAnimationFrame...')
+            
+            // ✅ FIX: Fallback - wait one more frame
+            requestAnimationFrame(() => {
+              try {
+                console.log('[DEBUG] Inside SECOND requestAnimationFrame (fallback)')
+                console.log('[DEBUG] Container dimensions after 2nd RAF:', {
+                  clientWidth: container.clientWidth,
+                  clientHeight: container.clientHeight,
+                  display: window.getComputedStyle(container).display
+                })
+                
+                if (container.clientWidth === 0 || container.clientHeight === 0) {
+                  const error = `Container STILL has zero dimensions after 2 frames: ${container.clientWidth}x${container.clientHeight}`
+                  console.error('[DEBUG] ❌', error)
+                  throw new Error(error)
+                }
+                
+                console.log('[DEBUG] ✅ Container has valid dimensions on 2nd frame, proceeding')
+                executeActualScript(container, script)
+              } catch (err) {
+                // Handle errors in second RAF callback
+                sceneError.value = err instanceof Error ? err.message : 'Failed to execute scene code'
+                sceneInitialized.value = false
+                console.error('[DEBUG] ❌ Error in second RAF:', err)
+                console.error('[DEBUG] Error message:', err instanceof Error ? err.message : String(err))
+                console.error('[DEBUG] Rolled back sceneInitialized to false')
+              }
+            })
+          } else {
+            console.log('[DEBUG] ✅ Container has valid dimensions, proceeding with execution')
+            executeActualScript(container, script)
+          }
+        } catch (err) {
+          // Handle errors in first RAF callback
+          sceneError.value = err instanceof Error ? err.message : 'Failed to execute scene code'
+          sceneInitialized.value = false
+          console.error('[DEBUG] ❌ Error in first RAF:', err)
+          console.error('[DEBUG] Error message:', err instanceof Error ? err.message : String(err))
+          console.error('[DEBUG] Rolled back sceneInitialized to false')
         }
       })
     } catch (err) {
@@ -220,41 +238,36 @@ export function useThreeJSScene(): UseThreeJSSceneReturn {
     console.log('[DEBUG] Generated script preview (first 300 chars):')
     console.log(script.substring(0, 300) + '...')
     
-    try {
-      // Create and execute the scene function
-      const executeScene = new Function('container', 'THREE', script)
-      executeScene(container, (window as any).THREE)
-      
-      console.log('[DEBUG] ✅ Script execution completed successfully')
-      
-      // Verify canvas was added
-      console.log('[DEBUG] Canvas element added to container:', container.children.length > 0)
-      if (container.children.length > 0) {
-        const canvas = container.querySelector('canvas')
-        if (canvas) {
-          console.log('[DEBUG] Canvas dimensions:', {
-            width: canvas.width,
-            height: canvas.height,
-            styleWidth: canvas.style.width,
-            styleHeight: canvas.style.height
-          })
-        }
+    // Create and execute the scene function
+    const executeScene = new Function('container', 'THREE', script)
+    executeScene(container, (window as any).THREE)
+    
+    console.log('[DEBUG] ✅ Script execution completed successfully')
+    
+    // Verify canvas was added
+    console.log('[DEBUG] Canvas element added to container:', container.children.length > 0)
+    if (container.children.length > 0) {
+      const canvas = container.querySelector('canvas')
+      if (canvas) {
+        console.log('[DEBUG] Canvas dimensions:', {
+          width: canvas.width,
+          height: canvas.height,
+          styleWidth: canvas.style.width,
+          styleHeight: canvas.style.height
+        })
       }
-      
-      // Store cleanup function
-      cleanupThreeJS = () => {
-        console.log('[DEBUG] Cleanup function called')
-        if (container) {
-          // Remove all children (canvas elements)
-          while (container.firstChild) {
-            container.removeChild(container.firstChild)
-          }
-          console.log('[DEBUG] Container cleaned, all children removed')
+    }
+    
+    // Store cleanup function
+    cleanupThreeJS = () => {
+      console.log('[DEBUG] Cleanup function called')
+      if (container) {
+        // Remove all children (canvas elements)
+        while (container.firstChild) {
+          container.removeChild(container.firstChild)
         }
+        console.log('[DEBUG] Container cleaned, all children removed')
       }
-    } catch (err) {
-      // Re-throw to be caught by parent try-catch
-      throw err
     }
   }
 
