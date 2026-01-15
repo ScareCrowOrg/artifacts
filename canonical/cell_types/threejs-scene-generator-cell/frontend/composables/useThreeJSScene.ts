@@ -5,7 +5,7 @@
  * from generated JavaScript code.
  */
 
-import { ref, onBeforeUnmount, type Ref } from 'vue'
+import { ref, onBeforeUnmount, nextTick, type Ref } from 'vue'
 
 export interface UseThreeJSSceneReturn {
   sceneInitialized: Ref<boolean>
@@ -152,65 +152,74 @@ export function useThreeJSScene(): UseThreeJSSceneReturn {
         display: window.getComputedStyle(container).display
       })
       
-      // ✅ FIX: Wait for browser layout calculation
-      // requestAnimationFrame runs before next paint, after layout
-      requestAnimationFrame(() => {
-        try {
-          console.log('[DEBUG] Inside first requestAnimationFrame')
-          console.log('[DEBUG] Container dimensions after RAF:', {
-            clientWidth: container.clientWidth,
-            clientHeight: container.clientHeight,
-            offsetWidth: container.offsetWidth,
-            offsetHeight: container.offsetHeight,
-            display: window.getComputedStyle(container).display,
-            computedHeight: window.getComputedStyle(container).height,
-            computedMinHeight: window.getComputedStyle(container).minHeight
-          })
-          
-          // ✅ FIX: Validate dimensions
-          if (container.clientWidth === 0 || container.clientHeight === 0) {
-            console.warn('[DEBUG] Container STILL has zero dimensions after first RAF')
-            console.warn('[DEBUG] Waiting for second requestAnimationFrame...')
-            
-            // ✅ FIX: Fallback - wait one more frame
-            requestAnimationFrame(() => {
-              try {
-                console.log('[DEBUG] Inside SECOND requestAnimationFrame (fallback)')
-                console.log('[DEBUG] Container dimensions after 2nd RAF:', {
-                  clientWidth: container.clientWidth,
-                  clientHeight: container.clientHeight,
-                  display: window.getComputedStyle(container).display
-                })
-                
-                if (container.clientWidth === 0 || container.clientHeight === 0) {
-                  const error = `Container STILL has zero dimensions after 2 frames: ${container.clientWidth}x${container.clientHeight}`
-                  console.error('[DEBUG] ❌', error)
-                  throw new Error(error)
-                }
-                
-                console.log('[DEBUG] ✅ Container has valid dimensions on 2nd frame, proceeding')
-                executeActualScript(container, script)
-              } catch (err) {
-                // Handle errors in second RAF callback
-                sceneError.value = err instanceof Error ? err.message : 'Failed to execute scene code'
-                sceneInitialized.value = false
-                console.error('[DEBUG] ❌ Error in second RAF:', err)
-                console.error('[DEBUG] Error message:', err instanceof Error ? err.message : String(err))
-                console.error('[DEBUG] Rolled back sceneInitialized to false')
-              }
+      // ✅ FIX: Wait for Vue to update DOM with nextTick
+      nextTick(() => {
+        console.log('[DEBUG] After nextTick, container dimensions:', {
+          clientWidth: container.clientWidth,
+          clientHeight: container.clientHeight,
+          display: window.getComputedStyle(container).display
+        })
+        
+        // ✅ FIX: Wait for browser layout calculation
+        // requestAnimationFrame runs before next paint, after layout
+        requestAnimationFrame(() => {
+          try {
+            console.log('[DEBUG] Inside first requestAnimationFrame')
+            console.log('[DEBUG] Container dimensions after RAF:', {
+              clientWidth: container.clientWidth,
+              clientHeight: container.clientHeight,
+              offsetWidth: container.offsetWidth,
+              offsetHeight: container.offsetHeight,
+              display: window.getComputedStyle(container).display,
+              computedHeight: window.getComputedStyle(container).height,
+              computedMinHeight: window.getComputedStyle(container).minHeight
             })
-          } else {
-            console.log('[DEBUG] ✅ Container has valid dimensions, proceeding with execution')
-            executeActualScript(container, script)
+            
+            // ✅ FIX: Validate dimensions
+            if (container.clientWidth === 0 || container.clientHeight === 0) {
+              console.warn('[DEBUG] Container STILL has zero dimensions after first RAF')
+              console.warn('[DEBUG] Waiting for second requestAnimationFrame...')
+              
+              // ✅ FIX: Fallback - wait one more frame
+              requestAnimationFrame(() => {
+                try {
+                  console.log('[DEBUG] Inside SECOND requestAnimationFrame (fallback)')
+                  console.log('[DEBUG] Container dimensions after 2nd RAF:', {
+                    clientWidth: container.clientWidth,
+                    clientHeight: container.clientHeight,
+                    display: window.getComputedStyle(container).display
+                  })
+                  
+                  if (container.clientWidth === 0 || container.clientHeight === 0) {
+                    const error = `Container STILL has zero dimensions after 2 frames: ${container.clientWidth}x${container.clientHeight}`
+                    console.error('[DEBUG] ❌', error)
+                    throw new Error(error)
+                  }
+                  
+                  console.log('[DEBUG] ✅ Container has valid dimensions on 2nd frame, proceeding')
+                  executeActualScript(container, script)
+                } catch (err) {
+                  // Handle errors in second RAF callback
+                  sceneError.value = err instanceof Error ? err.message : 'Failed to execute scene code'
+                  sceneInitialized.value = false
+                  console.error('[DEBUG] ❌ Error in second RAF:', err)
+                  console.error('[DEBUG] Error message:', err instanceof Error ? err.message : String(err))
+                  console.error('[DEBUG] Rolled back sceneInitialized to false')
+                }
+              })
+            } else {
+              console.log('[DEBUG] ✅ Container has valid dimensions, proceeding with execution')
+              executeActualScript(container, script)
+            }
+          } catch (err) {
+            // Handle errors in first RAF callback
+            sceneError.value = err instanceof Error ? err.message : 'Failed to execute scene code'
+            sceneInitialized.value = false
+            console.error('[DEBUG] ❌ Error in first RAF:', err)
+            console.error('[DEBUG] Error message:', err instanceof Error ? err.message : String(err))
+            console.error('[DEBUG] Rolled back sceneInitialized to false')
           }
-        } catch (err) {
-          // Handle errors in first RAF callback
-          sceneError.value = err instanceof Error ? err.message : 'Failed to execute scene code'
-          sceneInitialized.value = false
-          console.error('[DEBUG] ❌ Error in first RAF:', err)
-          console.error('[DEBUG] Error message:', err instanceof Error ? err.message : String(err))
-          console.error('[DEBUG] Rolled back sceneInitialized to false')
-        }
+        })
       })
     } catch (err) {
       sceneError.value = err instanceof Error ? err.message : 'Failed to execute scene code'
