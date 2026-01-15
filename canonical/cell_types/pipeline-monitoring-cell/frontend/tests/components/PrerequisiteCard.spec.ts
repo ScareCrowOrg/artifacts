@@ -6,8 +6,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, VueWrapper } from '@vue/test-utils'
-import PrerequisiteCard from '../PrerequisiteCard.vue'
-import type { PrerequisiteResult } from '../composables/useMonitoring'
+import PrerequisiteCard from '../../components/PrerequisiteCard.vue'
+import type { PrerequisiteResult } from '../../composables/useMonitoring'
 
 describe('PrerequisiteCard.vue', () => {
   let wrapper: VueWrapper<any>

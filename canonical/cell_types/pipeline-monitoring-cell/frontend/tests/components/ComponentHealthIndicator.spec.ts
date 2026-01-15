@@ -6,8 +6,8 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { mount, VueWrapper } from '@vue/test-utils'
-import ComponentHealthIndicator from '../ComponentHealthIndicator.vue'
-import type { ComponentHealth } from '../composables/useMonitoring'
+import ComponentHealthIndicator from '../../components/ComponentHealthIndicator.vue'
+import type { ComponentHealth } from '../../composables/useMonitoring'
 
 describe('ComponentHealthIndicator.vue', () => {
   let wrapper: VueWrapper<any>
