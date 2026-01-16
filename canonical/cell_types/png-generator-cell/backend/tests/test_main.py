@@ -17,22 +17,8 @@ import main
 class TestExecuteCell:
     """Tests for execute_cell function."""
     
-    def test_execute_cell_basic(self):
-        """Test basic cell execution."""
-        cell_data = {
-            "prompt": "A red dragon",
-            "generatedPng": None
-        }
-        
-        result = main.execute_cell(cell_data)
-        
-        assert result["success"] is True
-        assert result["message"] == "PNG generator cell ready"
-        assert result["prompt"] == "A red dragon"
-        assert result["has_png"] is False
-    
-    def test_execute_cell_with_png(self):
-        """Test cell execution with generated PNG."""
+    def test_execute_cell_with_existing_png(self):
+        """Test cell execution with already generated PNG."""
         cell_data = {
             "prompt": "A blue crystal",
             "generatedPng": "data:image/png;base64,iVBORw0KGgoAAAANS..."
@@ -41,7 +27,9 @@ class TestExecuteCell:
         result = main.execute_cell(cell_data)
         
         assert result["success"] is True
+        assert result["message"] == "PNG generator cell ready"
         assert result["has_png"] is True
+        assert result["generatedPng"] == "data:image/png;base64,iVBORw0KGgoAAAANS..."
     
     def test_execute_cell_empty_prompt(self):
         """Test cell execution with empty prompt."""
@@ -55,6 +43,64 @@ class TestExecuteCell:
         assert result["success"] is True
         assert result["prompt"] == ""
         assert result["has_png"] is False
+        assert result["message"] == "No prompt provided"
+    
+    def test_execute_cell_generates_png_success(self):
+        """Test cell execution that triggers PNG generation successfully."""
+        cell_data = {
+            "prompt": "A red dragon",
+            "generatedPng": None
+        }
+        
+        # Mock the StableDiffusionService
+        mock_sd_class = MagicMock()
+        mock_service = AsyncMock()
+        mock_service.generate_image.return_value = {
+            "success": True,
+            "image_base64": "iVBORw0KGgoAAAANSbase64data...",
+            "metadata": {
+                "prompt": "A red dragon",
+                "width": 512,
+                "height": 512
+            }
+        }
+        mock_sd_class.return_value = mock_service
+        
+        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': MagicMock(StableDiffusionService=mock_sd_class)}):
+            result = main.execute_cell(cell_data)
+        
+        assert result["success"] is True
+        assert result["message"] == "PNG generated successfully"
+        assert result["has_png"] is True
+        assert "generatedPng" in result
+        assert result["generatedPng"].startswith("data:image/png;base64,")
+        assert "fallback" not in result
+    
+    def test_execute_cell_generates_png_fallback(self):
+        """Test cell execution falls back to placeholder when service fails."""
+        cell_data = {
+            "prompt": "A mountain",
+            "generatedPng": None
+        }
+        
+        # Mock service to return failure
+        mock_sd_class = MagicMock()
+        mock_service = AsyncMock()
+        mock_service.generate_image.return_value = {
+            "success": False,
+            "error": "Service timeout"
+        }
+        mock_sd_class.return_value = mock_service
+        
+        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': MagicMock(StableDiffusionService=mock_sd_class)}):
+            result = main.execute_cell(cell_data)
+        
+        assert result["success"] is True
+        assert result["has_png"] is True
+        assert "generatedPng" in result
+        assert result["generatedPng"].startswith("data:image/png;base64,")
+        assert result.get("fallback") is True
+        assert "error" in result
 
 
 @pytest.mark.asyncio
