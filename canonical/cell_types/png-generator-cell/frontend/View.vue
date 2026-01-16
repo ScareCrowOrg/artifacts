@@ -164,12 +164,14 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { createLogger } from '@/utils/logger'
+import apiService from '@/services/apiService'
 
 const logger = createLogger('component:png-generator-cell')
 
 // Props
 interface Props {
-  cellId: string
+  cell?: any  // Cell object from DynamicCellView (contains id, initial_data, etc.)
+  cellId?: string  // Optional direct cellId (for backward compatibility)
   prompt?: string
   generatedPng?: string | null
   isGenerating?: boolean
@@ -184,6 +186,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  cell: undefined,
+  cellId: undefined,
   prompt: '',
   generatedPng: null,
   isGenerating: false,
@@ -197,8 +201,19 @@ const props = withDefaults(defineProps<Props>(), {
   })
 })
 
+// Computed: Extract cell ID from cell object or direct prop
+const effectiveCellId = computed(() => {
+  return props.cellId || props.cell?.id || props.cell?.cellId || 'unknown'
+})
+
+// Computed: Extract initial data from cell object
+const initialData = computed(() => {
+  return props.cell?.initial_data || props.cell?.data || {}
+})
+
 // Emits
 const emit = defineEmits<{
+  (e: 'update:cell', value: any): void
   (e: 'update:prompt', value: string): void
   (e: 'update:generatedPng', value: string | null): void
   (e: 'update:isGenerating', value: boolean): void
@@ -207,26 +222,57 @@ const emit = defineEmits<{
   (e: 'generate', params: any): void
 }>()
 
-// Local state
-const localPrompt = ref(props.prompt)
-const localGeneratedPng = ref(props.generatedPng)
-const localIsGenerating = ref(props.isGenerating)
-const localError = ref(props.error)
-const localParams = ref({ ...props.generationParams })
+// Local state - Initialize from props or initial_data
+const localPrompt = ref(props.prompt || initialData.value.prompt || '')
+const localGeneratedPng = ref(props.generatedPng || initialData.value.generatedPng || null)
+const localIsGenerating = ref(props.isGenerating || initialData.value.isGenerating || false)
+const localError = ref(props.error || initialData.value.error || null)
+const localParams = ref({ 
+  ...props.generationParams,
+  ...(initialData.value.generationParams || {})
+})
 
 // Watch for prop changes
-watch(() => props.prompt, (newVal) => { localPrompt.value = newVal })
-watch(() => props.generatedPng, (newVal) => { localGeneratedPng.value = newVal })
-watch(() => props.isGenerating, (newVal) => { localIsGenerating.value = newVal })
-watch(() => props.error, (newVal) => { localError.value = newVal })
-watch(() => props.generationParams, (newVal) => { localParams.value = { ...newVal } }, { deep: true })
+watch(() => props.prompt, (newVal) => { if (newVal !== undefined) localPrompt.value = newVal })
+watch(() => props.generatedPng, (newVal) => { if (newVal !== undefined) localGeneratedPng.value = newVal })
+watch(() => props.isGenerating, (newVal) => { if (newVal !== undefined) localIsGenerating.value = newVal })
+watch(() => props.error, (newVal) => { if (newVal !== undefined) localError.value = newVal })
+watch(() => props.generationParams, (newVal) => { if (newVal) localParams.value = { ...newVal } }, { deep: true })
 
-// Watch for local changes and emit updates
-watch(localPrompt, (newVal) => emit('update:prompt', newVal))
-watch(localGeneratedPng, (newVal) => emit('update:generatedPng', newVal))
-watch(localIsGenerating, (newVal) => emit('update:isGenerating', newVal))
-watch(localError, (newVal) => emit('update:error', newVal))
-watch(localParams, (newVal) => emit('update:generationParams', newVal), { deep: true })
+// Watch for initial_data changes from cell object
+watch(() => props.cell?.initial_data, (newVal) => {
+  if (newVal) {
+    if (newVal.prompt !== undefined) localPrompt.value = newVal.prompt
+    if (newVal.generatedPng !== undefined) localGeneratedPng.value = newVal.generatedPng
+    if (newVal.isGenerating !== undefined) localIsGenerating.value = newVal.isGenerating
+    if (newVal.error !== undefined) localError.value = newVal.error
+    if (newVal.generationParams) localParams.value = { ...localParams.value, ...newVal.generationParams }
+  }
+}, { deep: true })
+
+// Watch for local changes and emit updates (update cell object)
+watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localParams], () => {
+  if (props.cell) {
+    emit('update:cell', {
+      ...props.cell,
+      initial_data: {
+        ...props.cell.initial_data,
+        prompt: localPrompt.value,
+        generatedPng: localGeneratedPng.value,
+        isGenerating: localIsGenerating.value,
+        error: localError.value,
+        generationParams: localParams.value
+      }
+    })
+  }
+  
+  // Also emit individual updates for backward compatibility
+  emit('update:prompt', localPrompt.value)
+  emit('update:generatedPng', localGeneratedPng.value)
+  emit('update:isGenerating', localIsGenerating.value)
+  emit('update:error', localError.value)
+  emit('update:generationParams', localParams.value)
+}, { deep: true })
 
 // Methods
 const handleGenerate = async () => {
@@ -234,11 +280,63 @@ const handleGenerate = async () => {
     return
   }
 
-  logger.info('Generating PNG image', { prompt: localPrompt.value })
+  logger.info('Generating PNG image via ephemeral execution', { 
+    prompt: localPrompt.value,
+    cellId: effectiveCellId.value
+  })
   
   localIsGenerating.value = true
   localError.value = null
   
+  try {
+    // Call ephemeral execution endpoint for PNG generation
+    const response = await apiService.fetch('/api/cells/execute-ephemeral', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cell_type: 'png-generator-cell',
+        input_data: {
+          prompt: localPrompt.value,
+          ...localParams.value
+        }
+      })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    
+    logger.info('PNG generation completed', { 
+      success: data.success,
+      hasResult: !!data.result
+    })
+    
+    if (data.success && data.result) {
+      // Extract generated PNG from result
+      if (data.result.image_data) {
+        localGeneratedPng.value = `data:image/png;base64,${data.result.image_data}`
+      } else if (data.result.generatedPng) {
+        localGeneratedPng.value = data.result.generatedPng
+      } else {
+        throw new Error('No image data in response')
+      }
+      
+      localError.value = null
+    } else {
+      throw new Error(data.message || 'Generation failed')
+    }
+  } catch (error: any) {
+    logger.error('PNG generation failed', { error: error.message })
+    localError.value = error.message || 'Failed to generate image'
+    localGeneratedPng.value = null
+  } finally {
+    localIsGenerating.value = false
+  }
+  
+  // Emit generate event for backward compatibility
   emit('generate', {
     prompt: localPrompt.value,
     ...localParams.value
@@ -258,8 +356,8 @@ const handleCopy = async () => {
     ])
     
     logger.info('PNG copied to clipboard')
-  } catch (error) {
-    logger.error('Failed to copy PNG to clipboard', { error })
+  } catch (error: any) {
+    logger.error('Failed to copy PNG to clipboard', { error: error.message })
     localError.value = 'Failed to copy image to clipboard'
   }
 }
@@ -276,13 +374,17 @@ const handleDownload = () => {
     document.body.removeChild(link)
     
     logger.info('PNG downloaded')
-  } catch (error) {
-    logger.error('Failed to download PNG', { error })
+  } catch (error: any) {
+    logger.error('Failed to download PNG', { error: error.message })
     localError.value = 'Failed to download image'
   }
 }
 
-logger.debug('PNG Generator Cell mounted', { cellId: props.cellId })
+logger.debug('PNG Generator Cell mounted', { 
+  cellId: effectiveCellId.value,
+  hasCell: !!props.cell,
+  hasCellId: !!props.cellId
+})
 </script>
 
 <style scoped>

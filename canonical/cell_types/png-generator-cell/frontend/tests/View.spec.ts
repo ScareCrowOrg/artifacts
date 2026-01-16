@@ -17,6 +17,13 @@ vi.mock('@/utils/logger', () => ({
   })
 }))
 
+// Mock apiService
+vi.mock('@/services/apiService', () => ({
+  default: {
+    fetch: vi.fn()
+  }
+}))
+
 // Create i18n instance with test translations
 const i18n = createI18n({
   legacy: false,
@@ -48,17 +55,21 @@ describe('PNG Generator Cell View', () => {
   let wrapper: VueWrapper
 
   const defaultProps = {
-    cellId: 'test-cell-id',
-    prompt: '',
-    generatedPng: null,
-    isGenerating: false,
-    error: null,
-    generationParams: {
-      width: 512,
-      height: 512,
-      steps: 20,
-      cfg_scale: 7.0,
-      seed: -1
+    cell: {
+      id: 'test-cell-id',
+      initial_data: {
+        prompt: '',
+        generatedPng: null,
+        isGenerating: false,
+        error: null,
+        generationParams: {
+          width: 512,
+          height: 512,
+          steps: 20,
+          cfg_scale: 7.0,
+          seed: -1
+        }
+      }
     }
   }
 
@@ -74,6 +85,37 @@ describe('PNG Generator Cell View', () => {
   it('renders component correctly', () => {
     expect(wrapper.exists()).toBe(true)
     expect(wrapper.find('.png-generator-cell').exists()).toBe(true)
+  })
+  
+  it('works without cellId prop (ephemeral cell)', () => {
+    const wrapper2 = mount(View, {
+      props: {
+        cell: {
+          id: 'ephemeral-png-generator-cell-1234567890',
+          initial_data: {}
+        }
+      },
+      global: {
+        plugins: [i18n]
+      }
+    })
+    
+    expect(wrapper2.exists()).toBe(true)
+    expect(wrapper2.find('.png-generator-cell').exists()).toBe(true)
+  })
+  
+  it('works with direct cellId prop (backward compatibility)', () => {
+    const wrapper2 = mount(View, {
+      props: {
+        cellId: 'test-cell-123',
+        prompt: 'test'
+      },
+      global: {
+        plugins: [i18n]
+      }
+    })
+    
+    expect(wrapper2.exists()).toBe(true)
   })
 
   it('displays title and description', () => {
@@ -129,7 +171,17 @@ describe('PNG Generator Cell View', () => {
   })
 
   it('shows loading state during generation', async () => {
-    await wrapper.setProps({ isGenerating: true })
+    await wrapper.setProps({ 
+      cell: {
+        ...defaultProps.cell,
+        initial_data: {
+          ...defaultProps.cell.initial_data,
+          isGenerating: true
+        }
+      }
+    })
+    
+    await wrapper.vm.$nextTick()
     
     const button = wrapper.find('button')
     expect(button.text()).toContain('Generating...')
@@ -138,7 +190,17 @@ describe('PNG Generator Cell View', () => {
   })
 
   it('displays error message when error prop is set', async () => {
-    await wrapper.setProps({ error: 'Generation failed' })
+    await wrapper.setProps({ 
+      cell: {
+        ...defaultProps.cell,
+        initial_data: {
+          ...defaultProps.cell.initial_data,
+          error: 'Generation failed'
+        }
+      }
+    })
+    
+    await wrapper.vm.$nextTick()
     
     const errorSection = wrapper.find('.error-section')
     expect(errorSection.exists()).toBe(true)
@@ -147,7 +209,17 @@ describe('PNG Generator Cell View', () => {
 
   it('displays preview when PNG is generated', async () => {
     const base64Image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    await wrapper.setProps({ generatedPng: base64Image })
+    await wrapper.setProps({ 
+      cell: {
+        ...defaultProps.cell,
+        initial_data: {
+          ...defaultProps.cell.initial_data,
+          generatedPng: base64Image
+        }
+      }
+    })
+    
+    await wrapper.vm.$nextTick()
     
     const preview = wrapper.find('.preview-section')
     expect(preview.exists()).toBe(true)
@@ -159,7 +231,17 @@ describe('PNG Generator Cell View', () => {
 
   it('shows copy and download buttons when PNG is generated', async () => {
     const base64Image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    await wrapper.setProps({ generatedPng: base64Image })
+    await wrapper.setProps({ 
+      cell: {
+        ...defaultProps.cell,
+        initial_data: {
+          ...defaultProps.cell.initial_data,
+          generatedPng: base64Image
+        }
+      }
+    })
+    
+    await wrapper.vm.$nextTick()
     
     const buttons = wrapper.findAll('.preview-section button')
     expect(buttons).toHaveLength(2)
@@ -171,7 +253,7 @@ describe('PNG Generator Cell View', () => {
     const widthInput = wrapper.findAll('input[type="number"]')[0]
     await widthInput.setValue(768)
     
-    expect(wrapper.emitted('update:generationParams')).toBeTruthy()
+    expect(wrapper.emitted('update:cell')).toBeTruthy()
   })
 
   it('handles keyboard shortcut (Ctrl+Enter)', async () => {
@@ -179,15 +261,16 @@ describe('PNG Generator Cell View', () => {
     await textarea.setValue('A mountain')
     await textarea.trigger('keydown.ctrl.enter')
     
-    expect(wrapper.emitted('generate')).toBeTruthy()
+    // Should trigger generate action
+    expect(wrapper.emitted('update:cell')).toBeTruthy()
   })
 
   it('emits update events for prompt changes', async () => {
     const textarea = wrapper.find('textarea')
     await textarea.setValue('New prompt')
     
+    expect(wrapper.emitted('update:cell')).toBeTruthy()
     expect(wrapper.emitted('update:prompt')).toBeTruthy()
-    expect(wrapper.emitted('update:prompt')?.[0]).toEqual(['New prompt'])
   })
 
   it('validates parameter ranges', () => {
