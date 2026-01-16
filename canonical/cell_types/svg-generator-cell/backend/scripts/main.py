@@ -6,30 +6,45 @@ This module provides SVG generation functionality using LLM services.
 
 from typing import Dict, Any, Optional
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
+
+# Minimal SVG fallback placeholder - red circle
+MINIMAL_FALLBACK_SVG = '<svg viewBox="0 0 100 100" width="100" height="100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" fill="red"/></svg>'
+
+
+def _create_fallback_svg() -> str:
+    """
+    Create a simple red circle SVG as fallback placeholder.
+    
+    Returns:
+        SVG code as string
+    """
+    return MINIMAL_FALLBACK_SVG
 
 
 def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute the SVG generator cell.
     
-    This function is called when the cell is executed from the backend.
-    For the MVP, the actual SVG generation is handled via the frontend
-    calling the chat API with a specialized prompt.
+    This function generates an SVG from a text prompt if one doesn't already exist.
+    Falls back to a mock placeholder if the LLM service is unavailable.
     
     Args:
         cell_data: Cell instance data containing 'prompt' and optional 'generatedSvg'
         
     Returns:
-        Dict with execution results
+        Dict with execution results including generated SVG
         
     Example:
-        >>> execute_cell({"prompt": "A simple circle", "generatedSvg": "<svg>...</svg>"})
+        >>> execute_cell({"prompt": "A simple circle", "generatedSvg": None})
         {
             "success": True,
-            "message": "SVG generator cell ready",
-            "prompt": "A simple circle"
+            "message": "SVG generated successfully",
+            "prompt": "A simple circle",
+            "has_svg": True,
+            "generatedSvg": "<svg>...</svg>"
         }
     """
     prompt = cell_data.get('prompt', '')
@@ -37,20 +52,88 @@ def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     
     logger.info(f"SVG generator cell executed with prompt: {prompt[:50]}...")
     
-    return {
-        "success": True,
-        "message": "SVG generator cell ready",
-        "prompt": prompt,
-        "has_svg": generated_svg is not None
-    }
+    # If SVG already exists, just return success
+    if generated_svg:
+        return {
+            "success": True,
+            "message": "SVG generator cell ready",
+            "prompt": prompt,
+            "has_svg": True,
+            "generatedSvg": generated_svg
+        }
+    
+    # If no prompt provided, return without generating
+    if not prompt or not prompt.strip():
+        logger.warning("No prompt provided for SVG generation")
+        return {
+            "success": True,
+            "message": "No prompt provided",
+            "prompt": prompt,
+            "has_svg": False
+        }
+    
+    # Generate SVG from prompt
+    logger.info(f"Generating SVG for prompt: {prompt}")
+    
+    # Extract model preference if provided
+    model = cell_data.get('selectedModel', 'mistral')
+    
+    try:
+        # Call async generation function in sync context
+        # Note: asyncio.run() creates a new event loop. This is acceptable
+        # for ephemeral cell execution (always called from sync context).
+        # If called from async context, this would fail.
+        result = asyncio.run(generate_svg_from_prompt(
+            prompt=prompt,
+            model=model
+        ))
+        
+        if result.get("success"):
+            svg_code = result.get("svg", "")
+            
+            logger.info("SVG generation successful")
+            return {
+                "success": True,
+                "message": "SVG generated successfully",
+                "prompt": prompt,
+                "has_svg": True,
+                "generatedSvg": svg_code
+            }
+        else:
+            # Service failed, use fallback
+            logger.warning(f"SVG generation failed, using fallback: {result.get('error')}")
+            fallback_svg = _create_fallback_svg()
+            
+            return {
+                "success": True,
+                "message": "SVG generation failed, using fallback placeholder",
+                "prompt": prompt,
+                "has_svg": True,
+                "generatedSvg": fallback_svg,
+                "error": result.get("error"),
+                "fallback": True
+            }
+    except Exception as e:
+        # Unexpected error, use fallback
+        logger.error(f"Unexpected error during SVG generation: {e}", exc_info=True)
+        fallback_svg = _create_fallback_svg()
+        
+        return {
+            "success": True,
+            "message": "SVG generation error, using fallback placeholder",
+            "prompt": prompt,
+            "has_svg": True,
+            "generatedSvg": fallback_svg,
+            "error": str(e),
+            "fallback": True
+        }
 
 
 async def generate_svg_from_prompt(prompt: str, model: str = "mistral") -> Dict[str, Any]:
     """
     Generate SVG code from a text prompt using LLM.
     
-    This function can be called by the chat router or other backend services
-    to generate SVG visualizations.
+    Falls back to a placeholder if the LLM service is unavailable.
     
     Args:
         prompt: Text description of the desired SVG
@@ -67,10 +150,10 @@ async def generate_svg_from_prompt(prompt: str, model: str = "mistral") -> Dict[
             "prompt": "A blue circle with radius 50"
         }
     """
+    # Try to import and use LLM service
     try:
-        # Import here to avoid circular dependencies
-        from ...services.llm_service import LLMService
-        from ...models import EnrichedPrompt, ConversationMessage
+        from app.services.llm_service import LLMService
+        from app.models import EnrichedPrompt, ConversationMessage
         
         # Create system instruction for SVG generation
         system_instruction = """You are an expert SVG generator. Generate clean, valid SVG code based on user descriptions.
@@ -131,6 +214,15 @@ Example output format:
         return {
             "success": True,
             "svg": svg_code,
+            "prompt": prompt
+        }
+    
+    except ImportError as e:
+        # Service not available in path
+        logger.warning(f"LLM service not available: {e}")
+        return {
+            "success": False,
+            "error": "LLM service not available (import failed)",
             "prompt": prompt
         }
         

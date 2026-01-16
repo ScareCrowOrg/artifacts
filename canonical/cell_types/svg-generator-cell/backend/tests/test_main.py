@@ -6,33 +6,38 @@ import pytest
 import json
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add the cell scripts directory to Python path
 cell_scripts_dir = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(cell_scripts_dir))
 
-from main import execute_cell
+from main import execute_cell, generate_svg_from_prompt
+
+
+@pytest.fixture
+def mock_llm_service():
+    """Fixture to mock LLM service for tests."""
+    def _create_mock(generate_result):
+        mock_llm_class = MagicMock()
+        mock_service = MagicMock()
+        
+        # Create async iterator for streaming
+        async def mock_streaming(*args, **kwargs):
+            for chunk in generate_result:
+                yield chunk
+        
+        mock_service.generate_code_streaming = mock_streaming
+        mock_llm_class.return_value = mock_service
+        return mock_llm_class
+    return _create_mock
 
 
 class TestExecuteCell:
     """Tests for execute_cell function."""
     
-    def test_execute_cell_with_prompt(self):
-        """Test executing cell with a prompt."""
-        cell_data = {
-            "prompt": "A simple circle",
-            "generatedSvg": None
-        }
-        
-        result = execute_cell(cell_data)
-        
-        assert result["success"] is True
-        assert result["message"] == "SVG generator cell ready"
-        assert result["prompt"] == "A simple circle"
-        assert result["has_svg"] is False
-    
-    def test_execute_cell_with_generated_svg(self):
-        """Test executing cell with generated SVG."""
+    def test_execute_cell_with_existing_svg(self):
+        """Test cell execution with already generated SVG."""
         svg_code = '<svg><circle cx="50" cy="50" r="40" fill="blue"/></svg>'
         cell_data = {
             "prompt": "A blue circle",
@@ -42,8 +47,9 @@ class TestExecuteCell:
         result = execute_cell(cell_data)
         
         assert result["success"] is True
+        assert result["message"] == "SVG generator cell ready"
         assert result["has_svg"] is True
-        assert result["prompt"] == "A blue circle"
+        assert result["generatedSvg"] == svg_code
     
     def test_execute_cell_empty_prompt(self):
         """Test executing cell with empty prompt."""
@@ -57,6 +63,64 @@ class TestExecuteCell:
         assert result["success"] is True
         assert result["prompt"] == ""
         assert result["has_svg"] is False
+        assert result["message"] == "No prompt provided"
+    
+    def test_execute_cell_generates_svg_success(self, mock_llm_service):
+        """Test cell execution that triggers SVG generation successfully."""
+        cell_data = {
+            "prompt": "A red square",
+            "generatedSvg": None
+        }
+        
+        # Create mock using fixture
+        mock_llm = mock_llm_service([
+            {"type": "code", "content": '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'},
+            {"type": "code", "content": '<rect x="25" y="25" width="50" height="50" fill="red"/>'},
+            {"type": "code", "content": '</svg>'}
+        ])
+        
+        mock_enriched_prompt = MagicMock()
+        
+        with patch.dict('sys.modules', {
+            'app.services.llm_service': MagicMock(LLMService=mock_llm),
+            'app.models': MagicMock(EnrichedPrompt=mock_enriched_prompt, ConversationMessage=MagicMock())
+        }):
+            result = execute_cell(cell_data)
+        
+        assert result["success"] is True
+        assert result["message"] == "SVG generated successfully"
+        assert result["has_svg"] is True
+        assert "generatedSvg" in result
+        assert result["generatedSvg"].startswith("<svg")
+        assert "fallback" not in result
+    
+    def test_execute_cell_generates_svg_fallback(self, mock_llm_service):
+        """Test cell execution falls back to placeholder when service fails."""
+        cell_data = {
+            "prompt": "A complex shape",
+            "generatedSvg": None
+        }
+        
+        # Mock service to return invalid SVG
+        mock_llm = mock_llm_service([
+            {"type": "narrative", "content": "Here's your SVG:"},
+            {"type": "code", "content": "Not valid SVG"}
+        ])
+        
+        mock_enriched_prompt = MagicMock()
+        
+        with patch.dict('sys.modules', {
+            'app.services.llm_service': MagicMock(LLMService=mock_llm),
+            'app.models': MagicMock(EnrichedPrompt=mock_enriched_prompt, ConversationMessage=MagicMock())
+        }):
+            result = execute_cell(cell_data)
+        
+        assert result["success"] is True
+        assert result["has_svg"] is True
+        assert "generatedSvg" in result
+        assert result["generatedSvg"].startswith("<svg")
+        assert result.get("fallback") is True
+        assert "error" in result
     
     def test_execute_cell_default_values(self):
         """Test executing cell with missing fields."""
@@ -73,20 +137,55 @@ class TestExecuteCell:
 class TestGenerateSvgFromPrompt:
     """Tests for SVG generation function."""
     
-    @pytest.mark.skip(reason="Requires LLM service mock - future enhancement")
-    async def test_generate_svg_basic_shape(self):
-        """Test generating SVG for a basic shape."""
-        pass
+    async def test_generate_svg_success(self, mock_llm_service):
+        """Test successful SVG generation."""
+        mock_llm = mock_llm_service([
+            {"type": "code", "content": '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">'},
+            {"type": "code", "content": '<circle cx="100" cy="100" r="50" fill="blue"/>'},
+            {"type": "code", "content": '</svg>'}
+        ])
+        
+        mock_enriched_prompt = MagicMock()
+        
+        with patch.dict('sys.modules', {
+            'app.services.llm_service': MagicMock(LLMService=mock_llm),
+            'app.models': MagicMock(EnrichedPrompt=mock_enriched_prompt, ConversationMessage=MagicMock())
+        }):
+            result = await generate_svg_from_prompt("A blue circle")
+        
+        assert result["success"] is True
+        assert "svg" in result
+        assert result["svg"].startswith("<svg")
+        assert result["prompt"] == "A blue circle"
     
-    @pytest.mark.skip(reason="Requires LLM service mock - future enhancement")
-    async def test_generate_svg_complex_prompt(self):
-        """Test generating SVG for a complex prompt."""
-        pass
+    async def test_generate_svg_invalid_output(self, mock_llm_service):
+        """Test SVG generation when LLM returns invalid SVG."""
+        mock_llm = mock_llm_service([
+            {"type": "narrative", "content": "I'll create that for you"},
+            {"type": "code", "content": "This is not SVG"}
+        ])
+        
+        mock_enriched_prompt = MagicMock()
+        
+        with patch.dict('sys.modules', {
+            'app.services.llm_service': MagicMock(LLMService=mock_llm),
+            'app.models': MagicMock(EnrichedPrompt=mock_enriched_prompt, ConversationMessage=MagicMock())
+        }):
+            result = await generate_svg_from_prompt("A shape")
+        
+        assert result["success"] is False
+        assert "error" in result
+        assert "valid SVG" in result["error"]
     
-    @pytest.mark.skip(reason="Requires LLM service mock - future enhancement")
-    async def test_generate_svg_error_handling(self):
-        """Test error handling in SVG generation."""
-        pass
+    async def test_generate_svg_import_error(self):
+        """Test SVG generation when LLM service import fails."""
+        # Don't mock the imports, let them fail naturally
+        result = await generate_svg_from_prompt("A triangle")
+        
+        assert result["success"] is False
+        assert "error" in result
+        # Service might fail due to import or configuration issues
+        assert "error" in result["error"].lower() or "not configured" in result["error"].lower()
 
 
 class TestCellDataStructure:
