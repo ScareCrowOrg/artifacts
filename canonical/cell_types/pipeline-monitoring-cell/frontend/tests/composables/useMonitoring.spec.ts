@@ -17,6 +17,13 @@ vi.mock('@/utils/logger', () => ({
   })
 }))
 
+// Mock frontend health checks to prevent fallback data
+vi.mock('@/composables/useFrontendHealthChecks', () => ({
+  useFrontendHealthChecks: () => ({
+    validateAll: vi.fn().mockResolvedValue([])
+  })
+}))
+
 describe('useMonitoring', () => {
   beforeEach(() => {
     vi.clearAllMocks()
