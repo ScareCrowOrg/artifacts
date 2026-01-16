@@ -251,27 +251,36 @@ watch(() => props.cell?.initial_data, (newVal) => {
 }, { deep: true })
 
 // Watch for local changes and emit updates (update cell object)
+// Use throttled updates to prevent excessive emit calls
+let updateTimeout: ReturnType<typeof setTimeout> | null = null
 watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localParams], () => {
-  if (props.cell) {
-    emit('update:cell', {
-      ...props.cell,
-      initial_data: {
-        ...props.cell.initial_data,
-        prompt: localPrompt.value,
-        generatedPng: localGeneratedPng.value,
-        isGenerating: localIsGenerating.value,
-        error: localError.value,
-        generationParams: localParams.value
-      }
-    })
+  // Debounce updates to avoid excessive emit calls
+  if (updateTimeout) {
+    clearTimeout(updateTimeout)
   }
   
-  // Also emit individual updates for backward compatibility
-  emit('update:prompt', localPrompt.value)
-  emit('update:generatedPng', localGeneratedPng.value)
-  emit('update:isGenerating', localIsGenerating.value)
-  emit('update:error', localError.value)
-  emit('update:generationParams', localParams.value)
+  updateTimeout = setTimeout(() => {
+    if (props.cell) {
+      emit('update:cell', {
+        ...props.cell,
+        initial_data: {
+          ...props.cell.initial_data,
+          prompt: localPrompt.value,
+          generatedPng: localGeneratedPng.value,
+          isGenerating: localIsGenerating.value,
+          error: localError.value,
+          generationParams: localParams.value
+        }
+      })
+    }
+    
+    // Also emit individual updates for backward compatibility
+    emit('update:prompt', localPrompt.value)
+    emit('update:generatedPng', localGeneratedPng.value)
+    emit('update:isGenerating', localIsGenerating.value)
+    emit('update:error', localError.value)
+    emit('update:generationParams', localParams.value)
+  }, 100) // 100ms debounce
 }, { deep: true })
 
 // Methods
@@ -283,6 +292,13 @@ const handleGenerate = async () => {
   logger.info('Generating PNG image via ephemeral execution', { 
     prompt: localPrompt.value,
     cellId: effectiveCellId.value
+  })
+  
+  // Emit generate event FIRST for backward compatibility (before API call)
+  // This allows parent components to handle generation themselves if needed
+  emit('generate', {
+    prompt: localPrompt.value,
+    ...localParams.value
   })
   
   localIsGenerating.value = true
@@ -335,12 +351,6 @@ const handleGenerate = async () => {
   } finally {
     localIsGenerating.value = false
   }
-  
-  // Emit generate event for backward compatibility
-  emit('generate', {
-    prompt: localPrompt.value,
-    ...localParams.value
-  })
 }
 
 const handleCopy = async () => {
