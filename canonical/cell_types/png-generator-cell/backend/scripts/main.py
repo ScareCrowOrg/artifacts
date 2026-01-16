@@ -12,6 +12,10 @@ from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
+# Minimal 1x1 transparent PNG as ultra-fallback (67 bytes)
+# Used when PIL is not available - smallest possible valid PNG
+MINIMAL_FALLBACK_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+
 
 def _create_fallback_png() -> str:
     """
@@ -35,8 +39,7 @@ def _create_fallback_png() -> str:
     except Exception as e:
         logger.error(f"Failed to create fallback PNG: {e}")
         # Ultra-minimal fallback - smallest possible PNG (1x1 transparent)
-        minimal_png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
-        return f"data:image/png;base64,{minimal_png}"
+        return f"data:image/png;base64,{MINIMAL_FALLBACK_PNG}"
 
 
 def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -100,6 +103,9 @@ def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     
     try:
         # Call async generation function in sync context
+        # Note: asyncio.run() creates a new event loop. This is acceptable
+        # for ephemeral cell execution (always called from sync context).
+        # If called from async context, this would fail.
         result = asyncio.run(generate_png_from_prompt(
             prompt=prompt,
             width=width,

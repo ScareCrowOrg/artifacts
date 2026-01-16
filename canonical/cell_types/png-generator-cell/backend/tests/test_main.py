@@ -14,6 +14,18 @@ sys.path.insert(0, str(cell_root / "scripts"))
 import main
 
 
+@pytest.fixture
+def mock_stable_diffusion_service():
+    """Fixture to mock StableDiffusionService for tests."""
+    def _create_mock(generate_image_return_value):
+        mock_sd_class = MagicMock()
+        mock_service = AsyncMock()
+        mock_service.generate_image.return_value = generate_image_return_value
+        mock_sd_class.return_value = mock_service
+        return MagicMock(StableDiffusionService=mock_sd_class)
+    return _create_mock
+
+
 class TestExecuteCell:
     """Tests for execute_cell function."""
     
@@ -45,17 +57,15 @@ class TestExecuteCell:
         assert result["has_png"] is False
         assert result["message"] == "No prompt provided"
     
-    def test_execute_cell_generates_png_success(self):
+    def test_execute_cell_generates_png_success(self, mock_stable_diffusion_service):
         """Test cell execution that triggers PNG generation successfully."""
         cell_data = {
             "prompt": "A red dragon",
             "generatedPng": None
         }
         
-        # Mock the StableDiffusionService
-        mock_sd_class = MagicMock()
-        mock_service = AsyncMock()
-        mock_service.generate_image.return_value = {
+        # Create mock using fixture
+        mock_module = mock_stable_diffusion_service({
             "success": True,
             "image_base64": "iVBORw0KGgoAAAANSbase64data...",
             "metadata": {
@@ -63,10 +73,9 @@ class TestExecuteCell:
                 "width": 512,
                 "height": 512
             }
-        }
-        mock_sd_class.return_value = mock_service
+        })
         
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': MagicMock(StableDiffusionService=mock_sd_class)}):
+        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': mock_module}):
             result = main.execute_cell(cell_data)
         
         assert result["success"] is True
@@ -76,23 +85,20 @@ class TestExecuteCell:
         assert result["generatedPng"].startswith("data:image/png;base64,")
         assert "fallback" not in result
     
-    def test_execute_cell_generates_png_fallback(self):
+    def test_execute_cell_generates_png_fallback(self, mock_stable_diffusion_service):
         """Test cell execution falls back to placeholder when service fails."""
         cell_data = {
             "prompt": "A mountain",
             "generatedPng": None
         }
         
-        # Mock service to return failure
-        mock_sd_class = MagicMock()
-        mock_service = AsyncMock()
-        mock_service.generate_image.return_value = {
+        # Create mock using fixture
+        mock_module = mock_stable_diffusion_service({
             "success": False,
             "error": "Service timeout"
-        }
-        mock_sd_class.return_value = mock_service
+        })
         
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': MagicMock(StableDiffusionService=mock_sd_class)}):
+        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': mock_module}):
             result = main.execute_cell(cell_data)
         
         assert result["success"] is True
@@ -107,12 +113,9 @@ class TestExecuteCell:
 class TestGeneratePngFromPrompt:
     """Tests for generate_png_from_prompt function."""
     
-    async def test_generate_png_success(self):
+    async def test_generate_png_success(self, mock_stable_diffusion_service):
         """Test successful PNG generation."""
-        # Mock the StableDiffusionService class
-        mock_sd_class = MagicMock()
-        mock_service = AsyncMock()
-        mock_service.generate_image.return_value = {
+        mock_module = mock_stable_diffusion_service({
             "success": True,
             "image_base64": "iVBORw0KGgoAAAANS...",
             "metadata": {
@@ -123,11 +126,9 @@ class TestGeneratePngFromPrompt:
                 "cfg_scale": 7.0,
                 "seed": 12345
             }
-        }
-        mock_sd_class.return_value = mock_service
+        })
         
-        # Patch the import inside the function
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': MagicMock(StableDiffusionService=mock_sd_class)}):
+        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': mock_module}):
             result = await main.generate_png_from_prompt(
                 prompt="A blue crystal",
                 width=512,
@@ -142,17 +143,14 @@ class TestGeneratePngFromPrompt:
         assert result["prompt"] == "A blue crystal"
         assert "metadata" in result
     
-    async def test_generate_png_service_failure(self):
+    async def test_generate_png_service_failure(self, mock_stable_diffusion_service):
         """Test PNG generation when service returns failure."""
-        mock_sd_class = MagicMock()
-        mock_service = AsyncMock()
-        mock_service.generate_image.return_value = {
+        mock_module = mock_stable_diffusion_service({
             "success": False,
             "error": "Stable Diffusion API timeout"
-        }
-        mock_sd_class.return_value = mock_service
+        })
         
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': MagicMock(StableDiffusionService=mock_sd_class)}):
+        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': mock_module}):
             result = await main.generate_png_from_prompt(
                 prompt="A mountain"
             )
@@ -161,14 +159,15 @@ class TestGeneratePngFromPrompt:
         assert "error" in result
         assert "timeout" in result["error"].lower()
     
-    async def test_generate_png_exception_handling(self):
+    async def test_generate_png_exception_handling(self, mock_stable_diffusion_service):
         """Test PNG generation exception handling."""
         mock_sd_class = MagicMock()
         mock_service = AsyncMock()
         mock_service.generate_image.side_effect = Exception("Connection error")
         mock_sd_class.return_value = mock_service
+        mock_module = MagicMock(StableDiffusionService=mock_sd_class)
         
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': MagicMock(StableDiffusionService=mock_sd_class)}):
+        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': mock_module}):
             result = await main.generate_png_from_prompt(
                 prompt="A forest"
             )
