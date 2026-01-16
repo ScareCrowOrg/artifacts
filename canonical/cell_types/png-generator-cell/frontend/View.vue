@@ -169,9 +169,28 @@ import apiService from '@/services/apiService'
 const logger = createLogger('component:png-generator-cell')
 
 // Props
+interface CellObject {
+  id?: string
+  cellId?: string
+  initial_data?: {
+    prompt?: string
+    generatedPng?: string | null
+    isGenerating?: boolean
+    error?: string | null
+    generationParams?: {
+      width: number
+      height: number
+      steps: number
+      cfg_scale: number
+      seed: number
+    }
+  }
+  data?: any  // Legacy support
+}
+
 interface Props {
-  cell?: any  // Cell object from DynamicCellView (contains id, initial_data, etc.)
-  cellId?: string  // Optional direct cellId (for backward compatibility)
+  cell?: CellObject  // Cell object from DynamicCellView (contains id, initial_data, etc.)
+  cellId?: string    // Optional direct cellId (for backward compatibility)
   prompt?: string
   generatedPng?: string | null
   isGenerating?: boolean
@@ -207,6 +226,8 @@ const effectiveCellId = computed(() => {
 })
 
 // Computed: Extract initial data from cell object
+// NOTE: Supports both initial_data (primary) and data (legacy) properties
+// Priority: cell.initial_data > cell.data > empty object
 const initialData = computed(() => {
   return props.cell?.initial_data || props.cell?.data || {}
 })
@@ -251,10 +272,10 @@ watch(() => props.cell?.initial_data, (newVal) => {
 }, { deep: true })
 
 // Watch for local changes and emit updates (update cell object)
-// Use throttled updates to prevent excessive emit calls
+// Use debounced updates to prevent excessive emit calls
 let updateTimeout: ReturnType<typeof setTimeout> | null = null
 watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localParams], () => {
-  // Debounce updates to avoid excessive emit calls
+  // Debounce updates to avoid excessive emit calls (waits for 100ms of inactivity)
   if (updateTimeout) {
     clearTimeout(updateTimeout)
   }
@@ -294,8 +315,11 @@ const handleGenerate = async () => {
     cellId: effectiveCellId.value
   })
   
-  // Emit generate event FIRST for backward compatibility (before API call)
-  // This allows parent components to handle generation themselves if needed
+  // Emit generate event for backward compatibility
+  // NOTE: This event is emitted BEFORE the API call to allow parent components
+  // to intercept and handle generation themselves if needed (e.g., with custom logic).
+  // If parent components don't handle this event, the component will proceed with
+  // the default API call implementation below.
   emit('generate', {
     prompt: localPrompt.value,
     ...localParams.value
