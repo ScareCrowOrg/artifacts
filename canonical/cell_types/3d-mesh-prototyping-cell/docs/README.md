@@ -1,3 +1,20 @@
+---
+processed: true
+processed_date: 2026-01-17
+updated_docs:
+  - docs/official/backend/cell-types/3d-mesh-prototyping-cell.md
+themes:
+  - 3d-generation
+  - cell-types
+  - documentation
+  - three-js
+modules:
+  - artifacts
+  - backend
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # 3D Mesh Prototyping Cell
 
 ## Overview
