@@ -83,12 +83,19 @@ const hasMesh = computed(() => generatedMesh.value !== null && generatedMesh.val
  * Initialize Three.js scene, camera, renderer, and controls
  */
 const initThreeJS = () => {
+  logger.debug('[DEBUG_ITERATION_1] initThreeJS called', {
+    hasViewportContainer: !!viewportContainer.value,
+    timestamp: new Date().toISOString()
+  })
+  
   if (!viewportContainer.value) {
-    logger.error('Viewport container not found')
+    logger.error('[DEBUG_ITERATION_1] Viewport container not found - cannot initialize Three.js', {
+      viewportContainer: viewportContainer.value
+    })
     return
   }
 
-  logger.info('Initializing Three.js viewport')
+  logger.info('[DEBUG_ITERATION_1] Initializing Three.js viewport')
 
   // Scene
   scene = new THREE.Scene()
@@ -97,6 +104,9 @@ const initThreeJS = () => {
   // Camera
   const width = viewportContainer.value.clientWidth
   const height = viewportContainer.value.clientHeight
+  
+  logger.debug('[DEBUG_ITERATION_1] Viewport dimensions', { width, height })
+  
   camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000)
   camera.position.set(
     props.cellData.viewportSettings.cameraPosition[0],
@@ -109,6 +119,11 @@ const initThreeJS = () => {
   renderer.setSize(width, height)
   renderer.setPixelRatio(window.devicePixelRatio)
   viewportContainer.value.appendChild(renderer.domElement)
+  
+  logger.debug('[DEBUG_ITERATION_1] Renderer created and appended to DOM', {
+    rendererDomElementTagName: renderer.domElement.tagName,
+    pixelRatio: window.devicePixelRatio
+  })
 
   // Controls
   controls = new OrbitControls(camera, renderer.domElement)
@@ -134,7 +149,14 @@ const initThreeJS = () => {
   // Start animation loop
   animate()
 
-  logger.info('Three.js viewport initialized successfully')
+  logger.info('[DEBUG_ITERATION_1] Three.js viewport initialized successfully', {
+    hasScene: !!scene,
+    hasCamera: !!camera,
+    hasRenderer: !!renderer,
+    hasControls: !!controls,
+    animationStarted: true,
+    timestamp: new Date().toISOString()
+  })
 }
 
 /**
@@ -416,7 +438,30 @@ const handleResize = () => {
 
 // Lifecycle hooks
 onMounted(() => {
-  logger.info('3D Mesh Prototyping Cell mounted')
+  logger.info('[DEBUG_ITERATION_1] 3D Mesh Prototyping Cell mounted')
+  logger.debug('[DEBUG_ITERATION_1] Props received on mount', {
+    hasPropsCellData: !!props.cellData,
+    propsCellData: props.cellData,
+    propsCellDataKeys: props.cellData ? Object.keys(props.cellData) : [],
+    propsCellDataStringified: JSON.stringify(props.cellData, null, 2),
+    inputImage: inputImage.value,
+    generatedMesh: generatedMesh.value,
+    meshMetadata: meshMetadata.value,
+    viewportContainerExists: !!viewportContainer.value,
+    timestamp: new Date().toISOString()
+  })
+  
+  logger.debug('[DEBUG_ITERATION_1] Component refs initialization', {
+    inputImage_value: inputImage.value,
+    generatedMesh_value: generatedMesh.value,
+    meshMetadata_value: meshMetadata.value,
+    isGenerating_value: isGenerating.value,
+    error_value: error.value,
+    autoRotate_value: autoRotate.value,
+    wireframeMode_value: wireframeMode.value,
+    showGrid_value: showGrid.value,
+  })
+  
   initThreeJS()
   window.addEventListener('resize', handleResize)
 })
