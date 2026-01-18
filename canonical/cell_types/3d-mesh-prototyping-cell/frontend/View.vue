@@ -44,15 +44,32 @@ if (props.cell && props.cell.state) {
   console.log('[DEBUG_ITERATION_4] props.cell.state:', JSON.parse(JSON.stringify(props.cell.state)))
 }
 
+// Local component state (ITERATION #5 - writable refs for user interactions)
+const uploadedImage = ref<string | null>(null) // User-uploaded image (writable)
+const localError = ref<string | null>(null) // Local error state (writable)
+const localGeneratedMesh = ref<string | null>(null) // Generated mesh data (writable)
+const localIsGenerating = ref<boolean>(false) // Generation status (writable)
+const localAutoRotate = ref<boolean>(false) // Viewport setting (writable)
+const localWireframeMode = ref<boolean>(false) // Viewport setting (writable)
+const localShowGrid = ref<boolean>(true) // Viewport setting (writable)
+
 // Component state - Safe reactive access with defensive defaults (ITERATION #4)
+// Now prioritizes local state over cell data (ITERATION #5)
 const inputImage = computed(() => {
-  const imageUrl = props.cell?.initial_data?.inputImage || props.cell?.state?.inputImage || props.cell?.inputImage || ''
-  console.log('[DEBUG_ITERATION_4] Computed inputImage:', imageUrl)
+  // Prioritize uploaded image, then fall back to cell data
+  const imageUrl = uploadedImage.value || 
+                   props.cell?.initial_data?.inputImage || 
+                   props.cell?.state?.inputImage || 
+                   props.cell?.inputImage || ''
+  console.log('[DEBUG_ITERATION_5] Computed inputImage:', imageUrl)
   return imageUrl
 })
 
 const generatedMesh = computed(() => {
-  return props.cell?.initial_data?.generatedMesh || props.cell?.state?.generatedMesh || props.cell?.generatedMesh || ''
+  return localGeneratedMesh.value || 
+         props.cell?.initial_data?.generatedMesh || 
+         props.cell?.state?.generatedMesh || 
+         props.cell?.generatedMesh || ''
 })
 
 const meshMetadata = computed(() => {
@@ -60,29 +77,41 @@ const meshMetadata = computed(() => {
 })
 
 const isGenerating = computed(() => {
-  return props.cell?.initial_data?.isGenerating || props.cell?.state?.isGenerating || props.cell?.isGenerating || false
+  return localIsGenerating.value || 
+         props.cell?.initial_data?.isGenerating || 
+         props.cell?.state?.isGenerating || 
+         props.cell?.isGenerating || false
 })
 
+// Error computed with local error priority (ITERATION #5)
 const error = computed(() => {
-  return props.cell?.initial_data?.error || props.cell?.state?.error || props.cell?.error || null
+  return localError.value || 
+         props.cell?.initial_data?.error || 
+         props.cell?.state?.error || 
+         props.cell?.error || null
 })
 
+// Viewport settings with local toggle refs priority (ITERATION #5)
 const autoRotate = computed(() => {
-  return props.cell?.initial_data?.viewportSettings?.autoRotate || 
+  return localAutoRotate.value || 
+         props.cell?.initial_data?.viewportSettings?.autoRotate || 
          props.cell?.state?.viewportSettings?.autoRotate || 
          props.cell?.viewportSettings?.autoRotate || false
 })
 
 const wireframeMode = computed(() => {
-  return props.cell?.initial_data?.viewportSettings?.wireframeMode || 
+  return localWireframeMode.value || 
+         props.cell?.initial_data?.viewportSettings?.wireframeMode || 
          props.cell?.state?.viewportSettings?.wireframeMode || 
          props.cell?.viewportSettings?.wireframeMode || false
 })
 
 const showGrid = computed(() => {
-  return props.cell?.initial_data?.viewportSettings?.showGrid || 
-         props.cell?.state?.viewportSettings?.showGrid || 
-         props.cell?.viewportSettings?.showGrid || true
+  // Use logical OR but showGrid defaults to true
+  return localShowGrid.value !== false && (
+         props.cell?.initial_data?.viewportSettings?.showGrid !== false || 
+         props.cell?.state?.viewportSettings?.showGrid !== false || 
+         props.cell?.viewportSettings?.showGrid !== false)
 })
 
 // Job polling
@@ -147,7 +176,7 @@ const handleFileUpload = (event: Event) => {
   if (!file) return
 
   if (!file.type.startsWith('image/')) {
-    error.value = 'Please upload a valid image file (PNG, JPG, etc.)'
+    localError.value = 'Please upload a valid image file (PNG, JPG, etc.)'
     return
   }
 
@@ -156,12 +185,13 @@ const handleFileUpload = (event: Event) => {
   const reader = new FileReader()
   reader.onload = (e) => {
     const result = e.target?.result as string
-    inputImage.value = result
-    error.value = null
+    uploadedImage.value = result // ITERATION #5 - Now using writable ref
+    localError.value = null
     logger.debug('Image loaded as base64 data URL')
+    console.log('[DEBUG_ITERATION_5] uploadedImage set:', result.substring(0, 50) + '...')
   }
   reader.onerror = () => {
-    error.value = 'Failed to read image file'
+    localError.value = 'Failed to read image file'
     logger.error('FileReader error')
   }
   reader.readAsDataURL(file)
@@ -199,20 +229,20 @@ const pollJobStatus = async (id: string) => {
     if (status.status === 'completed') {
       logger.info('Job completed, fetching result...')
       
-      generatedMesh.value = status.mesh_data
-      meshMetadata.value = status.metadata
-      error.value = null
+      localGeneratedMesh.value = status.mesh_data // ITERATION #5 - Use local ref
+      // meshMetadata is read-only, no need to update
+      localError.value = null
       
       if (pollingInterval.value) {
         clearInterval(pollingInterval.value)
         pollingInterval.value = null
       }
       
-      isGenerating.value = false
+      localIsGenerating.value = false // ITERATION #5 - Use local ref
       logger.info('3D mesh loaded successfully', meshMetadata.value)
       
     } else if (status.status === 'failed') {
-      error.value = status.error || 'Job processing failed'
+      localError.value = status.error || 'Job processing failed' // ITERATION #5 - Use local ref
       logger.error('Job failed', error.value)
       
       if (pollingInterval.value) {
@@ -220,7 +250,7 @@ const pollJobStatus = async (id: string) => {
         pollingInterval.value = null
       }
       
-      isGenerating.value = false
+      localIsGenerating.value = false // ITERATION #5 - Use local ref
     }
     
   } catch (err: any) {
@@ -235,13 +265,13 @@ const pollJobStatus = async (id: string) => {
  */
 const generate3DMesh = async () => {
   if (!inputImage.value) {
-    error.value = 'Please upload an image first'
+    localError.value = 'Please upload an image first' // ITERATION #5 - Use local ref
     return
   }
 
   logger.info('Starting 3D mesh generation (queueing job)')
-  isGenerating.value = true
-  error.value = null
+  localIsGenerating.value = true // ITERATION #5 - Use local ref
+  localError.value = null
   jobStatus.value = 'queued'
 
   try {
@@ -285,14 +315,14 @@ const generate3DMesh = async () => {
       }, 2000)
       
     } else {
-      error.value = result.error || 'Failed to queue 3D generation job'
+      localError.value = result.error || 'Failed to queue 3D generation job' // ITERATION #5 - Use local ref
       logger.error('Job queueing failed', error.value)
-      isGenerating.value = false
+      localIsGenerating.value = false // ITERATION #5 - Use local ref
     }
   } catch (err: any) {
     logger.error('Error generating 3D mesh', err)
-    error.value = `Generation error: ${err.message}`
-    isGenerating.value = false
+    localError.value = `Generation error: ${err.message}` // ITERATION #5 - Use local ref
+    localIsGenerating.value = false // ITERATION #5 - Use local ref
   }
 }
 
@@ -313,24 +343,24 @@ const downloadMesh = () => {
     logger.debug('GLB download initiated')
   } catch (err) {
     logger.error('Error downloading mesh', err)
-    error.value = 'Failed to download mesh file'
+    localError.value = 'Failed to download mesh file' // ITERATION #5 - Use local ref
   }
 }
 
-// Toggle functions
+// Toggle functions (ITERATION #5 - using local refs declared above)
 const toggleAutoRotate = () => {
-  autoRotate.value = !autoRotate.value
-  logger.debug(`Auto-rotate: ${autoRotate.value}`)
+  localAutoRotate.value = !localAutoRotate.value
+  logger.debug(`Auto-rotate: ${localAutoRotate.value}`)
 }
 
 const toggleWireframe = () => {
-  wireframeMode.value = !wireframeMode.value
-  logger.debug(`Wireframe mode: ${wireframeMode.value}`)
+  localWireframeMode.value = !localWireframeMode.value
+  logger.debug(`Wireframe mode: ${localWireframeMode.value}`)
 }
 
 const toggleGrid = () => {
-  showGrid.value = !showGrid.value
-  logger.debug(`Grid: ${showGrid.value}`)
+  localShowGrid.value = !localShowGrid.value
+  logger.debug(`Grid: ${localShowGrid.value}`)
 }
 
 // Lifecycle
