@@ -7,7 +7,7 @@
  * 
  * @component
  */
-import { useGLTF } from '@tresjs/core'
+import { useGLTF } from '@tresjs/cientos'
 import { watch, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import { createLogger } from '@/utils/logger'
