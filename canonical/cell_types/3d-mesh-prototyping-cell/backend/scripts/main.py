@@ -300,16 +300,20 @@ async def get_redis_client():
         Redis client instance
     """
     try:
-        # Import Redis client from core
-        from app.core.redis_client import get_redis_client as get_core_redis
-        return await get_core_redis()
-    except ImportError:
-        # Fallback: create Redis client directly
-        import redis.asyncio as redis
-        import os
-        
-        redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-        return redis.from_url(redis_url, decode_responses=True)
+        # Try to import from core (when running as part of backend app)
+        try:
+            from app.core.redis_client import get_redis_client as get_core_redis
+            return await get_core_redis()
+        except (ImportError, ModuleNotFoundError):
+            # Fallback: create Redis client directly (standalone execution)
+            import redis.asyncio as redis
+            import os
+            
+            redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+            return redis.from_url(redis_url, decode_responses=True)
+    except Exception as e:
+        logger.error(f"Failed to get Redis client: {e}")
+        raise
 
 
 def get_shared_volume_path() -> Path:
@@ -325,14 +329,7 @@ def get_shared_volume_path() -> Path:
     return Path(shared_volume_env)
 
 
-
-    """
-    Generate a 3D mesh from a single input image using AI reconstruction.
-    
-    This function will integrate with Stable Fast 3D or InstantMesh models
-    when GPU infrastructure (RTX 4070) is properly configured in Kind/WSL2.
-    
-    Pipeline:
+# Legacy mock function kept for backward compatibility and testing
     1. Image preprocessing (resize, normalize)
     2. AI model inference (Single Image-to-3D reconstruction)
     3. Mesh post-processing (decimation, UV mapping)

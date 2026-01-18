@@ -67,6 +67,7 @@ const showGrid = ref<boolean>(props.cellData.viewportSettings.showGrid)
 const jobId = ref<string | null>(null)
 const jobStatus = ref<string>('idle')
 const pollingInterval = ref<number | null>(null)
+const isPolling = ref<boolean>(false) // Prevent concurrent polls
 
 // File input
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -78,6 +79,7 @@ const cameraPosition = computed(() => props.cellData.viewportSettings.cameraPosi
 
 /**
  * Convert base64 data URL to blob URL for GLTFLoader
+ * Memoized to avoid recreating URL on every access
  */
 const meshBlobUrl = computed(() => {
   if (!generatedMesh.value) return null
@@ -95,6 +97,18 @@ const meshBlobUrl = computed(() => {
     logger.error('Error creating blob URL', err)
     return null
   }
+})
+
+// Track previous blob URL for cleanup
+let previousBlobUrl: string | null = null
+
+// Watch for mesh changes and cleanup old blob URLs
+watch(meshBlobUrl, (newUrl, oldUrl) => {
+  if (previousBlobUrl && previousBlobUrl !== newUrl) {
+    URL.revokeObjectURL(previousBlobUrl)
+    logger.debug('Revoked previous blob URL')
+  }
+  previousBlobUrl = newUrl
 })
 
 /**
@@ -129,8 +143,17 @@ const handleFileUpload = (event: Event) => {
 
 /**
  * Poll job status from Redis via backend API
+ * Prevents concurrent polls with isPolling flag
  */
 const pollJobStatus = async (id: string) => {
+  // Prevent concurrent polling
+  if (isPolling.value) {
+    logger.debug('Poll already in progress, skipping')
+    return
+  }
+  
+  isPolling.value = true
+  
   try {
     const response = await fetch(`/api/cells/3d-job-status/${id}`, {
       headers: {
@@ -176,6 +199,8 @@ const pollJobStatus = async (id: string) => {
     
   } catch (err: any) {
     logger.error('Error polling job status', err)
+  } finally {
+    isPolling.value = false
   }
 }
 
@@ -284,6 +309,13 @@ onUnmounted(() => {
   if (pollingInterval.value) {
     clearInterval(pollingInterval.value)
   }
+  
+  // Cleanup blob URL on unmount
+  if (previousBlobUrl) {
+    URL.revokeObjectURL(previousBlobUrl)
+    logger.debug('Revoked blob URL on unmount')
+  }
+  
   logger.info('3D Mesh Prototyping Cell (TresJS) unmounted')
 })
 </script>

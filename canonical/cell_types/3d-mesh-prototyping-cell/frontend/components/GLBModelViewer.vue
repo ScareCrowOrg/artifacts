@@ -25,16 +25,18 @@ const { scene, load } = useGLTF(props.url, {
   dracoDecoderPath: 'https://www.gstatic.com/draco/versioned/decoders/1.5.6/'
 })
 
-// Load model asynchronously
+// Load model asynchronously with error handling
+let loadError = null
 try {
   await load()
   logger.info('GLB model loaded successfully')
 } catch (error) {
   logger.error('Failed to load GLB model', error)
+  loadError = error
 }
 
-// Center and scale model to fit viewport
-if (scene.value) {
+// Only proceed with setup if load succeeded
+if (!loadError && scene.value) {
   const bbox = new THREE.Box3().setFromObject(scene.value)
   const center = bbox.getCenter(new THREE.Vector3())
   scene.value.position.sub(center)
