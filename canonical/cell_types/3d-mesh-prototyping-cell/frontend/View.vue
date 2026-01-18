@@ -1,32 +1,33 @@
 <script setup lang="ts">
 /**
- * 3D Mesh Prototyping Cell - Frontend View Component
+ * 3D Mesh Prototyping Cell - Main View Component (TresJS)
  * 
- * Provides an interactive interface for generating 3D meshes from single images
- * using AI-powered reconstruction, with real-time Three.js preview.
+ * Migrated from imperative Three.js to declarative TresJS for simplified 3D rendering.
+ * This component orchestrates the entire 3D mesh generation workflow with job queueing.
  * 
  * Features:
  * - Image upload for 3D reconstruction
- * - Three.js viewport with GLTFLoader + DRACOLoader
- * - Viewport controls (auto-rotate, wireframe, grid)
- * - Download GLB functionality
- * - Progress indicators and error handling
+ * - Job queueing with Redis-based status polling
+ * - Declarative TresJS scene with automatic lifecycle management
+ * - Async GLB loading with Suspense
+ * - Reactive viewport controls
  * 
  * @component
  */
 
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { TresCanvas } from '@tresjs/core'
+import { OrbitControls, Grid } from '@tresjs/cientos'
 import { createLogger } from '@/utils/logger'
-import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
-import aiChatService from '@/services/aiChatService'
+import GLBModelViewer from './components/GLBModelViewer.vue'
+import JobStatusIndicator from './components/JobStatusIndicator.vue'
+import ViewportControls from './components/ViewportControls.vue'
+import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
 
-const logger = createLogger('component:3d-mesh-prototyping-cell')
+const logger = createLogger('component:3d-mesh-prototyping-cell-tresjs')
 
 interface Props {
-  cellData: {
+  cell: {
     inputImage: string | null
     generatedMesh: string | null
     meshMetadata: Record<string, any> | null
@@ -49,28 +50,24 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
-  (e: 'update:cellData', value: any): void
+  (e: 'update:cell', value: any): void
 }>()
 
 // Component state
-const inputImage = ref<string | null>(props.cellData.inputImage)
-const generatedMesh = ref<string | null>(props.cellData.generatedMesh)
-const meshMetadata = ref<Record<string, any> | null>(props.cellData.meshMetadata)
-const isGenerating = ref<boolean>(props.cellData.isGenerating)
-const error = ref<string | null>(props.cellData.error)
-const autoRotate = ref<boolean>(props.cellData.viewportSettings.autoRotate)
-const wireframeMode = ref<boolean>(props.cellData.viewportSettings.wireframeMode)
-const showGrid = ref<boolean>(props.cellData.viewportSettings.showGrid)
+const inputImage = ref<string | null>(props.cell.inputImage)
+const generatedMesh = ref<string | null>(props.cell.generatedMesh)
+const meshMetadata = ref<Record<string, any> | null>(props.cell.meshMetadata)
+const isGenerating = ref<boolean>(props.cell.isGenerating)
+const error = ref<string | null>(props.cell.error)
+const autoRotate = ref<boolean>(props.cell.viewportSettings.autoRotate)
+const wireframeMode = ref<boolean>(props.cell.viewportSettings.wireframeMode)
+const showGrid = ref<boolean>(props.cell.viewportSettings.showGrid)
 
-// Three.js references
-const viewportContainer = ref<HTMLDivElement | null>(null)
-let scene: THREE.Scene | null = null
-let camera: THREE.PerspectiveCamera | null = null
-let renderer: THREE.WebGLRenderer | null = null
-let controls: OrbitControls | null = null
-let currentMesh: THREE.Object3D | null = null
-let gridHelper: THREE.GridHelper | null = null
-let animationFrameId: number | null = null
+// Job polling
+const jobId = ref<string | null>(null)
+const jobStatus = ref<string>('idle')
+const pollingInterval = ref<number | null>(null)
+const isPolling = ref<boolean>(false) // Prevent concurrent polls
 
 // File input
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -78,193 +75,41 @@ const fileInput = ref<HTMLInputElement | null>(null)
 // Computed
 const hasInputImage = computed(() => inputImage.value !== null && inputImage.value !== '')
 const hasMesh = computed(() => generatedMesh.value !== null && generatedMesh.value !== '')
+const cameraPosition = computed(() => props.cell.viewportSettings.cameraPosition)
 
 /**
- * Initialize Three.js scene, camera, renderer, and controls
+ * Convert base64 data URL to blob URL for GLTFLoader
+ * Memoized to avoid recreating URL on every access
  */
-const initThreeJS = () => {
-  logger.debug('[DEBUG_ITERATION_1] initThreeJS called', {
-    hasViewportContainer: !!viewportContainer.value,
-    timestamp: new Date().toISOString()
-  })
+const meshBlobUrl = computed(() => {
+  if (!generatedMesh.value) return null
   
-  if (!viewportContainer.value) {
-    logger.error('[DEBUG_ITERATION_1] Viewport container not found - cannot initialize Three.js', {
-      viewportContainer: viewportContainer.value
-    })
-    return
-  }
-
-  logger.info('[DEBUG_ITERATION_1] Initializing Three.js viewport')
-
-  // Scene
-  scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x1a1a1a) // Dark background
-
-  // Camera
-  const width = viewportContainer.value.clientWidth
-  const height = viewportContainer.value.clientHeight
-  
-  logger.debug('[DEBUG_ITERATION_1] Viewport dimensions', { width, height })
-  
-  camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000)
-  camera.position.set(
-    props.cellData.viewportSettings.cameraPosition[0],
-    props.cellData.viewportSettings.cameraPosition[1],
-    props.cellData.viewportSettings.cameraPosition[2]
-  )
-
-  // Renderer
-  renderer = new THREE.WebGLRenderer({ antialias: true })
-  renderer.setSize(width, height)
-  renderer.setPixelRatio(window.devicePixelRatio)
-  viewportContainer.value.appendChild(renderer.domElement)
-  
-  logger.debug('[DEBUG_ITERATION_1] Renderer created and appended to DOM', {
-    rendererDomElementTagName: renderer.domElement.tagName,
-    pixelRatio: window.devicePixelRatio
-  })
-
-  // Controls
-  controls = new OrbitControls(camera, renderer.domElement)
-  controls.enableDamping = true
-  controls.dampingFactor = 0.05
-  controls.autoRotate = autoRotate.value
-  controls.autoRotateSpeed = 2.0
-
-  // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
-  scene.add(ambientLight)
-
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-  directionalLight.position.set(5, 10, 7.5)
-  scene.add(directionalLight)
-
-  // Grid Helper
-  gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222)
-  if (showGrid.value) {
-    scene.add(gridHelper)
-  }
-
-  // Start animation loop
-  animate()
-
-  logger.info('[DEBUG_ITERATION_1] Three.js viewport initialized successfully', {
-    hasScene: !!scene,
-    hasCamera: !!camera,
-    hasRenderer: !!renderer,
-    hasControls: !!controls,
-    animationStarted: true,
-    timestamp: new Date().toISOString()
-  })
-}
-
-/**
- * Animation loop
- */
-const animate = () => {
-  animationFrameId = requestAnimationFrame(animate)
-
-  if (controls) {
-    controls.update()
-  }
-
-  if (renderer && scene && camera) {
-    renderer.render(scene, camera)
-  }
-}
-
-/**
- * Load and display a GLB mesh in the scene
- */
-const loadMesh = async (meshData: string) => {
-  if (!scene) {
-    logger.error('Scene not initialized')
-    return
-  }
-
-  logger.info('Loading GLB mesh into scene')
-
   try {
-    // Remove existing mesh
-    if (currentMesh) {
-      scene.remove(currentMesh)
-      currentMesh = null
-    }
-
-    // Initialize GLTF loader with Draco decoder
-    const loader = new GLTFLoader()
-    const dracoLoader = new DRACOLoader()
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
-    loader.setDRACOLoader(dracoLoader)
-
-    // Convert base64 data URL to blob URL for loading
-    const base64Data = meshData.split(',')[1]
+    const base64Data = generatedMesh.value.split(',')[1]
     const binaryData = atob(base64Data)
     const bytes = new Uint8Array(binaryData.length)
     for (let i = 0; i < binaryData.length; i++) {
       bytes[i] = binaryData.charCodeAt(i)
     }
     const blob = new Blob([bytes], { type: 'model/gltf-binary' })
-    const blobUrl = URL.createObjectURL(blob)
-
-    // Load GLB
-    loader.load(
-      blobUrl,
-      (gltf) => {
-        currentMesh = gltf.scene
-
-        // Center the mesh
-        const box = new THREE.Box3().setFromObject(currentMesh)
-        const center = box.getCenter(new THREE.Vector3())
-        currentMesh.position.sub(center)
-
-        // Scale to fit viewport
-        const size = box.getSize(new THREE.Vector3())
-        const maxDim = Math.max(size.x, size.y, size.z)
-        const scale = 2 / maxDim
-        currentMesh.scale.multiplyScalar(scale)
-
-        // Apply wireframe mode if enabled
-        if (wireframeMode.value) {
-          applyWireframeMode(currentMesh, true)
-        }
-
-        scene!.add(currentMesh)
-        logger.info('GLB mesh loaded and added to scene')
-
-        // Clean up blob URL
-        URL.revokeObjectURL(blobUrl)
-      },
-      undefined,
-      (err) => {
-        logger.error('Error loading GLB mesh', err)
-        error.value = `Failed to load 3D mesh: ${err.message}`
-      }
-    )
+    return URL.createObjectURL(blob)
   } catch (err: any) {
-    logger.error('Error processing mesh data', err)
-    error.value = `Failed to process mesh: ${err.message}`
+    logger.error('Error creating blob URL', err)
+    return null
   }
-}
+})
 
-/**
- * Apply or remove wireframe mode to all materials in a mesh
- */
-const applyWireframeMode = (object: THREE.Object3D, enable: boolean) => {
-  object.traverse((child) => {
-    if ((child as THREE.Mesh).isMesh) {
-      const mesh = child as THREE.Mesh
-      if (Array.isArray(mesh.material)) {
-        mesh.material.forEach((mat) => {
-          mat.wireframe = enable
-        })
-      } else {
-        mesh.material.wireframe = enable
-      }
-    }
-  })
-}
+// Track previous blob URL for cleanup
+let previousBlobUrl: string | null = null
+
+// Watch for mesh changes and cleanup old blob URLs
+watch(meshBlobUrl, (newUrl, oldUrl) => {
+  if (previousBlobUrl && previousBlobUrl !== newUrl) {
+    URL.revokeObjectURL(previousBlobUrl)
+    logger.debug('Revoked previous blob URL')
+  }
+  previousBlobUrl = newUrl
+})
 
 /**
  * Handle image file upload
@@ -273,9 +118,7 @@ const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
 
-  if (!file) {
-    return
-  }
+  if (!file) return
 
   if (!file.type.startsWith('image/')) {
     error.value = 'Please upload a valid image file (PNG, JPG, etc.)'
@@ -299,7 +142,70 @@ const handleFileUpload = (event: Event) => {
 }
 
 /**
- * Generate 3D mesh from input image
+ * Poll job status from Redis via backend API
+ * Prevents concurrent polls with isPolling flag
+ */
+const pollJobStatus = async (id: string) => {
+  // Prevent concurrent polling
+  if (isPolling.value) {
+    logger.debug('Poll already in progress, skipping')
+    return
+  }
+  
+  isPolling.value = true
+  
+  try {
+    const response = await fetch(`/api/cells/3d-job-status/${id}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`)
+    }
+
+    const status = await response.json()
+    jobStatus.value = status.status
+
+    logger.debug(`Job ${id} status: ${status.status}`)
+
+    if (status.status === 'completed') {
+      logger.info('Job completed, fetching result...')
+      
+      generatedMesh.value = status.mesh_data
+      meshMetadata.value = status.metadata
+      error.value = null
+      
+      if (pollingInterval.value) {
+        clearInterval(pollingInterval.value)
+        pollingInterval.value = null
+      }
+      
+      isGenerating.value = false
+      logger.info('3D mesh loaded successfully', meshMetadata.value)
+      
+    } else if (status.status === 'failed') {
+      error.value = status.error || 'Job processing failed'
+      logger.error('Job failed', error.value)
+      
+      if (pollingInterval.value) {
+        clearInterval(pollingInterval.value)
+        pollingInterval.value = null
+      }
+      
+      isGenerating.value = false
+    }
+    
+  } catch (err: any) {
+    logger.error('Error polling job status', err)
+  } finally {
+    isPolling.value = false
+  }
+}
+
+/**
+ * Generate 3D mesh from input image (queue job to Redis)
  */
 const generate3DMesh = async () => {
   if (!inputImage.value) {
@@ -307,12 +213,12 @@ const generate3DMesh = async () => {
     return
   }
 
-  logger.info('Starting 3D mesh generation')
+  logger.info('Starting 3D mesh generation (queueing job)')
   isGenerating.value = true
   error.value = null
+  jobStatus.value = 'queued'
 
   try {
-    // Call backend via execute-ephemeral endpoint
     const response = await fetch('/api/cells/execute-ephemeral', {
       method: 'POST',
       headers: {
@@ -323,7 +229,7 @@ const generate3DMesh = async () => {
         cell_type: '3d-mesh-prototyping-cell',
         input_data: {
           inputImage: inputImage.value,
-          reconstructionParams: props.cellData.reconstructionParams
+          reconstructionParams: props.cell.reconstructionParams
         }
       })
     })
@@ -334,25 +240,25 @@ const generate3DMesh = async () => {
 
     const result = await response.json()
 
-    if (result.success && result.result) {
-      generatedMesh.value = result.result.generatedMesh
-      meshMetadata.value = result.result.meshMetadata
-      error.value = null
-
-      logger.info('3D mesh generated successfully', meshMetadata.value)
-
-      // Load mesh into Three.js scene
-      if (generatedMesh.value) {
-        await loadMesh(generatedMesh.value)
-      }
+    if (result.success && result.job_id) {
+      jobId.value = result.job_id
+      logger.info(`Job queued: ${jobId.value}`)
+      
+      jobStatus.value = 'processing'
+      pollingInterval.value = window.setInterval(() => {
+        if (jobId.value) {
+          pollJobStatus(jobId.value)
+        }
+      }, 2000)
+      
     } else {
-      error.value = result.result?.error || 'Failed to generate 3D mesh'
-      logger.error('Generation failed', error.value)
+      error.value = result.error || 'Failed to queue 3D generation job'
+      logger.error('Job queueing failed', error.value)
+      isGenerating.value = false
     }
   } catch (err: any) {
     logger.error('Error generating 3D mesh', err)
     error.value = `Generation error: ${err.message}`
-  } finally {
     isGenerating.value = false
   }
 }
@@ -361,9 +267,7 @@ const generate3DMesh = async () => {
  * Download generated GLB mesh
  */
 const downloadMesh = () => {
-  if (!generatedMesh.value) {
-    return
-  }
+  if (!generatedMesh.value) return
 
   logger.info('Downloading GLB mesh')
 
@@ -380,112 +284,39 @@ const downloadMesh = () => {
   }
 }
 
-/**
- * Toggle auto-rotate
- */
+// Toggle functions
 const toggleAutoRotate = () => {
   autoRotate.value = !autoRotate.value
-  if (controls) {
-    controls.autoRotate = autoRotate.value
-  }
   logger.debug(`Auto-rotate: ${autoRotate.value}`)
 }
 
-/**
- * Toggle wireframe mode
- */
 const toggleWireframe = () => {
   wireframeMode.value = !wireframeMode.value
-  if (currentMesh) {
-    applyWireframeMode(currentMesh, wireframeMode.value)
-  }
   logger.debug(`Wireframe mode: ${wireframeMode.value}`)
 }
 
-/**
- * Toggle grid helper
- */
 const toggleGrid = () => {
   showGrid.value = !showGrid.value
-  if (scene && gridHelper) {
-    if (showGrid.value) {
-      scene.add(gridHelper)
-    } else {
-      scene.remove(gridHelper)
-    }
-  }
   logger.debug(`Grid: ${showGrid.value}`)
 }
 
-/**
- * Handle window resize
- */
-const handleResize = () => {
-  if (!viewportContainer.value || !camera || !renderer) {
-    return
-  }
-
-  const width = viewportContainer.value.clientWidth
-  const height = viewportContainer.value.clientHeight
-
-  camera.aspect = width / height
-  camera.updateProjectionMatrix()
-
-  renderer.setSize(width, height)
-
-  logger.debug(`Viewport resized: ${width}x${height}`)
-}
-
-// Lifecycle hooks
+// Lifecycle
 onMounted(() => {
-  logger.info('[DEBUG_ITERATION_1] 3D Mesh Prototyping Cell mounted')
-  logger.debug('[DEBUG_ITERATION_1] Props received on mount', {
-    hasPropsCellData: !!props.cellData,
-    propsCellData: props.cellData,
-    propsCellDataKeys: props.cellData ? Object.keys(props.cellData) : [],
-    propsCellDataStringified: JSON.stringify(props.cellData, null, 2),
-    inputImage: inputImage.value,
-    generatedMesh: generatedMesh.value,
-    meshMetadata: meshMetadata.value,
-    viewportContainerExists: !!viewportContainer.value,
-    timestamp: new Date().toISOString()
-  })
-  
-  logger.debug('[DEBUG_ITERATION_1] Component refs initialization', {
-    inputImage_value: inputImage.value,
-    generatedMesh_value: generatedMesh.value,
-    meshMetadata_value: meshMetadata.value,
-    isGenerating_value: isGenerating.value,
-    error_value: error.value,
-    autoRotate_value: autoRotate.value,
-    wireframeMode_value: wireframeMode.value,
-    showGrid_value: showGrid.value,
-  })
-  
-  initThreeJS()
-  window.addEventListener('resize', handleResize)
+  logger.info('3D Mesh Prototyping Cell (TresJS) mounted')
 })
 
 onUnmounted(() => {
-  logger.info('3D Mesh Prototyping Cell unmounted')
-
-  // Clean up Three.js
-  if (animationFrameId !== null) {
-    cancelAnimationFrame(animationFrameId)
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value)
   }
-
-  if (renderer) {
-    renderer.dispose()
+  
+  // Cleanup blob URL on unmount
+  if (previousBlobUrl) {
+    URL.revokeObjectURL(previousBlobUrl)
+    logger.debug('Revoked blob URL on unmount')
   }
-
-  window.removeEventListener('resize', handleResize)
-})
-
-// Watch for mesh changes
-watch(() => generatedMesh.value, (newMesh) => {
-  if (newMesh && scene) {
-    loadMesh(newMesh)
-  }
+  
+  logger.info('3D Mesh Prototyping Cell (TresJS) unmounted')
 })
 </script>
 
@@ -500,6 +331,13 @@ watch(() => generatedMesh.value, (newMesh) => {
     <div v-if="error" class="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded mb-4">
       <strong>Error:</strong> {{ error }}
     </div>
+
+    <!-- Job Status -->
+    <JobStatusIndicator
+      :is-generating="isGenerating"
+      :job-status="jobStatus"
+      :job-id="jobId"
+    />
 
     <!-- Input Section -->
     <div class="mb-6">
@@ -531,57 +369,72 @@ watch(() => generatedMesh.value, (newMesh) => {
       :disabled="!hasInputImage || isGenerating"
       class="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-2 px-6 rounded mb-6 transition"
     >
-      <span v-if="isGenerating">Generating 3D Mesh...</span>
+      <span v-if="isGenerating">{{ jobStatus === 'processing' ? 'Processing...' : 'Queueing...' }}</span>
       <span v-else>Generate 3D Mesh</span>
     </button>
 
     <!-- Viewport Controls -->
-    <div v-if="hasMesh" class="mb-4 flex gap-4">
-      <button
-        @click="toggleAutoRotate"
-        :class="['px-4 py-2 rounded transition', autoRotate ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-700 hover:bg-gray-600']"
-      >
-        Auto-Rotate: {{ autoRotate ? 'ON' : 'OFF' }}
-      </button>
-      <button
-        @click="toggleWireframe"
-        :class="['px-4 py-2 rounded transition', wireframeMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-700 hover:bg-gray-600']"
-      >
-        Wireframe: {{ wireframeMode ? 'ON' : 'OFF' }}
-      </button>
-      <button
-        @click="toggleGrid"
-        :class="['px-4 py-2 rounded transition', showGrid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-700 hover:bg-gray-600']"
-      >
-        Grid: {{ showGrid ? 'ON' : 'OFF' }}
-      </button>
-      <button
-        @click="downloadMesh"
-        class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded transition"
-      >
-        Download GLB
-      </button>
-    </div>
+    <ViewportControls
+      :auto-rotate="autoRotate"
+      :wireframe-mode="wireframeMode"
+      :show-grid="showGrid"
+      :has-mesh="hasMesh"
+      @toggle-auto-rotate="toggleAutoRotate"
+      @toggle-wireframe="toggleWireframe"
+      @toggle-grid="toggleGrid"
+      @download-mesh="downloadMesh"
+    />
 
-    <!-- Three.js Viewport -->
-    <div
-      ref="viewportContainer"
+    <!-- TresJS Viewport (Declarative) -->
+    <TresCanvas
+      v-if="hasMesh && meshBlobUrl"
       class="viewport-container bg-black rounded border border-gray-700"
+      window-size
+      :style="{ width: '100%', height: '500px' }"
+    >
+      <TresPerspectiveCamera
+        :position="cameraPosition"
+        :fov="50"
+        :near="0.1"
+        :far="1000"
+      />
+
+      <TresAmbientLight :intensity="0.6" />
+      <TresDirectionalLight :position="[5, 10, 7.5]" :intensity="0.8" />
+
+      <Grid v-if="showGrid" :size="10" :divisions="10" />
+
+      <OrbitControls
+        :auto-rotate="autoRotate"
+        :auto-rotate-speed="2.0"
+        :enable-damping="true"
+        :damping-factor="0.05"
+      />
+
+      <Suspense>
+        <template #default>
+          <GLBModelViewer :url="meshBlobUrl" :wireframe="wireframeMode" />
+        </template>
+        <template #fallback>
+          <TresMesh>
+            <TresBoxGeometry :args="[0.1, 0.1, 0.1]" />
+            <TresMeshBasicMaterial color="#666666" />
+          </TresMesh>
+        </template>
+      </Suspense>
+    </TresCanvas>
+
+    <!-- Placeholder when no mesh -->
+    <div
+      v-else
+      class="viewport-container bg-black rounded border border-gray-700 flex items-center justify-center"
       style="width: 100%; height: 500px;"
-    ></div>
+    >
+      <p class="text-gray-500">Upload an image and generate a 3D mesh to view it here</p>
+    </div>
 
     <!-- Mesh Metadata -->
-    <div v-if="meshMetadata" class="mt-6 bg-gray-800 p-4 rounded">
-      <h3 class="text-lg font-semibold mb-2">Mesh Information</h3>
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        <div><strong>Vertices:</strong> {{ meshMetadata.vertices?.toLocaleString() }}</div>
-        <div><strong>Faces:</strong> {{ meshMetadata.faces?.toLocaleString() }}</div>
-        <div><strong>File Size:</strong> {{ (meshMetadata.fileSizeBytes / 1024).toFixed(2) }} KB</div>
-        <div><strong>Compression:</strong> {{ meshMetadata.compressionEnabled ? 'Enabled' : 'Disabled' }}</div>
-        <div><strong>Generation Time:</strong> {{ meshMetadata.generationTimeSeconds?.toFixed(2) }}s</div>
-        <div v-if="meshMetadata.note" class="col-span-2 text-yellow-400"><strong>Note:</strong> {{ meshMetadata.note }}</div>
-      </div>
-    </div>
+    <MeshMetadataDisplay :metadata="meshMetadata" />
   </div>
 </template>
 
