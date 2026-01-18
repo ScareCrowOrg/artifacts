@@ -1,61 +1,60 @@
 """
 3D Mesh Prototyping Cell - Backend Execution Logic
 
-Implements Single Image-to-3D reconstruction pipeline with GLB export and Draco compression.
+Implements Single Image-to-3D reconstruction pipeline with hybrid job queueing architecture.
 
-NOTE: This is an MVP implementation. The actual 3D reconstruction model integration
-(Stable Fast 3D or InstantMesh) requires GPU infrastructure setup (RTX 4070 via Kind/WSL2).
-For now, this provides the execution interface and mock reconstruction for testing.
+Phase 5 Update: Implements Redis-based job queueing for hybrid Windows Worker integration.
+- Jobs are queued to Redis with input image written to shared volume
+- Windows Worker polls queue and processes jobs using SF3D + Blender pipeline
+- Results are accessed via shared volume and returned to client
+
+Architecture:
+- Manager Cell (Kind/Linux): API, job queueing, result retrieval
+- Windows Worker: GPU processing (SF3D + Blender)
+- Redis: Job queue and status tracking
+- Shared Volume: File transfer between Manager and Worker
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import logging
 import base64
-import io
+import json
+import uuid
+import time
+import asyncio
+from pathlib import Path
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
 async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Execute the 3D mesh prototyping cell.
+    Execute the 3D mesh prototyping cell with hybrid job queueing.
     
-    This function is called when the cell is executed via the ephemeral endpoint.
-    It receives an input image and returns a 3D mesh in GLB format.
+    Phase 5 Architecture:
+    1. Generate unique job_id
+    2. Write input image to shared volume
+    3. Queue job to Redis with parameters
+    4. Return job_id immediately (client polls for status)
+    
+    The Windows Worker will:
+    - Poll Redis queue for jobs
+    - Process using SF3D + Blender pipeline
+    - Write results to shared volume
+    - Update job status in Redis
     
     Args:
         cell_data: Cell instance data containing:
             - inputImage: Base64-encoded PNG image for reconstruction
             - reconstructionParams: Parameters for 3D generation
-            - viewportSettings: Display settings for the viewer
     
     Returns:
-        Dict with execution results:
-            - success: Boolean indicating if generation succeeded
-            - generatedMesh: Base64-encoded GLB mesh data
-            - meshMetadata: Info about vertices, faces, file size
-            - error: Error message if generation failed
-    
-    Example:
-        >>> await execute_cell({
-        ...     "inputImage": "data:image/png;base64,iVBORw0KGgo...",
-        ...     "reconstructionParams": {
-        ...         "targetFaces": 50000,
-        ...         "enableDracoCompression": True,
-        ...         "compressionLevel": 7
-        ...     }
-        ... })
-        {
-            "success": True,
-            "generatedMesh": "data:model/gltf-binary;base64,...",
-            "meshMetadata": {
-                "vertices": 25341,
-                "faces": 50000,
-                "fileSizeBytes": 456789,
-                "compressionRatio": 0.23,
-                "generationTimeSeconds": 18.5
-            }
-        }
+        Dict with job queueing results:
+            - success: Boolean indicating if job was queued
+            - job_id: Unique job identifier for status polling
+            - message: Status message
+            - error: Error message if queueing failed
     """
     try:
         input_image = cell_data.get('inputImage')
@@ -65,16 +64,14 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             return {
                 "success": False,
                 "error": "No input image provided. Please upload a PNG image for 3D reconstruction.",
-                "generatedMesh": None,
-                "meshMetadata": None
+                "job_id": None
             }
         
-        logger.info("Starting 3D mesh reconstruction...")
+        logger.info("Queueing 3D mesh reconstruction job...")
         logger.debug(f"Reconstruction params: {reconstruction_params}")
         
-        # MVP: Call the actual 3D reconstruction service
-        # This will be implemented when GPU infrastructure is ready
-        result = await generate_3d_mesh_from_image(
+        # Queue job to Redis (non-blocking)
+        job_result = await queue_3d_generation_job(
             input_image=input_image,
             target_faces=reconstruction_params.get('targetFaces', 50000),
             enable_draco=reconstruction_params.get('enableDracoCompression', True),
@@ -82,21 +79,19 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             target_size_mb=reconstruction_params.get('targetFileSizeMB', 5)
         )
         
-        if result.get("success"):
-            logger.info("3D mesh reconstruction completed successfully")
+        if job_result.get("success"):
+            logger.info(f"Job queued successfully: {job_result.get('job_id')}")
             return {
                 "success": True,
-                "generatedMesh": result.get("mesh_data"),
-                "meshMetadata": result.get("metadata"),
-                "message": "3D mesh generated successfully"
+                "job_id": job_result.get("job_id"),
+                "message": "3D mesh generation job queued successfully"
             }
         else:
-            logger.error(f"3D mesh reconstruction failed: {result.get('error')}")
+            logger.error(f"Job queueing failed: {job_result.get('error')}")
             return {
                 "success": False,
-                "error": result.get("error", "Unknown error during 3D reconstruction"),
-                "generatedMesh": None,
-                "meshMetadata": None
+                "error": job_result.get("error", "Unknown error during job queueing"),
+                "job_id": None
             }
     
     except Exception as e:
@@ -104,18 +99,233 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "success": False,
             "error": f"Execution error: {str(e)}",
-            "generatedMesh": None,
-            "meshMetadata": None
+            "job_id": None
         }
 
-
-async def generate_3d_mesh_from_image(
+async def queue_3d_generation_job(
     input_image: str,
     target_faces: int = 50000,
     enable_draco: bool = True,
     compression_level: int = 7,
     target_size_mb: float = 5.0
 ) -> Dict[str, Any]:
+    """
+    Queue a 3D generation job to Redis for processing by Windows Worker.
+    
+    Phase 5 Hybrid Architecture:
+    1. Generate unique job_id
+    2. Write input image to shared volume
+    3. Queue job metadata to Redis
+    4. Return job_id for client polling
+    
+    Args:
+        input_image: Base64-encoded PNG image
+        target_faces: Target face count for decimation
+        enable_draco: Enable Draco mesh compression
+        compression_level: Draco compression level (0-10)
+        target_size_mb: Target file size in MB
+    
+    Returns:
+        Dict containing:
+            - success: Boolean
+            - job_id: Unique job identifier
+            - error: Error message if failed
+    """
+    try:
+        # Generate unique job ID
+        job_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+        
+        logger.info(f"Queueing 3D generation job: {job_id}")
+        
+        # Get Redis client and shared volume path
+        redis_client = await get_redis_client()
+        shared_volume = get_shared_volume_path()
+        
+        # Create job directory in shared volume
+        job_dir = shared_volume / "jobs" / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"Created job directory: {job_dir}")
+        
+        # Write input image to shared volume
+        input_path = job_dir / "input.png"
+        try:
+            # Decode base64 image
+            if ',' in input_image:
+                # Remove data:image/png;base64, prefix
+                image_data = input_image.split(',', 1)[1]
+            else:
+                image_data = input_image
+            
+            image_bytes = base64.b64decode(image_data)
+            
+            with open(input_path, 'wb') as f:
+                f.write(image_bytes)
+            
+            logger.debug(f"Wrote input image to: {input_path} ({len(image_bytes)} bytes)")
+            
+        except Exception as e:
+            logger.error(f"Failed to write input image: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to write input image: {str(e)}",
+                "job_id": None
+            }
+        
+        # Prepare job metadata
+        job_data = {
+            "job_id": job_id,
+            "status": "queued",
+            "created_at": timestamp,
+            "input_image_path": f"/data/jobs/{job_id}/input.png",
+            "output_dir": f"/data/jobs/{job_id}",
+            "parameters": json.dumps({
+                "target_faces": target_faces,
+                "enable_draco": enable_draco,
+                "compression_level": compression_level,
+                "target_size_mb": target_size_mb
+            })
+        }
+        
+        # Store job status in Redis
+        status_key = f"scareverse:3d-status:{job_id}"
+        await redis_client.hmset(status_key, job_data)
+        await redis_client.expire(status_key, 3600)  # Expire after 1 hour
+        
+        logger.debug(f"Stored job status in Redis: {status_key}")
+        
+        # Queue job for worker
+        queue_key = "scareverse:3d-jobs:queue"
+        await redis_client.lpush(queue_key, json.dumps(job_data))
+        
+        logger.info(f"Job {job_id} queued successfully")
+        
+        return {
+            "success": True,
+            "job_id": job_id,
+            "message": "Job queued successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error queueing 3D generation job: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"Job queueing failed: {str(e)}",
+            "job_id": None
+        }
+
+
+async def get_job_status(job_id: str) -> Dict[str, Any]:
+    """
+    Get the status of a 3D generation job from Redis.
+    
+    Args:
+        job_id: Unique job identifier
+    
+    Returns:
+        Dict containing:
+            - status: Job status (queued/processing/completed/failed)
+            - mesh_data: Base64 GLB data (if completed)
+            - metadata: Processing metadata (if completed)
+            - error: Error message (if failed)
+    """
+    try:
+        redis_client = await get_redis_client()
+        status_key = f"scareverse:3d-status:{job_id}"
+        
+        # Get job status from Redis
+        job_data = await redis_client.hgetall(status_key)
+        
+        if not job_data:
+            return {
+                "status": "not_found",
+                "error": "Job not found"
+            }
+        
+        status = job_data.get("status", "unknown")
+        
+        if status == "completed":
+            # Job completed - read GLB from shared volume
+            shared_volume = get_shared_volume_path()
+            output_path = shared_volume / "jobs" / job_id / "output.glb"
+            
+            if output_path.exists():
+                with open(output_path, 'rb') as f:
+                    glb_bytes = f.read()
+                
+                glb_base64 = base64.b64encode(glb_bytes).decode('utf-8')
+                mesh_data = f"data:model/gltf-binary;base64,{glb_base64}"
+                
+                # Parse metadata from job_data
+                metadata_json = job_data.get("metadata", "{}")
+                metadata = json.loads(metadata_json) if metadata_json else {}
+                
+                return {
+                    "status": "completed",
+                    "mesh_data": mesh_data,
+                    "metadata": metadata
+                }
+            else:
+                return {
+                    "status": "failed",
+                    "error": "Output file not found"
+                }
+        
+        elif status == "failed":
+            error = job_data.get("error", "Unknown error")
+            return {
+                "status": "failed",
+                "error": error
+            }
+        
+        else:
+            # Job still in progress (queued or processing)
+            return {
+                "status": status
+            }
+        
+    except Exception as e:
+        logger.error(f"Error getting job status: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": f"Status retrieval failed: {str(e)}"
+        }
+
+
+async def get_redis_client():
+    """
+    Get Redis client for job queueing.
+    
+    Returns:
+        Redis client instance
+    """
+    try:
+        # Import Redis client from core
+        from app.core.redis_client import get_redis_client as get_core_redis
+        return await get_core_redis()
+    except ImportError:
+        # Fallback: create Redis client directly
+        import redis.asyncio as redis
+        import os
+        
+        redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+        return redis.from_url(redis_url, decode_responses=True)
+
+
+def get_shared_volume_path() -> Path:
+    """
+    Get the shared volume path for file transfer with Windows Worker.
+    
+    Returns:
+        Path object pointing to shared volume
+    """
+    import os
+    
+    shared_volume_env = os.getenv('SHARED_VOLUME_PATH', '/mnt/wsl/scareverse')
+    return Path(shared_volume_env)
+
+
+
     """
     Generate a 3D mesh from a single input image using AI reconstruction.
     
