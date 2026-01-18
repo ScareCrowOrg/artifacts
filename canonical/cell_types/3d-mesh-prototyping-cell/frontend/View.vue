@@ -27,25 +27,7 @@ import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
 const logger = createLogger('component:3d-mesh-prototyping-cell-tresjs')
 
 interface Props {
-  cell: {
-    inputImage: string | null
-    generatedMesh: string | null
-    meshMetadata: Record<string, any> | null
-    isGenerating: boolean
-    error: string | null
-    reconstructionParams: {
-      targetFaces: number
-      enableDracoCompression: boolean
-      compressionLevel: number
-      targetFileSizeMB: number
-    }
-    viewportSettings: {
-      autoRotate: boolean
-      wireframeMode: boolean
-      showGrid: boolean
-      cameraPosition: number[]
-    }
-  }
+  cell: any // Flexible to handle initial_data, state, or direct properties
 }
 
 const props = defineProps<Props>()
@@ -53,15 +35,55 @@ const emit = defineEmits<{
   (e: 'update:cell', value: any): void
 }>()
 
-// Component state
-const inputImage = ref<string | null>(props.cell.inputImage)
-const generatedMesh = ref<string | null>(props.cell.generatedMesh)
-const meshMetadata = ref<Record<string, any> | null>(props.cell.meshMetadata)
-const isGenerating = ref<boolean>(props.cell.isGenerating)
-const error = ref<string | null>(props.cell.error)
-const autoRotate = ref<boolean>(props.cell.viewportSettings.autoRotate)
-const wireframeMode = ref<boolean>(props.cell.viewportSettings.wireframeMode)
-const showGrid = ref<boolean>(props.cell.viewportSettings.showGrid)
+// Debug logs to inspect cell structure (ITERATION #4)
+console.log('[DEBUG_ITERATION_4] props.cell:', JSON.parse(JSON.stringify(props.cell)))
+if (props.cell && props.cell.initial_data) {
+  console.log('[DEBUG_ITERATION_4] props.cell.initial_data:', JSON.parse(JSON.stringify(props.cell.initial_data)))
+}
+if (props.cell && props.cell.state) {
+  console.log('[DEBUG_ITERATION_4] props.cell.state:', JSON.parse(JSON.stringify(props.cell.state)))
+}
+
+// Component state - Safe reactive access with defensive defaults (ITERATION #4)
+const inputImage = computed(() => {
+  const imageUrl = props.cell?.initial_data?.inputImage || props.cell?.state?.inputImage || props.cell?.inputImage || ''
+  console.log('[DEBUG_ITERATION_4] Computed inputImage:', imageUrl)
+  return imageUrl
+})
+
+const generatedMesh = computed(() => {
+  return props.cell?.initial_data?.generatedMesh || props.cell?.state?.generatedMesh || props.cell?.generatedMesh || ''
+})
+
+const meshMetadata = computed(() => {
+  return props.cell?.initial_data?.meshMetadata || props.cell?.state?.meshMetadata || props.cell?.meshMetadata || null
+})
+
+const isGenerating = computed(() => {
+  return props.cell?.initial_data?.isGenerating || props.cell?.state?.isGenerating || props.cell?.isGenerating || false
+})
+
+const error = computed(() => {
+  return props.cell?.initial_data?.error || props.cell?.state?.error || props.cell?.error || null
+})
+
+const autoRotate = computed(() => {
+  return props.cell?.initial_data?.viewportSettings?.autoRotate || 
+         props.cell?.state?.viewportSettings?.autoRotate || 
+         props.cell?.viewportSettings?.autoRotate || false
+})
+
+const wireframeMode = computed(() => {
+  return props.cell?.initial_data?.viewportSettings?.wireframeMode || 
+         props.cell?.state?.viewportSettings?.wireframeMode || 
+         props.cell?.viewportSettings?.wireframeMode || false
+})
+
+const showGrid = computed(() => {
+  return props.cell?.initial_data?.viewportSettings?.showGrid || 
+         props.cell?.state?.viewportSettings?.showGrid || 
+         props.cell?.viewportSettings?.showGrid || true
+})
 
 // Job polling
 const jobId = ref<string | null>(null)
@@ -75,7 +97,11 @@ const fileInput = ref<HTMLInputElement | null>(null)
 // Computed
 const hasInputImage = computed(() => inputImage.value !== null && inputImage.value !== '')
 const hasMesh = computed(() => generatedMesh.value !== null && generatedMesh.value !== '')
-const cameraPosition = computed(() => props.cell.viewportSettings.cameraPosition)
+const cameraPosition = computed(() => {
+  return props.cell?.initial_data?.viewportSettings?.cameraPosition || 
+         props.cell?.state?.viewportSettings?.cameraPosition || 
+         props.cell?.viewportSettings?.cameraPosition || [0, 0, 5]
+})
 
 /**
  * Convert base64 data URL to blob URL for GLTFLoader
@@ -229,7 +255,14 @@ const generate3DMesh = async () => {
         cell_type: '3d-mesh-prototyping-cell',
         input_data: {
           inputImage: inputImage.value,
-          reconstructionParams: props.cell.reconstructionParams
+          reconstructionParams: props.cell?.initial_data?.reconstructionParams || 
+                                props.cell?.state?.reconstructionParams || 
+                                props.cell?.reconstructionParams || {
+                                  targetFaces: 10000,
+                                  enableDracoCompression: true,
+                                  compressionLevel: 7,
+                                  targetFileSizeMB: 10
+                                }
         }
       })
     })
@@ -303,6 +336,13 @@ const toggleGrid = () => {
 // Lifecycle
 onMounted(() => {
   logger.info('3D Mesh Prototyping Cell (TresJS) mounted')
+  
+  // Debug check for inputImage availability (ITERATION #4)
+  if (!inputImage.value) {
+    console.warn('[DEBUG_ITERATION_4] inputImage is empty on mount. Cell may not have initial data yet.')
+  } else {
+    logger.info('inputImage available on mount:', inputImage.value)
+  }
 })
 
 onUnmounted(() => {
