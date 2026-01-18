@@ -26,38 +26,39 @@ def mock_stable_diffusion_service():
     return _create_mock
 
 
+@pytest.mark.asyncio
 class TestExecuteCell:
     """Tests for execute_cell function."""
     
-    def test_execute_cell_with_existing_png(self):
+    async def test_execute_cell_with_existing_png(self):
         """Test cell execution with already generated PNG."""
         cell_data = {
             "prompt": "A blue crystal",
             "generatedPng": "data:image/png;base64,iVBORw0KGgoAAAANS..."
         }
         
-        result = main.execute_cell(cell_data)
+        result = await main.execute_cell(cell_data)
         
         assert result["success"] is True
         assert result["message"] == "PNG generator cell ready"
         assert result["has_png"] is True
         assert result["generatedPng"] == "data:image/png;base64,iVBORw0KGgoAAAANS..."
     
-    def test_execute_cell_empty_prompt(self):
+    async def test_execute_cell_empty_prompt(self):
         """Test cell execution with empty prompt."""
         cell_data = {
             "prompt": "",
             "generatedPng": None
         }
         
-        result = main.execute_cell(cell_data)
+        result = await main.execute_cell(cell_data)
         
         assert result["success"] is True
         assert result["prompt"] == ""
         assert result["has_png"] is False
         assert result["message"] == "No prompt provided"
     
-    def test_execute_cell_generates_png_success(self, mock_stable_diffusion_service):
+    async def test_execute_cell_generates_png_success(self, mock_stable_diffusion_service):
         """Test cell execution that triggers PNG generation successfully."""
         cell_data = {
             "prompt": "A red dragon",
@@ -76,7 +77,7 @@ class TestExecuteCell:
         })
         
         with patch.dict('sys.modules', {'app.services.stable_diffusion_service': mock_module}):
-            result = main.execute_cell(cell_data)
+            result = await main.execute_cell(cell_data)
         
         assert result["success"] is True
         assert result["message"] == "PNG generated successfully"
@@ -85,7 +86,7 @@ class TestExecuteCell:
         assert result["generatedPng"].startswith("data:image/png;base64,")
         assert "fallback" not in result
     
-    def test_execute_cell_generates_png_fallback(self, mock_stable_diffusion_service):
+    async def test_execute_cell_generates_png_fallback(self, mock_stable_diffusion_service):
         """Test cell execution falls back to placeholder when service fails."""
         cell_data = {
             "prompt": "A mountain",
@@ -99,7 +100,7 @@ class TestExecuteCell:
         })
         
         with patch.dict('sys.modules', {'app.services.stable_diffusion_service': mock_module}):
-            result = main.execute_cell(cell_data)
+            result = await main.execute_cell(cell_data)
         
         assert result["success"] is True
         assert result["has_png"] is True

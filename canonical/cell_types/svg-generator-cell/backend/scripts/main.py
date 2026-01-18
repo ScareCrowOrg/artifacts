@@ -24,7 +24,7 @@ def _create_fallback_svg() -> str:
     return MINIMAL_FALLBACK_SVG
 
 
-def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute the SVG generator cell.
     
@@ -38,7 +38,7 @@ def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         Dict with execution results including generated SVG
         
     Example:
-        >>> execute_cell({"prompt": "A simple circle", "generatedSvg": None})
+        >>> await execute_cell({"prompt": "A simple circle", "generatedSvg": None})
         {
             "success": True,
             "message": "SVG generated successfully",
@@ -79,14 +79,13 @@ def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     model = cell_data.get('selectedModel', 'mistral')
     
     try:
-        # Call async generation function in sync context
-        # Note: asyncio.run() creates a new event loop. This is acceptable
-        # for ephemeral cell execution (always called from sync context).
-        # If called from async context, this would fail.
-        result = asyncio.run(generate_svg_from_prompt(
+        # Call async generation function directly
+        # This works because execute_cell is now async and can be called
+        # from FastAPI's async context without creating a new event loop
+        result = await generate_svg_from_prompt(
             prompt=prompt,
             model=model
-        ))
+        )
         
         if result.get("success"):
             svg_code = result.get("svg", "")
@@ -248,5 +247,5 @@ if __name__ == "__main__":
             "generatedSvg": None
         }
     
-    result = execute_cell(cell_data)
+    result = asyncio.run(execute_cell(cell_data))
     print(json.dumps(result, indent=2))

@@ -42,7 +42,7 @@ def _create_fallback_png() -> str:
         return f"data:image/png;base64,{MINIMAL_FALLBACK_PNG}"
 
 
-def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute the PNG generator cell.
     
@@ -56,7 +56,7 @@ def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         Dict with execution results including generated PNG
         
     Example:
-        >>> execute_cell({"prompt": "A red dragon", "generatedPng": None})
+        >>> await execute_cell({"prompt": "A red dragon", "generatedPng": None})
         {
             "success": True,
             "message": "PNG generated successfully",
@@ -102,18 +102,17 @@ def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     seed = gen_params.get('seed', -1)
     
     try:
-        # Call async generation function in sync context
-        # Note: asyncio.run() creates a new event loop. This is acceptable
-        # for ephemeral cell execution (always called from sync context).
-        # If called from async context, this would fail.
-        result = asyncio.run(generate_png_from_prompt(
+        # Call async generation function directly
+        # This works because execute_cell is now async and can be called
+        # from FastAPI's async context without creating a new event loop
+        result = await generate_png_from_prompt(
             prompt=prompt,
             width=width,
             height=height,
             steps=steps,
             cfg_scale=cfg_scale,
             seed=seed
-        ))
+        )
         
         if result.get("success"):
             # Ensure proper Base64 prefix
@@ -260,5 +259,5 @@ if __name__ == "__main__":
             "generatedPng": None
         }
     
-    result = execute_cell(cell_data)
+    result = asyncio.run(execute_cell(cell_data))
     print(json.dumps(result, indent=2))

@@ -33,10 +33,11 @@ def mock_llm_service():
     return _create_mock
 
 
+@pytest.mark.asyncio
 class TestExecuteCell:
     """Tests for execute_cell function."""
     
-    def test_execute_cell_with_existing_svg(self):
+    async def test_execute_cell_with_existing_svg(self):
         """Test cell execution with already generated SVG."""
         svg_code = '<svg><circle cx="50" cy="50" r="40" fill="blue"/></svg>'
         cell_data = {
@@ -44,28 +45,28 @@ class TestExecuteCell:
             "generatedSvg": svg_code
         }
         
-        result = execute_cell(cell_data)
+        result = await execute_cell(cell_data)
         
         assert result["success"] is True
         assert result["message"] == "SVG generator cell ready"
         assert result["has_svg"] is True
         assert result["generatedSvg"] == svg_code
     
-    def test_execute_cell_empty_prompt(self):
+    async def test_execute_cell_empty_prompt(self):
         """Test executing cell with empty prompt."""
         cell_data = {
             "prompt": "",
             "generatedSvg": None
         }
         
-        result = execute_cell(cell_data)
+        result = await execute_cell(cell_data)
         
         assert result["success"] is True
         assert result["prompt"] == ""
         assert result["has_svg"] is False
         assert result["message"] == "No prompt provided"
     
-    def test_execute_cell_generates_svg_success(self, mock_llm_service):
+    async def test_execute_cell_generates_svg_success(self, mock_llm_service):
         """Test cell execution that triggers SVG generation successfully."""
         cell_data = {
             "prompt": "A red square",
@@ -85,7 +86,7 @@ class TestExecuteCell:
             'app.services.llm_service': MagicMock(LLMService=mock_llm),
             'app.models': MagicMock(EnrichedPrompt=mock_enriched_prompt, ConversationMessage=MagicMock())
         }):
-            result = execute_cell(cell_data)
+            result = await execute_cell(cell_data)
         
         assert result["success"] is True
         assert result["message"] == "SVG generated successfully"
@@ -94,7 +95,7 @@ class TestExecuteCell:
         assert result["generatedSvg"].startswith("<svg")
         assert "fallback" not in result
     
-    def test_execute_cell_generates_svg_fallback(self, mock_llm_service):
+    async def test_execute_cell_generates_svg_fallback(self, mock_llm_service):
         """Test cell execution falls back to placeholder when service fails."""
         cell_data = {
             "prompt": "A complex shape",
@@ -113,7 +114,7 @@ class TestExecuteCell:
             'app.services.llm_service': MagicMock(LLMService=mock_llm),
             'app.models': MagicMock(EnrichedPrompt=mock_enriched_prompt, ConversationMessage=MagicMock())
         }):
-            result = execute_cell(cell_data)
+            result = await execute_cell(cell_data)
         
         assert result["success"] is True
         assert result["has_svg"] is True
@@ -122,11 +123,11 @@ class TestExecuteCell:
         assert result.get("fallback") is True
         assert "error" in result
     
-    def test_execute_cell_default_values(self):
+    async def test_execute_cell_default_values(self):
         """Test executing cell with missing fields."""
         cell_data = {}
         
-        result = execute_cell(cell_data)
+        result = await execute_cell(cell_data)
         
         assert result["success"] is True
         assert result["prompt"] == ""
@@ -185,7 +186,7 @@ class TestGenerateSvgFromPrompt:
         assert result["success"] is False
         assert "error" in result
         # Service might fail due to import or configuration issues
-        assert "error" in result["error"].lower() or "not configured" in result["error"].lower()
+        assert "not available" in result["error"].lower() or "not configured" in result["error"].lower()
 
 
 class TestCellDataStructure:
