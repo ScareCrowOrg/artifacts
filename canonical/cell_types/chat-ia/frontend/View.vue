@@ -186,13 +186,144 @@ const chat = useChatIA(
   scrollToBottom,
 )
 
+/**
+ * Send message via Agent Mode or regular chat
+ * MVP 4: Routes to agent endpoint when Agent Mode is active
+ */
+async function sendMessageHandler(): Promise<void> {
+  if (chatStore.isAgentMode) {
+    // Agent Mode active - route to agent endpoint
+    await sendAgentMessage()
+  } else {
+    // Regular chat mode
+    await chat.sendMessage()
+  }
+}
+
+/**
+ * Send message via Agent Mode endpoint
+ * Creates session if needed, streams logs to terminal
+ */
+async function sendAgentMessage(): Promise<void> {
+  const userMessage = chat.userInput.value
+  if (!userMessage.trim()) return
+
+  try {
+    // Create agent session if not exists
+    if (!chatStore.agentSessionId) {
+      const conversationId = chatHistory.currentConversationId.value || `conv_${Date.now()}`
+      
+      // Call agent session creation endpoint
+      const API_BASE = window.location.origin
+      const response = await fetch(`${API_BASE}/api/agent/sessions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          conversation_id: conversationId,
+          files: [],  // TODO: Allow user to select files
+          model: 'ollama/qwen2.5-coder:7b',
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create agent session')
+      }
+
+      const session = await response.json()
+      chatStore.setAgentSession(session.session_id)
+      
+      // Show terminal and connect WebSocket
+      chatStore.showAgentTerminal = true
+    }
+
+    // Add user message to chat history
+    const userMsg = {
+      role: 'user',
+      content: userMessage,
+      timestamp: new Date(),
+    }
+    chat.messages.value.push(userMsg)
+    chatHistory.addMessage(userMsg)
+    
+    // Clear input
+    chat.userInput.value = ''
+    
+    // Send command to agent endpoint (SSE streaming)
+    const API_BASE = window.location.origin
+    const response = await fetch(`${API_BASE}/api/agent/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      },
+      body: JSON.stringify({
+        conversation_id: chatStore.agentSessionId,
+        command: userMessage,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to send agent command')
+    }
+
+    // Read SSE stream and add to chat as assistant message
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    let assistantResponse = '🤖 Agent Mode executing...\n\n'
+
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        // Parse SSE format (event: log\ndata: content\n\n)
+        const lines = chunk.split('\n')
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.substring(6)
+            assistantResponse += data + '\n'
+          }
+        }
+      }
+    }
+
+    // Add agent response to chat
+    const assistantMsg = {
+      role: 'assistant',
+      content: assistantResponse.trim() || 'Agent command completed.',
+      timestamp: new Date(),
+      model: 'Agent Mode',
+    }
+    chat.messages.value.push(assistantMsg)
+    chatHistory.addMessage(assistantMsg)
+    
+  } catch (error) {
+    console.error('[Agent Mode] Error:', error)
+    
+    // Add error message to chat
+    const errorMsg = {
+      role: 'assistant',
+      content: `❌ Error in Agent Mode: ${(error as Error).message}`,
+      timestamp: new Date(),
+    }
+    chat.messages.value.push(errorMsg)
+    chatHistory.addMessage(errorMsg)
+  } finally {
+    scrollToBottom()
+  }
+}
+
 // Methods
 function handleEnter(event: KeyboardEvent): void {
   if (event.shiftKey || event.ctrlKey || event.metaKey) {
     return
   }
   event.preventDefault()
-  chat.sendMessage()
+  sendMessageHandler()
   // Hide settings panel after sending message
   showSettingsPanel.value = false
   
