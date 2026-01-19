@@ -125,6 +125,7 @@ import { useChatHistory } from '@/composables/useChatHistory'
 import { useChatIA } from '@/composables/useChatIA'
 import { useChatStore } from '@/stores/chat'
 import { useUIStore } from '@/stores/ui'
+import authService from '@/services/authService'
 
 /**
  * Props interface for Chat IA Cell
@@ -213,14 +214,19 @@ async function sendAgentMessage(): Promise<void> {
     if (!chatStore.agentSessionId) {
       const conversationId = chatHistory.currentConversationId.value || `conv_${Date.now()}`
       
-      // Call agent session creation endpoint
-      // Note: Token retrieval could be improved using authService
+      // Call agent session creation endpoint using authService
       const API_BASE = window.location.origin
+      const token = authService.getToken()
+      
+      if (!token) {
+        throw new Error('No authentication token available')
+      }
+      
       const response = await fetch(`${API_BASE}/api/agent/sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           conversation_id: conversationId,
@@ -254,11 +260,17 @@ async function sendAgentMessage(): Promise<void> {
     
     // Send command to agent endpoint (SSE streaming)
     const API_BASE = window.location.origin
+    const token = authService.getToken()
+    
+    if (!token) {
+      throw new Error('No authentication token available')
+    }
+    
     const response = await fetch(`${API_BASE}/api/agent/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
         conversation_id: chatStore.agentSessionId,
