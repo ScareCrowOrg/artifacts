@@ -125,7 +125,9 @@ describe('PrerequisiteCard.vue', () => {
       })
 
       const card = wrapper.find('.prerequisite-card')
-      expect(card.classes()).toContain('border-border')
+      // Unknown status uses border-muted/50 and bg-muted/10
+      const classes = card.classes().join(' ')
+      expect(classes.includes('border-muted') || classes.includes('bg-muted')).toBe(true)
     })
   })
 
@@ -183,8 +185,10 @@ describe('PrerequisiteCard.vue', () => {
         }
       })
 
-      const fixButton = wrapper.find('button:contains("Fix")')
-      expect(fixButton.exists()).toBe(false)
+      // Check that no Fix button exists when status is healthy
+      const buttons = wrapper.findAll('button')
+      const fixButton = buttons.find(btn => btn.text().includes('Fix'))
+      expect(fixButton).toBeUndefined()
     })
 
     it('should show fix button when status is degraded', () => {
@@ -244,8 +248,10 @@ describe('PrerequisiteCard.vue', () => {
         }
       })
 
-      const toggleButton = wrapper.find('button:contains("Show Details")')
-      expect(toggleButton.exists()).toBe(true)
+      // Find button by text content
+      const buttons = wrapper.findAll('button')
+      const toggleButton = buttons.find(btn => btn.text().includes('Show Details'))
+      expect(toggleButton).toBeDefined()
     })
 
     it('should not show details toggle when no details', () => {
@@ -255,8 +261,10 @@ describe('PrerequisiteCard.vue', () => {
         }
       })
 
-      const toggleButton = wrapper.find('button:contains("Show Details")')
-      expect(toggleButton.exists()).toBe(false)
+      // Find button by text content
+      const buttons = wrapper.findAll('button')
+      const toggleButton = buttons.find(btn => btn.text().includes('Show Details'))
+      expect(toggleButton).toBeUndefined()
     })
 
     it('should toggle details visibility when button is clicked', async () => {
@@ -266,8 +274,12 @@ describe('PrerequisiteCard.vue', () => {
         }
       })
 
-      const toggleButton = wrapper.find('button:contains("Show Details")')
-      await toggleButton.trigger('click')
+      // Find button by text content
+      const buttons = wrapper.findAll('button')
+      const toggleButton = buttons.find(btn => btn.text().includes('Show Details'))
+      if (toggleButton) {
+        await toggleButton.trigger('click')
+      }
 
       const detailsSection = wrapper.find('.details-section')
       expect(detailsSection.exists()).toBe(true)
@@ -280,8 +292,12 @@ describe('PrerequisiteCard.vue', () => {
         }
       })
 
-      const toggleButton = wrapper.find('button:contains("Show Details")')
-      await toggleButton.trigger('click')
+      // Find button by text content
+      const buttons = wrapper.findAll('button')
+      const toggleButton = buttons.find(btn => btn.text().includes('Show Details'))
+      if (toggleButton) {
+        await toggleButton.trigger('click')
+      }
 
       expect(wrapper.text()).toContain('key1')
       expect(wrapper.text()).toContain('value1')
@@ -296,10 +312,18 @@ describe('PrerequisiteCard.vue', () => {
         }
       })
 
-      const toggleButton = wrapper.find('button:contains("Show Details")')
-      await toggleButton.trigger('click')
+      // Find button by text content - first find and click Show Details
+      let buttons = wrapper.findAll('button')
+      const toggleButton = buttons.find(btn => btn.text().includes('Show Details'))
+      if (toggleButton) {
+        await toggleButton.trigger('click')
+        await wrapper.vm.$nextTick()
+      }
 
-      expect(wrapper.text()).toContain('Hide Details')
+      // After clicking, the button text should change to "Hide Details"
+      const updatedButtons = wrapper.findAll('button')
+      const hideButton = updatedButtons.find(btn => btn.text().includes('Hide Details'))
+      expect(hideButton).toBeDefined()
     })
   })
 

@@ -257,8 +257,12 @@ describe('View.vue', () => {
         }
       })
 
-      const toggleButton = wrapper.find('button:contains("Auto-Refresh")')
-      await toggleButton.trigger('click')
+      // Find button by text content
+      const buttons = wrapper.findAll('button')
+      const toggleButton = buttons.find(btn => btn.text().includes('Auto-Refresh'))
+      if (toggleButton) {
+        await toggleButton.trigger('click')
+      }
 
       expect(mockStopHealthChecks).toHaveBeenCalled()
     })
@@ -274,8 +278,12 @@ describe('View.vue', () => {
         }
       })
 
-      const toggleButton = wrapper.find('button:contains("Auto-Refresh")')
-      await toggleButton.trigger('click')
+      // Find button by text content
+      const buttons = wrapper.findAll('button')
+      const toggleButton = buttons.find(btn => btn.text().includes('Auto-Refresh'))
+      if (toggleButton) {
+        await toggleButton.trigger('click')
+      }
 
       expect(wrapper.emitted('update:cell')).toBeTruthy()
     })
