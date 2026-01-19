@@ -330,11 +330,22 @@ def get_shared_volume_path() -> Path:
 
 
 # Legacy mock function kept for backward compatibility and testing
-    1. Image preprocessing (resize, normalize)
-    2. AI model inference (Single Image-to-3D reconstruction)
-    3. Mesh post-processing (decimation, UV mapping)
-    4. GLB export with Draco compression
-    5. Size optimization to meet target file size
+def generate_3d_mesh_from_image(
+    input_image: str,
+    target_faces: int = 50000,
+    enable_draco: bool = True,
+    compression_level: int = 7,
+    target_size_mb: float = 5.0
+) -> Dict[str, Any]:
+    """
+    Generate 3D mesh from single image using GPU-accelerated reconstruction.
+    
+    Pipeline stages:
+        1. Image preprocessing (resize, normalize)
+        2. AI model inference (Single Image-to-3D reconstruction)
+        3. Mesh post-processing (decimation, UV mapping)
+        4. GLB export with Draco compression
+        5. Size optimization to meet target file size
     
     Args:
         input_image: Base64-encoded PNG image
