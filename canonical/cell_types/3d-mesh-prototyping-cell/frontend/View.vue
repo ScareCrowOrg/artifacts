@@ -16,9 +16,12 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { TresCanvas } from '@tresjs/core'
+import { TresCanvas, TresPerspectiveCamera, TresAmbientLight, TresDirectionalLight, TresMesh } from '@tresjs/core'
 import { OrbitControls, Grid } from '@tresjs/cientos'
+import { TresBoxGeometry, TresMeshBasicMaterial } from '@tresjs/core'
 import { createLogger } from '@/utils/logger'
+import { apiFetch } from '@/services/apiService'
+import authService from '@/services/authService'
 import GLBModelViewer from './components/GLBModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
 import ViewportControls from './components/ViewportControls.vue'
@@ -200,6 +203,7 @@ const handleFileUpload = (event: Event) => {
 /**
  * Poll job status from Redis via backend API
  * Prevents concurrent polls with isPolling flag
+ * ITERATION #6: Fixed authentication - using apiFetch
  */
 const pollJobStatus = async (id: string) => {
   // Prevent concurrent polling
@@ -211,9 +215,10 @@ const pollJobStatus = async (id: string) => {
   isPolling.value = true
   
   try {
-    const response = await fetch(`/api/cells/3d-job-status/${id}`, {
+    // ITERATION #6: Use apiFetch for automatic auth handling
+    const response = await apiFetch(`/api/cells/3d-job-status/${id}`, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       }
     })
 
@@ -262,6 +267,7 @@ const pollJobStatus = async (id: string) => {
 
 /**
  * Generate 3D mesh from input image (queue job to Redis)
+ * ITERATION #6: Fixed authentication - using apiFetch with automatic auth headers
  */
 const generate3DMesh = async () => {
   if (!inputImage.value) {
@@ -269,17 +275,27 @@ const generate3DMesh = async () => {
     return
   }
 
+  // ITERATION #6: Check if user is authenticated
+  if (!authService.isAuthenticated()) {
+    localError.value = 'You must be logged in to generate 3D meshes'
+    logger.warn('User not authenticated, cannot generate mesh')
+    return
+  }
+
   logger.info('Starting 3D mesh generation (queueing job)')
+  console.log('[DEBUG_ITERATION_6] Auth token available:', authService.getToken() ? 'Yes' : 'No')
+  console.log('[DEBUG_ITERATION_6] Auth headers:', authService.getAuthHeaders())
+  
   localIsGenerating.value = true // ITERATION #5 - Use local ref
   localError.value = null
   jobStatus.value = 'queued'
 
   try {
-    const response = await fetch('/api/cells/execute-ephemeral', {
+    // ITERATION #6: Use apiFetch instead of raw fetch for automatic auth handling
+    const response = await apiFetch('/api/cells/execute-ephemeral', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
       body: JSON.stringify({
         cell_type: '3d-mesh-prototyping-cell',
@@ -297,11 +313,14 @@ const generate3DMesh = async () => {
       })
     })
 
+    console.log('[DEBUG_ITERATION_6] API response status:', response.status)
+
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`)
     }
 
     const result = await response.json()
+    console.log('[DEBUG_ITERATION_6] API response data:', result)
 
     if (result.success && result.job_id) {
       jobId.value = result.job_id
@@ -321,6 +340,7 @@ const generate3DMesh = async () => {
     }
   } catch (err: any) {
     logger.error('Error generating 3D mesh', err)
+    console.error('[DEBUG_ITERATION_6] Full error:', err)
     localError.value = `Generation error: ${err.message}` // ITERATION #5 - Use local ref
     localIsGenerating.value = false // ITERATION #5 - Use local ref
   }
