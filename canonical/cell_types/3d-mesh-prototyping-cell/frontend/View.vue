@@ -16,9 +16,8 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { TresCanvas, TresPerspectiveCamera, TresAmbientLight, TresDirectionalLight, TresMesh } from '@tresjs/core'
+import { TresCanvas } from '@tresjs/core'
 import { OrbitControls, Grid } from '@tresjs/cientos'
-import { TresBoxGeometry, TresMeshBasicMaterial } from '@tresjs/core'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
 import authService from '@/services/authService'
