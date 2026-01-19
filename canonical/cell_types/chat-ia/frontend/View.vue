@@ -228,7 +228,7 @@ async function sendAgentMessage(): Promise<void> {
       const conversationId = chatHistory.currentConversationId.value || `conv_${Date.now()}`
       
       // Collect file paths from attachments for Agent Mode context (MVP 4.1)
-      const files = chat.attachments.value.map((att: any) => att.path || att.filename)
+      const files = chat.attachments.value.map((att: { path?: string; filename: string }) => att.path || att.filename)
       
       // Call agent session creation endpoint using authService
       const API_BASE = window.location.origin
