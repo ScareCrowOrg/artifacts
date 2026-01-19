@@ -360,7 +360,7 @@ async function handleGeneratePNG(): Promise<void> {
   error.value = null
 
   try {
-    const response = await fetch('/api/v1/cells/execute', {
+    const response = await fetch('/api/cells/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -398,7 +398,7 @@ async function handleVectorize(): Promise<void> {
   error.value = null
 
   try {
-    const response = await fetch('/api/v1/cells/execute', {
+    const response = await fetch('/api/cells/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

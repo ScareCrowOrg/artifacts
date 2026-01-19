@@ -321,7 +321,7 @@ const prefixSegments = computed<string[]>(() => {
 // Methods
 async function loadRedisInfo(): Promise<void> {
   try {
-    const response = await fetch('/api/v1/redis-explorer/info', {
+    const response = await fetch('/api/redis-explorer/info', {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
@@ -346,7 +346,7 @@ async function scanKeys(): Promise<void> {
   try {
     logger.debug('Scanning keys', { prefix: currentPrefix.value })
     
-    const response = await fetch('/api/v1/redis-explorer/scan', {
+    const response = await fetch('/api/redis-explorer/scan', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -385,7 +385,7 @@ async function selectKey(key: string): Promise<void> {
   try {
     logger.debug('Loading key value', { key })
     
-    const response = await fetch(`/api/v1/redis-explorer/key/${encodeURIComponent(key)}`, {
+    const response = await fetch(`/api/redis-explorer/key/${encodeURIComponent(key)}`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
@@ -436,7 +436,7 @@ async function showDeleteConfirmation(): Promise<void> {
   
   // Load preview
   try {
-    const response = await fetch('/api/v1/redis-explorer/delete', {
+    const response = await fetch('/api/redis-explorer/delete', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -467,7 +467,7 @@ async function confirmDelete(): Promise<void> {
   try {
     logger.warn('Deleting keys', { pattern: deletePattern.value })
     
-    const response = await fetch('/api/v1/redis-explorer/delete', {
+    const response = await fetch('/api/redis-explorer/delete', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
