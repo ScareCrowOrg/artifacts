@@ -21,9 +21,11 @@
     <ChatHeader />
 
     <div class="flex flex-1 overflow-hidden relative">
-      <!-- Chat messages area -->
+      <!-- Chat messages area OR Agent Terminal (Interface Mutante - MVP 4.1) -->
       <div class="flex flex-col flex-1 overflow-hidden" data-testid="chat-body">
+        <!-- Classic Chat Mode (v-if) -->
         <div
+          v-if="!chatStore.isAgentMode"
           ref="messagesContainer"
           class="flex-1 overflow-y-auto overflow-x-hidden p-4 min-h-0 max-h-full"
         >
@@ -40,7 +42,16 @@
           <ChatLoadingIndicator v-if="chat.isLoading.value" />
         </div>
 
-        <!-- Settings Panel (collapsible) -->
+        <!-- Agent Mode Terminal (v-else) - Occupies 100% of viewport -->
+        <AgentTerminal
+          v-else
+          :visible="true"
+          :conversation-id="chatStore.agentSessionId || 'temp-session'"
+          class="flex-1"
+          @close="handleAgentTerminalClose"
+        />
+
+        <!-- Settings Panel (collapsible) - Manual via gear icon -->
         <ChatSettingsPanel 
           :visible="showSettingsPanel" 
           :chat="chat"
@@ -53,6 +64,7 @@
           :chat="chat"
           :on-input-focus="handleInputFocus"
           :on-enter="handleEnter"
+          :is-agent-mode="chatStore.isAgentMode"
         />
       </div>
 
@@ -68,13 +80,6 @@
         @clear-all="chatHistory.clearAllHistory()"
       />
     </div>
-
-    <!-- Agent Terminal (MVP 4) -->
-    <AgentTerminal
-      :visible="chatStore.showAgentTerminal"
-      :conversation-id="chatStore.agentSessionId"
-      @close="chatStore.toggleAgentTerminal"
-    />
 
     <!-- Trace Timeline Modal -->
     <TraceTimelineModal
@@ -337,16 +342,23 @@ function handleEnter(event: KeyboardEvent): void {
   }
   event.preventDefault()
   sendMessageHandler()
-  // Hide settings panel after sending message
-  showSettingsPanel.value = false
+  // Disable auto-show of settings panel (MVP 4.1 - manual via gear icon)
+  // showSettingsPanel.value = false
   
   // Update cell data with current conversation
   updateCellData()
 }
 
 function handleInputFocus(): void {
-  // Show settings panel when input is focused
-  showSettingsPanel.value = true
+  // Disable auto-show settings panel (MVP 4.1 UX focus requirement)
+  // Settings panel now manual via gear icon
+  // showSettingsPanel.value = true
+}
+
+// Handler for closing agent terminal (MVP 4.1)
+function handleAgentTerminalClose(): void {
+  // When closing terminal, optionally turn off agent mode
+  chatStore.toggleAgentMode()
 }
 
 function startNewConversation(): void {
