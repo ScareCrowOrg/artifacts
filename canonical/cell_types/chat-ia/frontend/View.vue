@@ -214,6 +214,7 @@ async function sendAgentMessage(): Promise<void> {
       const conversationId = chatHistory.currentConversationId.value || `conv_${Date.now()}`
       
       // Call agent session creation endpoint
+      // Note: Token retrieval could be improved using authService
       const API_BASE = window.location.origin
       const response = await fetch(`${API_BASE}/api/agent/sessions`, {
         method: 'POST',
@@ -223,7 +224,7 @@ async function sendAgentMessage(): Promise<void> {
         },
         body: JSON.stringify({
           conversation_id: conversationId,
-          files: [],  // TODO: Allow user to select files
+          files: [],  // TODO: Implement file selection UI (tracked in future enhancements)
           model: 'ollama/qwen2.5-coder:7b',
         }),
       })
