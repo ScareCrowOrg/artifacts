@@ -1,0 +1,48 @@
+{
+  "id": "redis-explorer",
+  "name": "Redis Explorer",
+  "description": "Hierarchical Redis key explorer with state invalidation capabilities for debugging and observability",
+  "version": "1.0.0",
+  "category": "debugging",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/RedisExplorerView.vue"],
+    "scripts": ["backend/scripts/main.py"],
+    "docs": ["docs/README.md"]
+  },
+  "default_initial_data": {
+    "category": "ephemeral",
+    "title": "Redis Explorer",
+    "current_prefix": "",
+    "delimiter": ":",
+    "max_depth": 1
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - ephemeral (not persisted to database)"
+    },
+    "title": {
+      "type": "string",
+      "default": "Redis Explorer",
+      "description": "Cell title"
+    },
+    "current_prefix": {
+      "type": "string",
+      "default": "",
+      "description": "Current Redis key prefix being explored"
+    },
+    "delimiter": {
+      "type": "string",
+      "default": ":",
+      "description": "Delimiter for hierarchical structure"
+    },
+    "max_depth": {
+      "type": "integer",
+      "default": 1,
+      "description": "Maximum depth levels to display"
+    }
+  }
+}
