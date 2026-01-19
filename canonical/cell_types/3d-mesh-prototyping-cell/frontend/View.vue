@@ -15,7 +15,7 @@
  * @component
  */
 
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, defineOptions } from 'vue'
 import { TresCanvas } from '@tresjs/core'
 import { OrbitControls, Grid } from '@tresjs/cientos'
 import { createLogger } from '@/utils/logger'
@@ -25,6 +25,9 @@ import GLBModelViewer from './components/GLBModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
 import ViewportControls from './components/ViewportControls.vue'
 import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
+
+// ITERATION #9: Define component name for proper Vue registration in dynamic loading context
+defineOptions({ name: 'MeshPrototypingCellView' })
 
 const logger = createLogger('component:3d-mesh-prototyping-cell-tresjs')
 
@@ -320,10 +323,22 @@ const generate3DMesh = async () => {
 
     const result = await response.json()
     console.log('[DEBUG_ITERATION_6] API response data:', result)
+    console.log('[DEBUG_ITERATION_9] API result structure:', {
+      hasSuccess: 'success' in result,
+      hasJobId: 'job_id' in result,
+      hasResult: 'result' in result,
+      resultKeys: result.result ? Object.keys(result.result) : []
+    })
 
-    if (result.success && result.job_id) {
-      jobId.value = result.job_id
+    // ITERATION #9: Fix job_id extraction from nested API response
+    // Backend returns: {success: true, result: {job_id: "..."}, ...}
+    // Not: {success: true, job_id: "..."}
+    const jobIdValue = result.result?.job_id || result.job_id
+    
+    if (result.success && jobIdValue) {
+      jobId.value = jobIdValue
       logger.info(`Job queued: ${jobId.value}`)
+      console.log('[DEBUG_ITERATION_9] Job ID extracted:', jobId.value)
       
       jobStatus.value = 'processing'
       pollingInterval.value = window.setInterval(() => {
@@ -333,8 +348,10 @@ const generate3DMesh = async () => {
       }, 2000)
       
     } else {
-      localError.value = result.error || 'Failed to queue 3D generation job' // ITERATION #5 - Use local ref
-      logger.error('Job queueing failed', error.value)
+      const errorMsg = result.error || result.result?.error || 'Failed to queue 3D generation job'
+      localError.value = errorMsg // ITERATION #5 - Use local ref
+      logger.error('Job queueing failed', errorMsg)
+      console.log('[DEBUG_ITERATION_9] Job queueing failed. Result:', result)
       localIsGenerating.value = false // ITERATION #5 - Use local ref
     }
   } catch (err: any) {
@@ -475,6 +492,10 @@ onUnmounted(() => {
     />
 
     <!-- TresJS Viewport (Declarative) -->
+    <!-- ITERATION #9 NOTE: TresJS v5 uses automatic component resolution.
+         Components like TresPerspectiveCamera, TresAmbientLight, etc. are NOT imported explicitly.
+         TresJS resolves them automatically from its internal catalogue at runtime.
+         Only TresCanvas needs to be imported. This is the correct v5 pattern. -->
     <TresCanvas
       v-if="hasMesh && meshBlobUrl"
       class="viewport-container bg-black rounded border border-gray-700"
