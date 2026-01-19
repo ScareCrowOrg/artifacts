@@ -238,7 +238,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/logger.js'
-
+import { apiFetch } from '@/services/apiService'
 const logger = createLogger('cell:redis-explorer')
 
 // Define props interface
@@ -321,12 +321,12 @@ const prefixSegments = computed<string[]>(() => {
 // Methods
 async function loadRedisInfo(): Promise<void> {
   try {
-    const response = await fetch('/api/redis-explorer/info', {
+    const response = await apiFetch('/api/redis-explorer/info', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       }
     })
-    
+
     if (!response.ok) {
       throw new Error('Failed to load Redis info')
     }
@@ -346,11 +346,10 @@ async function scanKeys(): Promise<void> {
   try {
     logger.debug('Scanning keys', { prefix: currentPrefix.value })
     
-    const response = await fetch('/api/redis-explorer/scan', {
+    const response = await apiFetch('/api/redis-explorer/scan', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
       body: JSON.stringify({
         prefix: currentPrefix.value,
@@ -385,9 +384,9 @@ async function selectKey(key: string): Promise<void> {
   try {
     logger.debug('Loading key value', { key })
     
-    const response = await fetch(`/api/redis-explorer/key/${encodeURIComponent(key)}`, {
+    const response = await apiFetch(`/api/redis-explorer/key/${encodeURIComponent(key)}`, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       }
     })
     
@@ -436,11 +435,10 @@ async function showDeleteConfirmation(): Promise<void> {
   
   // Load preview
   try {
-    const response = await fetch('/api/redis-explorer/delete', {
+    const response = await apiFetch('/api/redis-explorer/delete', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         prefix: deletePattern.value,
@@ -467,11 +465,10 @@ async function confirmDelete(): Promise<void> {
   try {
     logger.warn('Deleting keys', { pattern: deletePattern.value })
     
-    const response = await fetch('/api/redis-explorer/delete', {
+    const response = await apiFetch('/api/redis-explorer/delete', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         prefix: deletePattern.value,
