@@ -60,6 +60,13 @@
           @update:selected-collections="(value: string[]) => chat.selectedCollections.value = value"
         />
 
+        <!-- Context Bar (MVP 4.1 - Shows files in Agent Mode context) -->
+        <ContextBar
+          v-if="chatStore.isAgentMode"
+          :attachments="chat.attachments.value"
+          :on-remove="chat.removeAttachment"
+        />
+
         <ChatInput
           :chat="chat"
           :on-input-focus="handleInputFocus"
@@ -126,6 +133,7 @@ import ChatHistorySidebar from '@/components/ChatHistorySidebar.vue'
 import TraceTimelineModal from '@/components/chat/TraceTimelineModal.vue'
 import FileProposalModal from '@/components/chat/FileProposalModal.vue'
 import AgentTerminal from '@/components/chat/AgentTerminal.vue'
+import ContextBar from '@/components/chat/ContextBar.vue'
 import { useChatHistory } from '@/composables/useChatHistory'
 import { useChatIA } from '@/composables/useChatIA'
 import { useChatStore } from '@/stores/chat'
@@ -219,6 +227,9 @@ async function sendAgentMessage(): Promise<void> {
     if (!chatStore.agentSessionId) {
       const conversationId = chatHistory.currentConversationId.value || `conv_${Date.now()}`
       
+      // Collect file paths from attachments for Agent Mode context (MVP 4.1)
+      const files = chat.attachments.value.map((att: any) => att.path || att.filename)
+      
       // Call agent session creation endpoint using authService
       const API_BASE = window.location.origin
       const token = authService.getToken()
@@ -235,7 +246,7 @@ async function sendAgentMessage(): Promise<void> {
         },
         body: JSON.stringify({
           conversation_id: conversationId,
-          files: [],  // TODO: Implement file selection UI (tracked in future enhancements)
+          files: files,  // MVP 4.1: Include files from context bar
           model: 'ollama/qwen2.5-coder:7b',
         }),
       })
