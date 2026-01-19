@@ -69,6 +69,13 @@
       />
     </div>
 
+    <!-- Agent Terminal (MVP 4) -->
+    <AgentTerminal
+      :visible="chatStore.showAgentTerminal"
+      :conversation-id="chatStore.agentSessionId"
+      @close="chatStore.toggleAgentTerminal"
+    />
+
     <!-- Trace Timeline Modal -->
     <TraceTimelineModal
       :is-open="showTimelineModal"
@@ -113,6 +120,7 @@ import ChatSettingsPanel from '@/components/chat/ChatSettingsPanel.vue'
 import ChatHistorySidebar from '@/components/ChatHistorySidebar.vue'
 import TraceTimelineModal from '@/components/chat/TraceTimelineModal.vue'
 import FileProposalModal from '@/components/chat/FileProposalModal.vue'
+import AgentTerminal from '@/components/chat/AgentTerminal.vue'
 import { useChatHistory } from '@/composables/useChatHistory'
 import { useChatIA } from '@/composables/useChatIA'
 import { useChatStore } from '@/stores/chat'
