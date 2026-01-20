@@ -145,7 +145,7 @@ async def queue_3d_generation_job(
         # Create job directory in shared volume
         job_dir = shared_volume / "jobs" / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Created job directory: {job_dir}")
+        logger.info(f"✅ Job persistence path: {job_dir}")
         logger.info(f"Resolved job directory (absolute): {job_dir.resolve()}")
         
         # Write input image to shared volume
@@ -188,10 +188,11 @@ async def queue_3d_generation_job(
             }
         
         # Prepare job metadata
-        # Worker expects paths relative to its SHARED_VOLUME mount point (/data)
-        # Backend writes to shared_volume (/mnt/wsl/scareverse by default)
-        # These must align: Backend writes to /mnt/wsl/scareverse/jobs/{id}/input.png
-        # Worker reads from /data/jobs/{id}/input.png (where /data is mounted from /mnt/wsl/scareverse)
+        # MVP 4.1 Path Mapping:
+        # - Backend writes to: /app/.local-dev-data/scareverse-data/jobs/{id}/input.png
+        # - Files visible in Windows at: <PROJECT_ROOT>\.local-dev-data\scareverse-data\jobs\{id}\input.png
+        # - Worker mounts .local-dev-data/scareverse-data as /data
+        # - Worker reads from: /data/jobs/{id}/input.png
         worker_input_path = f"/data/jobs/{job_id}/input.png"
         worker_output_dir = f"/data/jobs/{job_id}"
         
@@ -347,25 +348,27 @@ def get_shared_volume_path() -> Path:
     """
     Get the shared volume path for file transfer with Windows Worker.
     
-    Path Mapping Architecture:
-    - Backend (Kind/Linux): Mounts /mnt/wsl/scareverse as shared volume
-    - Worker (Windows Docker): Mounts /mnt/wsl/scareverse as /data
-    - Files written by Backend to /mnt/wsl/scareverse/jobs/{id}/input.png
+    Path Mapping Architecture (Updated MVP 4.1):
+    - Backend (Kind/Linux): Uses /app volume mount (project root in Kind)
+    - Worker (Windows Docker): Mounts project's .local-dev-data/scareverse-data as /data
+    - Files written by Backend to /app/.local-dev-data/scareverse-data/jobs/{id}/input.png
+    - Are visible in Windows at [PROJECT_ROOT]\.local-dev-data\scareverse-data\jobs\{id}\input.png
     - Are read by Worker from /data/jobs/{id}/input.png
     
-    The SHARED_VOLUME_PATH for Backend should be /mnt/wsl/scareverse (default)
-    The SHARED_VOLUME for Worker should be /data (default)
+    The SHARED_VOLUME_PATH for Backend should be /app/.local-dev-data/scareverse-data (default)
+    The SHARED_VOLUME for Worker should be /data (default, mounting .local-dev-data/scareverse-data)
     
     Returns:
         Path object pointing to shared volume (Backend perspective)
     """
     import os
     
-    shared_volume_env = os.getenv('SHARED_VOLUME_PATH', '/mnt/wsl/scareverse')
+    # Use environment variable or default to /app bridge path
+    shared_volume_env = os.getenv('SHARED_VOLUME_PATH', '/app/.local-dev-data/scareverse-data')
     shared_volume_path = Path(shared_volume_env)
     
     # Log the configuration for debugging
-    logger.debug(f"Shared volume path: {shared_volume_path}")
+    logger.info(f"✅ Shared volume path configured: {shared_volume_path}")
     logger.debug(f"Shared volume exists: {shared_volume_path.exists()}")
     
     return shared_volume_path
