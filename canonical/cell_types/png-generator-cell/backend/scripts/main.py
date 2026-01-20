@@ -16,6 +16,35 @@ logger = logging.getLogger(__name__)
 # Used when PIL is not available - smallest possible valid PNG
 MINIMAL_FALLBACK_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
 
+# System prompt for Ollama when acting as Prompt Architect
+# This instructs Mistral to optimize prompts for 3D asset reconstruction (SF3D)
+OLLAMA_SYSTEM_PROMPT_3D_ARCHITECT = """You are the ScareVerse Prompt Architect. Your mission is to transform simple descriptions into technical prompts for Stable Diffusion.
+
+Objective: Generate prompts optimized for 3D asset reconstruction (Stable Fast 3D / SF3D).
+
+Rules:
+- Use flat lighting (no dramatic shadows or highlights)
+- Neutral gray background (studio setup)
+- Orthographic front view (centered, full object visible)
+- Full body or complete object isolation
+- High resolution and clear geometry
+- No artistic interpretation - technical precision only
+
+CRITICAL PROHIBITION: 
+- If the user requests an OBJECT (weapon, tool, furniture, prop, item), DO NOT include humans, hands, faces, or any biological elements
+- Objects must be standalone - no interaction, no context with living beings
+- Focus solely on the geometric and material properties of the object itself
+
+Output format: Return ONLY the optimized prompt string. Do not explain, do not add commentary. Just the prompt."""
+
+# Base negative prompt keywords for 3D asset generation
+# These prevent biological contamination and ensure technical precision
+NEGATIVE_PROMPT_3D_ASSET_BASE = "humans, people, hands, fingers, faces, portraits, person, man, woman, child, body parts, biological elements, dramatic lighting, shadows, high contrast, depth of field, bokeh, cluttered background, side view, back view, artistic interpretation"
+
+# Static enhancement suffixes for 3D asset mode (used in fallback)
+POSITIVE_SUFFIX_3D_ASSET = ", full body, standing, centered, front view, flat lighting, studio background, neutral gray background, high resolution, orthographic view"
+NEGATIVE_SUFFIX_3D_ASSET = ", shadows, dramatic lighting, high contrast, depth of field, bokeh, cluttered background, side view, back view"
+
 
 def _apply_static_3d_enhancement(prompt: str, negative_prompt: str = None) -> tuple:
     """
@@ -31,23 +60,19 @@ def _apply_static_3d_enhancement(prompt: str, negative_prompt: str = None) -> tu
     Returns:
         Tuple of (enhanced_prompt, enhanced_negative_prompt)
     """
-    # Positive prompt suffix for 3D asset generation
-    positive_suffix = ", full body, standing, centered, front view, flat lighting, studio background, neutral gray background, high resolution, orthographic view"
-    enhanced_prompt = f"{prompt}{positive_suffix}"
-    
-    # Negative prompt suffix for 3D asset generation
-    negative_suffix = ", shadows, dramatic lighting, high contrast, depth of field, bokeh, cluttered background, side view, back view"
+    # Use module-level constants for consistency
+    enhanced_prompt = f"{prompt}{POSITIVE_SUFFIX_3D_ASSET}"
     
     # Merge negative prompts, avoiding duplicate keywords
     enhanced_negative = negative_prompt or ""
     if enhanced_negative:
         # Split both prompts into keywords, deduplicate, and rejoin
         user_keywords = [k.strip() for k in enhanced_negative.split(',')]
-        suffix_keywords = [k.strip() for k in negative_suffix.lstrip(', ').split(',')]
+        suffix_keywords = [k.strip() for k in NEGATIVE_SUFFIX_3D_ASSET.lstrip(', ').split(',')]
         all_keywords = user_keywords + [k for k in suffix_keywords if k not in user_keywords]
         enhanced_negative = ', '.join(all_keywords)
     else:
-        enhanced_negative = negative_suffix.lstrip(", ")
+        enhanced_negative = NEGATIVE_SUFFIX_3D_ASSET.lstrip(", ")
     
     return enhanced_prompt, enhanced_negative
 
@@ -250,34 +275,16 @@ async def generate_png_from_prompt(
         
         try:
             # Import Ollama service for prompt orchestration
+            # NOTE: Import is conditional because this is an optional enhancement.
+            # If import fails, we gracefully fall back to static enhancement.
             from app.ollama_service import chamar_ollama, verificar_ollama_disponivel
             
             # Check if Ollama is available
             ollama_available = await verificar_ollama_disponivel()
             
             if ollama_available:
-                # System prompt for Ollama - Prompt Architect role
-                system_prompt = """You are the ScareVerse Prompt Architect. Your mission is to transform simple descriptions into technical prompts for Stable Diffusion.
-
-Objective: Generate prompts optimized for 3D asset reconstruction (Stable Fast 3D / SF3D).
-
-Rules:
-- Use flat lighting (no dramatic shadows or highlights)
-- Neutral gray background (studio setup)
-- Orthographic front view (centered, full object visible)
-- Full body or complete object isolation
-- High resolution and clear geometry
-- No artistic interpretation - technical precision only
-
-CRITICAL PROHIBITION: 
-- If the user requests an OBJECT (weapon, tool, furniture, prop, item), DO NOT include humans, hands, faces, or any biological elements
-- Objects must be standalone - no interaction, no context with living beings
-- Focus solely on the geometric and material properties of the object itself
-
-Output format: Return ONLY the optimized prompt string. Do not explain, do not add commentary. Just the prompt."""
-
-                # Build the full prompt for Ollama
-                ollama_prompt = f"""{system_prompt}
+                # Build the full prompt for Ollama using module-level constant
+                ollama_prompt = f"""{OLLAMA_SYSTEM_PROMPT_3D_ARCHITECT}
 
 User Description: {prompt}
 
@@ -294,17 +301,15 @@ Generate the optimized Stable Diffusion prompt:"""
                     logger.info(f"Ollama optimization successful - Enhanced prompt length: {len(optimized_prompt)}")
                     enhanced_prompt = optimized_prompt
                     
-                    # Enhance negative prompt for 3D assets
-                    base_negative = "humans, people, hands, fingers, faces, portraits, person, man, woman, child, body parts, biological elements, dramatic lighting, shadows, high contrast, depth of field, bokeh, cluttered background, side view, back view, artistic interpretation"
-                    
+                    # Enhance negative prompt using module-level constant
                     if enhanced_negative:
                         # Merge user negative prompt with base negative
                         user_keywords = [k.strip() for k in enhanced_negative.split(',')]
-                        base_keywords = [k.strip() for k in base_negative.split(',')]
+                        base_keywords = [k.strip() for k in NEGATIVE_PROMPT_3D_ASSET_BASE.split(',')]
                         all_keywords = user_keywords + [k for k in base_keywords if k not in user_keywords]
                         enhanced_negative = ', '.join(all_keywords)
                     else:
-                        enhanced_negative = base_negative
+                        enhanced_negative = NEGATIVE_PROMPT_3D_ASSET_BASE
                     
                     logger.debug(f"Final enhanced negative prompt: {enhanced_negative[:100]}...")
                 else:
