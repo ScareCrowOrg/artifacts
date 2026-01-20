@@ -397,3 +397,291 @@ class TestExecuteCellWith3DAssetMode:
         enhanced_negative = captured_calls[0]["negative_prompt"]
         assert "cartoon style" in enhanced_negative
         assert "shadows" in enhanced_negative
+
+
+@pytest.mark.asyncio
+class TestOllamaOrchestration:
+    """Tests for Ollama orchestration in 3D Asset Mode."""
+    
+    async def test_ollama_orchestration_success(self, mock_stable_diffusion_service):
+        """Test successful Ollama orchestration for prompt optimization."""
+        # Mock Ollama service
+        mock_ollama_module = MagicMock()
+        mock_ollama_module.verificar_ollama_disponivel = AsyncMock(return_value=True)
+        mock_ollama_module.chamar_ollama = AsyncMock(return_value={
+            "response": "A detailed space robot, metallic surface, centered composition, front view orthographic, flat studio lighting, neutral gray background, high resolution, clear geometric shapes, technical precision"
+        })
+        
+        # Mock Stable Diffusion service
+        captured_sd_calls = []
+        
+        def capture_sd_call(*args, **kwargs):
+            captured_sd_calls.append(kwargs)
+            return {
+                "success": True,
+                "image_base64": "iVBORw0KGgoAAAANS...",
+                "metadata": {"prompt": kwargs.get("prompt", "")}
+            }
+        
+        mock_sd_class = MagicMock()
+        mock_sd_service = AsyncMock()
+        mock_sd_service.generate_image.side_effect = capture_sd_call
+        mock_sd_class.return_value = mock_sd_service
+        mock_sd_module = MagicMock(StableDiffusionService=mock_sd_class)
+        
+        with patch.dict('sys.modules', {
+            'app.ollama_service': mock_ollama_module,
+            'app.services.stable_diffusion_service': mock_sd_module
+        }):
+            result = await main.generate_png_from_prompt(
+                prompt="A space robot",
+                asset_3d_mode=True
+            )
+        
+        assert result["success"] is True
+        
+        # Verify Ollama was called
+        mock_ollama_module.verificar_ollama_disponivel.assert_called_once()
+        mock_ollama_module.chamar_ollama.assert_called_once()
+        
+        # Verify Ollama prompt contains system instructions
+        ollama_call_args = mock_ollama_module.chamar_ollama.call_args[0][0]
+        assert "ScareVerse Prompt Architect" in ollama_call_args
+        assert "A space robot" in ollama_call_args
+        assert "CRITICAL PROHIBITION" in ollama_call_args
+        
+        # Verify SD was called with optimized prompt
+        assert len(captured_sd_calls) == 1
+        sd_prompt = captured_sd_calls[0]["prompt"]
+        assert "metallic surface" in sd_prompt
+        assert "flat studio lighting" in sd_prompt
+        
+        # Verify negative prompt includes anti-biological keywords
+        sd_negative = captured_sd_calls[0]["negative_prompt"]
+        assert "humans" in sd_negative
+        assert "hands" in sd_negative
+        assert "faces" in sd_negative
+    
+    async def test_ollama_orchestration_ollama_unavailable(self, mock_stable_diffusion_service):
+        """Test fallback to static enhancement when Ollama is unavailable."""
+        # Mock Ollama service as unavailable
+        mock_ollama_module = MagicMock()
+        mock_ollama_module.verificar_ollama_disponivel = AsyncMock(return_value=False)
+        
+        # Mock Stable Diffusion service
+        captured_sd_calls = []
+        
+        def capture_sd_call(*args, **kwargs):
+            captured_sd_calls.append(kwargs)
+            return {
+                "success": True,
+                "image_base64": "iVBORw0KGgoAAAANS...",
+                "metadata": {"prompt": kwargs.get("prompt", "")}
+            }
+        
+        mock_sd_class = MagicMock()
+        mock_sd_service = AsyncMock()
+        mock_sd_service.generate_image.side_effect = capture_sd_call
+        mock_sd_class.return_value = mock_sd_service
+        mock_sd_module = MagicMock(StableDiffusionService=mock_sd_class)
+        
+        with patch.dict('sys.modules', {
+            'app.ollama_service': mock_ollama_module,
+            'app.services.stable_diffusion_service': mock_sd_module
+        }):
+            result = await main.generate_png_from_prompt(
+                prompt="A magic sword",
+                asset_3d_mode=True
+            )
+        
+        assert result["success"] is True
+        
+        # Verify Ollama availability was checked
+        mock_ollama_module.verificar_ollama_disponivel.assert_called_once()
+        
+        # Verify chamar_ollama was NOT called (Ollama unavailable)
+        mock_ollama_module.chamar_ollama.assert_not_called()
+        
+        # Verify SD was called with static enhancement
+        assert len(captured_sd_calls) == 1
+        sd_prompt = captured_sd_calls[0]["prompt"]
+        assert "A magic sword" in sd_prompt
+        assert "full body" in sd_prompt
+        assert "flat lighting" in sd_prompt
+        assert "orthographic view" in sd_prompt
+    
+    async def test_ollama_orchestration_ollama_returns_empty(self, mock_stable_diffusion_service):
+        """Test fallback to static enhancement when Ollama returns empty response."""
+        # Mock Ollama service returning empty
+        mock_ollama_module = MagicMock()
+        mock_ollama_module.verificar_ollama_disponivel = AsyncMock(return_value=True)
+        mock_ollama_module.chamar_ollama = AsyncMock(return_value={"response": ""})
+        
+        # Mock Stable Diffusion service
+        captured_sd_calls = []
+        
+        def capture_sd_call(*args, **kwargs):
+            captured_sd_calls.append(kwargs)
+            return {
+                "success": True,
+                "image_base64": "iVBORw0KGgoAAAANS...",
+                "metadata": {"prompt": kwargs.get("prompt", "")}
+            }
+        
+        mock_sd_class = MagicMock()
+        mock_sd_service = AsyncMock()
+        mock_sd_service.generate_image.side_effect = capture_sd_call
+        mock_sd_class.return_value = mock_sd_service
+        mock_sd_module = MagicMock(StableDiffusionService=mock_sd_class)
+        
+        with patch.dict('sys.modules', {
+            'app.ollama_service': mock_ollama_module,
+            'app.services.stable_diffusion_service': mock_sd_module
+        }):
+            result = await main.generate_png_from_prompt(
+                prompt="A treasure chest",
+                asset_3d_mode=True
+            )
+        
+        assert result["success"] is True
+        
+        # Verify Ollama was called but returned empty
+        mock_ollama_module.chamar_ollama.assert_called_once()
+        
+        # Verify SD was called with static enhancement (fallback)
+        assert len(captured_sd_calls) == 1
+        sd_prompt = captured_sd_calls[0]["prompt"]
+        assert "A treasure chest" in sd_prompt
+        assert "full body" in sd_prompt
+    
+    async def test_ollama_orchestration_with_custom_negative_prompt(self, mock_stable_diffusion_service):
+        """Test Ollama orchestration preserves user's negative prompt."""
+        # Mock Ollama service
+        mock_ollama_module = MagicMock()
+        mock_ollama_module.verificar_ollama_disponivel = AsyncMock(return_value=True)
+        mock_ollama_module.chamar_ollama = AsyncMock(return_value={
+            "response": "A medieval shield with ornate details, centered view, flat lighting, gray background"
+        })
+        
+        # Mock Stable Diffusion service
+        captured_sd_calls = []
+        
+        def capture_sd_call(*args, **kwargs):
+            captured_sd_calls.append(kwargs)
+            return {
+                "success": True,
+                "image_base64": "iVBORw0KGgoAAAANS...",
+                "metadata": {"prompt": kwargs.get("prompt", "")}
+            }
+        
+        mock_sd_class = MagicMock()
+        mock_sd_service = AsyncMock()
+        mock_sd_service.generate_image.side_effect = capture_sd_call
+        mock_sd_class.return_value = mock_sd_service
+        mock_sd_module = MagicMock(StableDiffusionService=mock_sd_class)
+        
+        with patch.dict('sys.modules', {
+            'app.ollama_service': mock_ollama_module,
+            'app.services.stable_diffusion_service': mock_sd_module
+        }):
+            result = await main.generate_png_from_prompt(
+                prompt="A medieval shield",
+                negative_prompt="rust, damage, scratches",
+                asset_3d_mode=True
+            )
+        
+        assert result["success"] is True
+        
+        # Verify SD negative prompt includes both user keywords and base negative
+        assert len(captured_sd_calls) == 1
+        sd_negative = captured_sd_calls[0]["negative_prompt"]
+        
+        # User keywords preserved
+        assert "rust" in sd_negative
+        assert "damage" in sd_negative
+        assert "scratches" in sd_negative
+        
+        # Base negative keywords added
+        assert "humans" in sd_negative
+        assert "people" in sd_negative
+        assert "hands" in sd_negative
+    
+    async def test_ollama_orchestration_exception_handling(self, mock_stable_diffusion_service):
+        """Test fallback when Ollama raises exception."""
+        # Mock Ollama service raising exception
+        mock_ollama_module = MagicMock()
+        mock_ollama_module.verificar_ollama_disponivel = AsyncMock(return_value=True)
+        mock_ollama_module.chamar_ollama = AsyncMock(side_effect=Exception("Connection timeout"))
+        
+        # Mock Stable Diffusion service
+        captured_sd_calls = []
+        
+        def capture_sd_call(*args, **kwargs):
+            captured_sd_calls.append(kwargs)
+            return {
+                "success": True,
+                "image_base64": "iVBORw0KGgoAAAANS...",
+                "metadata": {"prompt": kwargs.get("prompt", "")}
+            }
+        
+        mock_sd_class = MagicMock()
+        mock_sd_service = AsyncMock()
+        mock_sd_service.generate_image.side_effect = capture_sd_call
+        mock_sd_class.return_value = mock_sd_service
+        mock_sd_module = MagicMock(StableDiffusionService=mock_sd_class)
+        
+        with patch.dict('sys.modules', {
+            'app.ollama_service': mock_ollama_module,
+            'app.services.stable_diffusion_service': mock_sd_module
+        }):
+            result = await main.generate_png_from_prompt(
+                prompt="A magic staff",
+                asset_3d_mode=True
+            )
+        
+        assert result["success"] is True
+        
+        # Verify SD was called with static enhancement (fallback after exception)
+        assert len(captured_sd_calls) == 1
+        sd_prompt = captured_sd_calls[0]["prompt"]
+        assert "A magic staff" in sd_prompt
+        assert "flat lighting" in sd_prompt
+
+
+def test_static_3d_enhancement():
+    """Test the static 3D enhancement helper function."""
+    prompt = "A wooden barrel"
+    negative_prompt = None
+    
+    enhanced_prompt, enhanced_negative = main._apply_static_3d_enhancement(prompt, negative_prompt)
+    
+    # Check positive enhancement
+    assert "A wooden barrel" in enhanced_prompt
+    assert "full body" in enhanced_prompt
+    assert "flat lighting" in enhanced_prompt
+    assert "orthographic view" in enhanced_prompt
+    
+    # Check negative enhancement
+    assert "shadows" in enhanced_negative
+    assert "dramatic lighting" in enhanced_negative
+    assert "cluttered background" in enhanced_negative
+
+
+def test_static_3d_enhancement_with_custom_negative():
+    """Test static 3D enhancement with custom negative prompt."""
+    prompt = "A steel helmet"
+    negative_prompt = "rust, damage"
+    
+    enhanced_prompt, enhanced_negative = main._apply_static_3d_enhancement(prompt, negative_prompt)
+    
+    # Check positive enhancement
+    assert "A steel helmet" in enhanced_prompt
+    
+    # Check negative enhancement preserves user keywords
+    assert "rust" in enhanced_negative
+    assert "damage" in enhanced_negative
+    assert "shadows" in enhanced_negative
+    
+    # Check no duplicate keywords
+    keywords = [k.strip() for k in enhanced_negative.split(',')]
+    assert len(keywords) == len(set(keywords))
