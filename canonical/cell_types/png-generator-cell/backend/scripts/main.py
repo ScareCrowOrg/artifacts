@@ -101,6 +101,10 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     cfg_scale = gen_params.get('cfg_scale', 7.0)
     seed = gen_params.get('seed', -1)
     
+    # Extract 3D Asset Mode and negative prompt from cell_data
+    negative_prompt = cell_data.get('negativePrompt', '')
+    asset_3d_mode = cell_data.get('asset3dMode', False)
+    
     try:
         # Call async generation function directly
         # This works because execute_cell is now async and can be called
@@ -111,7 +115,9 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             height=height,
             steps=steps,
             cfg_scale=cfg_scale,
-            seed=seed
+            seed=seed,
+            negative_prompt=negative_prompt,
+            asset_3d_mode=asset_3d_mode
         )
         
         if result.get("success"):
@@ -166,7 +172,8 @@ async def generate_png_from_prompt(
     steps: int = 20,
     cfg_scale: float = 7.0,
     seed: int = -1,
-    negative_prompt: str = None
+    negative_prompt: str = None,
+    asset_3d_mode: bool = False
 ) -> Dict[str, Any]:
     """
     Generate PNG image from a text prompt using Stable Diffusion.
@@ -181,6 +188,7 @@ async def generate_png_from_prompt(
         cfg_scale: Classifier-free guidance scale
         seed: Random seed (-1 for random)
         negative_prompt: Things to avoid in generation
+        asset_3d_mode: Enable 3D Asset optimization (adds technical suffixes)
         
     Returns:
         Dict with generated PNG or error information
@@ -194,6 +202,29 @@ async def generate_png_from_prompt(
             "metadata": {...}
         }
     """
+    # Apply 3D Asset Mode suffixes if enabled
+    enhanced_prompt = prompt
+    enhanced_negative = negative_prompt or ""
+    
+    if asset_3d_mode:
+        # Positive prompt suffix for 3D asset generation
+        positive_suffix = ", full body, standing, centered, front view, flat lighting, studio background, neutral gray background, high resolution, orthographic view"
+        enhanced_prompt = f"{prompt}{positive_suffix}"
+        
+        # Negative prompt suffix for 3D asset generation
+        negative_suffix = ", shadows, dramatic lighting, high contrast, depth of field, bokeh, cluttered background, side view, back view"
+        
+        # Merge negative prompts, avoiding duplicate keywords
+        if enhanced_negative:
+            # Split both prompts into keywords, deduplicate, and rejoin
+            user_keywords = [k.strip() for k in enhanced_negative.split(',')]
+            suffix_keywords = [k.strip() for k in negative_suffix.lstrip(', ').split(',')]
+            all_keywords = user_keywords + [k for k in suffix_keywords if k not in user_keywords]
+            enhanced_negative = ', '.join(all_keywords)
+        else:
+            enhanced_negative = negative_suffix.lstrip(", ")
+    
+    logger.info(f"Generating PNG with 3D Asset Mode: {asset_3d_mode}")
     # Try to import and use Stable Diffusion service
     try:
         from app.services.stable_diffusion_service import StableDiffusionService
@@ -201,10 +232,10 @@ async def generate_png_from_prompt(
         # Initialize Stable Diffusion service
         sd_service = StableDiffusionService()
         
-        # Generate image
+        # Generate image with enhanced prompts
         result = await sd_service.generate_image(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
+            prompt=enhanced_prompt,
+            negative_prompt=enhanced_negative,
             width=width,
             height=height,
             steps=steps,

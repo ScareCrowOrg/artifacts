@@ -25,6 +25,25 @@
     </div>
 
     <div class="cell-content space-y-4">
+      <!-- 3D Asset Mode Toggle -->
+      <div class="asset-3d-mode-section flex items-center gap-3 p-3 bg-surface-light dark:bg-surface-dark-light border border-border dark:border-border-dark rounded">
+        <input
+          id="asset3dMode"
+          v-model="localAsset3dMode"
+          type="checkbox"
+          :disabled="localIsGenerating"
+          class="w-5 h-5 rounded border-border dark:border-border-dark text-primary focus:ring-2 focus:ring-primary"
+        />
+        <label for="asset3dMode" class="flex-1 cursor-pointer">
+          <div class="text-sm font-medium text-text-primary dark:text-text-primary-dark">
+            {{ $t('pngGeneratorCell.asset3dModeLabel') }}
+          </div>
+          <div class="text-xs text-text-secondary dark:text-text-secondary-dark mt-1">
+            {{ $t('pngGeneratorCell.asset3dModeDescription') }}
+          </div>
+        </label>
+      </div>
+
       <!-- Prompt Input Section -->
       <div class="prompt-section">
         <label class="block text-sm font-medium text-text-secondary dark:text-text-secondary-dark mb-2">
@@ -38,6 +57,21 @@
           rows="3"
           @keydown.ctrl.enter="handleGenerate"
           @keydown.meta.enter="handleGenerate"
+        />
+      </div>
+
+      <!-- Negative Prompt Input Section -->
+      <div class="negative-prompt-section">
+        <label class="block text-sm font-medium text-text-secondary dark:text-text-secondary-dark mb-2">
+          {{ $t('pngGeneratorCell.negativePromptLabel') }}
+          <span class="text-xs text-text-secondary dark:text-text-secondary-dark ml-1">({{ $t('pngGeneratorCell.optional') }})</span>
+        </label>
+        <textarea
+          v-model="localNegativePrompt"
+          :disabled="localIsGenerating"
+          :placeholder="$t('pngGeneratorCell.negativePromptPlaceholder')"
+          class="w-full px-3 py-2 border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark rounded focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+          rows="2"
         />
       </div>
 
@@ -177,6 +211,8 @@ interface CellObject {
     generatedPng?: string | null
     isGenerating?: boolean
     error?: string | null
+    negativePrompt?: string
+    asset3dMode?: boolean
     generationParams?: {
       width: number
       height: number
@@ -195,6 +231,8 @@ interface Props {
   generatedPng?: string | null
   isGenerating?: boolean
   error?: string | null
+  negativePrompt?: string
+  asset3dMode?: boolean
   generationParams?: {
     width: number
     height: number
@@ -211,6 +249,8 @@ const props = withDefaults(defineProps<Props>(), {
   generatedPng: null,
   isGenerating: false,
   error: null,
+  negativePrompt: '',
+  asset3dMode: false,
   generationParams: () => ({
     width: 512,
     height: 512,
@@ -239,6 +279,8 @@ const emit = defineEmits<{
   (e: 'update:generatedPng', value: string | null): void
   (e: 'update:isGenerating', value: boolean): void
   (e: 'update:error', value: string | null): void
+  (e: 'update:negativePrompt', value: string): void
+  (e: 'update:asset3dMode', value: boolean): void
   (e: 'update:generationParams', value: any): void
   (e: 'generate', params: any): void
 }>()
@@ -248,6 +290,8 @@ const localPrompt = ref(props.prompt || initialData.value.prompt || '')
 const localGeneratedPng = ref(props.generatedPng || initialData.value.generatedPng || null)
 const localIsGenerating = ref(props.isGenerating || initialData.value.isGenerating || false)
 const localError = ref(props.error || initialData.value.error || null)
+const localNegativePrompt = ref(props.negativePrompt || initialData.value.negativePrompt || '')
+const localAsset3dMode = ref(props.asset3dMode || initialData.value.asset3dMode || false)
 const localParams = ref({ 
   ...props.generationParams,
   ...(initialData.value.generationParams || {})
@@ -258,6 +302,8 @@ watch(() => props.prompt, (newVal) => { if (newVal !== undefined) localPrompt.va
 watch(() => props.generatedPng, (newVal) => { if (newVal !== undefined) localGeneratedPng.value = newVal })
 watch(() => props.isGenerating, (newVal) => { if (newVal !== undefined) localIsGenerating.value = newVal })
 watch(() => props.error, (newVal) => { if (newVal !== undefined) localError.value = newVal })
+watch(() => props.negativePrompt, (newVal) => { if (newVal !== undefined) localNegativePrompt.value = newVal })
+watch(() => props.asset3dMode, (newVal) => { if (newVal !== undefined) localAsset3dMode.value = newVal })
 watch(() => props.generationParams, (newVal) => { if (newVal) localParams.value = { ...newVal } }, { deep: true })
 
 // Watch for initial_data changes from cell object
@@ -267,6 +313,8 @@ watch(() => props.cell?.initial_data, (newVal) => {
     if (newVal.generatedPng !== undefined) localGeneratedPng.value = newVal.generatedPng
     if (newVal.isGenerating !== undefined) localIsGenerating.value = newVal.isGenerating
     if (newVal.error !== undefined) localError.value = newVal.error
+    if (newVal.negativePrompt !== undefined) localNegativePrompt.value = newVal.negativePrompt
+    if (newVal.asset3dMode !== undefined) localAsset3dMode.value = newVal.asset3dMode
     if (newVal.generationParams) localParams.value = { ...localParams.value, ...newVal.generationParams }
   }
 }, { deep: true })
@@ -274,7 +322,7 @@ watch(() => props.cell?.initial_data, (newVal) => {
 // Watch for local changes and emit updates (update cell object)
 // Use debounced updates to prevent excessive emit calls
 let updateTimeout: ReturnType<typeof setTimeout> | null = null
-watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localParams], () => {
+watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localNegativePrompt, localAsset3dMode, localParams], () => {
   // Debounce updates to avoid excessive emit calls (waits for 100ms of inactivity)
   if (updateTimeout) {
     clearTimeout(updateTimeout)
@@ -290,6 +338,8 @@ watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localParam
           generatedPng: localGeneratedPng.value,
           isGenerating: localIsGenerating.value,
           error: localError.value,
+          negativePrompt: localNegativePrompt.value,
+          asset3dMode: localAsset3dMode.value,
           generationParams: localParams.value
         }
       })
@@ -300,6 +350,8 @@ watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localParam
     emit('update:generatedPng', localGeneratedPng.value)
     emit('update:isGenerating', localIsGenerating.value)
     emit('update:error', localError.value)
+    emit('update:negativePrompt', localNegativePrompt.value)
+    emit('update:asset3dMode', localAsset3dMode.value)
     emit('update:generationParams', localParams.value)
   }, 100) // 100ms debounce
 }, { deep: true })
@@ -322,6 +374,8 @@ const handleGenerate = async () => {
   // the default API call implementation below.
   emit('generate', {
     prompt: localPrompt.value,
+    negativePrompt: localNegativePrompt.value,
+    asset3dMode: localAsset3dMode.value,
     ...localParams.value
   })
   
@@ -337,6 +391,8 @@ const handleGenerate = async () => {
         cell_type: 'png-generator-cell',
         input_data: {
           prompt: localPrompt.value,
+          negativePrompt: localNegativePrompt.value,
+          asset3dMode: localAsset3dMode.value,
           ...localParams.value
         }
       })
