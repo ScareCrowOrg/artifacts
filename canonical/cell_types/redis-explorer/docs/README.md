@@ -1,3 +1,21 @@
+---
+processed: true
+processed_date: "2026-01-20"
+generated_docs:
+  - "docs/official/frontend/architecture/cell-type-examples-patterns.md"
+themes:
+  - "cell-architecture"
+  - "redis"
+  - "data-management"
+  - "hierarchical-navigation"
+modules:
+  - "frontend"
+  - "artifacts"
+  - "infrastructure"
+code_verified: true
+dead_docs_found: false
+---
+
 # Redis Explorer Cell
 
 ## Overview

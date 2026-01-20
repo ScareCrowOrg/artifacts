@@ -1,3 +1,20 @@
+---
+processed: true
+processed_date: "2026-01-20"
+generated_docs:
+  - "docs/official/frontend/architecture/cell-type-examples-patterns.md"
+themes:
+  - "cell-architecture"
+  - "component-design"
+  - "3d-rendering"
+  - "tresjs"
+modules:
+  - "frontend"
+  - "artifacts"
+code_verified: true
+dead_docs_found: false
+---
+
 # 3D Mesh Prototyping Cell - Frontend Components
 
 This directory contains modular Vue components for the 3D Mesh Prototyping Cell frontend interface.
