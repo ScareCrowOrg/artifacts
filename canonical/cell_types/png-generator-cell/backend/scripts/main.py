@@ -211,7 +211,7 @@ async def generate_png_from_prompt(
         positive_suffix = ", full body, standing, centered, front view, flat lighting, studio background, neutral gray background, high resolution, orthographic view"
         enhanced_prompt = f"{prompt}{positive_suffix}"
         
-        # Negative prompt suffix for 3D asset generation (removed duplicate 'blurry')
+        # Negative prompt suffix for 3D asset generation
         negative_suffix = ", shadows, dramatic lighting, high contrast, depth of field, bokeh, cluttered background, side view, back view"
         
         # Merge negative prompts, avoiding duplicate keywords
