@@ -215,8 +215,14 @@ async def queue_3d_generation_job(
             })
         }
         
-        # Store job status in Redis
+        # Store job status in Redis as a Hash
         status_key = f"scareverse:3d-status:{job_id}"
+        
+        # Preventive cleanup: Delete any existing key to avoid WRONGTYPE errors
+        # This ensures we always start with a fresh Hash, not a leftover String
+        await redis_client.delete(status_key)
+        
+        # Store job data as a Hash using hmset
         await redis_client.hmset(status_key, job_data)
         await redis_client.expire(status_key, 3600)  # Expire after 1 hour
         
@@ -261,14 +267,38 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
         redis_client = await get_redis_client()
         status_key = f"scareverse:3d-status:{job_id}"
         
-        # Get job status from Redis
-        job_data = await redis_client.hgetall(status_key)
+        # Get job status from Redis (expecting a Hash)
+        try:
+            job_data = await redis_client.hgetall(status_key)
+        except Exception as redis_error:
+            # Handle WRONGTYPE error when key is not a Hash
+            error_msg = str(redis_error)
+            if "WRONGTYPE" in error_msg:
+                logger.error(
+                    f"Redis WRONGTYPE error for key {status_key}. "
+                    f"Key exists but is not a Hash. This can happen if the key "
+                    f"was created with 'set' instead of 'hset'. Consider deleting "
+                    f"the key: redis-cli DEL {status_key}"
+                )
+                return {
+                    "status": "error",
+                    "error": "Job status key has wrong type. Please retry the job or contact support."
+                }
+            else:
+                # Re-raise other Redis errors
+                raise
         
         if not job_data:
             return {
                 "status": "not_found",
                 "error": "Job not found"
             }
+        
+        # Safely decode bytes if Redis client doesn't have decode_responses=True
+        if job_data and isinstance(next(iter(job_data.values()), None), bytes):
+            job_data = {k.decode('utf-8') if isinstance(k, bytes) else k: 
+                       v.decode('utf-8') if isinstance(v, bytes) else v 
+                       for k, v in job_data.items()}
         
         status = job_data.get("status", "unknown")
         
@@ -285,8 +315,13 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
                 mesh_data = f"data:model/gltf-binary;base64,{glb_base64}"
                 
                 # Parse metadata from job_data
+                # Metadata might be stored as JSON string in the hash
                 metadata_json = job_data.get("metadata", "{}")
-                metadata = json.loads(metadata_json) if metadata_json else {}
+                try:
+                    metadata = json.loads(metadata_json) if metadata_json and metadata_json != "{}" else {}
+                except (json.JSONDecodeError, TypeError):
+                    logger.warning(f"Failed to parse metadata JSON: {metadata_json}")
+                    metadata = {}
                 
                 return {
                     "status": "completed",
