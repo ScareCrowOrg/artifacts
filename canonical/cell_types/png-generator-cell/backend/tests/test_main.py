@@ -225,7 +225,7 @@ class TestGeneratePngFromPrompt:
         with patch.dict('sys.modules', {'app.services.stable_diffusion_service': mock_module}):
             result = await main.generate_png_from_prompt(
                 prompt="A robot",
-                negative_prompt="blurry",
+                negative_prompt="blurry, low quality",
                 asset_3d_mode=True
             )
         
@@ -235,8 +235,56 @@ class TestGeneratePngFromPrompt:
         # Verify that custom negative prompt is preserved and 3D suffix is appended
         enhanced_negative = captured_calls[0]["negative_prompt"]
         assert "blurry" in enhanced_negative
+        assert "low quality" in enhanced_negative
         assert "shadows" in enhanced_negative
         assert "dramatic lighting" in enhanced_negative
+        
+        # Verify no keyword duplication
+        keywords = [k.strip() for k in enhanced_negative.split(',')]
+        assert len(keywords) == len(set(keywords)), "Should not have duplicate keywords"
+    
+    async def test_generate_png_3d_mode_deduplicates_keywords(self, mock_stable_diffusion_service):
+        """Test that 3D Asset Mode properly deduplicates keywords in negative prompt."""
+        captured_calls = []
+        
+        def capture_generate_call(*args, **kwargs):
+            captured_calls.append(kwargs)
+            return {
+                "success": True,
+                "image_base64": "iVBORw0KGgoAAAANS...",
+                "metadata": {"prompt": kwargs.get("prompt", "")}
+            }
+        
+        mock_sd_class = MagicMock()
+        mock_service = AsyncMock()
+        mock_service.generate_image.side_effect = capture_generate_call
+        mock_sd_class.return_value = mock_service
+        mock_module = MagicMock(StableDiffusionService=mock_sd_class)
+        
+        # User provides negative prompt with some keywords that overlap with 3D mode defaults
+        with patch.dict('sys.modules', {'app.services.stable_diffusion_service': mock_module}):
+            result = await main.generate_png_from_prompt(
+                prompt="A spaceship",
+                negative_prompt="shadows, cluttered background, extra detail",
+                asset_3d_mode=True
+            )
+        
+        assert result["success"] is True
+        assert len(captured_calls) == 1
+        
+        # Verify keywords appear only once
+        enhanced_negative = captured_calls[0]["negative_prompt"]
+        keywords = [k.strip() for k in enhanced_negative.split(',')]
+        
+        # Check no duplicates
+        assert len(keywords) == len(set(keywords)), f"Found duplicate keywords: {keywords}"
+        
+        # Verify both user keywords and suffix keywords are present
+        assert "shadows" in keywords
+        assert "cluttered background" in keywords
+        assert "extra detail" in keywords
+        assert "dramatic lighting" in keywords
+        assert "depth of field" in keywords
     
     async def test_generate_png_with_3d_asset_mode_disabled(self, mock_stable_diffusion_service):
         """Test PNG generation with 3D Asset Mode disabled (default)."""
