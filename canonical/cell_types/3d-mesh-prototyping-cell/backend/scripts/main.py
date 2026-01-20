@@ -160,14 +160,17 @@ async def queue_3d_generation_job(
             
             image_bytes = base64.b64decode(image_data)
             
+            bytes_written = 0
             with open(input_path, 'wb') as f:
-                f.write(image_bytes)
+                bytes_written = f.write(image_bytes)
+                f.flush()  # Ensure data is written to disk
             
             # Verify file was written successfully
-            if not input_path.exists():
+            try:
+                file_size = input_path.stat().st_size
+            except FileNotFoundError:
                 raise IOError(f"Failed to write file to {input_path}")
             
-            file_size = input_path.stat().st_size
             logger.info(f"✅ Wrote input image to: {input_path}")
             logger.info(f"   Absolute path: {input_path.resolve()}")
             logger.info(f"   File size: {file_size} bytes (expected: {len(image_bytes)} bytes)")
