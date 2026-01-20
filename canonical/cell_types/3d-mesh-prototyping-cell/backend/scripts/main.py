@@ -363,11 +363,7 @@ def get_shared_volume_path() -> Path:
     import os
     
     # Use environment variable or default to /app bridge path
-    shared_volume_env = os.getenv('SHARED_VOLUME_PATH')
-    if not shared_volume_env:
-        # Fallback: Use /app volume mount (Kind hostPath -> project root)
-        shared_volume_env = '/app/.local-dev-data/scareverse-data'
-    
+    shared_volume_env = os.getenv('SHARED_VOLUME_PATH', '/app/.local-dev-data/scareverse-data')
     shared_volume_path = Path(shared_volume_env)
     
     # Log the configuration for debugging
