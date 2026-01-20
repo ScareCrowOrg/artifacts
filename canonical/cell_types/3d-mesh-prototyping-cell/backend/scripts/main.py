@@ -188,10 +188,11 @@ async def queue_3d_generation_job(
             }
         
         # Prepare job metadata
-        # Worker expects paths relative to its SHARED_VOLUME mount point (/data)
-        # Backend writes to shared_volume (/mnt/wsl/scareverse by default)
-        # These must align: Backend writes to /mnt/wsl/scareverse/jobs/{id}/input.png
-        # Worker reads from /data/jobs/{id}/input.png (where /data is mounted from /mnt/wsl/scareverse)
+        # MVP 4.1 Path Mapping:
+        # - Backend writes to: /app/.local-dev-data/scareverse-data/jobs/{id}/input.png
+        # - Files visible in Windows at: <PROJECT_ROOT>\.local-dev-data\scareverse-data\jobs\{id}\input.png
+        # - Worker mounts .local-dev-data/scareverse-data as /data
+        # - Worker reads from: /data/jobs/{id}/input.png
         worker_input_path = f"/data/jobs/{job_id}/input.png"
         worker_output_dir = f"/data/jobs/{job_id}"
         
