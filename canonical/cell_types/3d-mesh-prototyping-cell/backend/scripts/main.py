@@ -145,7 +145,8 @@ async def queue_3d_generation_job(
         # Create job directory in shared volume
         job_dir = shared_volume / "jobs" / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"Created job directory: {job_dir}")
+        logger.info(f"Created job directory: {job_dir}")
+        logger.info(f"Resolved job directory (absolute): {job_dir.resolve()}")
         
         # Write input image to shared volume
         input_path = job_dir / "input.png"
@@ -162,7 +163,18 @@ async def queue_3d_generation_job(
             with open(input_path, 'wb') as f:
                 f.write(image_bytes)
             
-            logger.debug(f"Wrote input image to: {input_path} ({len(image_bytes)} bytes)")
+            # Verify file was written successfully
+            if not input_path.exists():
+                raise IOError(f"Failed to write file to {input_path}")
+            
+            file_size = input_path.stat().st_size
+            logger.info(f"✅ Wrote input image to: {input_path}")
+            logger.info(f"   Absolute path: {input_path.resolve()}")
+            logger.info(f"   File size: {file_size} bytes (expected: {len(image_bytes)} bytes)")
+            
+            # Validate file size matches
+            if file_size != len(image_bytes):
+                raise IOError(f"File size mismatch: wrote {len(image_bytes)} bytes but file is {file_size} bytes")
             
         except Exception as e:
             logger.error(f"Failed to write input image: {e}")
@@ -173,12 +185,24 @@ async def queue_3d_generation_job(
             }
         
         # Prepare job metadata
+        # Worker expects paths relative to its SHARED_VOLUME mount point (/data)
+        # Backend writes to shared_volume (/mnt/wsl/scareverse by default)
+        # These must align: Backend writes to /mnt/wsl/scareverse/jobs/{id}/input.png
+        # Worker reads from /data/jobs/{id}/input.png (where /data is mounted from /mnt/wsl/scareverse)
+        worker_input_path = f"/data/jobs/{job_id}/input.png"
+        worker_output_dir = f"/data/jobs/{job_id}"
+        
+        logger.info(f"Path mapping for worker:")
+        logger.info(f"  Backend writes to: {input_path}")
+        logger.info(f"  Worker will read from: {worker_input_path}")
+        logger.info(f"  Worker output dir: {worker_output_dir}")
+        
         job_data = {
             "job_id": job_id,
             "status": "queued",
             "created_at": timestamp,
-            "input_image_path": f"/data/jobs/{job_id}/input.png",
-            "output_dir": f"/data/jobs/{job_id}",
+            "input_image_path": worker_input_path,
+            "output_dir": worker_output_dir,
             "parameters": json.dumps({
                 "target_faces": target_faces,
                 "enable_draco": enable_draco,
@@ -320,13 +344,28 @@ def get_shared_volume_path() -> Path:
     """
     Get the shared volume path for file transfer with Windows Worker.
     
+    Path Mapping Architecture:
+    - Backend (Kind/Linux): Mounts /mnt/wsl/scareverse as shared volume
+    - Worker (Windows Docker): Mounts /mnt/wsl/scareverse as /data
+    - Files written by Backend to /mnt/wsl/scareverse/jobs/{id}/input.png
+    - Are read by Worker from /data/jobs/{id}/input.png
+    
+    The SHARED_VOLUME_PATH for Backend should be /mnt/wsl/scareverse (default)
+    The SHARED_VOLUME for Worker should be /data (default)
+    
     Returns:
-        Path object pointing to shared volume
+        Path object pointing to shared volume (Backend perspective)
     """
     import os
     
     shared_volume_env = os.getenv('SHARED_VOLUME_PATH', '/mnt/wsl/scareverse')
-    return Path(shared_volume_env)
+    shared_volume_path = Path(shared_volume_env)
+    
+    # Log the configuration for debugging
+    logger.debug(f"Shared volume path: {shared_volume_path}")
+    logger.debug(f"Shared volume exists: {shared_volume_path.exists()}")
+    
+    return shared_volume_path
 
 
 # Legacy mock function kept for backward compatibility and testing
