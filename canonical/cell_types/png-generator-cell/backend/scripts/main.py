@@ -17,6 +17,41 @@ logger = logging.getLogger(__name__)
 MINIMAL_FALLBACK_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
 
 
+def _apply_static_3d_enhancement(prompt: str, negative_prompt: str = None) -> tuple:
+    """
+    Apply static 3D asset prompt enhancements (fallback when Ollama is unavailable).
+    
+    This is the legacy enhancement method, used as a fallback when Ollama
+    orchestration is not available.
+    
+    Args:
+        prompt: Original user prompt
+        negative_prompt: User's negative prompt (optional)
+        
+    Returns:
+        Tuple of (enhanced_prompt, enhanced_negative_prompt)
+    """
+    # Positive prompt suffix for 3D asset generation
+    positive_suffix = ", full body, standing, centered, front view, flat lighting, studio background, neutral gray background, high resolution, orthographic view"
+    enhanced_prompt = f"{prompt}{positive_suffix}"
+    
+    # Negative prompt suffix for 3D asset generation
+    negative_suffix = ", shadows, dramatic lighting, high contrast, depth of field, bokeh, cluttered background, side view, back view"
+    
+    # Merge negative prompts, avoiding duplicate keywords
+    enhanced_negative = negative_prompt or ""
+    if enhanced_negative:
+        # Split both prompts into keywords, deduplicate, and rejoin
+        user_keywords = [k.strip() for k in enhanced_negative.split(',')]
+        suffix_keywords = [k.strip() for k in negative_suffix.lstrip(', ').split(',')]
+        all_keywords = user_keywords + [k for k in suffix_keywords if k not in user_keywords]
+        enhanced_negative = ', '.join(all_keywords)
+    else:
+        enhanced_negative = negative_suffix.lstrip(", ")
+    
+    return enhanced_prompt, enhanced_negative
+
+
 def _create_fallback_png() -> str:
     """
     Create a 1x1 red pixel PNG as fallback placeholder.
@@ -180,6 +215,9 @@ async def generate_png_from_prompt(
     
     Falls back to a placeholder if the Stable Diffusion service is unavailable.
     
+    When asset_3d_mode is enabled, orchestrates with Ollama to generate
+    an optimized prompt before calling Stable Diffusion.
+    
     Args:
         prompt: Text description of the desired image
         width: Image width in pixels
@@ -188,7 +226,7 @@ async def generate_png_from_prompt(
         cfg_scale: Classifier-free guidance scale
         seed: Random seed (-1 for random)
         negative_prompt: Things to avoid in generation
-        asset_3d_mode: Enable 3D Asset optimization (adds technical suffixes)
+        asset_3d_mode: Enable 3D Asset optimization (uses Ollama orchestration)
         
     Returns:
         Dict with generated PNG or error information
@@ -202,29 +240,87 @@ async def generate_png_from_prompt(
             "metadata": {...}
         }
     """
-    # Apply 3D Asset Mode suffixes if enabled
+    # Initialize prompt variables
     enhanced_prompt = prompt
     enhanced_negative = negative_prompt or ""
     
+    # If 3D Asset Mode is enabled, use Ollama orchestration
     if asset_3d_mode:
-        # Positive prompt suffix for 3D asset generation
-        positive_suffix = ", full body, standing, centered, front view, flat lighting, studio background, neutral gray background, high resolution, orthographic view"
-        enhanced_prompt = f"{prompt}{positive_suffix}"
+        logger.info(f"3D Asset Mode enabled - orchestrating with Ollama for prompt optimization")
         
-        # Negative prompt suffix for 3D asset generation
-        negative_suffix = ", shadows, dramatic lighting, high contrast, depth of field, bokeh, cluttered background, side view, back view"
-        
-        # Merge negative prompts, avoiding duplicate keywords
-        if enhanced_negative:
-            # Split both prompts into keywords, deduplicate, and rejoin
-            user_keywords = [k.strip() for k in enhanced_negative.split(',')]
-            suffix_keywords = [k.strip() for k in negative_suffix.lstrip(', ').split(',')]
-            all_keywords = user_keywords + [k for k in suffix_keywords if k not in user_keywords]
-            enhanced_negative = ', '.join(all_keywords)
-        else:
-            enhanced_negative = negative_suffix.lstrip(", ")
+        try:
+            # Import Ollama service for prompt orchestration
+            from app.ollama_service import chamar_ollama, verificar_ollama_disponivel
+            
+            # Check if Ollama is available
+            ollama_available = await verificar_ollama_disponivel()
+            
+            if ollama_available:
+                # System prompt for Ollama - Prompt Architect role
+                system_prompt = """You are the ScareVerse Prompt Architect. Your mission is to transform simple descriptions into technical prompts for Stable Diffusion.
+
+Objective: Generate prompts optimized for 3D asset reconstruction (Stable Fast 3D / SF3D).
+
+Rules:
+- Use flat lighting (no dramatic shadows or highlights)
+- Neutral gray background (studio setup)
+- Orthographic front view (centered, full object visible)
+- Full body or complete object isolation
+- High resolution and clear geometry
+- No artistic interpretation - technical precision only
+
+CRITICAL PROHIBITION: 
+- If the user requests an OBJECT (weapon, tool, furniture, prop, item), DO NOT include humans, hands, faces, or any biological elements
+- Objects must be standalone - no interaction, no context with living beings
+- Focus solely on the geometric and material properties of the object itself
+
+Output format: Return ONLY the optimized prompt string. Do not explain, do not add commentary. Just the prompt."""
+
+                # Build the full prompt for Ollama
+                ollama_prompt = f"""{system_prompt}
+
+User Description: {prompt}
+
+Generate the optimized Stable Diffusion prompt:"""
+
+                # Call Ollama with timeout handling
+                logger.debug(f"Calling Ollama for prompt optimization - Original: {prompt[:50]}...")
+                ollama_result = await chamar_ollama(ollama_prompt)
+                
+                # Extract the optimized prompt from Ollama response
+                optimized_prompt = ollama_result.get("response", "").strip()
+                
+                if optimized_prompt:
+                    logger.info(f"Ollama optimization successful - Enhanced prompt length: {len(optimized_prompt)}")
+                    enhanced_prompt = optimized_prompt
+                    
+                    # Enhance negative prompt for 3D assets
+                    base_negative = "humans, people, hands, fingers, faces, portraits, person, man, woman, child, body parts, biological elements, dramatic lighting, shadows, high contrast, depth of field, bokeh, cluttered background, side view, back view, artistic interpretation"
+                    
+                    if enhanced_negative:
+                        # Merge user negative prompt with base negative
+                        user_keywords = [k.strip() for k in enhanced_negative.split(',')]
+                        base_keywords = [k.strip() for k in base_negative.split(',')]
+                        all_keywords = user_keywords + [k for k in base_keywords if k not in user_keywords]
+                        enhanced_negative = ', '.join(all_keywords)
+                    else:
+                        enhanced_negative = base_negative
+                    
+                    logger.debug(f"Final enhanced negative prompt: {enhanced_negative[:100]}...")
+                else:
+                    logger.warning("Ollama returned empty response, falling back to static enhancement")
+                    enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
+                    
+            else:
+                logger.warning("Ollama not available, falling back to static 3D asset enhancement")
+                enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
+                
+        except Exception as e:
+            logger.error(f"Error during Ollama orchestration: {e}", exc_info=True)
+            logger.warning("Falling back to static 3D asset enhancement")
+            enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
     
-    logger.info(f"Generating PNG with 3D Asset Mode: {asset_3d_mode}")
+    logger.info(f"Generating PNG - Asset 3D Mode: {asset_3d_mode}, Prompt length: {len(enhanced_prompt)}")
     # Try to import and use Stable Diffusion service
     try:
         from app.services.stable_diffusion_service import StableDiffusionService
