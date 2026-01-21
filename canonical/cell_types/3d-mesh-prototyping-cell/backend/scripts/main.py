@@ -323,10 +323,37 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
                     logger.warning(f"Failed to parse metadata JSON: {metadata_json}")
                     metadata = {}
                 
+                # Extract optimization status fields from job_data
+                # These are set by the worker_bridge.py resilience fallback
+                blender_optimized = job_data.get("blender_optimized")
+                blender_error = job_data.get("blender_error")
+                sf3d_completed = job_data.get("sf3d_completed")
+                message = job_data.get("message")
+                
+                # Convert string booleans to actual booleans
+                if blender_optimized is not None:
+                    blender_optimized = blender_optimized in ['True', 'true', '1', True]
+                if sf3d_completed is not None:
+                    sf3d_completed = sf3d_completed in ['True', 'true', '1', True]
+                
+                # Add optimization status to metadata if not already present
+                if blender_optimized is not None:
+                    metadata['blenderOptimized'] = blender_optimized
+                if blender_error:
+                    metadata['blenderError'] = blender_error
+                if sf3d_completed is not None:
+                    metadata['sf3dCompleted'] = sf3d_completed
+                if message:
+                    metadata['message'] = message
+                
                 return {
                     "status": "completed",
                     "mesh_data": mesh_data,
-                    "metadata": metadata
+                    "metadata": metadata,
+                    "blender_optimized": blender_optimized,
+                    "blender_error": blender_error,
+                    "sf3d_completed": sf3d_completed,
+                    "message": message
                 }
             else:
                 return {

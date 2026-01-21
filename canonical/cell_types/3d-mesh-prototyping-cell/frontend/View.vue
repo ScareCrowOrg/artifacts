@@ -125,6 +125,12 @@ const jobStatus = ref<string>('idle')
 const pollingInterval = ref<number | null>(null)
 const isPolling = ref<boolean>(false) // Prevent concurrent polls
 
+// Optimization status tracking
+const blenderOptimized = ref<boolean | null>(null)
+const blenderError = ref<string | null>(null)
+const statusMessage = ref<string | null>(null)
+const sf3dCompleted = ref<boolean | null>(null)
+
 // File input
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -237,6 +243,19 @@ const pollJobStatus = async (id: string) => {
       logger.info('Job completed, fetching result...')
       
       localGeneratedMesh.value = status.mesh_data // ITERATION #5 - Use local ref
+      
+      // Extract optimization status from metadata or job status
+      blenderOptimized.value = status.blender_optimized ?? status.metadata?.blenderOptimized ?? null
+      blenderError.value = status.blender_error ?? status.metadata?.blenderError ?? null
+      statusMessage.value = status.message ?? status.metadata?.message ?? null
+      sf3dCompleted.value = status.sf3d_completed ?? status.metadata?.sf3dCompleted ?? null
+      
+      logger.info('Optimization status:', {
+        blenderOptimized: blenderOptimized.value,
+        sf3dCompleted: sf3dCompleted.value,
+        hasError: !!blenderError.value
+      })
+      
       // meshMetadata is read-only, no need to update
       localError.value = null
       
@@ -443,6 +462,9 @@ onUnmounted(() => {
       :is-generating="isGenerating"
       :job-status="jobStatus"
       :job-id="jobId"
+      :blender-optimized="blenderOptimized"
+      :blender-error="blenderError"
+      :message="statusMessage"
     />
 
     <!-- Input Section -->
