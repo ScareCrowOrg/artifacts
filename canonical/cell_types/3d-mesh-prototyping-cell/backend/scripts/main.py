@@ -22,6 +22,7 @@ import json
 import uuid
 import time
 import asyncio
+import os
 from pathlib import Path
 from datetime import datetime
 
@@ -305,9 +306,25 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
         if status == "completed":
             # Job completed - read GLB from shared volume
             shared_volume = get_shared_volume_path()
+            
+            # Phase A: Path Sanitization and Normalization
+            # Construct output path with sanitization
             output_path = shared_volume / "jobs" / job_id / "output.glb"
             
+            # Normalize the path to handle any trailing spaces, double slashes, etc.
+            output_path_str = str(output_path).strip()  # Remove leading/trailing whitespace
+            output_path_normalized = os.path.normpath(output_path_str)  # Normalize path separators
+            output_path_absolute = os.path.abspath(output_path_normalized)  # Get absolute path
+            
+            # Convert back to Path object for consistent usage
+            output_path = Path(output_path_absolute)
+            
+            # Log with delimiters for verification (temporary debug log)
+            logger.info(f"Checking path: [{output_path}]")
+            logger.debug(f"Path details - raw: [{output_path_str}], normalized: [{output_path_normalized}], absolute: [{output_path_absolute}]")
+            
             if output_path.exists():
+                logger.info(f"✅ File validated and found: {output_path}")
                 with open(output_path, 'rb') as f:
                     glb_bytes = f.read()
                 
@@ -356,6 +373,23 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
                     "message": message
                 }
             else:
+                # Phase B: Deep Check - Inspect directory when file not found
+                logger.error(f"Output file not found at path: [{output_path}]")
+                
+                # Inspect parent directory
+                parent_dir = output_path.parent
+                if parent_dir.exists():
+                    try:
+                        dir_contents = list(parent_dir.iterdir())
+                        logger.error(f"Parent directory exists at: [{parent_dir}]")
+                        logger.error(f"Parent directory contents ({len(dir_contents)} items):")
+                        for item in dir_contents:
+                            logger.error(f"  - {item.name} (is_file: {item.is_file()}, size: {item.stat().st_size if item.is_file() else 'N/A'})")
+                    except (PermissionError, OSError) as e:
+                        logger.error(f"Could not list parent directory [{parent_dir}]: {e}")
+                else:
+                    logger.error(f"Parent directory does not exist: [{parent_dir}]")
+                
                 return {
                     "status": "failed",
                     "error": "Output file not found"
