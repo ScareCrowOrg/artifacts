@@ -191,10 +191,10 @@ async def queue_3d_generation_job(
         # MVP 4.1 Path Mapping:
         # - Backend writes to: /app/.local-dev-data/scareverse-data/jobs/{id}/input.png
         # - Files visible in Windows at: <PROJECT_ROOT>\.local-dev-data\scareverse-data\jobs\{id}\input.png
-        # - Worker mounts .local-dev-data/scareverse-data as /data
-        # - Worker reads from: /data/jobs/{id}/input.png
-        worker_input_path = f"/data/jobs/{job_id}/input.png"
-        worker_output_dir = f"/data/jobs/{job_id}"
+        # - Worker mounts .local-dev-data/scareverse-data as /app/.local-dev-data/scareverse-data
+        # - Worker reads from: /app/.local-dev-data/scareverse-data/jobs/{id}/input.png
+        worker_input_path = f"{get_shared_volume_path()}/jobs/{job_id}/input.png"
+        worker_output_dir = f"{get_shared_volume_path()}/jobs/{job_id}"
         
         logger.info(f"Path mapping for worker:")
         logger.info(f"  Backend writes to: {input_path}")
