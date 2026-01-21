@@ -319,7 +319,7 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
             # Convert back to Path object for consistent usage
             output_path = Path(output_path_absolute)
             
-            # Log with delimiters for verification (temporary debug log)
+            # Path verification logging for debugging
             logger.info(f"Checking path: [{output_path}]")
             logger.debug(f"Path details - raw: [{output_path_str}], normalized: [{output_path_normalized}], absolute: [{output_path_absolute}]")
             
