@@ -42,14 +42,28 @@
           <ChatLoadingIndicator v-if="chat.isLoading.value" />
         </div>
 
-        <!-- Agent Mode Terminal (v-else) - Occupies 100% of viewport -->
+        <!-- Agent Mode Terminal (v-else-if) - Occupies 100% of viewport -->
         <AgentTerminal
-          v-else
+          v-else-if="chatStore.agentSessionId"
           :visible="true"
-          :conversation-id="chatStore.agentSessionId || 'temp-session'"
+          :conversation-id="chatStore.agentSessionId"
           class="flex-1"
           @close="handleAgentTerminalClose"
         />
+
+        <!-- Loading indicator while session is being created -->
+        <div
+          v-else
+          class="flex-1 flex items-center justify-center"
+          style="color: var(--color-text-secondary);"
+        >
+          <div class="flex flex-col items-center gap-3">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+            <p class="text-sm">
+              {{ $t('agentMode.creatingSession') || 'Creating agent session...' }}
+            </p>
+          </div>
+        </div>
 
         <!-- Settings Panel (collapsible) - Manual via gear icon -->
         <ChatSettingsPanel 
