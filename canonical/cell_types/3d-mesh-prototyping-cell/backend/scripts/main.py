@@ -326,8 +326,37 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
             logger.info(f"  Shared volume root: {shared_volume}")
             logger.info(f"  Expected path (resolved): {output_path}")
             
-            if output_path.exists():
-                logger.info(f"✅ File validated and found: {output_path}")
+            # Phase C: Active File Validation with Filesystem Cache Invalidation
+            # Strategy: Retry with cache invalidation to handle volume sync delays
+            file_found = False
+            max_retries = 5
+            retry_delay = 1.0
+            
+            for attempt in range(max_retries):
+                # Force kernel to update file table by listing parent directory
+                parent_dir = output_path.parent
+                if parent_dir.exists():
+                    try:
+                        # This operation forces filesystem cache refresh
+                        list(parent_dir.iterdir())
+                    except (PermissionError, OSError) as e:
+                        logger.warning(f"Failed to list directory for cache invalidation: {e}")
+                
+                # Check if file exists and has non-zero size
+                if output_path.exists() and output_path.stat().st_size > 0:
+                    file_found = True
+                    if attempt > 0:
+                        logger.info(f"✅ File detected after {attempt} retry attempt(s): {output_path}")
+                    else:
+                        logger.info(f"✅ File detected on first attempt: {output_path}")
+                    break
+                
+                if attempt < max_retries - 1:
+                    logger.warning(f"⚠️ Attempt {attempt + 1}/{max_retries}: File not visible. Retrying after {retry_delay}s...")
+                    time.sleep(retry_delay)
+            
+            if file_found:
+                # File successfully validated - read content
                 with open(output_path, 'rb') as f:
                     glb_bytes = f.read()
                 
@@ -376,9 +405,9 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
                     "message": message
                 }
             else:
-                # Phase B: Deep Diagnostic Check - Inspect directory when file not found
-                logger.error(f"❌ Output file not found at expected path: {output_path}")
-                logger.error(f"   This usually indicates a Worker processing issue or path mismatch.")
+                # Phase C Fallback: File not found after all retry attempts
+                logger.error(f"❌ Failed to locate file after {max_retries} retry attempts")
+                logger.error(f"   Expected path: {output_path}")
                 
                 # Diagnostic Step 1: Check if parent directory exists
                 parent_dir = output_path.parent
