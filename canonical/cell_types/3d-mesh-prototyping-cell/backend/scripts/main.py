@@ -188,18 +188,24 @@ async def queue_3d_generation_job(
                 "job_id": None
             }
         
-        # Prepare job metadata
-        # MVP 4.1 Path Mapping:
+        # Prepare job metadata - CRITICAL: Path Unification
+        # All paths MUST use get_shared_volume_path() to ensure consistency
+        # MVP 4.1 Path Mapping Architecture:
         # - Backend writes to: /app/.local-dev-data/scareverse-data/jobs/{id}/input.png
         # - Files visible in Windows at: <PROJECT_ROOT>\.local-dev-data\scareverse-data\jobs\{id}\input.png
         # - Worker mounts .local-dev-data/scareverse-data as /app/.local-dev-data/scareverse-data
         # - Worker reads from: /app/.local-dev-data/scareverse-data/jobs/{id}/input.png
-        worker_input_path = f"{get_shared_volume_path()}/jobs/{job_id}/input.png"
-        worker_output_dir = f"{get_shared_volume_path()}/jobs/{job_id}"
         
-        logger.info(f"Path mapping for worker:")
+        # Phase A: Use shared_volume_root for ALL path constructions
+        shared_volume_root = get_shared_volume_path()
+        worker_input_path = f"{shared_volume_root}/jobs/{job_id}/input.png"
+        worker_output_dir = f"{shared_volume_root}/jobs/{job_id}"
+        
+        # DEBUG LOG - Path Configuration (Critical for troubleshooting)
+        logger.info(f"✅ Path unification verified:")
+        logger.info(f"  Shared volume root: {shared_volume_root}")
         logger.info(f"  Backend writes to: {input_path}")
-        logger.info(f"  Worker will read from: {worker_input_path}")
+        logger.info(f"  Worker input path: {worker_input_path}")
         logger.info(f"  Worker output dir: {worker_output_dir}")
         
         job_data = {
@@ -305,13 +311,13 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
         
         if status == "completed":
             # Job completed - read GLB from shared volume
+            # Phase B: Robust Path Validation with Sanitization
             shared_volume = get_shared_volume_path()
             
-            # Phase A: Path Sanitization and Normalization
-            # Construct output path with sanitization
+            # Construct output path using same root as job submission (path unification)
             output_path = shared_volume / "jobs" / job_id / "output.glb"
             
-            # Normalize the path to handle any trailing spaces, double slashes, etc.
+            # Sanitization: Remove spaces and normalize path
             output_path_str = str(output_path).strip()  # Remove leading/trailing whitespace
             output_path_normalized = os.path.normpath(output_path_str)  # Normalize path separators
             output_path_absolute = os.path.abspath(output_path_normalized)  # Get absolute path
@@ -319,9 +325,12 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
             # Convert back to Path object for consistent usage
             output_path = Path(output_path_absolute)
             
-            # Path verification logging for debugging
-            logger.info(f"Checking path: [{output_path}]")
-            logger.debug(f"Path details - raw: [{output_path_str}], normalized: [{output_path_normalized}], absolute: [{output_path_absolute}]")
+            # DEBUG LOG (Crucial for troubleshooting "Output file not found" errors)
+            logger.info(f"🔍 Attempting to validate output file:")
+            logger.info(f"  Job ID: {job_id}")
+            logger.info(f"  Shared volume root: {shared_volume}")
+            logger.info(f"  Expected path: {output_path}")
+            logger.debug(f"  Path sanitization - raw: [{output_path_str}], normalized: [{output_path_normalized}], absolute: [{output_path_absolute}]")
             
             if output_path.exists():
                 logger.info(f"✅ File validated and found: {output_path}")
@@ -373,26 +382,44 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
                     "message": message
                 }
             else:
-                # Phase B: Deep Check - Inspect directory when file not found
-                logger.error(f"Output file not found at path: [{output_path}]")
+                # Phase B: Deep Diagnostic Check - Inspect directory when file not found
+                logger.error(f"❌ Output file not found at expected path: {output_path}")
+                logger.error(f"   This usually indicates a Worker processing issue or path mismatch.")
                 
-                # Inspect parent directory
+                # Diagnostic Step 1: Check if parent directory exists
                 parent_dir = output_path.parent
                 if parent_dir.exists():
                     try:
                         dir_contents = list(parent_dir.iterdir())
-                        logger.error(f"Parent directory exists at: [{parent_dir}]")
-                        logger.error(f"Parent directory contents ({len(dir_contents)} items):")
+                        logger.error(f"📁 Parent directory exists: {parent_dir}")
+                        logger.error(f"   Directory contains {len(dir_contents)} items:")
                         for item in dir_contents:
-                            logger.error(f"  - {item.name} (is_file: {item.is_file()}, size: {item.stat().st_size if item.is_file() else 'N/A'})")
+                            item_info = f"   - {item.name}"
+                            if item.is_file():
+                                try:
+                                    size = item.stat().st_size
+                                    item_info += f" (file, {size} bytes)"
+                                except OSError:
+                                    item_info += " (file, size unknown)"
+                            else:
+                                item_info += " (directory)"
+                            logger.error(item_info)
                     except (PermissionError, OSError) as e:
-                        logger.error(f"Could not list parent directory [{parent_dir}]: {e}")
+                        logger.error(f"   Could not list directory contents: {e}")
                 else:
-                    logger.error(f"Parent directory does not exist: [{parent_dir}]")
+                    logger.error(f"❌ Parent directory does not exist: {parent_dir}")
+                    logger.error(f"   This suggests the Worker never started processing or job directory creation failed.")
+                
+                # Diagnostic Step 2: Check shared volume root
+                if not shared_volume.exists():
+                    logger.error(f"❌ CRITICAL: Shared volume root does not exist: {shared_volume}")
+                    logger.error(f"   This indicates a volume mounting issue. Check infrastructure configuration.")
+                else:
+                    logger.error(f"✅ Shared volume root exists: {shared_volume}")
                 
                 return {
                     "status": "failed",
-                    "error": "Output file not found"
+                    "error": "Output file not found. Worker may have encountered an error during processing. Check Worker logs for details."
                 }
         
         elif status == "failed":
