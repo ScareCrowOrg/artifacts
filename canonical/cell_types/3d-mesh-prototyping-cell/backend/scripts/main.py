@@ -198,8 +198,8 @@ async def queue_3d_generation_job(
         
         # Phase A: Use shared_volume_root for ALL path constructions
         shared_volume_root = get_shared_volume_path()
-        worker_input_path = f"{shared_volume_root}/jobs/{job_id}/input.png"
-        worker_output_dir = f"{shared_volume_root}/jobs/{job_id}"
+        worker_input_path = str(shared_volume_root / "jobs" / job_id / "input.png")
+        worker_output_dir = str(shared_volume_root / "jobs" / job_id)
         
         # DEBUG LOG - Path Configuration (Critical for troubleshooting)
         logger.info(f"✅ Path unification verified:")
@@ -317,20 +317,14 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
             # Construct output path using same root as job submission (path unification)
             output_path = shared_volume / "jobs" / job_id / "output.glb"
             
-            # Sanitization: Remove spaces and normalize path
-            output_path_str = str(output_path).strip()  # Remove leading/trailing whitespace
-            output_path_normalized = os.path.normpath(output_path_str)  # Normalize path separators
-            output_path_absolute = os.path.abspath(output_path_normalized)  # Get absolute path
-            
-            # Convert back to Path object for consistent usage
-            output_path = Path(output_path_absolute)
+            # Sanitization: Normalize and resolve to absolute path
+            output_path = output_path.resolve()
             
             # DEBUG LOG (Crucial for troubleshooting "Output file not found" errors)
             logger.info(f"🔍 Attempting to validate output file:")
             logger.info(f"  Job ID: {job_id}")
             logger.info(f"  Shared volume root: {shared_volume}")
-            logger.info(f"  Expected path: {output_path}")
-            logger.debug(f"  Path sanitization - raw: [{output_path_str}], normalized: [{output_path_normalized}], absolute: [{output_path_absolute}]")
+            logger.info(f"  Expected path (resolved): {output_path}")
             
             if output_path.exists():
                 logger.info(f"✅ File validated and found: {output_path}")
