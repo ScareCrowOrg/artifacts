@@ -161,6 +161,9 @@ async def queue_3d_generation_job(
             
             image_bytes = base64.b64decode(image_data)
             
+            # Part C: Log payload size for echo detection
+            logger.info(f"Processing image of {len(image_bytes)} bytes")
+            
             bytes_written = 0
             with open(input_path, 'wb') as f:
                 bytes_written = f.write(image_bytes)
@@ -311,20 +314,28 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
         
         if status == "completed":
             # Job completed - read GLB from shared volume
-            # Phase B: Robust Path Validation with Sanitization
-            shared_volume = get_shared_volume_path()
+            # Phase B: Trust Redis - Extract optimized_mesh_path from Worker payload
             
-            # Construct output path using same root as job submission (path unification)
-            output_path = shared_volume / "jobs" / job_id / "output.glb"
+            # CRITICAL: Read dynamic path from Worker instead of hardcoded "output.glb"
+            optimized_mesh_path_str = job_data.get("optimized_mesh_path")
+            
+            if not optimized_mesh_path_str:
+                logger.error(f"❌ Worker did not report 'optimized_mesh_path' in Redis payload")
+                logger.error(f"   Job ID: {job_id}")
+                logger.error(f"   Available keys in job_data: {list(job_data.keys())}")
+                return {
+                    "status": "failed",
+                    "error": "Worker did not report output file path. This indicates a Worker-side failure."
+                }
             
             # Sanitization: Normalize and resolve to absolute path
-            output_path = output_path.resolve()
+            output_path = Path(optimized_mesh_path_str.strip()).resolve()
             
             # DEBUG LOG (Crucial for troubleshooting "Output file not found" errors)
-            logger.info(f"🔍 Attempting to validate output file:")
+            logger.info(f"🔍 Attempting to read output file from Worker-reported path:")
             logger.info(f"  Job ID: {job_id}")
-            logger.info(f"  Shared volume root: {shared_volume}")
-            logger.info(f"  Expected path (resolved): {output_path}")
+            logger.info(f"  Worker-reported path: {optimized_mesh_path_str}")
+            logger.info(f"  Resolved absolute path: {output_path}")
             
             # Phase C: Active File Validation with Filesystem Cache Invalidation
             # Strategy: Retry with cache invalidation to handle volume sync delays
@@ -433,16 +444,17 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
                     logger.error(f"❌ Parent directory does not exist: {parent_dir}")
                     logger.error(f"   This suggests the Worker never started processing or job directory creation failed.")
                 
-                # Diagnostic Step 2: Check shared volume root
-                if not shared_volume.exists():
-                    logger.error(f"❌ CRITICAL: Shared volume root does not exist: {shared_volume}")
-                    logger.error(f"   This indicates a volume mounting issue. Check infrastructure configuration.")
-                else:
-                    logger.error(f"✅ Shared volume root exists: {shared_volume}")
+                # Diagnostic Step 2: Check Worker-reported path structure
+                logger.error(f"   Worker reported path: {optimized_mesh_path_str}")
+                logger.error(f"   This suggests the Worker completed but the file is not visible to the Backend.")
+                logger.error(f"   Possible causes:")
+                logger.error(f"     1. Volume mount mismatch between Worker and Backend")
+                logger.error(f"     2. Worker wrote to different location than reported")
+                logger.error(f"     3. Filesystem synchronization delay (cache issue)")
                 
                 return {
                     "status": "failed",
-                    "error": "Output file not found. Worker may have encountered an error during processing. Check Worker logs for details."
+                    "error": "Output file not found at Worker-reported path. Worker may have encountered an error during file write or volume mounting issue exists. Check Worker logs for details."
                 }
         
         elif status == "failed":
