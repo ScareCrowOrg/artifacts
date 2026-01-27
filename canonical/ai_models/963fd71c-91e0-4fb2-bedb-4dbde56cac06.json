@@ -3,7 +3,7 @@
   "name": "Scare Interpreter",
   "description": "Open Interpreter integration via aider-worker service. Provides autonomous code exploration, analysis, and planning capabilities with direct file system access through ephemeral execution.",
   "type": "interpreter",
-  "provider": "scare-worker",
+  "provider": "interpreter",
   "modelId": "open-interpreter",
   "apiKey": null,
   "version": "1.0.0",
