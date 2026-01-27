@@ -276,7 +276,7 @@ async function sendAgentMessage(): Promise<void> {
 
     // Add user message to chat history
     const userMsg = {
-      role: 'user',
+      role: 'user' as const,
       content: userMessage,
       timestamp: new Date(),
     }
@@ -334,7 +334,7 @@ async function sendAgentMessage(): Promise<void> {
 
     // Add agent response to chat
     const assistantMsg = {
-      role: 'assistant',
+      role: 'assistant' as const,
       content: assistantResponse.trim() || 'Agent command completed.',
       timestamp: new Date(),
       model: 'Agent Mode',
@@ -347,7 +347,7 @@ async function sendAgentMessage(): Promise<void> {
     
     // Add error message to chat
     const errorMsg = {
-      role: 'assistant',
+      role: 'assistant' as const,
       content: `❌ Error in Agent Mode: ${(error as Error).message}`,
       timestamp: new Date(),
     }

@@ -63,7 +63,11 @@ export interface UseUnclassifiedCellReturn {
   
   // Methods
   loadCellData: () => void
-  saveCell: () => Promise<void>
+  saveCell?: () => Promise<void>  // Optional for backward compatibility
+  prepareForSave: () => UnclassifiedCell
+  startSaving: () => void
+  onSaveComplete: () => void
+  onSaveError: (error: Error) => void
   closeCell: () => void
   sendFragmentToChat: (fragment: any, index: number) => void
   sendCellToChat: () => void  // ITERATION 3: Added for main view Send to Chat

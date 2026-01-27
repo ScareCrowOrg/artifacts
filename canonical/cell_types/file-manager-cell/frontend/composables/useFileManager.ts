@@ -334,7 +334,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     
     try {
       // Get current user ID
-      const userId = authStore.user?.id || notebookStore.getUserId()
+      const userId = authStore.currentUser?.id || notebookStore.getUserId()
       
       if (!userId) {
         throw new Error('User not authenticated')
@@ -470,7 +470,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     
     try {
       // Get current user ID
-      const userId = authStore.user?.id || notebookStore.getUserId()
+      const userId = authStore.currentUser?.id || notebookStore.getUserId()
       
       if (!userId) {
         throw new Error('User not authenticated')
@@ -660,7 +660,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   async function createNewFileEditor(): Promise<void> {
     try {
       // Get current user ID
-      const userId = authStore.user?.id || notebookStore.getUserId()
+      const userId = authStore.currentUser?.id || notebookStore.getUserId()
       
       if (!userId) {
         throw new Error('User not authenticated')

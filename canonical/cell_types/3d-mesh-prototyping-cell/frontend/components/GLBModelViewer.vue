@@ -30,9 +30,10 @@ const props = defineProps<{
 }>()
 
 // Load GLB model using TresJS composable
-const { scene, load } = useGLTF(props.url, {
+// v5 API uses 'state' instead of 'scene' and 'execute' instead of 'load'
+const { state: scene, execute: load } = useGLTF(props.url, {
   draco: true,
-  dracoDecoderPath: 'https://www.gstatic.com/draco/versioned/decoders/1.5.6/'
+  decoderPath: 'https://www.gstatic.com/draco/versioned/decoders/1.5.6/'
 })
 
 // Load model asynchronously with error handling
@@ -65,15 +66,19 @@ if (!loadError && scene.value) {
 const applyWireframe = (enabled: boolean) => {
   if (!scene.value) return
   
-  scene.value.traverse((child) => {
+  scene.value.traverse((child: THREE.Object3D) => {
     if ((child as any).isMesh) {
       const mesh = child as THREE.Mesh
       if (Array.isArray(mesh.material)) {
-        mesh.material.forEach((mat) => {
-          mat.wireframe = enabled
+        mesh.material.forEach((mat: THREE.Material) => {
+          // Type guard: wireframe only exists on certain material types
+          if ('wireframe' in mat) {
+            (mat as THREE.MeshStandardMaterial).wireframe = enabled
+          }
         })
-      } else {
-        mesh.material.wireframe = enabled
+      } else if ('wireframe' in mesh.material) {
+        // Type guard: wireframe only exists on certain material types
+        (mesh.material as THREE.MeshStandardMaterial).wireframe = enabled
       }
     }
   })
@@ -87,7 +92,7 @@ watch(() => props.wireframe, applyWireframe, { immediate: true })
 // Cleanup on unmount
 onUnmounted(() => {
   if (scene.value) {
-    scene.value.traverse((child) => {
+    scene.value.traverse((child: THREE.Object3D) => {
       if ((child as any).isMesh) {
         const mesh = child as THREE.Mesh
         if (mesh.geometry) mesh.geometry.dispose()

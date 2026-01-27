@@ -125,7 +125,7 @@ const {
 } = useManualCapture(cellDataRef)
 
 // Get user ID from auth store (fallback to default if not authenticated)
-const userId = computed(() => authStore.user?.id || 'default-user-id')
+const userId = computed(() => authStore.currentUser?.id || 'default-user-id')
 
 /**
  * Create a file-editor-v2 cell with the given content
