@@ -20,7 +20,7 @@
       <div class="flex flex-col gap-2 flex-1">
         <h2 class="m-0 text-2xl text-text-primary dark:text-text-primary-dark font-semibold">{{ $t('fileEditor.title') }}</h2>
         
-        <!-- File Path Display with Edit Button -->
+        <!-- File Path Display with Edit and Copy Buttons -->
         <div class="flex flex-col gap-2">
           <div class="flex items-center gap-2">
             <span class="text-sm font-semibold text-text-secondary dark:text-text-secondary-dark">
@@ -35,6 +35,16 @@
               @click="openConfigDialog"
             >
               ⚙️ {{ $t('fileEditor.configurePathButton') }}
+            </button>
+            <button
+              class="px-3 py-1 text-xs font-medium bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-md cursor-pointer transition-all duration-200 hover:bg-primary/10 dark:hover:bg-primary/20 hover:border-primary disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              :class="pathCopied ? 'text-success border-success' : 'text-text-secondary dark:text-text-secondary-dark'"
+              :title="$t('fileEditor.copyPath')"
+              :aria-label="$t('fileEditor.copyPath')"
+              @click="handleCopyPath"
+            >
+              {{ pathCopied ? '✓' : '📋' }}
+              {{ pathCopied ? $t('fileEditor.pathCopied') : $t('fileEditor.copyPath') }}
             </button>
             <span 
               v-if="isNewFile"
@@ -170,6 +180,9 @@ const editableFilePath = ref<string>(filePath.value)
 // File configuration dialog state
 const isConfigDialogOpen = ref<boolean>(false)
 
+// Copy path state
+const pathCopied = ref<boolean>(false)
+
 // Check if this is a new file creation
 const isNewFile = computed<boolean>(() => {
   const data = props.cell?.initial_data as any
@@ -295,6 +308,28 @@ function handleConfigConfirm(data: { filename: string; directory: string }): voi
   })
   
   // The watchers will automatically update the cell data
+}
+
+/**
+ * Copy file path to clipboard
+ */
+async function handleCopyPath(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(editableFullPath.value)
+    pathCopied.value = true
+    
+    // Reset the copied state after 2 seconds
+    setTimeout(() => {
+      pathCopied.value = false
+    }, 2000)
+  } catch (error) {
+    console.error('[FILE-EDITOR] Failed to copy path to clipboard:', error)
+    // Fallback: show error message
+    errorMessage.value = 'Failed to copy path to clipboard'
+    setTimeout(() => {
+      errorMessage.value = ''
+    }, 3000)
+  }
 }
 
 // Load file on mount
