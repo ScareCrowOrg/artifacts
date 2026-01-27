@@ -2,7 +2,7 @@
   "id": "963fd71c-91e0-4fb2-bedb-4dbde56cac06",
   "name": "Scare Interpreter",
   "description": "Open Interpreter integration via aider-worker service. Provides autonomous code exploration, analysis, and planning capabilities with direct file system access through ephemeral execution.",
-  "type": "agentic",
+  "type": "interpreter",
   "provider": "scare-worker",
   "modelId": "open-interpreter",
   "apiKey": null,
