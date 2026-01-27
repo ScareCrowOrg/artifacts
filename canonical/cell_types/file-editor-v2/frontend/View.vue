@@ -134,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, toRef, computed } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, toRef, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import FileConfigDialog from '@/components/FileConfigDialog.vue'
@@ -182,6 +182,7 @@ const isConfigDialogOpen = ref<boolean>(false)
 
 // Copy path state
 const pathCopied = ref<boolean>(false)
+let copyTimeoutId: ReturnType<typeof setTimeout> | null = null
 
 // Check if this is a new file creation
 const isNewFile = computed<boolean>(() => {
@@ -318,14 +319,20 @@ async function handleCopyPath(): Promise<void> {
     await navigator.clipboard.writeText(editableFullPath.value)
     pathCopied.value = true
     
+    // Clear any existing timeout
+    if (copyTimeoutId) {
+      clearTimeout(copyTimeoutId)
+    }
+    
     // Reset the copied state after 2 seconds
-    setTimeout(() => {
+    copyTimeoutId = setTimeout(() => {
       pathCopied.value = false
+      copyTimeoutId = null
     }, 2000)
   } catch (error) {
     console.error('[FILE-EDITOR] Failed to copy path to clipboard:', error)
-    // Fallback: show error message
-    errorMessage.value = 'Failed to copy path to clipboard'
+    // Use i18n for error message
+    errorMessage.value = $t('fileEditor.loadFileFailed')  // Reuse existing error key
     setTimeout(() => {
       errorMessage.value = ''
     }, 3000)
@@ -351,6 +358,15 @@ onMounted(async () => {
   // Initialize editable fields after loading
   editableFileName.value = fileName.value
   editableFilePath.value = filePath.value
+})
+
+// Cleanup on unmount
+onBeforeUnmount(() => {
+  // Clear any pending timeout to prevent memory leaks
+  if (copyTimeoutId) {
+    clearTimeout(copyTimeoutId)
+    copyTimeoutId = null
+  }
 })
 
 // Expose methods for parent component (CellToolbar) to call
