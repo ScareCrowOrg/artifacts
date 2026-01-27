@@ -266,6 +266,7 @@ import { useCellFactory } from '@/composables/useCellFactory.js'
 import { useTransmutation } from '@/composables/useTransmutation.js'
 import { useCellsStore } from '@/stores/cells.js'
 import { createLogger } from '@/utils/logger.js'
+import type { UseCellFactoryReturn, UseTransmutationReturn, UseBaseCellFeaturesReturn } from '@/types/composables'
 
 const log = createLogger('component:UnclassifiedCellView')
 const { t: $t } = useI18n()
@@ -296,7 +297,7 @@ console.log('[UnclassifiedCellView] 🏭 CALLING useCellFactory() with cellId:',
 // Factory-per-ID Pattern: Each cell gets its own isolated factory instance
 // This prevents state pollution between multiple cells operating simultaneously.
 // Pass the cell's UUID to ensure proper state isolation.
-const cellFactory = useCellFactory(props.cell?.id)
+const cellFactory: UseCellFactoryReturn = useCellFactory(props.cell?.id)
 
 // DEBUG LOG #8: After useCellFactory call - check initial state
 console.log('[UnclassifiedCellView] ✅ useCellFactory RETURNED', {
@@ -310,7 +311,7 @@ console.log('[UnclassifiedCellView] ✅ useCellFactory RETURNED', {
 log.debug('Cell factory initialized with clean state', { cellId: props.cell?.id, state: cellFactory.generationState.value })
 
 // Transmutation composable for cell → book transformations
-const transmutation = useTransmutation()
+const transmutation: UseTransmutationReturn = useTransmutation()
 
 // Use unclassified cell composable for cell-specific logic
 const {
@@ -334,7 +335,7 @@ const {
 
 // Use base cell features for common cell operations
 // ARCHITECTURE PRINCIPLE: Pass cell instance to avoid store lookup
-const baseCellApi = useBaseCellFeatures(
+const baseCellApi: UseBaseCellFeaturesReturn = useBaseCellFeatures(
   computed(() => props.cell?.id || ''),
   computed(() => 'unclassified-cell'),
   {}, // options

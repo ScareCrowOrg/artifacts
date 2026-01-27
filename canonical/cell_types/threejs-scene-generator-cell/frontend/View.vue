@@ -418,10 +418,14 @@ animate();`
     // Call the chat API with the prompt
     const response = await processMessage({
       intention: threejsPrompt,
+      assignee_id: '',
       history: [],
       model: selectedModel.value,
       classifyIntention: false,
       attachments: [],
+      thread_id: '',
+      assistant_id: '',
+      selected_collections: [],
     })
     
     console.log('[DEBUG] Response received from processMessage')
@@ -430,7 +434,7 @@ animate();`
     console.log('[DEBUG] Full response:', JSON.stringify(response, null, 2))
 
     // Extract code from response
-    const content = response.message || response.response || ''
+    const content = (response as any).message || (response as any).response || ''
     console.log('[DEBUG] Extracted content length:', content.length)
     console.log('[DEBUG] Content preview (first 500 chars):', content.substring(0, 500))
     
@@ -467,7 +471,9 @@ animate();`
     console.log('[DEBUG] Waiting for nextTick before initializing scene')
     await nextTick()
     console.log('[DEBUG] nextTick complete, calling initializeThreeJSScene')
-    initializeThreeJSScene(generatedScript.value)
+    if (generatedScript.value) {
+      initializeThreeJSScene(generatedScript.value)
+    }
 
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred'

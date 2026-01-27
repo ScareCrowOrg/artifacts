@@ -214,7 +214,7 @@ export function useClientSideValidation() {
   async function validateCellRegistry(): Promise<ClientValidationResult> {
     try {
       // Try to import CellRegistry
-      const { default: CellRegistry } = await import('@/utils/CellRegistry.js')
+      const CellRegistry = await import('@/utils/CellRegistry.js')
       
       if (CellRegistry && typeof CellRegistry.getCellInstance === 'function') {
         return {

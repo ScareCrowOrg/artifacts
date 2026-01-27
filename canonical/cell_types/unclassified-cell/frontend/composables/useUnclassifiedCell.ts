@@ -159,7 +159,7 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
 
     try {
       // Support both initial_data (new) and data (legacy) fields
-      const data = cell.value.initial_data || cell.value.data || {}
+      const data = (cell.value.initial_data || cell.value.data || {}) as Partial<UnclassifiedCellData>
       
       cellData.value = {
         title: data.title || '',

@@ -106,7 +106,7 @@ const { addCell: addCellToLayout } = useDynamicLayout()
 
 // Get cell data with defaults
 const cellData = computed<ManualCaptureCellData>(() => {
-  const initial_data = props.cell?.state?.initial_data || props.cell?.initial_data || {}
+  const initial_data = (props.cell?.state?.initial_data || props.cell?.initial_data || {}) as Partial<ManualCaptureCellData>
   return {
     category: initial_data.category || 'efemera',
     icon: initial_data.icon || '✍️',

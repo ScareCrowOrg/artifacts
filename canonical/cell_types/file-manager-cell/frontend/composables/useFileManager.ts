@@ -405,7 +405,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
           addCell(cellData)
           
           // Add to notebook store (in-memory only, not persisted)
-          notebookStore.cells[ephemeralCell.id] = ephemeralCell
+          ;(notebookStore.cells as Record<string, any>)[ephemeralCell.id] = ephemeralCell
         }
       }
       
@@ -519,7 +519,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
       addCell(cellData)
       
       // Step 3: Add to notebook store
-      notebookStore.cells[newCell.id] = newCell
+      ;(notebookStore.cells as Record<string, any>)[newCell.id] = newCell
       
       successMessage.value = `✅ Célula criada para ${fileName}`
       setTimeout(() => {
@@ -710,7 +710,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
       addCell(cellData)
       
       // Add to notebook store (in-memory only, not persisted)
-      notebookStore.cells[ephemeralCell.id] = ephemeralCell
+      ;(notebookStore.cells as Record<string, any>)[ephemeralCell.id] = ephemeralCell
       
       successMessage.value = '✅ Editor de novo arquivo aberto'
       setTimeout(() => {

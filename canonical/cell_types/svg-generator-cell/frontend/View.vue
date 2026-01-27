@@ -298,14 +298,18 @@ Include proper viewBox and dimensions. Keep it simple and readable.`
     // Use the selected model from the dropdown
     const response = await processMessage({
       intention: svgPrompt,
+      assignee_id: '',
       history: [],
       model: selectedModel.value,
       classifyIntention: false,
       attachments: [],
+      thread_id: '',
+      assistant_id: '',
+      selected_collections: [],
     })
 
     // Extract SVG from response
-    const content = response.message || response.response || ''
+    const content = (response as any).message || (response as any).response || ''
     
     // Try to extract SVG from the response
     let extractedSvg = content

@@ -399,9 +399,9 @@ describe('Unclassified Cell View', () => {
       )
       
       expect(generateButton).toBeDefined()
-      expect(generateButton.exists()).toBe(true)
+      expect(generateButton?.exists()).toBe(true)
       // Button should be enabled when there's content
-      expect(generateButton.attributes('disabled')).toBeUndefined()
+      expect(generateButton?.attributes('disabled')).toBeUndefined()
     })
 
     it('should enable generate button for persisted cells with content', async () => {
@@ -418,8 +418,8 @@ describe('Unclassified Cell View', () => {
       )
       
       expect(generateButton).toBeDefined()
-      expect(generateButton.exists()).toBe(true)
-      expect(generateButton.attributes('disabled')).toBeUndefined()
+      expect(generateButton?.exists()).toBe(true)
+      expect(generateButton?.attributes('disabled')).toBeUndefined()
     })
 
     it('should disable generate button for persisted cells without content', async () => {
@@ -444,8 +444,8 @@ describe('Unclassified Cell View', () => {
       )
       
       expect(generateButton).toBeDefined()
-      expect(generateButton.exists()).toBe(true)
-      expect(generateButton.attributes('disabled')).toBeDefined()
+      expect(generateButton?.exists()).toBe(true)
+      expect(generateButton?.attributes('disabled')).toBeDefined()
     })
 
     it('should send fragment to chat when button clicked', async () => {
