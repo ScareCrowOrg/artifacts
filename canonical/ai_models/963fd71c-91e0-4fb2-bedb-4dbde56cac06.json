@@ -1,0 +1,33 @@
+{
+  "id": "963fd71c-91e0-4fb2-bedb-4dbde56cac06",
+  "name": "Scare Interpreter",
+  "description": "Open Interpreter integration via aider-worker service. Provides autonomous code exploration, analysis, and planning capabilities with direct file system access through ephemeral execution.",
+  "type": "agentic",
+  "provider": "scare-worker",
+  "modelId": "open-interpreter",
+  "apiKey": null,
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
+    "timeout": 120,
+    "requiresApiKey": false,
+    "temperature": 0.7,
+    "max_tokens": 4096
+  },
+  "metadata": {
+    "contexto": "Session-aware with stateless history injection",
+    "capabilities": [
+      "Code exploration",
+      "Project analysis",
+      "Action planning",
+      "File system access"
+    ],
+    "execution_mode": "ephemeral",
+    "specialidade": "Autonomous code analysis and planning with system interaction",
+    "backend_service": "aider-worker",
+    "endpoint": "/sessions/ephemeral/{session_id}/interpret",
+    "stateless": true
+  },
+  "createdAt": "2026-01-27T10:00:00Z",
+  "updatedAt": "2026-01-27T10:00:00Z"
+}
