@@ -66,8 +66,8 @@ if (!loadError && scene.value && scene.value.scene) {
 const applyWireframe = (enabled: boolean) => {
   if (!scene.value || !scene.value.scene) return
   
-  scene.value.scene.traverse((child: THREE.Object3D) => {
-    if ((child as any).isMesh) {
+  scene.value.scene.traverse((child: any) => {
+    if (child.isMesh) {
       const mesh = child as unknown as THREE.Mesh
       if (Array.isArray(mesh.material)) {
         mesh.material.forEach((mat: THREE.Material) => {
@@ -92,8 +92,8 @@ watch(() => props.wireframe, applyWireframe, { immediate: true })
 // Cleanup on unmount
 onUnmounted(() => {
   if (scene.value && scene.value.scene) {
-    scene.value.scene.traverse((child: THREE.Object3D) => {
-      if ((child as any).isMesh) {
+    scene.value.scene.traverse((child: any) => {
+      if (child.isMesh) {
         const mesh = child as unknown as THREE.Mesh
         if (mesh.geometry) mesh.geometry.dispose()
         if (Array.isArray(mesh.material)) {

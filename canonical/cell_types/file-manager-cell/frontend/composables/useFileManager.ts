@@ -35,7 +35,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   // Composables & Stores
   const { addCell } = useDynamicLayout() as import('@/types/stores').UseDynamicLayoutReturn
   const notebookStore = useNotebookStore()
-  const authStore = useAuthStore()
+  const authStore = useAuthStore() as unknown as import('@/types/stores').AuthStore
   
   // State
   const tree = ref<FileTreeNode[]>([])
@@ -334,7 +334,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     
     try {
       // Get current user ID
-      const userId = authStore.currentUser.value?.id || notebookStore.getUserId()
+      const userId = (authStore.currentUser?.value)?.id || notebookStore.getUserId()
       
       if (!userId) {
         throw new Error('User not authenticated')
@@ -470,7 +470,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     
     try {
       // Get current user ID
-      const userId = authStore.currentUser.value?.id || notebookStore.getUserId()
+      const userId = (authStore.currentUser?.value)?.id || notebookStore.getUserId()
       
       if (!userId) {
         throw new Error('User not authenticated')
@@ -660,7 +660,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   async function createNewFileEditor(): Promise<void> {
     try {
       // Get current user ID
-      const userId = authStore.currentUser.value?.id || notebookStore.getUserId()
+      const userId = (authStore.currentUser?.value)?.id || notebookStore.getUserId()
       
       if (!userId) {
         throw new Error('User not authenticated')

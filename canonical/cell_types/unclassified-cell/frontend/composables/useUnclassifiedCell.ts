@@ -200,6 +200,7 @@ export function useUnclassifiedCell(cell: Ref<UnclassifiedCell | null>): UseUncl
       // Create updated cell object with new data
       const updatedCell: UnclassifiedCell = {
         ...cell.value,
+        id: cell.value?.id || '',
         initial_data: cellData.value,
         data: cellData.value, // Also update legacy data field
       }

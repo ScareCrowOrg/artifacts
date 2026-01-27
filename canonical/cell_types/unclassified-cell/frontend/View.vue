@@ -30,7 +30,7 @@
     <!-- Transmutation Progress (if transmuting) -->
     <transition name="slide-fade">
       <div
-        v-if="transmutation.isTransmuting && transmutation.currentCellId === cell?.id"
+        v-if="transmutation.isTransmuting.value && transmutation.currentCellId.value === cell?.id"
         class="transmutation-banner p-4 rounded-lg border-2 border-primary/50 bg-gradient-to-r from-primary/10 to-primary/20 dark:from-primary/20 dark:to-primary/30 mb-4"
         role="alert"
         aria-live="polite"
@@ -143,7 +143,7 @@
 
       <!-- Streaming Preview -->
       <div
-        v-if="cellFactory.streamingContent.length > 0"
+        v-if="cellFactory.streamingContent.value.length > 0"
         class="flex flex-col gap-2 flex-1 min-h-[200px]"
       >
         <label class="font-semibold text-sm text-text-secondary dark:text-text-secondary-dark">
@@ -162,7 +162,7 @@
       >
         <ul class="text-sm space-y-1">
           <li
-            v-for="ref in cellFactory.generatedRefs"
+            v-for="ref in cellFactory.generatedRefs.value"
             :key="ref.id"
             class="text-text-secondary dark:text-text-secondary-dark"
           >
@@ -174,9 +174,9 @@
 
     <!-- Sandbox Preview -->
     <SandboxPreview
-      v-if="cellFactory.hasGeneratedCode.value && cellFactory.generatedRefs.length > 0"
+      v-if="cellFactory.hasGeneratedCode.value && cellFactory.generatedRefs.value.length > 0"
       :cell-id="cell?.id || 'temp-cell'"
-      :dynamic-refs="cellFactory.generatedRefs"
+      :dynamic-refs="cellFactory.generatedRefs.value"
       :loading="cellFactory.isGenerating.value"
       class="mt-4"
       data-testid="sandbox-preview-component"
@@ -255,7 +255,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import SandboxPreview from '@/components/SandboxPreview.vue'
@@ -267,6 +267,7 @@ import { useTransmutation } from '@/composables/useTransmutation.js'
 import { useCellsStore } from '@/stores/cells.js'
 import { createLogger } from '@/utils/logger.js'
 import type { UseCellFactoryReturn, UseTransmutationReturn, UseBaseCellFeaturesReturn } from '@/types/composables'
+import type { CompleteCell } from '@/types/cell'
 
 const log = createLogger('component:UnclassifiedCellView')
 const { t: $t } = useI18n()
@@ -297,7 +298,7 @@ console.log('[UnclassifiedCellView] 🏭 CALLING useCellFactory() with cellId:',
 // Factory-per-ID Pattern: Each cell gets its own isolated factory instance
 // This prevents state pollution between multiple cells operating simultaneously.
 // Pass the cell's UUID to ensure proper state isolation.
-const cellFactory: UseCellFactoryReturn = useCellFactory(props.cell?.id)
+const cellFactory = useCellFactory(props.cell?.id) as UseCellFactoryReturn
 
 // DEBUG LOG #8: After useCellFactory call - check initial state
 console.log('[UnclassifiedCellView] ✅ useCellFactory RETURNED', {
@@ -311,7 +312,7 @@ console.log('[UnclassifiedCellView] ✅ useCellFactory RETURNED', {
 log.debug('Cell factory initialized with clean state', { cellId: props.cell?.id, state: cellFactory.generationState.value })
 
 // Transmutation composable for cell → book transformations
-const transmutation: UseTransmutationReturn = useTransmutation()
+const transmutation = useTransmutation() as UseTransmutationReturn
 
 // Use unclassified cell composable for cell-specific logic
 const {
@@ -339,7 +340,7 @@ const baseCellApi: UseBaseCellFeaturesReturn = useBaseCellFeatures(
   computed(() => props.cell?.id || ''),
   computed(() => 'unclassified-cell'),
   {}, // options
-  ref(props.cell) // Pass cell instance directly
+  ref(props.cell) as Ref<CompleteCell> // Type assertion for compatibility
 )
 
 // DEBUG ITERATION 3 - LOG #4: Template render tracking
@@ -416,7 +417,7 @@ async function onGenerate(): Promise<void> {
     errorMessage.value = null
     
     console.log('[UnclassifiedCellView] 📞 Calling cellFactory.generateCellCode')
-    const result = await cellFactory.generateCellCode(
+    await cellFactory.generateCellCode(
       props.cell.id,
       cellData.value.content,
       'auto',
@@ -427,20 +428,13 @@ async function onGenerate(): Promise<void> {
       }
     )
 
-    console.group('[UnclassifiedCellView] 📬 generateCellCode RETURNED')
-    console.log('✅ Success:', result.success)
-    console.log('📊 Full result:', result)
+    console.group('[UnclassifiedCellView] 📬 generateCellCode COMPLETED')
     console.log('🔄 Factory state after:', cellFactory.generationState.value)
     console.log('🔄 isGenerating after:', cellFactory.isGenerating.value)
     console.groupEnd()
 
-    if (result.success) {
-      successMessage.value = 'Generation started! Watch the preview below.'
-      console.log('[UnclassifiedCellView] ✅ Generation started successfully')
-    } else {
-      errorMessage.value = result.error || 'Failed to start generation'
-      console.error('[UnclassifiedCellView] ❌ Generation failed with error:', result.error)
-    }
+    successMessage.value = 'Generation started! Watch the preview below.'
+    console.log('[UnclassifiedCellView] ✅ Generation started successfully')
   } catch (error: any) {
     console.group('[UnclassifiedCellView] 💥 EXCEPTION CAUGHT in onGenerate')
     console.error('Error object:', error)

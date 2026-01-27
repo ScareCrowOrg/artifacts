@@ -95,7 +95,7 @@ import type { CellProps, ManualCaptureCellData } from './types'
 const props = defineProps<CellProps>()
 
 // Stores
-const authStore = useAuthStore()
+const authStore = useAuthStore() as unknown as import('@/types/stores').AuthStore
 const layoutStore = useLayoutStore()
 
 // i18n
@@ -125,7 +125,7 @@ const {
 } = useManualCapture(cellDataRef)
 
 // Get user ID from auth store (fallback to default if not authenticated)
-const userId = computed(() => authStore.currentUser.value?.id || 'default-user-id')
+const userId = computed(() => (authStore.currentUser?.value)?.id || 'default-user-id')
 
 /**
  * Create a file-editor-v2 cell with the given content

@@ -287,7 +287,7 @@ const cell = computed(() => {
   
   // Fallback to notebook store
   console.log('[BaseFragmentsManager] Falling back to notebook store')
-  return notebookStore.cells[cellId.value]
+  return (notebookStore.cells as Record<string, any>)[cellId.value]
 })
 
 const cellType = computed(() => {

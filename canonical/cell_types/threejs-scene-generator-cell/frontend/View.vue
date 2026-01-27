@@ -465,7 +465,7 @@ animate();`
     generatedScript.value = extractedCode.trim()
     error.value = null
     
-    console.log('[DEBUG] Generated script stored, length:', generatedScript.value.length)
+    console.log('[DEBUG] Generated script stored, length:', generatedScript.value?.length || 0)
 
     // Initialize the scene
     console.log('[DEBUG] Waiting for nextTick before initializing scene')

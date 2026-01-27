@@ -182,7 +182,7 @@ export function useBaseCellFeatures(
         
         if (!cell) {
           console.log('⚠️ No cell instance provided, falling back to store lookup')
-          cell = notebookStore.cells[cellId.value]
+          cell = (notebookStore.cells as Record<string, any>)[cellId.value]
         }
         
         if (!cell) {
@@ -209,7 +209,7 @@ export function useBaseCellFeatures(
         console.log('📤 Sending complete payload to backend:', {
           keys: Object.keys(payload),
           initial_data_size: JSON.stringify(payload.initial_data).length,
-          fragments_count: payload.fragments.length,
+          fragments_count: (payload.fragments as any[])?.length || 0,
           has_metadata: !!payload.metadata,
           has_status: !!payload.status,
         })
@@ -224,7 +224,7 @@ export function useBaseCellFeatures(
             },
             body: JSON.stringify(payload),
           }
-        )
+        ) as Response
 
         if (!response.ok) {
           const errorText = await response.text()
@@ -236,15 +236,12 @@ export function useBaseCellFeatures(
           throw new Error(`Falha ao salvar célula: ${response.statusText}`)
         }
 
-        const updatedCell = await response.json()
-        console.log('✅ Cell saved to backend:', {
-          id: updatedCell.id,
-          fragments: updatedCell.fragments?.length || 0,
-          metadata_keys: Object.keys(updatedCell.metadata || {}).length,
-        })
+        const updatedCell: any = await response.json()
+        console.log('✅ Cell saved to backend')
         
         // Update the cell in the store with the response from backend
-        notebookStore.cells[cellId.value] = updatedCell
+        const cells = notebookStore.cells as Record<string, any>
+        cells[cellId.value] = updatedCell
       }
 
       showSuccess('Célula salva com sucesso!')
@@ -314,7 +311,7 @@ export function useBaseCellFeatures(
       } else {
         console.warn('⚠️ No cell instance provided, falling back to store lookup')
         console.warn('This is not ideal and may cause issues if cell not in store')
-        cell = notebookStore.cells[cellId.value]
+        cell = (notebookStore.cells as Record<string, any>)[cellId.value]
         
         if (!cell) {
           console.error('❌ Cell not found in store:', cellId.value)
@@ -671,7 +668,7 @@ export function useBaseCellFeatures(
    * Get parent cell context for subviews
    */
   function getParentContext(): ParentCellContext {
-    const cell = notebookStore.cells[cellId.value]
+    const cell = (notebookStore.cells as Record<string, any>)[cellId.value]
     
     return {
       cellId: cellId.value,
