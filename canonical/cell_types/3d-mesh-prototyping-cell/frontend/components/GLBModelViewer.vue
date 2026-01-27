@@ -47,15 +47,15 @@ try {
 }
 
 // Only proceed with setup if load succeeded
-if (!loadError && scene.value) {
-  const bbox = new THREE.Box3().setFromObject(scene.value)
+if (!loadError && scene.value && scene.value.scene) {
+  const bbox = new THREE.Box3().setFromObject(scene.value.scene)
   const center = bbox.getCenter(new THREE.Vector3())
-  scene.value.position.sub(center)
+  scene.value.scene.position.sub(center)
   
   const size = bbox.getSize(new THREE.Vector3())
   const maxDim = Math.max(size.x, size.y, size.z)
   const scale = 2 / maxDim
-  scene.value.scale.multiplyScalar(scale)
+  scene.value.scene.scale.multiplyScalar(scale)
   
   logger.debug('Model centered and scaled', { scale, maxDim })
 }
@@ -64,11 +64,11 @@ if (!loadError && scene.value) {
  * Apply wireframe mode to all meshes in the scene
  */
 const applyWireframe = (enabled: boolean) => {
-  if (!scene.value) return
+  if (!scene.value || !scene.value.scene) return
   
-  scene.value.traverse((child: THREE.Object3D) => {
+  scene.value.scene.traverse((child: THREE.Object3D) => {
     if ((child as any).isMesh) {
-      const mesh = child as THREE.Mesh
+      const mesh = child as unknown as THREE.Mesh
       if (Array.isArray(mesh.material)) {
         mesh.material.forEach((mat: THREE.Material) => {
           // Type guard: wireframe only exists on certain material types
@@ -91,10 +91,10 @@ watch(() => props.wireframe, applyWireframe, { immediate: true })
 
 // Cleanup on unmount
 onUnmounted(() => {
-  if (scene.value) {
-    scene.value.traverse((child: THREE.Object3D) => {
+  if (scene.value && scene.value.scene) {
+    scene.value.scene.traverse((child: THREE.Object3D) => {
       if ((child as any).isMesh) {
-        const mesh = child as THREE.Mesh
+        const mesh = child as unknown as THREE.Mesh
         if (mesh.geometry) mesh.geometry.dispose()
         if (Array.isArray(mesh.material)) {
           mesh.material.forEach(mat => mat.dispose())

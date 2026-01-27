@@ -278,7 +278,7 @@ async function sendAgentMessage(): Promise<void> {
     const userMsg = {
       role: 'user' as const,
       content: userMessage,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     }
     chat.messages.value.push(userMsg)
     chatHistory.addMessage(userMsg)
@@ -336,7 +336,7 @@ async function sendAgentMessage(): Promise<void> {
     const assistantMsg = {
       role: 'assistant' as const,
       content: assistantResponse.trim() || 'Agent command completed.',
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
       model: 'Agent Mode',
     }
     chat.messages.value.push(assistantMsg)
@@ -349,7 +349,7 @@ async function sendAgentMessage(): Promise<void> {
     const errorMsg = {
       role: 'assistant' as const,
       content: `❌ Error in Agent Mode: ${(error as Error).message}`,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     }
     chat.messages.value.push(errorMsg)
     chatHistory.addMessage(errorMsg)

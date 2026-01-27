@@ -102,7 +102,7 @@ const layoutStore = useLayoutStore()
 const { t } = useI18n()
 
 // Use dynamic layout composable (standard pattern - same as file-manager-cell)
-const { addCell: addCellToLayout } = useDynamicLayout()
+const { addCell: addCellToLayout } = useDynamicLayout() as import('@/types/stores').UseDynamicLayoutReturn
 
 // Get cell data with defaults
 const cellData = computed<ManualCaptureCellData>(() => {
@@ -125,7 +125,7 @@ const {
 } = useManualCapture(cellDataRef)
 
 // Get user ID from auth store (fallback to default if not authenticated)
-const userId = computed(() => authStore.currentUser?.id || 'default-user-id')
+const userId = computed(() => authStore.currentUser.value?.id || 'default-user-id')
 
 /**
  * Create a file-editor-v2 cell with the given content

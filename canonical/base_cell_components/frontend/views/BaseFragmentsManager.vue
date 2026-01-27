@@ -215,7 +215,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useNotebookStore } from '@/stores/useNotebookStore'
-import { useBaseCellFeatures } from '../composables/useBaseCellFeatures.ts'
+import { useBaseCellFeatures } from '../composables/useBaseCellFeatures'
 import { useParentCellContext } from '@/composables/useParentCellContext'
 import type { CellFragment } from '@/types/baseCell'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
