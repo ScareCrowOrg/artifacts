@@ -65,15 +65,6 @@
           </div>
         </div>
 
-        <!-- Settings Panel (collapsible) - Manual via gear icon -->
-        <ChatSettingsPanel 
-          :visible="showSettingsPanel" 
-          :chat="chat"
-          @update:selected-model="(value: string) => chat.selectedModel.value = value"
-          @update:enable-intention-classification="(value: boolean) => chat.enableIntentionClassification.value = value"
-          @update:selected-collections="(value: string[]) => chat.selectedCollections.value = value"
-        />
-
         <!-- Context Bar (MVP 4.1 - Shows files in Agent Mode context) -->
         <ContextBar
           v-if="chatStore.isAgentMode"
@@ -123,6 +114,16 @@
       @cancel="chatStore.hideFileProposal"
       @close="chatStore.hideFileProposal"
     />
+    
+    <!-- Chat Settings Modal -->
+    <ChatSettingsModal 
+      :is-open="uiStore.showChatSettings"
+      :chat="chat"
+      @close="uiStore.toggleChatSettings"
+      @update:selected-model="(value: string) => chat.selectedModel.value = value"
+      @update:enable-intention-classification="(value: boolean) => chat.enableIntentionClassification.value = value"
+      @update:selected-collections="(value: string[]) => chat.selectedCollections.value = value"
+    />
   </section>
 </template>
 
@@ -142,7 +143,7 @@ import WelcomeMessage from '@/components/chat/WelcomeMessage.vue'
 import ChatLoadingIndicator from '@/components/chat/ChatLoadingIndicator.vue'
 import ChatMessage from '@/components/chat/ChatMessage.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
-import ChatSettingsPanel from '@/components/chat/ChatSettingsPanel.vue'
+import ChatSettingsModal from '@/components/chat/ChatSettingsModal.vue'
 import ChatHistorySidebar from '@/components/ChatHistorySidebar.vue'
 import TraceTimelineModal from '@/components/chat/TraceTimelineModal.vue'
 import FileProposalModal from '@/components/chat/FileProposalModal.vue'
@@ -189,9 +190,6 @@ const chatHistory = useChatHistory()
 
 // Ref for messages container
 const messagesContainer = ref<HTMLDivElement | null>(null)
-
-// Settings panel visibility (dynamic behavior)
-const showSettingsPanel = ref<boolean>(false)
 
 // Timeline modal state
 const showTimelineModal = ref<boolean>(false)
@@ -367,17 +365,13 @@ function handleEnter(event: KeyboardEvent): void {
   }
   event.preventDefault()
   sendMessageHandler()
-  // Disable auto-show of settings panel (MVP 4.1 - manual via gear icon)
-  // showSettingsPanel.value = false
   
   // Update cell data with current conversation
   updateCellData()
 }
 
 function handleInputFocus(): void {
-  // Disable auto-show settings panel (MVP 4.1 UX focus requirement)
-  // Settings panel now manual via gear icon
-  // showSettingsPanel.value = true
+  // Input focus handler - settings now controlled via modal
 }
 
 // Handler for closing agent terminal (MVP 4.1)
@@ -440,17 +434,6 @@ watch(
     if (uiStore.clearChatTrigger > 0) {
       chat.clearChat()
       updateCellData()
-    }
-  },
-)
-
-// Watch for attachment changes to show settings panel
-watch(
-  () => chat.attachments.value.length,
-  (newLength: number, oldLength: number | undefined) => {
-    if (oldLength !== undefined && newLength > oldLength) {
-      // New attachment added, show settings panel
-      showSettingsPanel.value = true
     }
   },
 )
