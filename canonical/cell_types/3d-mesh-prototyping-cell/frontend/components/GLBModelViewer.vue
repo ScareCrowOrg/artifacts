@@ -12,8 +12,11 @@
 /**
  * GLBModel Viewer Component - TresJS-based 3D model display
  * 
- * Uses async useGLTF composable for loading and displaying GLB models.
+ * Uses useGLTF composable for loading and displaying GLB models.
  * Handles automatic centering, scaling, and wireframe modes.
+ * 
+ * FIXED: Removed top-level await to prevent TresContext error.
+ * The async loading is handled by useGLTF internally.
  * 
  * @component
  */
@@ -30,45 +33,22 @@ const props = defineProps<{
 }>()
 
 // Load GLB model using TresJS composable
-// v5 API uses 'state' instead of 'scene' and 'execute' instead of 'load'
-const { state: scene, execute: load } = useGLTF(props.url, {
+// NOTE: useGLTF handles async loading internally, we don't await it at top level
+// The 'scene' ref will be null until the model loads
+const { scene } = useGLTF(props.url, {
   draco: true,
   decoderPath: 'https://www.gstatic.com/draco/versioned/decoders/1.5.6/'
 })
-
-// Load model asynchronously with error handling
-let loadError = null
-try {
-  await load()
-  logger.info('GLB model loaded successfully')
-} catch (error) {
-  logger.error('Failed to load GLB model', error)
-  loadError = error
-}
-
-// Only proceed with setup if load succeeded
-if (!loadError && scene.value && scene.value.scene) {
-  const bbox = new THREE.Box3().setFromObject(scene.value.scene)
-  const center = bbox.getCenter(new THREE.Vector3())
-  scene.value.scene.position.sub(center)
-  
-  const size = bbox.getSize(new THREE.Vector3())
-  const maxDim = Math.max(size.x, size.y, size.z)
-  const scale = 2 / maxDim
-  scene.value.scene.scale.multiplyScalar(scale)
-  
-  logger.debug('Model centered and scaled', { scale, maxDim })
-}
 
 /**
  * Apply wireframe mode to all meshes in the scene
  */
 const applyWireframe = (enabled: boolean) => {
-  if (!scene.value || !scene.value.scene) return
+  if (!scene.value) return
   
-  scene.value.scene.traverse((child: any) => {
+  scene.value.traverse((child: any) => {
     if (child.isMesh) {
-      const mesh = child as unknown as THREE.Mesh
+      const mesh = child as THREE.Mesh
       if (Array.isArray(mesh.material)) {
         mesh.material.forEach((mat: THREE.Material) => {
           // Type guard: wireframe only exists on certain material types
@@ -76,7 +56,7 @@ const applyWireframe = (enabled: boolean) => {
             (mat as THREE.MeshStandardMaterial).wireframe = enabled
           }
         })
-      } else if ('wireframe' in mesh.material) {
+      } else if (mesh.material && 'wireframe' in mesh.material) {
         // Type guard: wireframe only exists on certain material types
         (mesh.material as THREE.MeshStandardMaterial).wireframe = enabled
       }
@@ -86,15 +66,33 @@ const applyWireframe = (enabled: boolean) => {
   logger.debug(`Wireframe mode: ${enabled}`)
 }
 
-// Watch for wireframe prop changes
-watch(() => props.wireframe, applyWireframe, { immediate: true })
+// Watch for changes in both scene loading and wireframe prop
+watch([scene, () => props.wireframe], ([sceneValue, wireframeValue]) => {
+  if (sceneValue) {
+    // Center and scale the model once loaded
+    const bbox = new THREE.Box3().setFromObject(sceneValue)
+    const center = bbox.getCenter(new THREE.Vector3())
+    sceneValue.position.sub(center)
+    
+    const size = bbox.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z)
+    const scale = 2 / maxDim
+    sceneValue.scale.multiplyScalar(scale)
+    
+    logger.debug('Model centered and scaled', { scale, maxDim })
+    logger.info('GLB model loaded successfully')
+    
+    // Apply wireframe mode
+    applyWireframe(wireframeValue)
+  }
+})
 
 // Cleanup on unmount
 onUnmounted(() => {
-  if (scene.value && scene.value.scene) {
-    scene.value.scene.traverse((child: any) => {
+  if (scene.value) {
+    scene.value.traverse((child: any) => {
       if (child.isMesh) {
-        const mesh = child as unknown as THREE.Mesh
+        const mesh = child as THREE.Mesh
         if (mesh.geometry) mesh.geometry.dispose()
         if (Array.isArray(mesh.material)) {
           mesh.material.forEach(mat => mat.dispose())
