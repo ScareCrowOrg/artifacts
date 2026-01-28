@@ -31,10 +31,13 @@ import { OrbitControls, Grid } from '@tresjs/cientos'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
 import authService from '@/services/authService'
+import { useJobPolling } from './composables/useJobPolling'
 import GLBModelViewer from './components/GLBModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
 import ViewportControls from './components/ViewportControls.vue'
 import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
+import GenerationModeSwitcher from './components/GenerationModeSwitcher.vue'
+import GLBFileUploader from './components/GLBFileUploader.vue'
 
 // ITERATION #9: Define component name for proper Vue registration in dynamic loading context
 defineOptions({ name: 'MeshPrototypingCellView' })
@@ -67,6 +70,19 @@ const localIsGenerating = ref<boolean>(false) // Generation status (writable)
 const localAutoRotate = ref<boolean>(false) // Viewport setting (writable)
 const localWireframeMode = ref<boolean>(false) // Viewport setting (writable)
 const localShowGrid = ref<boolean>(true) // Viewport setting (writable)
+
+// Generation mode state
+type GenerationMode = 'cloud-api' | 'local-gpu' | 'manual-upload'
+const generationMode = ref<GenerationMode>(
+  (props.cell?.initial_data?.generationMode || 
+   props.cell?.state?.generationMode || 
+   props.cell?.generationMode || 
+   'local-gpu') as GenerationMode
+)
+
+// Manual upload state
+const uploadedGLBFile = ref<File | null>(null)
+const uploadedGLBUrl = ref<string | null>(null)
 
 // Component state - Safe reactive access with defensive defaults (ITERATION #4)
 // Now prioritizes local state over cell data (ITERATION #5)
@@ -129,24 +145,42 @@ const showGrid = computed(() => {
          props.cell?.viewportSettings?.showGrid !== false)
 })
 
-// Job polling
-const jobId = ref<string | null>(null)
-const jobStatus = ref<string>('idle')
-const pollingInterval = ref<number | null>(null)
-const isPolling = ref<boolean>(false) // Prevent concurrent polls
-
-// Optimization status tracking
-const blenderOptimized = ref<boolean | null>(null)
-const blenderError = ref<string | null>(null)
-const statusMessage = ref<string | null>(null)
-const sf3dCompleted = ref<boolean | null>(null)
+// Job polling using composable
+const {
+  jobId,
+  jobStatus,
+  isPolling,
+  blenderOptimized,
+  blenderError,
+  statusMessage,
+  sf3dCompleted,
+  startPolling,
+  stopPolling
+} = useJobPolling(
+  // onComplete callback
+  (meshData, metadata) => {
+    localGeneratedMesh.value = meshData
+    localError.value = null
+    localIsGenerating.value = false
+    logger.info('3D mesh loaded successfully', metadata)
+  },
+  // onError callback
+  (error) => {
+    localError.value = error
+    localIsGenerating.value = false
+    logger.error('Job failed', error)
+  }
+)
 
 // File input
 const fileInput = ref<HTMLInputElement | null>(null)
 
 // Computed
 const hasInputImage = computed(() => inputImage.value !== null && inputImage.value !== '')
-const hasMesh = computed(() => generatedMesh.value !== null && generatedMesh.value !== '')
+const hasMesh = computed(() => {
+  // Has mesh if either generated or manually uploaded
+  return (generatedMesh.value !== null && generatedMesh.value !== '') || uploadedGLBUrl.value !== null
+})
 const cameraPosition = computed(() => {
   return props.cell?.initial_data?.viewportSettings?.cameraPosition || 
          props.cell?.state?.viewportSettings?.cameraPosition || 
@@ -155,9 +189,15 @@ const cameraPosition = computed(() => {
 
 /**
  * Convert base64 data URL to blob URL for GLTFLoader
+ * Handles both generated meshes (base64) and manually uploaded files (blob URL)
  * Memoized to avoid recreating URL on every access
  */
 const meshBlobUrl = computed(() => {
+  // Priority: Manual upload > Generated mesh
+  if (uploadedGLBUrl.value) {
+    return uploadedGLBUrl.value
+  }
+  
   if (!generatedMesh.value) return null
   
   try {
@@ -219,90 +259,34 @@ const handleFileUpload = (event: Event) => {
 }
 
 /**
- * Poll job status from Redis via backend API
- * Prevents concurrent polls with isPolling flag
- * ITERATION #6: Fixed authentication - using apiFetch
+ * Handle GLB file upload (manual upload mode)
  */
-const pollJobStatus = async (id: string) => {
-  // Prevent concurrent polling
-  if (isPolling.value) {
-    logger.debug('Poll already in progress, skipping')
-    return
-  }
+const handleGLBUpload = (file: File, blobUrl: string) => {
+  logger.info(`GLB file uploaded: ${file.name} (${file.size} bytes)`)
   
-  isPolling.value = true
+  uploadedGLBFile.value = file
+  uploadedGLBUrl.value = blobUrl
+  localError.value = null
   
-  try {
-    // ITERATION #6: Use apiFetch for automatic auth handling
-    const response = await apiFetch(`/api/cells/3d-job-status/${id}`, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`)
-    }
-
-    const status = await response.json()
-    jobStatus.value = status.status
-
-    logger.debug(`Job ${id} status: ${status.status}`)
-
-    if (status.status === 'completed') {
-      logger.info('Job completed, fetching result...')
-      
-      localGeneratedMesh.value = status.mesh_data // ITERATION #5 - Use local ref
-      
-      // Extract optimization status from metadata or job status
-      blenderOptimized.value = status.blender_optimized ?? status.metadata?.blenderOptimized ?? null
-      blenderError.value = status.blender_error ?? status.metadata?.blenderError ?? null
-      statusMessage.value = status.message ?? status.metadata?.message ?? null
-      sf3dCompleted.value = status.sf3d_completed ?? status.metadata?.sf3dCompleted ?? null
-      
-      logger.info('Optimization status:', {
-        blenderOptimized: blenderOptimized.value,
-        sf3dCompleted: sf3dCompleted.value,
-        hasError: !!blenderError.value
-      })
-      
-      // meshMetadata is read-only, no need to update
-      localError.value = null
-      
-      if (pollingInterval.value) {
-        clearInterval(pollingInterval.value)
-        pollingInterval.value = null
-      }
-      
-      localIsGenerating.value = false // ITERATION #5 - Use local ref
-      logger.info('3D mesh loaded successfully', meshMetadata.value)
-      
-    } else if (status.status === 'failed') {
-      localError.value = status.error || 'Job processing failed' // ITERATION #5 - Use local ref
-      logger.error('Job failed', error.value)
-      
-      if (pollingInterval.value) {
-        clearInterval(pollingInterval.value)
-        pollingInterval.value = null
-      }
-      
-      localIsGenerating.value = false // ITERATION #5 - Use local ref
-    }
-    
-  } catch (err: any) {
-    logger.error('Error polling job status', err)
-  } finally {
-    isPolling.value = false
-  }
+  // Clear any generated mesh to prioritize the uploaded one
+  localGeneratedMesh.value = null
 }
 
 /**
- * Generate 3D mesh from input image (queue job to Redis)
- * ITERATION #6: Fixed authentication - using apiFetch with automatic auth headers
+ * Handle GLB upload error
+ */
+const handleGLBUploadError = (error: string) => {
+  localError.value = error
+  logger.error('GLB upload error', error)
+}
+
+/**
+ * Generate 3D mesh from input image with mode-aware routing
+ * Supports: cloud-api, local-gpu, manual-upload
  */
 const generate3DMesh = async () => {
-  if (!inputImage.value) {
-    localError.value = 'Please upload an image first' // ITERATION #5 - Use local ref
+  if (!inputImage.value && generationMode.value !== 'manual-upload') {
+    localError.value = 'Please upload an image first'
     return
   }
 
@@ -313,16 +297,12 @@ const generate3DMesh = async () => {
     return
   }
 
-  logger.info('Starting 3D mesh generation (queueing job)')
-  console.log('[DEBUG_ITERATION_6] Auth token available:', authService.getToken() ? 'Yes' : 'No')
-  console.log('[DEBUG_ITERATION_6] Auth headers:', authService.getAuthHeaders())
+  logger.info(`Starting 3D mesh generation with mode: ${generationMode.value}`)
   
-  localIsGenerating.value = true // ITERATION #5 - Use local ref
+  localIsGenerating.value = true
   localError.value = null
-  jobStatus.value = 'queued'
 
   try {
-    // ITERATION #6: Use apiFetch instead of raw fetch for automatic auth handling
     const response = await apiFetch('/api/cells/execute-ephemeral', {
       method: 'POST',
       headers: {
@@ -331,6 +311,7 @@ const generate3DMesh = async () => {
       body: JSON.stringify({
         cell_type: '3d-mesh-prototyping-cell',
         input_data: {
+          generationMode: generationMode.value,
           inputImage: inputImage.value,
           reconstructionParams: props.cell?.initial_data?.reconstructionParams || 
                                 props.cell?.state?.reconstructionParams || 
@@ -344,50 +325,32 @@ const generate3DMesh = async () => {
       })
     })
 
-    console.log('[DEBUG_ITERATION_6] API response status:', response.status)
-
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`)
     }
 
     const result = await response.json()
-    console.log('[DEBUG_ITERATION_6] API response data:', result)
-    console.log('[DEBUG_ITERATION_9] API result structure:', {
-      hasSuccess: 'success' in result,
-      hasJobId: 'job_id' in result,
-      hasResult: 'result' in result,
-      resultKeys: result.result ? Object.keys(result.result) : []
-    })
+    logger.debug('API response:', result)
 
-    // ITERATION #9: Fix job_id extraction from nested API response
-    // Backend returns: {success: true, result: {job_id: "..."}, ...}
-    // Not: {success: true, job_id: "..."}
+    // Extract job_id from nested API response
     const jobIdValue = result.result?.job_id || result.job_id
     
     if (result.success && jobIdValue) {
-      jobId.value = jobIdValue
-      logger.info(`Job queued: ${jobId.value}`)
-      console.log('[DEBUG_ITERATION_9] Job ID extracted:', jobId.value)
+      logger.info(`Job queued: ${jobIdValue}`)
       
-      jobStatus.value = 'processing'
-      pollingInterval.value = window.setInterval(() => {
-        if (jobId.value) {
-          pollJobStatus(jobId.value)
-        }
-      }, 2000)
+      // Start polling using composable
+      startPolling(jobIdValue, 2000)
       
     } else {
       const errorMsg = result.error || result.result?.error || 'Failed to queue 3D generation job'
-      localError.value = errorMsg // ITERATION #5 - Use local ref
+      localError.value = errorMsg
       logger.error('Job queueing failed', errorMsg)
-      console.log('[DEBUG_ITERATION_9] Job queueing failed. Result:', result)
-      localIsGenerating.value = false // ITERATION #5 - Use local ref
+      localIsGenerating.value = false
     }
   } catch (err: any) {
     logger.error('Error generating 3D mesh', err)
-    console.error('[DEBUG_ITERATION_6] Full error:', err)
-    localError.value = `Generation error: ${err.message}` // ITERATION #5 - Use local ref
-    localIsGenerating.value = false // ITERATION #5 - Use local ref
+    localError.value = `Generation error: ${err.message}`
+    localIsGenerating.value = false
   }
 }
 
@@ -441,14 +404,19 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (pollingInterval.value) {
-    clearInterval(pollingInterval.value)
-  }
+  // Stop polling
+  stopPolling()
   
   // Cleanup blob URL on unmount
   if (previousBlobUrl) {
     URL.revokeObjectURL(previousBlobUrl)
     logger.debug('Revoked blob URL on unmount')
+  }
+  
+  // Cleanup uploaded GLB URL
+  if (uploadedGLBUrl.value) {
+    URL.revokeObjectURL(uploadedGLBUrl.value)
+    logger.debug('Revoked uploaded GLB URL')
   }
   
   logger.info('3D Mesh Prototyping Cell (TresJS) unmounted')
@@ -467,8 +435,16 @@ onUnmounted(() => {
       <strong>Error:</strong> {{ error }}
     </div>
 
+    <!-- Generation Mode Switcher -->
+    <GenerationModeSwitcher
+      v-model="generationMode"
+      :disabled="isGenerating"
+      class="mb-6"
+    />
+
     <!-- Job Status -->
     <JobStatusIndicator
+      v-if="generationMode !== 'manual-upload'"
       :is-generating="isGenerating"
       :job-status="jobStatus"
       :job-id="jobId"
@@ -477,8 +453,17 @@ onUnmounted(() => {
       :message="statusMessage"
     />
 
-    <!-- Input Section -->
-    <div class="mb-6">
+    <!-- Manual Upload Section -->
+    <GLBFileUploader
+      v-if="generationMode === 'manual-upload'"
+      :disabled="isGenerating"
+      @upload="handleGLBUpload"
+      @error="handleGLBUploadError"
+      class="mb-6"
+    />
+
+    <!-- Image Upload Section (for generation modes) -->
+    <div v-if="generationMode !== 'manual-upload'" class="mb-6">
       <label class="block text-sm font-medium mb-2 text-text-primary dark:text-text-primary-dark">Upload Image for 3D Reconstruction</label>
       <input
         ref="fileInput"
@@ -491,8 +476,8 @@ onUnmounted(() => {
       <p class="text-xs text-text-secondary dark:text-text-secondary-dark mt-1">Supported formats: PNG, JPG, JPEG</p>
     </div>
 
-    <!-- Image Preview -->
-    <div v-if="hasInputImage" class="mb-6">
+    <!-- Image Preview (only for generation modes) -->
+    <div v-if="hasInputImage && generationMode !== 'manual-upload'" class="mb-6">
       <label class="block text-sm font-medium mb-2 text-text-primary dark:text-text-primary-dark">Input Image Preview</label>
       <img
         :src="inputImage"
@@ -501,14 +486,15 @@ onUnmounted(() => {
       />
     </div>
 
-    <!-- Generate Button -->
+    <!-- Generate Button (only for generation modes) -->
     <button
+      v-if="generationMode !== 'manual-upload'"
       @click="generate3DMesh"
       :disabled="!hasInputImage || isGenerating"
       class="bg-success dark:bg-success-light hover:bg-success-dark dark:hover:bg-success disabled:bg-surface-disabled dark:disabled:bg-surface-disabled disabled:cursor-not-allowed text-white font-semibold py-2 px-6 rounded mb-6 transition"
     >
       <span v-if="isGenerating">{{ jobStatus === 'processing' ? 'Processing...' : 'Queueing...' }}</span>
-      <span v-else>Generate 3D Mesh</span>
+      <span v-else>Generate 3D Mesh ({{ generationMode === 'cloud-api' ? 'Cloud' : 'Local GPU' }})</span>
     </button>
 
     <!-- Viewport Controls -->

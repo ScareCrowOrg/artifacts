@@ -3,10 +3,11 @@
 
 Implements Single Image-to-3D reconstruction pipeline with hybrid job queueing architecture.
 
-Phase 5 Update: Implements Redis-based job queueing for hybrid Windows Worker integration.
-- Jobs are queued to Redis with input image written to shared volume
-- Windows Worker polls queue and processes jobs using SF3D + Blender pipeline
-- Results are accessed via shared volume and returned to client
+Phase 6 Update: Adds hybrid generation mode routing (cloud-api, local-gpu, manual-upload).
+- Supports multiple generation modes for flexible deployment scenarios
+- cloud-api: External API-based generation (placeholder for future integration)
+- local-gpu: Redis-based job queueing for Windows Worker integration
+- manual-upload: Direct file upload without processing
 
 Architecture:
 - Manager Cell (Kind/Linux): API, job queueing, result retrieval
@@ -15,51 +16,45 @@ Architecture:
 - Shared Volume: File transfer between Manager and Worker
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import logging
-import base64
-import json
-import uuid
-import time
-import asyncio
-import os
-from pathlib import Path
-from datetime import datetime
+
+from job_queue import queue_3d_generation_job, get_job_status
 
 logger = logging.getLogger(__name__)
 
 
 async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Execute the 3D mesh prototyping cell with hybrid job queueing.
+    Execute the 3D mesh prototyping cell with hybrid generation mode routing.
     
-    Phase 5 Architecture:
-    1. Generate unique job_id
-    2. Write input image to shared volume
-    3. Queue job to Redis with parameters
-    4. Return job_id immediately (client polls for status)
+    Phase 6 Architecture:
+    1. Extract generationMode from cell_data (default: 'local-gpu')
+    2. Route to appropriate generation handler
+    3. Return job_id for polling (local-gpu) or immediate result (other modes)
     
-    The Windows Worker will:
-    - Poll Redis queue for jobs
-    - Process using SF3D + Blender pipeline
-    - Write results to shared volume
-    - Update job status in Redis
+    Generation Modes:
+    - 'local-gpu': Redis job queueing for Windows Worker (default)
+    - 'cloud-api': External API-based generation (placeholder)
+    - 'manual-upload': Direct file upload without processing
     
     Args:
         cell_data: Cell instance data containing:
             - inputImage: Base64-encoded PNG image for reconstruction
             - reconstructionParams: Parameters for 3D generation
+            - generationMode: Generation mode (optional, defaults to 'local-gpu')
     
     Returns:
-        Dict with job queueing results:
-            - success: Boolean indicating if job was queued
-            - job_id: Unique job identifier for status polling
+        Dict with execution results:
+            - success: Boolean indicating if operation succeeded
+            - job_id: Unique job identifier (for local-gpu mode)
             - message: Status message
-            - error: Error message if queueing failed
+            - error: Error message if execution failed
     """
     try:
         input_image = cell_data.get('inputImage')
         reconstruction_params = cell_data.get('reconstructionParams', {})
+        generation_mode = cell_data.get('generationMode', 'local-gpu')
         
         if not input_image:
             return {
@@ -68,32 +63,13 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 "job_id": None
             }
         
-        logger.info("Queueing 3D mesh reconstruction job...")
+        logger.info(f"Executing 3D mesh reconstruction with mode: {generation_mode}")
         logger.debug(f"Reconstruction params: {reconstruction_params}")
         
-        # Queue job to Redis (non-blocking)
-        job_result = await queue_3d_generation_job(
-            input_image=input_image,
-            target_faces=reconstruction_params.get('targetFaces', 50000),
-            enable_draco=reconstruction_params.get('enableDracoCompression', True),
-            compression_level=reconstruction_params.get('compressionLevel', 7),
-            target_size_mb=reconstruction_params.get('targetFileSizeMB', 5)
-        )
+        # Route to appropriate generation handler
+        result = await route_generation_request(cell_data, generation_mode)
         
-        if job_result.get("success"):
-            logger.info(f"Job queued successfully: {job_result.get('job_id')}")
-            return {
-                "success": True,
-                "job_id": job_result.get("job_id"),
-                "message": "3D mesh generation job queued successfully"
-            }
-        else:
-            logger.error(f"Job queueing failed: {job_result.get('error')}")
-            return {
-                "success": False,
-                "error": job_result.get("error", "Unknown error during job queueing"),
-                "job_id": None
-            }
+        return result
     
     except Exception as e:
         logger.error(f"Error in 3D mesh prototyping cell execution: {e}", exc_info=True)
@@ -103,433 +79,151 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             "job_id": None
         }
 
-async def queue_3d_generation_job(
-    input_image: str,
-    target_faces: int = 50000,
-    enable_draco: bool = True,
-    compression_level: int = 7,
-    target_size_mb: float = 5.0
-) -> Dict[str, Any]:
+
+
+async def route_generation_request(cell_data: Dict[str, Any], mode: str) -> Dict[str, Any]:
     """
-    Queue a 3D generation job to Redis for processing by Windows Worker.
+    Route 3D generation request to appropriate handler based on mode.
     
-    Phase 5 Hybrid Architecture:
-    1. Generate unique job_id
-    2. Write input image to shared volume
-    3. Queue job metadata to Redis
-    4. Return job_id for client polling
+    Generation Modes:
+    - 'cloud-api': External API-based generation (placeholder for future integration)
+    - 'local-gpu': Redis-based job queueing for Windows Worker
+    - 'manual-upload': Direct file upload without processing
     
     Args:
-        input_image: Base64-encoded PNG image
-        target_faces: Target face count for decimation
-        enable_draco: Enable Draco mesh compression
-        compression_level: Draco compression level (0-10)
-        target_size_mb: Target file size in MB
+        cell_data: Cell instance data with input image and parameters
+        mode: Generation mode string
     
     Returns:
-        Dict containing:
-            - success: Boolean
-            - job_id: Unique job identifier
-            - error: Error message if failed
+        Dict with execution results based on mode
     """
     try:
-        # Generate unique job ID
-        job_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
-        
-        logger.info(f"Queueing 3D generation job: {job_id}")
-        
-        # Get Redis client and shared volume path
-        redis_client = await get_redis_client()
-        shared_volume = get_shared_volume_path()
-        
-        # Create job directory in shared volume
-        job_dir = shared_volume / "jobs" / job_id
-        job_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"✅ Job persistence path: {job_dir}")
-        logger.info(f"Resolved job directory (absolute): {job_dir.resolve()}")
-        
-        # Write input image to shared volume
-        input_path = job_dir / "input.png"
-        try:
-            # Decode base64 image
-            if ',' in input_image:
-                # Remove data:image/png;base64, prefix
-                image_data = input_image.split(',', 1)[1]
-            else:
-                image_data = input_image
-            
-            image_bytes = base64.b64decode(image_data)
-            
-            # Part C: Log payload size for echo detection
-            logger.info(f"Processing image of {len(image_bytes)} bytes")
-            
-            bytes_written = 0
-            with open(input_path, 'wb') as f:
-                bytes_written = f.write(image_bytes)
-                f.flush()  # Ensure data is written to disk
-            
-            # Verify file was written successfully
-            try:
-                file_size = input_path.stat().st_size
-            except FileNotFoundError:
-                raise IOError(f"Failed to write file to {input_path}")
-            
-            logger.info(f"✅ Wrote input image to: {input_path}")
-            logger.info(f"   Absolute path: {input_path.resolve()}")
-            logger.info(f"   File size: {file_size} bytes (expected: {len(image_bytes)} bytes)")
-            
-            # Validate file size matches
-            if file_size != len(image_bytes):
-                raise IOError(f"File size mismatch: wrote {len(image_bytes)} bytes but file is {file_size} bytes")
-            
-        except Exception as e:
-            logger.error(f"Failed to write input image: {e}")
+        if mode == 'cloud-api':
+            return await handle_cloud_api_generation(cell_data)
+        elif mode == 'local-gpu':
+            return await handle_local_gpu_generation(cell_data)
+        elif mode == 'manual-upload':
+            return await handle_manual_upload(cell_data)
+        else:
+            logger.error(f"Unknown generation mode: {mode}")
             return {
                 "success": False,
-                "error": f"Failed to write input image: {str(e)}",
+                "error": f"Unknown generation mode: {mode}. Supported modes: cloud-api, local-gpu, manual-upload",
                 "job_id": None
             }
-        
-        # Prepare job metadata - CRITICAL: Path Unification
-        # All paths MUST use get_shared_volume_path() to ensure consistency
-        # MVP 4.1 Path Mapping Architecture:
-        # - Backend writes to: /app/.local-dev-data/scareverse-data/jobs/{id}/input.png
-        # - Files visible in Windows at: <PROJECT_ROOT>\.local-dev-data\scareverse-data\jobs\{id}\input.png
-        # - Worker mounts .local-dev-data/scareverse-data as /app/.local-dev-data/scareverse-data
-        # - Worker reads from: /app/.local-dev-data/scareverse-data/jobs/{id}/input.png
-        
-        # Phase A: Use shared_volume_root for ALL path constructions
-        shared_volume_root = get_shared_volume_path()
-        worker_input_path = str(shared_volume_root / "jobs" / job_id / "input.png")
-        worker_output_dir = str(shared_volume_root / "jobs" / job_id)
-        
-        # DEBUG LOG - Path Configuration (Critical for troubleshooting)
-        logger.info(f"✅ Path unification verified:")
-        logger.info(f"  Shared volume root: {shared_volume_root}")
-        logger.info(f"  Backend writes to: {input_path}")
-        logger.info(f"  Worker input path: {worker_input_path}")
-        logger.info(f"  Worker output dir: {worker_output_dir}")
-        
-        job_data = {
-            "job_id": job_id,
-            "status": "queued",
-            "created_at": timestamp,
-            "input_image_path": worker_input_path,
-            "output_dir": worker_output_dir,
-            "parameters": json.dumps({
-                "target_faces": target_faces,
-                "enable_draco": enable_draco,
-                "compression_level": compression_level,
-                "target_size_mb": target_size_mb
-            })
-        }
-        
-        # Store job status in Redis as a Hash
-        status_key = f"scareverse:3d-status:{job_id}"
-        
-        # Preventive cleanup: Delete any existing key to avoid WRONGTYPE errors
-        # This ensures we always start with a fresh Hash, not a leftover String
-        await redis_client.delete(status_key)
-        
-        # Store job data as a Hash using hmset
-        await redis_client.hmset(status_key, job_data)
-        await redis_client.expire(status_key, 3600)  # Expire after 1 hour
-        
-        logger.debug(f"Stored job status in Redis: {status_key}")
-        
-        # Queue job for worker
-        queue_key = "scareverse:3d-jobs:queue"
-        await redis_client.lpush(queue_key, json.dumps(job_data))
-        
-        logger.info(f"Job {job_id} queued successfully")
-        
-        return {
-            "success": True,
-            "job_id": job_id,
-            "message": "Job queued successfully"
-        }
-        
     except Exception as e:
-        logger.error(f"Error queueing 3D generation job: {e}", exc_info=True)
+        logger.error(f"Error routing generation request: {e}", exc_info=True)
         return {
             "success": False,
-            "error": f"Job queueing failed: {str(e)}",
+            "error": f"Routing error: {str(e)}",
             "job_id": None
         }
 
 
-async def get_job_status(job_id: str) -> Dict[str, Any]:
+async def handle_cloud_api_generation(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Get the status of a 3D generation job from Redis.
+    Handle 3D generation via external cloud API.
+    
+    This is a placeholder for future cloud API integration.
+    Currently returns mock data to demonstrate the architecture.
     
     Args:
-        job_id: Unique job identifier
+        cell_data: Cell instance data with input image and parameters
     
     Returns:
-        Dict containing:
-            - status: Job status (queued/processing/completed/failed)
-            - mesh_data: Base64 GLB data (if completed)
-            - metadata: Processing metadata (if completed)
-            - error: Error message (if failed)
+        Dict with mock API response
     """
-    try:
-        redis_client = await get_redis_client()
-        status_key = f"scareverse:3d-status:{job_id}"
-        
-        # Get job status from Redis (expecting a Hash)
-        try:
-            job_data = await redis_client.hgetall(status_key)
-        except Exception as redis_error:
-            # Handle WRONGTYPE error when key is not a Hash
-            error_msg = str(redis_error)
-            if "WRONGTYPE" in error_msg:
-                logger.error(
-                    f"Redis WRONGTYPE error for key {status_key}. "
-                    f"Key exists but is not a Hash. This can happen if the key "
-                    f"was created with 'set' instead of 'hset'. Consider deleting "
-                    f"the key: redis-cli DEL {status_key}"
-                )
-                return {
-                    "status": "error",
-                    "error": "Job status key has wrong type. Please retry the job or contact support."
-                }
-            else:
-                # Re-raise other Redis errors
-                raise
-        
-        if not job_data:
-            return {
-                "status": "not_found",
-                "error": "Job not found"
-            }
-        
-        # Safely decode bytes if Redis client doesn't have decode_responses=True
-        if job_data and isinstance(next(iter(job_data.values()), None), bytes):
-            job_data = {k.decode('utf-8') if isinstance(k, bytes) else k: 
-                       v.decode('utf-8') if isinstance(v, bytes) else v 
-                       for k, v in job_data.items()}
-        
-        status = job_data.get("status", "unknown")
-        
-        if status == "completed":
-            # Job completed - read GLB from shared volume
-            # Phase B: Trust Redis - Extract optimized_mesh_path from Worker payload
-            
-            # CRITICAL: Read dynamic path from Worker instead of hardcoded "output.glb"
-            optimized_mesh_path_str = job_data.get("optimized_mesh_path")
-            
-            if not optimized_mesh_path_str:
-                logger.error(f"❌ Worker did not report 'optimized_mesh_path' in Redis payload")
-                logger.error(f"   Job ID: {job_id}")
-                logger.error(f"   Available keys in job_data: {list(job_data.keys())}")
-                return {
-                    "status": "failed",
-                    "error": "Worker did not report output file path. This indicates a Worker-side failure."
-                }
-            
-            # Sanitization: Normalize and resolve to absolute path
-            output_path = Path(optimized_mesh_path_str.strip()).resolve()
-            
-            # DEBUG LOG (Crucial for troubleshooting "Output file not found" errors)
-            logger.info(f"🔍 Attempting to read output file from Worker-reported path:")
-            logger.info(f"  Job ID: {job_id}")
-            logger.info(f"  Worker-reported path: {optimized_mesh_path_str}")
-            logger.info(f"  Resolved absolute path: {output_path}")
-            
-            # Phase C: Active File Validation with Filesystem Cache Invalidation
-            # Strategy: Retry with cache invalidation to handle volume sync delays
-            file_found = False
-            max_retries = 5
-            retry_delay = 1.0
-            
-            for attempt in range(max_retries):
-                # Force kernel to update file table by listing parent directory
-                parent_dir = output_path.parent
-                if parent_dir.exists():
-                    try:
-                        # This operation forces filesystem cache refresh
-                        list(parent_dir.iterdir())
-                    except (PermissionError, OSError) as e:
-                        logger.warning(f"Failed to list directory for cache invalidation: {e}")
-                
-                # Check if file exists and has non-zero size
-                if output_path.exists() and output_path.stat().st_size > 0:
-                    file_found = True
-                    if attempt > 0:
-                        logger.info(f"✅ File detected after {attempt} retry attempt(s): {output_path}")
-                    else:
-                        logger.info(f"✅ File detected on first attempt: {output_path}")
-                    break
-                
-                if attempt < max_retries - 1:
-                    logger.warning(f"⚠️ Attempt {attempt + 1}/{max_retries}: File not visible. Retrying after {retry_delay}s...")
-                    time.sleep(retry_delay)
-            
-            if file_found:
-                # File successfully validated - read content
-                with open(output_path, 'rb') as f:
-                    glb_bytes = f.read()
-                
-                glb_base64 = base64.b64encode(glb_bytes).decode('utf-8')
-                mesh_data = f"data:model/gltf-binary;base64,{glb_base64}"
-                
-                # Parse metadata from job_data
-                # Metadata might be stored as JSON string in the hash
-                metadata_json = job_data.get("metadata", "{}")
-                try:
-                    metadata = json.loads(metadata_json) if metadata_json and metadata_json != "{}" else {}
-                except (json.JSONDecodeError, TypeError):
-                    logger.warning(f"Failed to parse metadata JSON: {metadata_json}")
-                    metadata = {}
-                
-                # Extract optimization status fields from job_data
-                # These are set by the worker_bridge.py resilience fallback
-                blender_optimized = job_data.get("blender_optimized")
-                blender_error = job_data.get("blender_error")
-                sf3d_completed = job_data.get("sf3d_completed")
-                message = job_data.get("message")
-                
-                # Convert string booleans to actual booleans
-                if blender_optimized is not None:
-                    blender_optimized = blender_optimized in ['True', 'true', '1', True]
-                if sf3d_completed is not None:
-                    sf3d_completed = sf3d_completed in ['True', 'true', '1', True]
-                
-                # Add optimization status to metadata if not already present
-                if blender_optimized is not None:
-                    metadata['blenderOptimized'] = blender_optimized
-                if blender_error:
-                    metadata['blenderError'] = blender_error
-                if sf3d_completed is not None:
-                    metadata['sf3dCompleted'] = sf3d_completed
-                if message:
-                    metadata['message'] = message
-                
-                return {
-                    "status": "completed",
-                    "mesh_data": mesh_data,
-                    "metadata": metadata,
-                    "blender_optimized": blender_optimized,
-                    "blender_error": blender_error,
-                    "sf3d_completed": sf3d_completed,
-                    "message": message
-                }
-            else:
-                # Phase C Fallback: File not found after all retry attempts
-                logger.error(f"❌ Failed to locate file after {max_retries} retry attempts")
-                logger.error(f"   Expected path: {output_path}")
-                
-                # Diagnostic Step 1: Check if parent directory exists
-                parent_dir = output_path.parent
-                if parent_dir.exists():
-                    try:
-                        dir_contents = list(parent_dir.iterdir())
-                        logger.error(f"📁 Parent directory exists: {parent_dir}")
-                        logger.error(f"   Directory contains {len(dir_contents)} items:")
-                        for item in dir_contents:
-                            item_info = f"   - {item.name}"
-                            if item.is_file():
-                                try:
-                                    size = item.stat().st_size
-                                    item_info += f" (file, {size} bytes)"
-                                except OSError:
-                                    item_info += " (file, size unknown)"
-                            else:
-                                item_info += " (directory)"
-                            logger.error(item_info)
-                    except (PermissionError, OSError) as e:
-                        logger.error(f"   Could not list directory contents: {e}")
-                else:
-                    logger.error(f"❌ Parent directory does not exist: {parent_dir}")
-                    logger.error(f"   This suggests the Worker never started processing or job directory creation failed.")
-                
-                # Diagnostic Step 2: Check Worker-reported path structure
-                logger.error(f"   Worker reported path: {optimized_mesh_path_str}")
-                logger.error(f"   This suggests the Worker completed but the file is not visible to the Backend.")
-                logger.error(f"   Possible causes:")
-                logger.error(f"     1. Volume mount mismatch between Worker and Backend")
-                logger.error(f"     2. Worker wrote to different location than reported")
-                logger.error(f"     3. Filesystem synchronization delay (cache issue)")
-                
-                return {
-                    "status": "failed",
-                    "error": "Output file not found at Worker-reported path. Worker may have encountered an error during file write or volume mounting issue exists. Check Worker logs for details."
-                }
-        
-        elif status == "failed":
-            error = job_data.get("error", "Unknown error")
-            return {
-                "status": "failed",
-                "error": error
-            }
-        
-        else:
-            # Job still in progress (queued or processing)
-            return {
-                "status": status
-            }
-        
-    except Exception as e:
-        logger.error(f"Error getting job status: {e}", exc_info=True)
+    logger.info("Cloud API generation requested (placeholder)")
+    
+    # Placeholder: Simulate API call
+    # In production, this would:
+    # 1. Send request to external API (e.g., Meshy, Rodin, etc.)
+    # 2. Poll for completion
+    # 3. Return generated mesh
+    
+    reconstruction_params = cell_data.get('reconstructionParams', {})
+    
+    logger.info(f"Simulating cloud API call with params: {reconstruction_params}")
+    
+    # Generate mock result
+    mock_result = _generate_mock_glb_mesh(
+        target_faces=reconstruction_params.get('targetFaces', 50000),
+        enable_draco=reconstruction_params.get('enableDracoCompression', True)
+    )
+    
+    return {
+        "success": True,
+        "mode": "cloud-api",
+        "message": "Cloud API generation completed (mock)",
+        "mesh_data": mock_result.get("mesh_data"),
+        "metadata": mock_result.get("metadata")
+    }
+
+
+async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Handle 3D generation via local GPU worker (Redis job queue).
+    
+    This is the default mode for Windows Worker integration.
+    Jobs are queued to Redis and processed asynchronously.
+    
+    Args:
+        cell_data: Cell instance data with input image and parameters
+    
+    Returns:
+        Dict with job queueing result
+    """
+    logger.info("Local GPU generation requested (Redis job queue)")
+    
+    input_image = cell_data.get('inputImage')
+    reconstruction_params = cell_data.get('reconstructionParams', {})
+    
+    # Queue job to Redis (non-blocking)
+    job_result = await queue_3d_generation_job(
+        input_image=input_image,
+        target_faces=reconstruction_params.get('targetFaces', 50000),
+        enable_draco=reconstruction_params.get('enableDracoCompression', True),
+        compression_level=reconstruction_params.get('compressionLevel', 7),
+        target_size_mb=reconstruction_params.get('targetFileSizeMB', 5)
+    )
+    
+    if job_result.get("success"):
+        logger.info(f"Job queued successfully: {job_result.get('job_id')}")
         return {
-            "status": "error",
-            "error": f"Status retrieval failed: {str(e)}"
+            "success": True,
+            "job_id": job_result.get("job_id"),
+            "mode": "local-gpu",
+            "message": "3D mesh generation job queued successfully"
+        }
+    else:
+        logger.error(f"Job queueing failed: {job_result.get('error')}")
+        return {
+            "success": False,
+            "error": job_result.get("error", "Unknown error during job queueing"),
+            "job_id": None
         }
 
 
-async def get_redis_client():
+async def handle_manual_upload(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Get Redis client for job queueing.
+    Handle manual file upload mode (no processing needed).
+    
+    In this mode, the user has already uploaded a 3D mesh file.
+    No generation or processing is required.
+    
+    Args:
+        cell_data: Cell instance data with uploaded file
     
     Returns:
-        Redis client instance
+        Dict with success confirmation
     """
-    try:
-        # Try to import from core (when running as part of backend app)
-        try:
-            from app.core.redis_client import get_redis_client as get_core_redis
-            return await get_core_redis()
-        except (ImportError, ModuleNotFoundError):
-            # Fallback: create Redis client directly (standalone execution)
-            import redis.asyncio as redis
-            import os
-            
-            redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-            return redis.from_url(redis_url, decode_responses=True)
-    except Exception as e:
-        logger.error(f"Failed to get Redis client: {e}")
-        raise
-
-
-def get_shared_volume_path() -> Path:
-    """
-    Get the shared volume path for file transfer with Windows Worker.
+    logger.info("Manual upload mode - no processing required")
     
-    Path Mapping Architecture (Updated MVP 4.1):
-    - Backend (Kind/Linux): Uses /app volume mount (project root in Kind)
-    - Worker (Windows Docker): Mounts project's .local-dev-data/scareverse-data as /data
-    - Files written by Backend to /app/.local-dev-data/scareverse-data/jobs/{id}/input.png
-    - Are visible in Windows at [PROJECT_ROOT]\.local-dev-data\scareverse-data\jobs\{id}\input.png
-    - Are read by Worker from /data/jobs/{id}/input.png
-    
-    The SHARED_VOLUME_PATH for Backend should be /app/.local-dev-data/scareverse-data (default)
-    The SHARED_VOLUME for Worker should be /data (default, mounting .local-dev-data/scareverse-data)
-    
-    Returns:
-        Path object pointing to shared volume (Backend perspective)
-    """
-    import os
-    
-    # Use environment variable or default to /app bridge path
-    shared_volume_env = os.getenv('SHARED_VOLUME_PATH', '/app/.local-dev-data/scareverse-data')
-    shared_volume_path = Path(shared_volume_env)
-    
-    # Log the configuration for debugging
-    logger.info(f"✅ Shared volume path configured: {shared_volume_path}")
-    logger.debug(f"Shared volume exists: {shared_volume_path.exists()}")
-    
-    return shared_volume_path
+    return {
+        "success": True,
+        "mode": "manual-upload",
+        "message": "File upload confirmed. No processing required."
+    }
 
 
 # Legacy mock function kept for backward compatibility and testing
@@ -658,10 +352,11 @@ if __name__ == "__main__":
     import asyncio
     
     async def main():
+        """Standalone execution entry point for testing."""
         if len(sys.argv) > 1:
             cell_data = json.loads(sys.argv[1])
         else:
-            # Test data
+            # Test data with default local-gpu mode
             cell_data = {
                 "inputImage": "data:image/png;base64,iVBORw0KGgo...",
                 "reconstructionParams": {
@@ -669,10 +364,12 @@ if __name__ == "__main__":
                     "enableDracoCompression": True,
                     "compressionLevel": 7,
                     "targetFileSizeMB": 5
-                }
+                },
+                "generationMode": "local-gpu"
             }
         
         result = await execute_cell(cell_data)
         print(json.dumps(result, indent=2))
     
     asyncio.run(main())
+

@@ -12,6 +12,7 @@
   },
   "default_initial_data": {
     "category": "ephemeral",
+    "generationMode": "cloud-api",
     "inputImage": null,
     "generatedMesh": null,
     "meshMetadata": null,
@@ -36,6 +37,12 @@
       "type": "string",
       "default": "ephemeral",
       "description": "Cell category - 'ephemeral' marks this as ephemeral (not persisted)"
+    },
+    "generationMode": {
+      "type": "string",
+      "default": "cloud-api",
+      "enum": ["cloud-api", "local-gpu", "manual-upload"],
+      "description": "Generation mode: cloud-api (default), local-gpu (experimental), or manual-upload (direct GLB)"
     },
     "inputImage": {
       "type": ["string", "null"],
