@@ -1,3 +1,25 @@
+---
+processed: true
+processed_date: 2026-01-29
+themes:
+  - cell-types
+  - 3d-generation
+  - frontend-backend-sync
+  - configuration
+modules:
+  - backend
+  - frontend
+code_verified: true
+dead_docs_found: false
+updated_docs:
+  - docs/official/backend/cell-types/3d-mesh-prototyping-cell.md
+notes: |
+  Document identifies frontend/backend inconsistency in default generation mode.
+  Backend correctly defaults to 'local-gpu', frontend needs update to match.
+  Existing official doc already comprehensive (874 lines, needs modularization).
+  Frontend team should address action items listed in this document.
+---
+
 # Frontend Integration Notes - Generation Mode Default
 
 ## Issue Identified
