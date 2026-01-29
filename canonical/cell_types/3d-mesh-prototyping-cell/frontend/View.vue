@@ -509,57 +509,55 @@ onUnmounted(() => {
       @download-mesh="downloadMesh"
     />
 
-    <!-- TresJS Viewport (Declarative) -->
-    <!-- ITERATION #9 NOTE: TresJS v5 uses automatic component resolution.
-         Components like TresPerspectiveCamera, TresAmbientLight, etc. are NOT imported explicitly.
-         TresJS resolves them automatically from its internal catalogue at runtime.
-         Only TresCanvas needs to be imported. This is the correct v5 pattern. -->
+
+    <!-- TresJS Viewport (Declarative) - Canvas sempre presente -->
     <TresCanvas
-      v-if="hasMesh && meshBlobUrl"
       class="viewport-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
       window-size
       :style="{ width: '100%', height: '500px' }"
     >
-      <TresPerspectiveCamera
-        :position="cameraPosition"
-        :fov="50"
-        :near="0.1"
-        :far="1000"
-      />
+      <template v-if="hasMesh && meshBlobUrl">
+        <TresPerspectiveCamera
+          :position="cameraPosition"
+          :fov="50"
+          :near="0.1"
+          :far="1000"
+        />
 
-      <TresAmbientLight :intensity="0.6" />
-      <TresDirectionalLight :position="[5, 10, 7.5]" :intensity="0.8" />
+        <TresAmbientLight :intensity="0.6" />
+        <TresDirectionalLight :position="[5, 10, 7.5]" :intensity="0.8" />
 
-      <Grid v-if="showGrid" :size="10" :divisions="10" />
+        <Grid v-if="showGrid && hasMesh && meshBlobUrl" :size="10" :divisions="10" />
 
-      <OrbitControls
-        :auto-rotate="autoRotate"
-        :auto-rotate-speed="2.0"
-        :enable-damping="true"
-        :damping-factor="0.05"
-      />
+        <OrbitControls
+          :auto-rotate="autoRotate"
+          :auto-rotate-speed="2.0"
+          :enable-damping="true"
+          :damping-factor="0.05"
+        />
 
-      <Suspense>
-        <template #default>
-          <GLBModelViewer :url="meshBlobUrl" :wireframe="wireframeMode" />
-        </template>
-        <template #fallback>
-          <TresMesh>
-            <TresBoxGeometry :args="[0.1, 0.1, 0.1]" />
-            <TresMeshBasicMaterial color="#666666" />
-          </TresMesh>
-        </template>
-      </Suspense>
+        <Suspense>
+          <template #default>
+            <GLBModelViewer :url="meshBlobUrl" :wireframe="wireframeMode" />
+          </template>
+          <template #fallback>
+            <TresMesh>
+              <TresBoxGeometry :args="[0.1, 0.1, 0.1]" />
+              <TresMeshBasicMaterial color="#666666" />
+            </TresMesh>
+          </template>
+        </Suspense>
+      </template>
+      <template v-else>
+        <TresMesh>
+          <TresBoxGeometry :args="[0.1, 0.1, 0.1]" />
+          <TresMeshBasicMaterial color="#666666" />
+        </TresMesh>
+        <div class="flex items-center justify-center" style="position:absolute;top:0;left:0;width:100%;height:100%;">
+          <p class="text-text-secondary dark:text-text-secondary-dark">Upload an image and generate a 3D mesh to view it here</p>
+        </div>
+      </template>
     </TresCanvas>
-
-    <!-- Placeholder when no mesh -->
-    <div
-      v-else
-      class="viewport-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark flex items-center justify-center"
-      style="width: 100%; height: 500px;"
-    >
-      <p class="text-text-secondary dark:text-text-secondary-dark">Upload an image and generate a 3D mesh to view it here</p>
-    </div>
 
     <!-- Mesh Metadata -->
     <MeshMetadataDisplay :metadata="meshMetadata" />
