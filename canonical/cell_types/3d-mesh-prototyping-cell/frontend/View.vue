@@ -10,29 +10,27 @@
  */
 <script setup lang="ts">
 /**
- * 3D Mesh Prototyping Cell - Main View Component (TresJS)
+ * 3D Mesh Prototyping Cell - Main View Component (Babylon.js)
  * 
- * Migrated from imperative Three.js to declarative TresJS for simplified 3D rendering.
+ * Migrated from TresJS to Babylon.js for better physics integration and stability.
  * This component orchestrates the entire 3D mesh generation workflow with job queueing.
  * 
  * Features:
  * - Image upload for 3D reconstruction
  * - Job queueing with Redis-based status polling
- * - Declarative TresJS scene with automatic lifecycle management
- * - Async GLB loading with Suspense
+ * - Babylon.js scene with per-cell engine architecture
+ * - GLB loading with proper resource management
  * - Reactive viewport controls
  * 
  * @component
  */
 
 import { ref, computed, watch, onMounted, onUnmounted, defineOptions } from 'vue'
-import { TresCanvas } from '@tresjs/core'
-import { OrbitControls, Grid } from '@tresjs/cientos'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
 import authService from '@/services/authService'
 import { useJobPolling } from './composables/useJobPolling'
-import GLBModelViewer from './components/GLBModelViewer.vue'
+import BabylonModelViewer from './components/BabylonModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
 import ViewportControls from './components/ViewportControls.vue'
 import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
@@ -42,7 +40,7 @@ import GLBFileUploader from './components/GLBFileUploader.vue'
 // ITERATION #9: Define component name for proper Vue registration in dynamic loading context
 defineOptions({ name: 'MeshPrototypingCellView' })
 
-const logger = createLogger('component:3d-mesh-prototyping-cell-tresjs')
+const logger = createLogger('component:3d-mesh-prototyping-cell-babylon')
 
 interface Props {
   cell: any // Flexible to handle initial_data, state, or direct properties
@@ -393,7 +391,7 @@ const toggleGrid = () => {
 
 // Lifecycle
 onMounted(() => {
-  logger.info('3D Mesh Prototyping Cell (TresJS) mounted')
+  logger.info('3D Mesh Prototyping Cell (Babylon.js) mounted')
   
   // Debug check for inputImage availability (ITERATION #4)
   if (!inputImage.value) {
@@ -419,7 +417,7 @@ onUnmounted(() => {
     logger.debug('Revoked uploaded GLB URL')
   }
   
-  logger.info('3D Mesh Prototyping Cell (TresJS) unmounted')
+  logger.info('3D Mesh Prototyping Cell (Babylon.js) unmounted')
 })
 </script>
 
@@ -509,55 +507,24 @@ onUnmounted(() => {
       @download-mesh="downloadMesh"
     />
 
-
-    <!-- TresJS Viewport (Declarative) - Canvas sempre presente -->
-    <TresCanvas
+    <!-- Babylon.js Viewport - Per-cell engine instance -->
+    <div 
       class="viewport-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
-      window-size
       :style="{ width: '100%', height: '500px' }"
     >
-      <template v-if="hasMesh && meshBlobUrl">
-        <TresPerspectiveCamera
-          :position="cameraPosition"
-          :fov="50"
-          :near="0.1"
-          :far="1000"
-        />
-
-        <TresAmbientLight :intensity="0.6" />
-        <TresDirectionalLight :position="[5, 10, 7.5]" :intensity="0.8" />
-
-        <Grid v-if="showGrid && hasMesh && meshBlobUrl" :size="10" :divisions="10" />
-
-        <OrbitControls
-          :auto-rotate="autoRotate"
-          :auto-rotate-speed="2.0"
-          :enable-damping="true"
-          :damping-factor="0.05"
-        />
-
-        <Suspense>
-          <template #default>
-            <GLBModelViewer :url="meshBlobUrl" :wireframe="wireframeMode" />
-          </template>
-          <template #fallback>
-            <TresMesh>
-              <TresBoxGeometry :args="[0.1, 0.1, 0.1]" />
-              <TresMeshBasicMaterial color="#666666" />
-            </TresMesh>
-          </template>
-        </Suspense>
-      </template>
-      <template v-else>
-        <TresMesh>
-          <TresBoxGeometry :args="[0.1, 0.1, 0.1]" />
-          <TresMeshBasicMaterial color="#666666" />
-        </TresMesh>
-        <div class="flex items-center justify-center" style="position:absolute;top:0;left:0;width:100%;height:100%;">
-          <p class="text-text-secondary dark:text-text-secondary-dark">Upload an image and generate a 3D mesh to view it here</p>
-        </div>
-      </template>
-    </TresCanvas>
+      <BabylonModelViewer
+        v-if="hasMesh && meshBlobUrl"
+        :url="meshBlobUrl"
+        :wireframe="wireframeMode"
+        :auto-rotate="autoRotate"
+        :show-grid="showGrid"
+      />
+      <div v-else class="flex items-center justify-center h-full">
+        <p class="text-text-secondary dark:text-text-secondary-dark">
+          Upload an image and generate a 3D mesh to view it here
+        </p>
+      </div>
+    </div>
 
     <!-- Mesh Metadata -->
     <MeshMetadataDisplay :metadata="meshMetadata" />
