@@ -1,3 +1,19 @@
+---
+processed: true
+processed_date: 2026-01-31
+generated_docs:
+  - docs/official/backend/refactoring/modularization-patterns.md
+themes:
+  - redis
+  - job-queue
+  - backend
+  - architecture
+modules:
+  - backend
+  - architecture
+code_verified: true
+dead_docs_found: false
+---
 # Job Queue Module
 
 Redis-based job queueing and status tracking for 3D mesh generation with hybrid Windows Worker integration.
