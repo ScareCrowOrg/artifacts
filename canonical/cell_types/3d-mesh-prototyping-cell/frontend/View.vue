@@ -26,10 +26,11 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted, defineOptions } from 'vue'
+import { TresCanvas } from '@tresjs/core'
+import { OrbitControls, Grid } from '@tresjs/cientos'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
 import authService from '@/services/authService'
-import { use3DContext } from '@/composables/use3DContext'
 import { useJobPolling } from './composables/useJobPolling'
 import GLBModelViewer from './components/GLBModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
@@ -37,12 +38,11 @@ import ViewportControls from './components/ViewportControls.vue'
 import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
 import GenerationModeSwitcher from './components/GenerationModeSwitcher.vue'
 import GLBFileUploader from './components/GLBFileUploader.vue'
-import * as THREE from 'three'
 
 // ITERATION #9: Define component name for proper Vue registration in dynamic loading context
 defineOptions({ name: 'MeshPrototypingCellView' })
 
-const logger = createLogger('component:3d-mesh-prototyping-cell-threejs')
+const logger = createLogger('component:3d-mesh-prototyping-cell-tresjs')
 
 interface Props {
   cell: any // Flexible to handle initial_data, state, or direct properties
@@ -53,16 +53,6 @@ const emit = defineEmits<{
   (e: 'update:cell', value: any): void
 }>()
 
-// Try to inject 3D context (optional - gracefully handle if not available)
-let threeContext: ReturnType<typeof use3DContext> | null = null
-let gridHelper: THREE.GridHelper | null = null
-
-try {
-  threeContext = use3DContext()
-  logger.info('Successfully injected Three.js context')
-} catch (error) {
-  logger.warn('Three.js context not available - viewport controls will be disabled', error)
-}
 // Debug logs to inspect cell structure (ITERATION #4)
 console.log('[DEBUG_ITERATION_4] props.cell:', JSON.parse(JSON.stringify(props.cell)))
 if (props.cell && props.cell.initial_data) {
@@ -388,44 +378,22 @@ const downloadMesh = () => {
 // Toggle functions (ITERATION #5 - using local refs declared above)
 const toggleAutoRotate = () => {
   localAutoRotate.value = !localAutoRotate.value
-  
-  // Update shared controls if available
-  if (threeContext) {
-    threeContext.controls.autoRotate = localAutoRotate.value
-    logger.debug(`Auto-rotate: ${localAutoRotate.value}`)
-  }
+  logger.debug(`Auto-rotate: ${localAutoRotate.value}`)
 }
 
 const toggleWireframe = () => {
   localWireframeMode.value = !localWireframeMode.value
   logger.debug(`Wireframe mode: ${localWireframeMode.value}`)
-  // Wireframe is applied per-model in GLBModelViewer
 }
 
 const toggleGrid = () => {
   localShowGrid.value = !localShowGrid.value
-  
-  // Toggle grid visibility in shared scene if available
-  if (threeContext && gridHelper) {
-    gridHelper.visible = localShowGrid.value
-    logger.debug(`Grid: ${localShowGrid.value}`)
-  }
+  logger.debug(`Grid: ${localShowGrid.value}`)
 }
 
 // Lifecycle
 onMounted(() => {
-  logger.info('3D Mesh Prototyping Cell (Three.js) mounted')
-  
-  // Get grid helper reference from scene if available
-  if (threeContext) {
-    const gridInScene = threeContext.scene.children.find(
-      (child) => child instanceof THREE.GridHelper
-    )
-    if (gridInScene) {
-      gridHelper = gridInScene as THREE.GridHelper
-      gridHelper.visible = localShowGrid.value
-    }
-  }
+  logger.info('3D Mesh Prototyping Cell (TresJS) mounted')
   
   // Debug check for inputImage availability (ITERATION #4)
   if (!inputImage.value) {
@@ -451,7 +419,7 @@ onUnmounted(() => {
     logger.debug('Revoked uploaded GLB URL')
   }
   
-  logger.info('3D Mesh Prototyping Cell (Three.js) unmounted')
+  logger.info('3D Mesh Prototyping Cell (TresJS) unmounted')
 })
 </script>
 
@@ -541,15 +509,55 @@ onUnmounted(() => {
       @download-mesh="downloadMesh"
     />
 
-    <!-- Model Viewer Component (uses injected scene from DynamicWorkspace) -->
-    <div v-if="hasMesh && meshBlobUrl" class="mb-6">
-      <GLBModelViewer :url="meshBlobUrl" :wireframe="wireframeMode" />
-    </div>
-    <div v-else class="mb-6 p-8 text-center theme-bg-surface rounded border border-border dark:border-border-dark">
-      <p class="text-text-secondary dark:text-text-secondary-dark">
-        {{ generationMode === 'manual-upload' ? 'Upload a GLB file to view it in the 3D workspace' : 'Upload an image and generate a 3D mesh to view it in the workspace' }}
-      </p>
-    </div>
+
+    <!-- TresJS Viewport (Declarative) - Canvas sempre presente -->
+    <TresCanvas
+      class="viewport-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
+      window-size
+      :style="{ width: '100%', height: '500px' }"
+    >
+      <template v-if="hasMesh && meshBlobUrl">
+        <TresPerspectiveCamera
+          :position="cameraPosition"
+          :fov="50"
+          :near="0.1"
+          :far="1000"
+        />
+
+        <TresAmbientLight :intensity="0.6" />
+        <TresDirectionalLight :position="[5, 10, 7.5]" :intensity="0.8" />
+
+        <Grid v-if="showGrid && hasMesh && meshBlobUrl" :size="10" :divisions="10" />
+
+        <OrbitControls
+          :auto-rotate="autoRotate"
+          :auto-rotate-speed="2.0"
+          :enable-damping="true"
+          :damping-factor="0.05"
+        />
+
+        <Suspense>
+          <template #default>
+            <GLBModelViewer :url="meshBlobUrl" :wireframe="wireframeMode" />
+          </template>
+          <template #fallback>
+            <TresMesh>
+              <TresBoxGeometry :args="[0.1, 0.1, 0.1]" />
+              <TresMeshBasicMaterial color="#666666" />
+            </TresMesh>
+          </template>
+        </Suspense>
+      </template>
+      <template v-else>
+        <TresMesh>
+          <TresBoxGeometry :args="[0.1, 0.1, 0.1]" />
+          <TresMeshBasicMaterial color="#666666" />
+        </TresMesh>
+        <div class="flex items-center justify-center" style="position:absolute;top:0;left:0;width:100%;height:100%;">
+          <p class="text-text-secondary dark:text-text-secondary-dark">Upload an image and generate a 3D mesh to view it here</p>
+        </div>
+      </template>
+    </TresCanvas>
 
     <!-- Mesh Metadata -->
     <MeshMetadataDisplay :metadata="meshMetadata" />
@@ -559,5 +567,10 @@ onUnmounted(() => {
 <style scoped>
 .mesh-prototyping-container {
   font-family: 'Inter', sans-serif;
+}
+
+.viewport-container {
+  position: relative;
+  overflow: hidden;
 }
 </style>

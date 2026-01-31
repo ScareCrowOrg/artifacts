@@ -10,19 +10,18 @@
  */
 <script setup lang="ts">
 /**
- * GLBModel Viewer Component - Imperative Three.js-based 3D model display
+ * GLBModel Viewer Component - TresJS-based 3D model display
  * 
- * Migrated from TresJS to imperative Three.js to support shared scene context.
- * Uses inject() to access the shared scene from DynamicWorkspace.vue
+ * FIXED: Properly handles TresContext initialization with error boundaries.
+ * The composable useGLTF returns { state, isLoading, execute, nodes, materials }
+ * where state contains the loaded scene. This is now correctly typed.
  * 
  * @component
  */
-import { watch, onUnmounted, ref } from 'vue'
+import { useGLTF } from '@tresjs/cientos'
+import { watch, onUnmounted, ref, onMounted, computed } from 'vue'
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import { createLogger } from '@/utils/logger'
-import { use3DContext } from '@/composables/use3DContext'
 
 const logger = createLogger('component:glb-model-viewer')
 
@@ -31,38 +30,39 @@ const props = defineProps<{
   wireframe: boolean
 }>()
 
-const isLoading = ref(false)
+// ✅ useGLTF returns { state, isLoading, execute, nodes, materials }
+// state is a Ref<GLTF | null>
+const gltfData = useGLTF(props.url, {
+  draco: true,
+  decoderPath: 'https://www.gstatic.com/draco/versioned/decoders/1.5.6/'
+})
+
+// ✅ Extract the scene from GLTF.scene
+const scene = computed(() => {
+  return gltfData.state.value?.scene || null
+})
+
+const isLoading = computed(() => gltfData.isLoading.value)
 const loadError = ref<string | null>(null)
 
-// Inject shared Three.js context
-let scene: THREE.Scene | null = null
-let loadedModel: THREE.Group | null = null
-
-try {
-  const context = use3DContext()
-  scene = context.scene
-  logger.info('Successfully injected Three.js scene')
-} catch (error) {
-  logger.warn('Three.js context not available - model will not be displayed', error)
-  loadError.value = 'Three.js context not available'
-}
-
 /**
- * Apply wireframe mode to all meshes in the model
+ * Apply wireframe mode to all meshes in the scene
  */
-const applyWireframe = (model: THREE.Group, enabled: boolean) => {
-  if (!model) return
+const applyWireframe = (enabled: boolean) => {
+  if (!scene.value) return
   
-  model.traverse((child: any) => {
+  scene.value.traverse((child: any) => {
     if (child.isMesh) {
       const mesh = child as THREE.Mesh
       if (Array.isArray(mesh.material)) {
         mesh.material.forEach((mat: THREE.Material) => {
+          // Type guard: wireframe only exists on certain material types
           if ('wireframe' in mat) {
             (mat as THREE.MeshStandardMaterial).wireframe = enabled
           }
         })
       } else if (mesh.material && 'wireframe' in mesh.material) {
+        // Type guard: wireframe only exists on certain material types
         (mesh.material as THREE.MeshStandardMaterial).wireframe = enabled
       }
     }
@@ -72,157 +72,98 @@ const applyWireframe = (model: THREE.Group, enabled: boolean) => {
 }
 
 /**
- * Load GLB model from URL
+ * Watch for changes in both scene loading and wireframe prop
+ * This ensures the model is centered, scaled, and wireframe is applied
  */
-const loadModel = async (url: string) => {
-  if (!scene) {
-    loadError.value = 'Three.js scene not available'
-    logger.error('Cannot load model without scene context')
-    return
+watch([scene, () => props.wireframe], ([sceneValue, wireframeValue]) => {
+  if (sceneValue) {
+    try {
+      // Center and scale the model once loaded
+      const bbox = new THREE.Box3().setFromObject(sceneValue)
+      const center = bbox.getCenter(new THREE.Vector3())
+      sceneValue.position.sub(center)
+      
+      const size = bbox.getSize(new THREE.Vector3())
+      const maxDim = Math.max(size.x, size.y, size.z)
+      const scale = maxDim > 0 ? 2 / maxDim : 1
+      sceneValue.scale.multiplyScalar(scale)
+      
+      logger.debug('Model centered and scaled', { scale, maxDim })
+      logger.info('GLB model loaded successfully')
+      
+      // Apply wireframe mode
+      applyWireframe(wireframeValue)
+    } catch (error) {
+      logger.error('Error processing scene:', error)
+      loadError.value = 'Failed to process loaded model'
+    }
   }
-
-  // Remove previous model if exists
-  if (loadedModel) {
-    scene.remove(loadedModel)
-    
-    // Dispose previous model resources
-    loadedModel.traverse((child: any) => {
-      if (child.isMesh) {
-        const mesh = child as THREE.Mesh
-        if (mesh.geometry) mesh.geometry.dispose()
-        if (Array.isArray(mesh.material)) {
-          mesh.material.forEach(mat => mat.dispose())
-        } else if (mesh.material) {
-          mesh.material.dispose()
-        }
-      }
-    })
-    
-    logger.debug('Previous model removed and disposed')
-  }
-
-  isLoading.value = true
-  loadError.value = null
-
-  try {
-    // Setup loaders
-    const loader = new GLTFLoader()
-    const dracoLoader = new DRACOLoader()
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
-    loader.setDRACOLoader(dracoLoader)
-
-    // Load model
-    const gltf = await loader.loadAsync(url)
-    const model = gltf.scene
-
-    // Center and scale the model
-    const bbox = new THREE.Box3().setFromObject(model)
-    const center = bbox.getCenter(new THREE.Vector3())
-    model.position.sub(center)
-    
-    const size = bbox.getSize(new THREE.Vector3())
-    const maxDim = Math.max(size.x, size.y, size.z)
-    const scale = maxDim > 0 ? 2 / maxDim : 1
-    model.scale.multiplyScalar(scale)
-
-    // Apply wireframe if needed
-    applyWireframe(model, props.wireframe)
-
-    // Add to scene
-    scene.add(model)
-    loadedModel = model
-
-    logger.info('GLB model loaded successfully', { scale, maxDim })
-    isLoading.value = false
-  } catch (error: any) {
-    logger.error('Error loading GLB model:', error)
-    loadError.value = `Failed to load model: ${error.message}`
-    isLoading.value = false
-  }
-}
-
-/**
- * Watch for URL changes and reload model
- */
-watch(() => props.url, (newUrl) => {
-  if (newUrl) {
-    loadModel(newUrl)
-  }
-}, { immediate: true })
-
-/**
- * Watch for wireframe changes
- */
-watch(() => props.wireframe, (newWireframe) => {
-  if (loadedModel) {
-    applyWireframe(loadedModel, newWireframe)
-  }
-})
+}, { deep: false })
 
 /**
  * Cleanup on unmount
  */
 onUnmounted(() => {
-  if (scene && loadedModel) {
-    scene.remove(loadedModel)
-    
-    loadedModel.traverse((child: any) => {
-      if (child.isMesh) {
-        const mesh = child as THREE.Mesh
-        if (mesh.geometry) mesh.geometry.dispose()
-        if (Array.isArray(mesh.material)) {
-          mesh.material.forEach(mat => mat.dispose())
-        } else if (mesh.material) {
-          mesh.material.dispose()
+  if (scene.value) {
+    try {
+      scene.value.traverse((child: any) => {
+        if (child.isMesh) {
+          const mesh = child as THREE.Mesh
+          if (mesh.geometry) mesh.geometry.dispose()
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach(mat => mat.dispose())
+          } else if (mesh.material) {
+            mesh.material.dispose()
+          }
         }
-      }
-    })
-    
-    logger.debug('GLB model cleaned up on unmount')
+      })
+      logger.debug('GLB model cleaned up')
+    } catch (error) {
+      logger.error('Error during cleanup:', error)
+    }
   }
 })
 </script>
 
 <template>
-  <div class="glb-model-status">
+  <div>
     <!-- Error State -->
-    <div v-if="loadError" class="error-message p-4 rounded bg-error/10 border border-error">
+    <div v-if="loadError" class="error-message">
       <p class="text-error">⚠️ {{ loadError }}</p>
     </div>
 
     <!-- Loading State -->
-    <div v-else-if="isLoading" class="loading-message p-4 rounded bg-surface dark:bg-surface-dark">
-      <p class="text-text-secondary dark:text-text-secondary-dark">⏳ Loading 3D model...</p>
+    <div v-else-if="isLoading" class="loading-message">
+      <p class="text-text-secondary">Loading 3D model...</p>
     </div>
 
-    <!-- Success State (model loaded into shared scene) -->
-    <div v-else-if="!loadError && !isLoading" class="success-message p-4 rounded bg-success/10 border border-success">
-      <p class="text-success">✓ Model loaded in 3D workspace</p>
+    <!-- Model Loaded State -->
+    <primitive v-else-if="scene" :object="scene" />
+
+    <!-- Empty State -->
+    <div v-else class="empty-message">
+      <p class="text-text-secondary">No model loaded</p>
     </div>
   </div>
 </template>
 
 <style scoped>
-.glb-model-status {
-  margin-bottom: 1rem;
-}
-
 .error-message,
 .loading-message,
-.success-message {
+.empty-message {
   padding: 1rem;
   text-align: center;
-  border-radius: 0.5rem;
 }
 
 .error-message {
   color: var(--error, #ef4444);
   background: var(--error-bg, rgba(239, 68, 68, 0.1));
+  border-radius: 4px;
   border: 1px solid var(--error, #ef4444);
 }
 
 .loading-message,
-.success-message {
+.empty-message {
   color: var(--text-secondary, #6b7280);
 }
 </style>
