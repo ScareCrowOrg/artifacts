@@ -26,8 +26,6 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted, defineOptions } from 'vue'
-import { TresCanvas } from '@tresjs/core'
-import { OrbitControls, Grid } from '@tresjs/cientos'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
 import authService from '@/services/authService'
@@ -42,7 +40,7 @@ import GLBFileUploader from './components/GLBFileUploader.vue'
 // ITERATION #9: Define component name for proper Vue registration in dynamic loading context
 defineOptions({ name: 'MeshPrototypingCellView' })
 
-const logger = createLogger('component:3d-mesh-prototyping-cell-tresjs')
+const logger = createLogger('component:3d-mesh-prototyping-cell-threejs')
 
 interface Props {
   cell: any // Flexible to handle initial_data, state, or direct properties
@@ -509,55 +507,15 @@ onUnmounted(() => {
       @download-mesh="downloadMesh"
     />
 
-
-    <!-- TresJS Viewport (Declarative) - Canvas sempre presente -->
-    <TresCanvas
-      class="viewport-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
-      window-size
-      :style="{ width: '100%', height: '500px' }"
-    >
-      <template v-if="hasMesh && meshBlobUrl">
-        <TresPerspectiveCamera
-          :position="cameraPosition"
-          :fov="50"
-          :near="0.1"
-          :far="1000"
-        />
-
-        <TresAmbientLight :intensity="0.6" />
-        <TresDirectionalLight :position="[5, 10, 7.5]" :intensity="0.8" />
-
-        <Grid v-if="showGrid && hasMesh && meshBlobUrl" :size="10" :divisions="10" />
-
-        <OrbitControls
-          :auto-rotate="autoRotate"
-          :auto-rotate-speed="2.0"
-          :enable-damping="true"
-          :damping-factor="0.05"
-        />
-
-        <Suspense>
-          <template #default>
-            <GLBModelViewer :url="meshBlobUrl" :wireframe="wireframeMode" />
-          </template>
-          <template #fallback>
-            <TresMesh>
-              <TresBoxGeometry :args="[0.1, 0.1, 0.1]" />
-              <TresMeshBasicMaterial color="#666666" />
-            </TresMesh>
-          </template>
-        </Suspense>
-      </template>
-      <template v-else>
-        <TresMesh>
-          <TresBoxGeometry :args="[0.1, 0.1, 0.1]" />
-          <TresMeshBasicMaterial color="#666666" />
-        </TresMesh>
-        <div class="flex items-center justify-center" style="position:absolute;top:0;left:0;width:100%;height:100%;">
-          <p class="text-text-secondary dark:text-text-secondary-dark">Upload an image and generate a 3D mesh to view it here</p>
-        </div>
-      </template>
-    </TresCanvas>
+    <!-- Model Viewer Component (uses injected scene from DynamicWorkspace) -->
+    <div v-if="hasMesh && meshBlobUrl" class="mb-6">
+      <GLBModelViewer :url="meshBlobUrl" :wireframe="wireframeMode" />
+    </div>
+    <div v-else class="mb-6 p-8 text-center theme-bg-surface rounded border border-border dark:border-border-dark">
+      <p class="text-text-secondary dark:text-text-secondary-dark">
+        {{ generationMode === 'manual-upload' ? 'Upload a GLB file to view it in the 3D workspace' : 'Upload an image and generate a 3D mesh to view it in the workspace' }}
+      </p>
+    </div>
 
     <!-- Mesh Metadata -->
     <MeshMetadataDisplay :metadata="meshMetadata" />
@@ -567,10 +525,5 @@ onUnmounted(() => {
 <style scoped>
 .mesh-prototyping-container {
   font-family: 'Inter', sans-serif;
-}
-
-.viewport-container {
-  position: relative;
-  overflow: hidden;
 }
 </style>
