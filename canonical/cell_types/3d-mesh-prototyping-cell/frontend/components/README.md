@@ -1,13 +1,14 @@
 ---
 processed: true
-processed_date: "2026-01-20"
+processed_date: "2026-01-31"
+updated: true
 generated_docs:
   - "docs/official/frontend/architecture/cell-type-examples-patterns.md"
 themes:
   - "cell-architecture"
   - "component-design"
   - "3d-rendering"
-  - "tresjs"
+  - "babylon-js"
 modules:
   - "frontend"
   - "artifacts"
@@ -19,21 +20,30 @@ dead_docs_found: false
 
 This directory contains modular Vue components for the 3D Mesh Prototyping Cell frontend interface.
 
+**Migration Note**: Migrated from TresJS to Babylon.js on 2026-01-31. See [BABYLON_MIGRATION.md](../../docs/BABYLON_MIGRATION.md) for details.
+
 ## Components
 
-### GLBModelViewer.vue
-**Purpose**: TresJS-based 3D model viewer component  
+### BabylonModelViewer.vue
+**Purpose**: Babylon.js-based 3D model viewer component  
 **Responsibilities**:
-- Load GLB models using TresJS `useGLTF` composable
+- Initialize per-cell Babylon.js Engine and Scene
+- Load GLB models using Babylon.js SceneLoader
 - Handle automatic centering and scaling of models
 - Apply wireframe mode to all meshes
-- Manage Three.js resource cleanup
+- Manage camera controls (ArcRotateCamera with orbit)
+- Create and display ground grid (GridMaterial)
+- Proper resource cleanup and disposal
 
 **Props**:
 - `url: string` - Blob URL of the GLB model to load
 - `wireframe: boolean` - Whether to enable wireframe rendering
+- `autoRotate: boolean` - Enable camera auto-rotation
+- `showGrid: boolean` - Display ground grid
 
-**Dependencies**: TresJS Core, Three.js
+**Dependencies**: @babylonjs/core, @babylonjs/loaders, @babylonjs/materials
+
+**Architecture**: Per-cell Engine pattern - each component creates its own Babylon.js Engine instance for input isolation and clean resource management.
 
 ### JobStatusIndicator.vue
 **Purpose**: Real-time job status display component  
@@ -82,18 +92,25 @@ This directory contains modular Vue components for the 3D Mesh Prototyping Cell 
 ## Architecture
 
 These components follow the modular design principles from RULESET.md:
-- Each component is < 150 lines
+- Each component is < 200 lines (BabylonModelViewer: ~250 lines due to engine setup)
 - Single responsibility principle
 - Props-down, events-up pattern
 - Clear separation of concerns
+- Proper resource lifecycle management
+
+**Babylon.js Integration**:
+- Per-cell Engine architecture (not global shared engine)
+- Each viewer creates independent Engine + Scene + Camera
+- Natural input isolation via camera.attachControl(localCanvas)
+- Clean disposal on unmount (engine.dispose())
 
 ## Usage
 
-Import and use in parent component (ViewTresJS.vue):
+Import and use in parent component (View.vue):
 
 ```vue
 <script setup>
-import GLBModelViewer from './components/GLBModelViewer.vue'
+import BabylonModelViewer from './components/BabylonModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
 import ViewportControls from './components/ViewportControls.vue'
 import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
@@ -103,9 +120,14 @@ import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
   <div>
     <JobStatusIndicator :is-generating="isGenerating" :job-status="status" :job-id="jobId" />
     <ViewportControls @toggle-auto-rotate="handleAutoRotate" ... />
-    <TresCanvas>
-      <GLBModelViewer :url="modelUrl" :wireframe="wireframeMode" />
-    </TresCanvas>
+    <div class="viewport-container">
+      <BabylonModelViewer 
+        :url="modelUrl" 
+        :wireframe="wireframeMode"
+        :auto-rotate="autoRotate"
+        :show-grid="showGrid"
+      />
+    </div>
     <MeshMetadataDisplay :metadata="meshMetadata" />
   </div>
 </template>
@@ -119,6 +141,15 @@ Unit tests for these components should be added to:
 Test coverage should validate:
 - Component rendering with various props
 - Event emission
-- Async GLB loading in GLBModelViewer
+- Async GLB loading in BabylonModelViewer
+- Engine initialization and disposal
+- Camera controls and auto-rotation
+- Grid material creation
 - Status color changes in JobStatusIndicator
 - Button state changes in ViewportControls
+
+## Archived Components
+
+### GLBModelViewer.vue.tresjs.archived
+Former TresJS-based viewer, archived during Babylon.js migration (2026-01-31).
+Kept for reference but should not be used in new code.
