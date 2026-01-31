@@ -30,7 +30,7 @@ import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
 import authService from '@/services/authService'
 import { useJobPolling } from './composables/useJobPolling'
-import BabylonModelViewer from './components/BabylonModelViewer.vue'
+import BabylonModelViewer from '@/components/viewers/BabylonModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
 import ViewportControls from './components/ViewportControls.vue'
 import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
@@ -518,6 +518,8 @@ onUnmounted(() => {
         :wireframe="wireframeMode"
         :auto-rotate="autoRotate"
         :show-grid="showGrid"
+        background-color="#ffffff"
+        :grid-visible="false"
       />
       <div v-else class="flex items-center justify-center h-full">
         <p class="text-text-secondary dark:text-text-secondary-dark">
