@@ -29,6 +29,7 @@ import { ref, computed, watch, onMounted, onUnmounted, defineOptions } from 'vue
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
 import authService from '@/services/authService'
+import { use3DContext } from '@/composables/use3DContext'
 import { useJobPolling } from './composables/useJobPolling'
 import GLBModelViewer from './components/GLBModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
@@ -36,11 +37,23 @@ import ViewportControls from './components/ViewportControls.vue'
 import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
 import GenerationModeSwitcher from './components/GenerationModeSwitcher.vue'
 import GLBFileUploader from './components/GLBFileUploader.vue'
+import * as THREE from 'three'
 
 // ITERATION #9: Define component name for proper Vue registration in dynamic loading context
 defineOptions({ name: 'MeshPrototypingCellView' })
 
 const logger = createLogger('component:3d-mesh-prototyping-cell-threejs')
+
+// Try to inject 3D context (optional - gracefully handle if not available)
+let threeContext: ReturnType<typeof use3DContext> | null = null
+let gridHelper: THREE.GridHelper | null = null
+
+try {
+  threeContext = use3DContext()
+  logger.info('Successfully injected Three.js context')
+} catch (error) {
+  logger.warn('Three.js context not available - viewport controls will be disabled', error)
+}
 
 interface Props {
   cell: any // Flexible to handle initial_data, state, or direct properties
@@ -376,22 +389,44 @@ const downloadMesh = () => {
 // Toggle functions (ITERATION #5 - using local refs declared above)
 const toggleAutoRotate = () => {
   localAutoRotate.value = !localAutoRotate.value
-  logger.debug(`Auto-rotate: ${localAutoRotate.value}`)
+  
+  // Update shared controls if available
+  if (threeContext) {
+    threeContext.controls.autoRotate = localAutoRotate.value
+    logger.debug(`Auto-rotate: ${localAutoRotate.value}`)
+  }
 }
 
 const toggleWireframe = () => {
   localWireframeMode.value = !localWireframeMode.value
   logger.debug(`Wireframe mode: ${localWireframeMode.value}`)
+  // Wireframe is applied per-model in GLBModelViewer
 }
 
 const toggleGrid = () => {
   localShowGrid.value = !localShowGrid.value
-  logger.debug(`Grid: ${localShowGrid.value}`)
+  
+  // Toggle grid visibility in shared scene if available
+  if (threeContext && gridHelper) {
+    gridHelper.visible = localShowGrid.value
+    logger.debug(`Grid: ${localShowGrid.value}`)
+  }
 }
 
 // Lifecycle
 onMounted(() => {
-  logger.info('3D Mesh Prototyping Cell (TresJS) mounted')
+  logger.info('3D Mesh Prototyping Cell (Three.js) mounted')
+  
+  // Get grid helper reference from scene if available
+  if (threeContext) {
+    const gridInScene = threeContext.scene.children.find(
+      (child) => child instanceof THREE.GridHelper
+    )
+    if (gridInScene) {
+      gridHelper = gridInScene as THREE.GridHelper
+      gridHelper.visible = localShowGrid.value
+    }
+  }
   
   // Debug check for inputImage availability (ITERATION #4)
   if (!inputImage.value) {
@@ -417,7 +452,7 @@ onUnmounted(() => {
     logger.debug('Revoked uploaded GLB URL')
   }
   
-  logger.info('3D Mesh Prototyping Cell (TresJS) unmounted')
+  logger.info('3D Mesh Prototyping Cell (Three.js) unmounted')
 })
 </script>
 
