@@ -1,13 +1,14 @@
 ---
 processed: true
-processed_date: 2026-01-17
+processed_date: 2026-01-31
 updated_docs:
   - docs/official/backend/cell-types/3d-mesh-prototyping-cell.md
+  - docs/BABYLON_MIGRATION.md
 themes:
   - 3d-generation
   - cell-types
   - documentation
-  - three-js
+  - babylon-js
 modules:
   - artifacts
   - backend
@@ -20,6 +21,8 @@ dead_docs_found: false
 ## Overview
 
 The **3D Mesh Prototyping Cell** is an advanced interactive cell that enables the generation of real volumetric 3D meshes (with 360º volume) from single input images using AI-powered reconstruction. This cell addresses the ScareVerse project's need for true 3D "Hero Assets" and complex character models that go beyond the 2.5D SVG extrusion approach.
+
+**Technology**: Migrated to **Babylon.js** (2026-01-31) from TresJS for better physics integration, stability, and native Rapier support. See [BABYLON_MIGRATION.md](./BABYLON_MIGRATION.md) for details.
 
 ## Features
 
@@ -87,24 +90,25 @@ The **3D Mesh Prototyping Cell** is an advanced interactive cell that enables th
 
 **Technology Stack**:
 - Vue 3 with TypeScript
-- Three.js (3D rendering)
-- GLTFLoader + DRACOLoader (mesh loading)
-- OrbitControls (camera interaction)
+- **Babylon.js** (3D rendering engine)
+- SceneLoader (GLB/GLTF loading)
+- ArcRotateCamera (orbit controls)
 
 **Key Components**:
 - Image upload with FileReader API
-- Three.js scene initialization
+- Babylon.js engine initialization (per-cell instance)
 - Mesh loading and display
 - Viewport control toggles
 - Download functionality
 
-**Three.js Scene Setup**:
+**Babylon.js Scene Setup**:
 ```typescript
-- Scene: Dark background (0x1a1a1a)
-- Camera: PerspectiveCamera (FOV: 50°)
-- Lighting: Ambient (0.6) + Directional (0.8)
-- Controls: OrbitControls with damping
-- Grid: 10x10 helper grid (toggleable)
+- Engine: Per-cell WebGL engine instance
+- Scene: Dark background (RGB 0.1, 0.1, 0.1)
+- Camera: ArcRotateCamera with orbit controls
+- Lighting: HemisphericLight (intensity: 0.8)
+- Controls: Native camera controls with zoom limits
+- Grid: GridMaterial ground plane (toggleable)
 ```
 
 ### Backend (`backend/scripts/main.py`)
@@ -397,15 +401,16 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]
 ## References
 
 ### Documentation
+- [Babylon.js Migration Guide](./BABYLON_MIGRATION.md) ⭐ **NEW**
 - [Ephemeral Execution Flow](../../../docs/issues/implement-ephemeral-execution-flow/)
 - [RULESET.md](../../../docs/official/RULESET.md)
 - [TEAM.md](../../../docs/official/TEAM.md)
 - [Cell Type Architecture](../../../docs/official/backend/architecture/)
 
 ### External Resources
-- [Three.js Documentation](https://threejs.org/docs/)
-- [GLTFLoader Guide](https://threejs.org/docs/#examples/en/loaders/GLTFLoader)
-- [Draco Compression](https://google.github.io/draco/)
+- [Babylon.js Documentation](https://doc.babylonjs.com/)
+- [Babylon.js SceneLoader](https://doc.babylonjs.com/features/featuresDeepDive/Babylon.js_and_WebGL_Advanced_Topics/Loaders/)
+- [Babylon.js Physics](https://doc.babylonjs.com/features/featuresDeepDive/Physics/)
 - [Stable Fast 3D](https://github.com/Stability-AI/stable-fast-3d) (model reference)
 
 ## Support
@@ -417,8 +422,9 @@ For issues or questions:
 
 ---
 
-**Version**: 1.0.0  
+**Version**: 2.0.0  
 **Created**: 2026-01-16  
+**Updated**: 2026-01-31 (Migrated to Babylon.js)  
 **Category**: prototyping  
 **Status**: MVP - Mock implementation, GPU integration pending  
 **Authors**: GitHub Copilot Agent
