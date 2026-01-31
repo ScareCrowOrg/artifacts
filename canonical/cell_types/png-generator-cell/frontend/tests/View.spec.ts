@@ -165,7 +165,9 @@ describe('PNG Generator Cell View', () => {
         height: 512,
         steps: 20,
         cfg_scale: 7.0,
-        seed: -1
+        seed: -1,
+        asset3dMode: false,
+        negativePrompt: ''
       }
     ])
   })
@@ -253,6 +255,10 @@ describe('PNG Generator Cell View', () => {
     const widthInput = wrapper.findAll('input[type="number"]')[0]
     await widthInput.setValue(768)
     
+    // Wait for debounced emit (100ms debounce in component)
+    await new Promise(resolve => setTimeout(resolve, 150))
+    await wrapper.vm.$nextTick()
+    
     expect(wrapper.emitted('update:cell')).toBeTruthy()
   })
 
@@ -261,13 +267,18 @@ describe('PNG Generator Cell View', () => {
     await textarea.setValue('A mountain')
     await textarea.trigger('keydown.ctrl.enter')
     
-    // Should trigger generate action
-    expect(wrapper.emitted('update:cell')).toBeTruthy()
+    // Should trigger generate action (immediate, not debounced)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('generate')).toBeTruthy()
   })
 
   it('emits update events for prompt changes', async () => {
     const textarea = wrapper.find('textarea')
     await textarea.setValue('New prompt')
+    
+    // Wait for debounced emit (100ms debounce in component)
+    await new Promise(resolve => setTimeout(resolve, 150))
+    await wrapper.vm.$nextTick()
     
     expect(wrapper.emitted('update:cell')).toBeTruthy()
     expect(wrapper.emitted('update:prompt')).toBeTruthy()
