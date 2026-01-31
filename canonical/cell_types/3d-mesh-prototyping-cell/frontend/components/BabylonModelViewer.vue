@@ -166,7 +166,9 @@ const loadModel = async () => {
   loadError.value = null
 
   try {
-    const result = await SceneLoader.ImportMeshAsync('', '', props.url, scene)
+    // Detectar se é Blob URL e forçar extensão
+    const pluginExtension = props.url.startsWith('blob:') ? '.glb' : undefined
+    const result = await SceneLoader.ImportMeshAsync('', '', props.url, scene, undefined, pluginExtension)
     
     if (result.meshes.length === 0) {
       throw new Error('No meshes found in model')
