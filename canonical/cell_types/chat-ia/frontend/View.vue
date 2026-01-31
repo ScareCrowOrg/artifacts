@@ -83,13 +83,12 @@
       <!-- Chat History Sidebar -->
       <ChatHistorySidebar
         v-if="uiStore.showChatHistory"
-        :conversations="chatHistory.conversations.value"
-        :current-conversation-id="chatHistory.currentConversationId.value ?? undefined"
+        :conversations="chatHistory.allConversations.value"
+        :current-conversation-id="conversationId"
         @close="uiStore.toggleChatHistory"
         @select-conversation="chat.loadConversation($event)"
-        @new-conversation="startNewConversation"
+        @new-conversation="handleNewConversation"
         @delete-conversation="chatHistory.deleteConversation($event)"
-        @clear-all="chatHistory.clearAllHistory()"
       />
     </div>
 
@@ -185,8 +184,34 @@ const emit = defineEmits<{
 const chatStore = useChatStore()
 const uiStore = useUIStore()
 
-// Initialize chat history composable
-const chatHistory = useChatHistory()
+// ============ CONVERSATIONID: EPHEMERAL → PERSISTENT ============
+
+/**
+ * Get or create a persistent conversationId for this cell
+ * 1. Try to recover from saved state (cell.initial_data.conversationId)
+ * 2. Optionally, offer to open the most recent conversation (commented out - can be enabled)
+ * 3. Otherwise, create a new UUID
+ */
+function getOrCreateConversationId(): string {
+  // 1. Try to recover from saved state
+  if (props.cell.initial_data?.conversationId) {
+    return props.cell.initial_data.conversationId
+  }
+  
+  // 2. OPTIONAL: If it's a new cell, offer to open the most recent conversation
+  // Uncomment the following lines to enable this behavior:
+  // const chatHistoryTemp = useChatHistory({ conversationId: 'temp' })
+  // const recentId = chatHistoryTemp.getMostRecentConversationId()
+  // if (recentId) return recentId
+  
+  // 3. Otherwise, create a new UUID
+  return crypto.randomUUID()
+}
+
+const conversationId = getOrCreateConversationId()
+
+// Initialize chat history composable with persistent conversationId
+const chatHistory = useChatHistory({ conversationId })
 
 // Ref for messages container
 const messagesContainer = ref<HTMLDivElement | null>(null)
@@ -205,12 +230,14 @@ const scrollToBottom = (): void => {
   })
 }
 
-// Initialize chat IA composable
-const chat = useChatIA(
+// Initialize chat IA composable with new props structure
+const chat = useChatIA({
+  conversationId,
   chatHistory,
-  (celulaConteudo: string) => emit('celula-criada', celulaConteudo),
+  emitCellCreated: (celulaConteudo: string) => emit('celula-criada', celulaConteudo),
   scrollToBottom,
-)
+  activeCellRef: null
+})
 
 /**
  * Send message via Agent Mode or regular chat
@@ -380,17 +407,30 @@ function handleAgentTerminalClose(): void {
   chatStore.toggleAgentMode()
 }
 
-function startNewConversation(): void {
-  chatHistory.createConversation()
-  chat.messages.value = []
+/**
+ * Clear the current chat messages
+ * Note: In the new per-cell architecture, this only clears the local messages.
+ * To start a truly new conversation, you would need to create a new cell with a new conversationId.
+ */
+function clearCurrentChat(): void {
+  chat.clearChat()
   uiStore.showChatHistory = false
-  
-  // Update cell data
-  updateCellData()
 }
 
-function handleShowTimeline(conversationId: string): void {
-  selectedConversationId.value = conversationId
+/**
+ * Handle new conversation request from sidebar
+ * In the new architecture, we can't truly create a new conversation from within the cell
+ * because the conversationId is determined at cell creation time.
+ * This function clears the current chat as a workaround.
+ */
+function handleNewConversation(): void {
+  clearCurrentChat()
+  // TODO: Ideally, this should trigger the creation of a new chat-ia cell with a new conversationId
+  // For now, we just clear the current chat
+}
+
+function handleShowTimeline(convId: string): void {
+  selectedConversationId.value = convId
   showTimelineModal.value = true
 }
 
@@ -422,7 +462,7 @@ function updateCellData(): void {
       selectedModel: chat.selectedModel.value,
       enableIntentionClassification: chat.enableIntentionClassification.value,
       selectedCollections: chat.selectedCollections.value,
-      conversationId: chatHistory.currentConversationId.value,
+      conversationId: conversationId,  // ✅ Persist conversationId
     }
   })
 }
@@ -466,7 +506,7 @@ onMounted(() => {
   
   // Initialize from cell data if available
   if (props.cell.initial_data) {
-    const { selectedModel, enableIntentionClassification, selectedCollections, conversationId } = props.cell.initial_data
+    const { selectedModel, enableIntentionClassification, selectedCollections } = props.cell.initial_data
     
     if (selectedModel) {
       chat.selectedModel.value = selectedModel
@@ -479,15 +519,21 @@ onMounted(() => {
     }
   }
   
-  // Fetch models and load conversation
+  // Fetch models
   chat.fetchModels()
   
-  // Load specific conversation if set, otherwise load last
-  if (props.cell.initial_data?.conversationId) {
-    chat.loadConversation(props.cell.initial_data.conversationId)
+  // ✅ Load conversation from global bank
+  // The conversationId is already determined by getOrCreateConversationId()
+  const conversation = chatHistory.currentConversation.value
+  if (conversation) {
+    chat.messages.value = conversation.messages
   } else {
-    chat.loadLastConversation()
+    // No conversation found with this ID - it's a new conversation
+    // Create it in the global bank
+    chatHistory.createConversation('Nova Conversa')
   }
+  
+  scrollToBottom()
 })
 
 // Unregister component from store on unmount
