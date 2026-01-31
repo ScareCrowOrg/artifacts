@@ -87,9 +87,8 @@
         :current-conversation-id="conversationId"
         @close="uiStore.toggleChatHistory"
         @select-conversation="chat.loadConversation($event)"
-        @new-conversation="startNewConversation"
+        @new-conversation="handleNewConversation"
         @delete-conversation="chatHistory.deleteConversation($event)"
-        @clear-all="() => {}"
       />
     </div>
 
@@ -235,7 +234,7 @@ const scrollToBottom = (): void => {
 const chat = useChatIA({
   conversationId,
   chatHistory,
-  emitCelulaCreada: (celulaConteudo: string) => emit('celula-criada', celulaConteudo),
+  emitCellCreated: (celulaConteudo: string) => emit('celula-criada', celulaConteudo),
   scrollToBottom,
   activeCellRef: null
 })
@@ -408,17 +407,26 @@ function handleAgentTerminalClose(): void {
   chatStore.toggleAgentMode()
 }
 
-function startNewConversation(): void {
-  // In the new architecture, we don't create a conversation from the cell
-  // Instead, we would need to create a new cell with a new conversationId
-  // For now, just clear the current chat
+/**
+ * Clear the current chat messages
+ * Note: In the new per-cell architecture, this only clears the local messages.
+ * To start a truly new conversation, you would need to create a new cell with a new conversationId.
+ */
+function clearCurrentChat(): void {
   chat.clearChat()
   uiStore.showChatHistory = false
-  
-  // Note: To fully implement "new conversation", you would need to:
-  // 1. Create a new cell with a new conversationId
-  // 2. Or update this cell's conversationId (but this breaks the persistent design)
-  // For MVP, clearing is sufficient
+}
+
+/**
+ * Handle new conversation request from sidebar
+ * In the new architecture, we can't truly create a new conversation from within the cell
+ * because the conversationId is determined at cell creation time.
+ * This function clears the current chat as a workaround.
+ */
+function handleNewConversation(): void {
+  clearCurrentChat()
+  // TODO: Ideally, this should trigger the creation of a new chat-ia cell with a new conversationId
+  // For now, we just clear the current chat
 }
 
 function handleShowTimeline(convId: string): void {
