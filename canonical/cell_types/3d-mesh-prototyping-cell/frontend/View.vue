@@ -44,6 +44,15 @@ defineOptions({ name: 'MeshPrototypingCellView' })
 
 const logger = createLogger('component:3d-mesh-prototyping-cell-threejs')
 
+interface Props {
+  cell: any // Flexible to handle initial_data, state, or direct properties
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<{
+  (e: 'update:cell', value: any): void
+}>()
+
 // Try to inject 3D context (optional - gracefully handle if not available)
 let threeContext: ReturnType<typeof use3DContext> | null = null
 let gridHelper: THREE.GridHelper | null = null
@@ -54,16 +63,6 @@ try {
 } catch (error) {
   logger.warn('Three.js context not available - viewport controls will be disabled', error)
 }
-
-interface Props {
-  cell: any // Flexible to handle initial_data, state, or direct properties
-}
-
-const props = defineProps<Props>()
-const emit = defineEmits<{
-  (e: 'update:cell', value: any): void
-}>()
-
 // Debug logs to inspect cell structure (ITERATION #4)
 console.log('[DEBUG_ITERATION_4] props.cell:', JSON.parse(JSON.stringify(props.cell)))
 if (props.cell && props.cell.initial_data) {

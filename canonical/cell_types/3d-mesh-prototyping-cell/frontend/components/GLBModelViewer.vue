@@ -17,7 +17,7 @@
  * 
  * @component
  */
-import { watch, onUnmounted, ref, onMounted } from 'vue'
+import { watch, onUnmounted, ref } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
@@ -31,6 +31,9 @@ const props = defineProps<{
   wireframe: boolean
 }>()
 
+const isLoading = ref(false)
+const loadError = ref<string | null>(null)
+
 // Inject shared Three.js context
 let scene: THREE.Scene | null = null
 let loadedModel: THREE.Group | null = null
@@ -41,10 +44,8 @@ try {
   logger.info('Successfully injected Three.js scene')
 } catch (error) {
   logger.warn('Three.js context not available - model will not be displayed', error)
+  loadError.value = 'Three.js context not available'
 }
-
-const isLoading = ref(false)
-const loadError = ref<string | null>(null)
 
 /**
  * Apply wireframe mode to all meshes in the model
