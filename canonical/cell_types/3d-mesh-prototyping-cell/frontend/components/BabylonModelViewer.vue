@@ -33,12 +33,12 @@ import {
   HemisphericLight,
   Vector3,
   SceneLoader,
-  GridMaterial,
   MeshBuilder,
   AbstractMesh,
   StandardMaterial,
   Color3
 } from '@babylonjs/core'
+import { GridMaterial } from '@babylonjs/materials/grid'
 import '@babylonjs/loaders/glTF'
 import { createLogger } from '@/utils/logger'
 
