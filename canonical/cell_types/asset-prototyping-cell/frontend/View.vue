@@ -210,11 +210,12 @@
             </div>
           </div>
 
-          <!-- 3D Viewport -->
+          <!-- 3D Viewport - Babylon.js Canvas -->
           <div class="viewport-container">
-            <div
+            <canvas
               ref="viewportRef"
               class="w-full h-96 border rounded bg-surface-elevated dark:bg-surface-dark"
+              style="display: block;"
             />
           </div>
         </div>
@@ -245,9 +246,18 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, onMounted, onBeforeUnmount, type Ref } from 'vue'
-import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
+import {
+  Engine,
+  Scene,
+  ArcRotateCamera,
+  HemisphericLight,
+  Vector3,
+  StandardMaterial,
+  Color3,
+  Mesh,
+  MeshBuilder
+} from '@babylonjs/core'
+import * as earcut from 'earcut'
 
 // Define props interface
 interface Props {
@@ -300,13 +310,12 @@ const mesh3dConfig = reactive(
   }
 )
 
-// Three.js refs
-const viewportRef: Ref<HTMLDivElement | null> = ref(null)
-let scene: THREE.Scene | null = null
-let camera: THREE.PerspectiveCamera | null = null
-let renderer: THREE.WebGLRenderer | null = null
-let controls: OrbitControls | null = null
-let currentMesh: THREE.Mesh | null = null
+// Babylon.js refs
+const viewportRef: Ref<HTMLCanvasElement | null> = ref(null)
+let engine: Engine | null = null
+let scene: Scene | null = null
+let camera: ArcRotateCamera | null = null
+let currentMesh: Mesh | null = null
 
 // Steps definition
 const steps = [
@@ -332,21 +341,21 @@ watch(() => props.cell.initial_data, (newData) => {
   }
 }, { deep: true })
 
-// Initialize Three.js when reaching step 3
+// Initialize Babylon.js when reaching step 3
 watch(currentStep, (newStep) => {
   if (newStep === 3 && viewportRef.value && !scene) {
-    initThreeJS()
+    initBabylonJS()
   }
 })
 
 onMounted(() => {
   if (currentStep.value === 3 && viewportRef.value) {
-    initThreeJS()
+    initBabylonJS()
   }
 })
 
 onBeforeUnmount(() => {
-  cleanupThreeJS()
+  cleanupBabylonJS()
 })
 
 function getStepClass(stepNumber: number): string {
@@ -434,43 +443,66 @@ function handleContinueTo3D(): void {
   updateCell()
 }
 
-function initThreeJS(): void {
+function initBabylonJS(): void {
   if (!viewportRef.value) return
 
-  // Create scene
-  scene = new THREE.Scene()
-  scene.background = new THREE.Color('var(--color-surface-elevated)')
+  try {
+    // Create engine
+    engine = new Engine(viewportRef.value, true, {
+      preserveDrawingBuffer: true,
+      stencil: true,
+    })
 
-  // Create camera
-  const width = viewportRef.value.clientWidth
-  const height = viewportRef.value.clientHeight
-  camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000)
-  camera.position.z = 100
+    // Create scene
+    scene = new Scene(engine)
+    scene.clearColor = new Color3(0.1, 0.1, 0.1).toColor4()
 
-  // Create renderer
-  renderer = new THREE.WebGLRenderer({ antialias: true })
-  renderer.setSize(width, height)
-  viewportRef.value.appendChild(renderer.domElement)
+    // Create camera
+    camera = new ArcRotateCamera(
+      'camera',
+      -Math.PI / 2,
+      Math.PI / 2.5,
+      100,
+      Vector3.Zero(),
+      scene
+    )
+    camera.attachControl(viewportRef.value, true)
+    camera.lowerRadiusLimit = 20
+    camera.upperRadiusLimit = 500
+    camera.wheelPrecision = 50
 
-  // Add controls
-  controls = new OrbitControls(camera, renderer.domElement)
-  controls.enableDamping = true
+    // Create lighting
+    const light = new HemisphericLight('light', new Vector3(0, 1, 0), scene)
+    light.intensity = 0.8
 
-  // Add lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5)
-  scene.add(ambientLight)
+    // Add additional directional light for better depth perception
+    const directionalLight = new HemisphericLight('dirLight', new Vector3(0, 1, 1), scene)
+    directionalLight.intensity = 0.5
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5)
-  directionalLight.position.set(0, 1, 1)
-  scene.add(directionalLight)
+    // Start render loop
+    engine.runRenderLoop(() => {
+      if (scene) {
+        scene.render()
+      }
+    })
 
-  // Load SVG and create mesh
-  if (generatedSvg.value) {
-    createMeshFromSVG(generatedSvg.value)
+    // Handle window resize
+    window.addEventListener('resize', handleResize)
+
+    // Load SVG and create mesh if available
+    if (generatedSvg.value) {
+      createMeshFromSVG(generatedSvg.value)
+    }
+  } catch (error) {
+    console.error('Error initializing Babylon.js:', error)
+    error.value = 'Failed to initialize 3D viewport'
   }
+}
 
-  // Start animation loop
-  animate()
+function handleResize(): void {
+  if (engine) {
+    engine.resize()
+  }
 }
 
 function createMeshFromSVG(svgString: string): void {
@@ -478,50 +510,199 @@ function createMeshFromSVG(svgString: string): void {
 
   // Remove existing mesh
   if (currentMesh) {
-    scene.remove(currentMesh)
-    currentMesh.geometry.dispose()
-    if (Array.isArray(currentMesh.material)) {
-      currentMesh.material.forEach(m => m.dispose())
-    } else {
-      currentMesh.material.dispose()
-    }
+    currentMesh.dispose()
+    currentMesh = null
   }
 
-  const loader = new SVGLoader()
-  const svgData = loader.parse(svgString)
+  try {
+    // Parse SVG string to extract path data
+    const parser = new DOMParser()
+    const svgDoc = parser.parseFromString(svgString, 'image/svg+xml')
+    const paths = svgDoc.querySelectorAll('path')
 
-  const group = new THREE.Group()
+    if (paths.length === 0) {
+      error.value = 'No paths found in SVG'
+      return
+    }
 
-  svgData.paths.forEach((path) => {
-    const shapes = SVGLoader.createShapes(path)
+    // For simplicity, we'll create a basic extrusion from the first path
+    // A more complete implementation would handle multiple paths
+    const pathElement = paths[0]
+    const pathData = pathElement.getAttribute('d')
+    
+    if (!pathData) {
+      error.value = 'Invalid SVG path data'
+      return
+    }
 
-    shapes.forEach((shape) => {
-      const geometry = new THREE.ExtrudeGeometry(shape, {
+    // Parse SVG path commands into polygon points
+    const points = parseSVGPath(pathData)
+    
+    if (points.length < 3) {
+      error.value = 'Insufficient points for mesh creation'
+      return
+    }
+
+    // Create extruded mesh using Babylon.js ExtrudePolygon
+    const polygon = MeshBuilder.ExtrudePolygon(
+      'svgMesh',
+      {
+        shape: points,
         depth: mesh3dConfig.depth,
-        bevelEnabled: mesh3dConfig.bevelEnabled,
-        bevelThickness: mesh3dConfig.bevelThickness,
-        bevelSize: mesh3dConfig.bevelSize,
-        bevelSegments: mesh3dConfig.bevelSegments
-      })
+        sideOrientation: Mesh.DOUBLESIDE,
+        // Note: Babylon.js doesn't have built-in bevel like Three.js
+        // For production, would need custom bevel implementation
+      },
+      scene,
+      earcut
+    )
 
-      const material = new THREE.MeshStandardMaterial({
-        color: 0x00ff00, // Will need theming in future
-        roughness: 0.5,
-        metalness: 0.3
-      })
+    // Apply material
+    const material = new StandardMaterial('svgMaterial', scene)
+    material.diffuseColor = new Color3(0, 1, 0) // Green color
+    material.specularColor = new Color3(0.5, 0.5, 0.5)
+    polygon.material = material
 
-      const mesh = new THREE.Mesh(geometry, material)
-      group.add(mesh)
-    })
+    // Center the mesh
+    const boundingInfo = polygon.getBoundingInfo()
+    const center = boundingInfo.boundingBox.centerWorld
+    polygon.position = center.negate()
+
+    currentMesh = polygon
+  } catch (err) {
+    console.error('Error creating mesh from SVG:', err)
+    error.value = `Failed to create 3D mesh: ${err instanceof Error ? err.message : 'Unknown error'}`
+  }
+}
+
+/**
+ * Parse SVG path data string into Vector3 points for Babylon.js
+ * This is a simplified parser - production would need a more robust implementation
+ */
+function parseSVGPath(pathData: string): Vector3[] {
+  const points: Vector3[] = []
+  const commands = pathData.match(/[MLHVCSQTAZmlhvcsqtaz][^MLHVCSQTAZmlhvcsqtaz]*/g) || []
+  
+  let currentX = 0
+  let currentY = 0
+  let startX = 0
+  let startY = 0
+
+  commands.forEach(cmd => {
+    const type = cmd[0]
+    const values = cmd.slice(1).trim().split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n))
+    
+    switch (type) {
+      case 'M': // Move to absolute
+        if (values.length >= 2) {
+          currentX = values[0]
+          currentY = values[1]
+          startX = currentX
+          startY = currentY
+          points.push(new Vector3(currentX, currentY, 0))
+        }
+        break
+      case 'm': // Move to relative
+        if (values.length >= 2) {
+          currentX += values[0]
+          currentY += values[1]
+          startX = currentX
+          startY = currentY
+          points.push(new Vector3(currentX, currentY, 0))
+        }
+        break
+      case 'L': // Line to absolute
+        for (let i = 0; i < values.length; i += 2) {
+          if (i + 1 < values.length) {
+            currentX = values[i]
+            currentY = values[i + 1]
+            points.push(new Vector3(currentX, currentY, 0))
+          }
+        }
+        break
+      case 'l': // Line to relative
+        for (let i = 0; i < values.length; i += 2) {
+          if (i + 1 < values.length) {
+            currentX += values[i]
+            currentY += values[i + 1]
+            points.push(new Vector3(currentX, currentY, 0))
+          }
+        }
+        break
+      case 'H': // Horizontal line absolute
+        values.forEach(x => {
+          currentX = x
+          points.push(new Vector3(currentX, currentY, 0))
+        })
+        break
+      case 'h': // Horizontal line relative
+        values.forEach(dx => {
+          currentX += dx
+          points.push(new Vector3(currentX, currentY, 0))
+        })
+        break
+      case 'V': // Vertical line absolute
+        values.forEach(y => {
+          currentY = y
+          points.push(new Vector3(currentX, currentY, 0))
+        })
+        break
+      case 'v': // Vertical line relative
+        values.forEach(dy => {
+          currentY += dy
+          points.push(new Vector3(currentX, currentY, 0))
+        })
+        break
+      case 'Z':
+      case 'z': // Close path
+        if (currentX !== startX || currentY !== startY) {
+          points.push(new Vector3(startX, startY, 0))
+        }
+        break
+      // For curves (C, Q, etc.), we'd need to sample points along the curve
+      // Simplified version treats them as line segments
+      case 'C': // Cubic bezier absolute
+        if (values.length >= 6) {
+          // Just take the end point for simplicity
+          currentX = values[4]
+          currentY = values[5]
+          points.push(new Vector3(currentX, currentY, 0))
+        }
+        break
+      case 'c': // Cubic bezier relative
+        if (values.length >= 6) {
+          currentX += values[4]
+          currentY += values[5]
+          points.push(new Vector3(currentX, currentY, 0))
+        }
+        break
+    }
   })
 
-  // Center the group
-  const box = new THREE.Box3().setFromObject(group)
-  const center = box.getCenter(new THREE.Vector3())
-  group.position.sub(center)
+  // Normalize points to reasonable scale (SVG coordinates can be large)
+  if (points.length > 0) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    points.forEach(p => {
+      minX = Math.min(minX, p.x)
+      minY = Math.min(minY, p.y)
+      maxX = Math.max(maxX, p.x)
+      maxY = Math.max(maxY, p.y)
+    })
+    
+    const width = maxX - minX
+    const height = maxY - minY
+    const scale = 10 / Math.max(width, height) // Normalize to ~10 units
+    const centerX = (minX + maxX) / 2
+    const centerY = (minY + maxY) / 2
+    
+    return points.map(p => new Vector3(
+      (p.x - centerX) * scale,
+      (p.y - centerY) * scale,
+      0
+    ))
+  }
 
-  scene.add(group)
-  currentMesh = group as any
+  return points
 }
 
 function handleConfigChange(): void {
@@ -531,24 +712,25 @@ function handleConfigChange(): void {
   updateCell()
 }
 
-function animate(): void {
-  if (!renderer || !scene || !camera || !controls) return
-
-  requestAnimationFrame(animate)
-  controls.update()
-  renderer.render(scene, camera)
-}
-
-function cleanupThreeJS(): void {
-  if (renderer && viewportRef.value) {
-    viewportRef.value.removeChild(renderer.domElement)
-    renderer.dispose()
+function cleanupBabylonJS(): void {
+  window.removeEventListener('resize', handleResize)
+  
+  if (currentMesh) {
+    currentMesh.dispose()
+    currentMesh = null
   }
-  scene = null
+  
+  if (scene) {
+    scene.dispose()
+    scene = null
+  }
+  
+  if (engine) {
+    engine.dispose()
+    engine = null
+  }
+  
   camera = null
-  renderer = null
-  controls = null
-  currentMesh = null
 }
 
 function handleExport(): void {
