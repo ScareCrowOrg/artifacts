@@ -19,7 +19,7 @@ from pathlib import Path
 scripts_path = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(scripts_path))
 
-from main import execute_cell, generate_3d_mesh_from_image, _generate_mock_glb_mesh
+from main import execute_cell, generate_3d_mesh_from_image, _generate_mock_glb_mesh, handle_cloud_api_generation
 
 
 class TestExecuteCell:
@@ -322,3 +322,128 @@ async def test_integration_full_pipeline():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestCloudAPIGeneration:
+    """Tests for cloud-api generation mode with Stable Fast 3D."""
+    
+    @pytest.mark.asyncio
+    @patch('stable_fast_3d_client.create_client')
+    async def test_cloud_api_success(self, mock_create_client):
+        """Test successful cloud API generation."""
+        # Setup mock client
+        mock_client = MagicMock()
+        mock_client.generate_mesh.return_value = {
+            "success": True,
+            "mesh_data": "data:model/gltf-binary;base64,MOCK_GLB_DATA",
+            "metadata": {
+                "fileSizeBytes": 12345,
+                "modelType": "stable_fast_3d"
+            },
+            "error": None
+        }
+        mock_create_client.return_value = mock_client
+        
+        # Test data
+        cell_data = {
+            "inputImage": "data:image/png;base64,iVBORw0KGgo...",
+            "reconstructionParams": {
+                "textureResolution": 1024,
+                "foregroundRatio": 0.85
+            }
+        }
+        
+        # Execute
+        result = await handle_cloud_api_generation(cell_data)
+        
+        # Verify
+        assert result["success"] is True
+        assert result["mode"] == "cloud-api"
+        assert result["mesh_data"] is not None
+        assert mock_client.generate_mesh.called
+    
+    @pytest.mark.asyncio
+    @patch('stable_fast_3d_client.create_client')
+    async def test_cloud_api_no_api_key(self, mock_create_client):
+        """Test cloud API generation without API key."""
+        # Setup mock to return None (no API key)
+        mock_create_client.return_value = None
+        
+        cell_data = {
+            "inputImage": "data:image/png;base64,iVBORw0KGgo..."
+        }
+        
+        result = await handle_cloud_api_generation(cell_data)
+        
+        assert result["success"] is False
+        assert "API key not configured" in result["error"]
+    
+    @pytest.mark.asyncio
+    @patch('stable_fast_3d_client.create_client')
+    async def test_cloud_api_no_input_image(self, mock_create_client):
+        """Test cloud API generation without input image."""
+        # Setup mock client
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+        
+        cell_data = {}  # No input image
+        
+        result = await handle_cloud_api_generation(cell_data)
+        
+        assert result["success"] is False
+        assert "No input image" in result["error"]
+    
+    @pytest.mark.asyncio
+    @patch('stable_fast_3d_client.create_client')
+    async def test_cloud_api_generation_failure(self, mock_create_client):
+        """Test cloud API generation with API failure."""
+        # Setup mock client to return error
+        mock_client = MagicMock()
+        mock_client.generate_mesh.return_value = {
+            "success": False,
+            "error": "API rate limit exceeded",
+            "mesh_data": None,
+            "metadata": None
+        }
+        mock_create_client.return_value = mock_client
+        
+        cell_data = {
+            "inputImage": "data:image/png;base64,iVBORw0KGgo..."
+        }
+        
+        result = await handle_cloud_api_generation(cell_data)
+        
+        assert result["success"] is False
+        assert "rate limit" in result["error"].lower()
+    
+    @pytest.mark.asyncio
+    @patch('stable_fast_3d_client.create_client')
+    async def test_cloud_api_with_custom_params(self, mock_create_client):
+        """Test cloud API with custom reconstruction parameters."""
+        # Setup mock client
+        mock_client = MagicMock()
+        mock_client.generate_mesh.return_value = {
+            "success": True,
+            "mesh_data": "data:model/gltf-binary;base64,MOCK_DATA",
+            "metadata": {"fileSizeBytes": 5000},
+            "error": None
+        }
+        mock_create_client.return_value = mock_client
+        
+        cell_data = {
+            "inputImage": "data:image/png;base64,test",
+            "reconstructionParams": {
+                "textureResolution": 2048,
+                "foregroundRatio": 0.9
+            }
+        }
+        
+        result = await handle_cloud_api_generation(cell_data)
+        
+        assert result["success"] is True
+        
+        # Verify custom params were passed
+        call_kwargs = mock_client.generate_mesh.call_args[1]
+        assert call_kwargs["texture_resolution"] == 2048
+        assert call_kwargs["foreground_ratio"] == 0.9
+
