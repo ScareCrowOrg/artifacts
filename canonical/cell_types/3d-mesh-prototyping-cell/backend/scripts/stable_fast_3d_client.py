@@ -289,41 +289,29 @@ def create_client(
     """
     Factory function to create Stable Fast 3D client with configuration.
     
-    Attempts to load configuration from environment if not provided.
+    This function attempts to load configuration from environment variables
+    or the backend config module if available. For most use cases within
+    the cell execution context, prefer importing and using the client directly.
     
     Args:
-        api_key: API key (optional, loads from config if not provided)
+        api_key: API key (optional, loads from environment if not provided)
         api_url: API endpoint URL (optional, uses default if not provided)
         timeout: Request timeout (optional, uses default if not provided)
     
     Returns:
         StableFast3DClient instance if API key is available, None otherwise
     """
-    # Try to import config for automatic configuration
-    try:
-        import sys
-        from pathlib import Path
-        
-        # Add backend app to path for config import
-        backend_app_path = Path(__file__).parent.parent.parent.parent.parent.parent / "backend" / "app"
-        if str(backend_app_path) not in sys.path:
-            sys.path.insert(0, str(backend_app_path))
-        
-        from config import STABLE_FAST_3D_API_KEY, STABLE_FAST_3D_URL, STABLE_FAST_3D_TIMEOUT
-        
-        api_key = api_key or STABLE_FAST_3D_API_KEY
-        api_url = api_url or STABLE_FAST_3D_URL
-        timeout = timeout or STABLE_FAST_3D_TIMEOUT
-    except ImportError:
-        logger.warning("Could not import config. Using provided parameters or defaults.")
+    # Try to load from environment variables first
+    import os
+    
+    api_key = api_key or os.getenv("STABLE_FAST_3D_API_KEY")
+    api_url = api_url or os.getenv("STABLE_FAST_3D_URL", "https://api.stability.ai/v1/generation/stable-fast-3d")
+    timeout_str = os.getenv("STABLE_FAST_3D_TIMEOUT", "60")
+    timeout = timeout or int(timeout_str)
     
     # Check if API key is available
     if not api_key:
         logger.warning("No Stable Fast 3D API key provided. Cloud-API mode will not be available.")
         return None
-    
-    # Use defaults if not specified
-    api_url = api_url or "https://api.stability.ai/v1/generation/stable-fast-3d"
-    timeout = timeout or 60
     
     return StableFast3DClient(api_key=api_key, api_url=api_url, timeout=timeout)

@@ -136,6 +136,8 @@ async def handle_cloud_api_generation(cell_data: Dict[str, Any]) -> Dict[str, An
     logger.info("Cloud API generation requested (Stable Fast 3D)")
     
     # Import the Stable Fast 3D client
+    # Note: Import is inside function because stable_fast_3d_client is a local module
+    # in the same directory. This allows graceful handling if the module is unavailable.
     try:
         from stable_fast_3d_client import create_client
     except ImportError:
