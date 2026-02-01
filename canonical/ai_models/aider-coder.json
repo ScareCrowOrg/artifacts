@@ -1,0 +1,33 @@
+{
+  "id": "aider-coder-model",
+  "name": "Scare Aider",
+  "description": "Aider integration via aider-worker service. Provides autonomous code modification and file editing capabilities with atomic execution through ephemeral sessions.",
+  "type": "cloud",
+  "provider": "aider",
+  "modelId": "aider-coder",
+  "apiKey": null,
+  "version": "1.0.0",
+  "active": true,
+  "configuration": {
+    "timeout": 300,
+    "requiresApiKey": false,
+    "temperature": 0.7,
+    "max_tokens": 8192
+  },
+  "metadata": {
+    "contexto": "Session-aware with git-based change tracking",
+    "capabilities": [
+      "Code modification",
+      "File editing",
+      "Git-based versioning",
+      "Multi-file operations"
+    ],
+    "execution_mode": "ephemeral",
+    "specialidade": "Autonomous code modification and file editing with git tracking",
+    "backend_service": "aider-worker",
+    "endpoint": "/sessions/ephemeral/{session_id}/execute",
+    "stateless": true
+  },
+  "createdAt": "2026-02-01T00:00:00Z",
+  "updatedAt": "2026-02-01T00:00:00Z"
+}
