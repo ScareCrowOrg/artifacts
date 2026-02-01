@@ -288,30 +288,48 @@ def create_client(
 ) -> Optional[StableFast3DClient]:
     """
     Factory function to create Stable Fast 3D client with configuration.
-    
-    This function attempts to load configuration from environment variables
-    or the backend config module if available. For most use cases within
-    the cell execution context, prefer importing and using the client directly.
-    
+
+    This function attempts to load configuration from the backend config module first,
+    then falls back to environment variables. For most use cases within the cell
+    execution context, rely on the cell's main.py to pass the config.
+
     Args:
-        api_key: API key (optional, loads from environment if not provided)
+        api_key: API key (optional, loads from config/environment if not provided)
         api_url: API endpoint URL (optional, uses default if not provided)
         timeout: Request timeout (optional, uses default if not provided)
-    
+
     Returns:
         StableFast3DClient instance if API key is available, None otherwise
     """
-    # Try to load from environment variables first
     import os
-    
-    api_key = api_key or os.getenv("STABLE_FAST_3D_API_KEY")
-    api_url = api_url or os.getenv("STABLE_FAST_3D_URL", "https://api.stability.ai/v1/generation/stable-fast-3d")
-    timeout_str = os.getenv("STABLE_FAST_3D_TIMEOUT", "60")
-    timeout = timeout or int(timeout_str)
-    
+
+    # Try to get API key from provided argument first, then from app config, then from environment
+    if not api_key:
+        try:
+            from app.config import STABLE_FAST_3D_API_KEY as config_api_key
+            api_key = config_api_key
+        except ImportError:
+            api_key = os.getenv("STABLE_FAST_3D_API_KEY")
+
+    # Get other config values
+    if not api_url:
+        try:
+            from app.config import STABLE_FAST_3D_URL as config_url
+            api_url = config_url
+        except ImportError:
+            api_url = os.getenv("STABLE_FAST_3D_URL", "https://api.stability.ai/v1/generation/stable-fast-3d")
+
+    if not timeout:
+        try:
+            from app.config import STABLE_FAST_3D_TIMEOUT as config_timeout
+            timeout = config_timeout
+        except ImportError:
+            timeout_str = os.getenv("STABLE_FAST_3D_TIMEOUT", "60")
+            timeout = int(timeout_str)
+
     # Check if API key is available
     if not api_key:
         logger.warning("No Stable Fast 3D API key provided. Cloud-API mode will not be available.")
         return None
-    
+
     return StableFast3DClient(api_key=api_key, api_url=api_url, timeout=timeout)

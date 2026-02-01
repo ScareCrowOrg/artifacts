@@ -18,8 +18,22 @@ Architecture:
 
 from typing import Dict, Any
 import logging
+import os
+import sys
+
+# Add backend to path for importing config module
+backend_path = os.path.join(os.path.dirname(__file__), '../../../backend')
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
 
 from job_queue import queue_3d_generation_job, get_job_status
+
+# Import configuration from backend (follows project standards)
+try:
+    from app.config import STABLE_FAST_3D_API_KEY
+except ImportError:
+    # Fallback if config is not available
+    STABLE_FAST_3D_API_KEY = os.getenv("STABLE_FAST_3D_API_KEY")
 
 logger = logging.getLogger(__name__)
 
@@ -123,42 +137,55 @@ async def route_generation_request(cell_data: Dict[str, Any], mode: str) -> Dict
 async def handle_cloud_api_generation(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle 3D generation via external cloud API (Stable Fast 3D).
-    
+
     Integrates with Stability AI's Stable Fast 3D API to generate 3D meshes
     from single images. Requires API key configuration.
-    
+
     Args:
         cell_data: Cell instance data with input image and parameters
-    
+
     Returns:
         Dict with API generation result (success/error, mesh data, metadata)
     """
+    import sys
+    import os
+
     logger.info("Cloud API generation requested (Stable Fast 3D)")
-    
+
     # Import the Stable Fast 3D client
     # Note: Import is inside function because stable_fast_3d_client is a local module
     # in the same directory. This allows graceful handling if the module is unavailable.
+    # For ephemeral cell execution, we need to ensure the scripts directory is in sys.path
     try:
+        # Ensure the scripts directory is in sys.path for ephemeral execution
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+
         from stable_fast_3d_client import create_client
-    except ImportError:
-        logger.error("Failed to import Stable Fast 3D client")
+    except ImportError as e:
+        error_msg = "Failed to import Stable Fast 3D client"
+        logger.error(f"{error_msg}: {str(e)}")
         return {
             "success": False,
-            "error": "Stable Fast 3D client module not available",
+            "error": error_msg,
             "mesh_data": None,
-            "metadata": None
+            "metadata": None,
+            "mode": "cloud-api"
         }
-    
+
     # Create client (will load config from environment)
     client = create_client()
-    
+
     if client is None:
-        logger.error("Stable Fast 3D API key not configured")
+        error_msg = "Stable Fast 3D API key not configured. Please set STABLE_FAST_3D_API_KEY in your environment."
+        logger.error(error_msg)
         return {
             "success": False,
-            "error": "Stable Fast 3D API key not configured. Please set STABLE_FAST_3D_API_KEY in your environment.",
+            "error": error_msg,
             "mesh_data": None,
-            "metadata": None
+            "metadata": None,
+            "mode": "cloud-api"
         }
     
     # Extract input image

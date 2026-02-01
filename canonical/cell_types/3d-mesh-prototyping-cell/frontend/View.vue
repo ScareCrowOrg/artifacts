@@ -301,6 +301,8 @@ const generate3DMesh = async () => {
   localError.value = null
 
   try {
+    logger.info(`Sending generation request with mode: ${generationMode.value}`)
+
     const response = await apiFetch('/api/cells/execute-ephemeral', {
       method: 'POST',
       headers: {
@@ -311,8 +313,8 @@ const generate3DMesh = async () => {
         input_data: {
           generationMode: generationMode.value,
           inputImage: inputImage.value,
-          reconstructionParams: props.cell?.initial_data?.reconstructionParams || 
-                                props.cell?.state?.reconstructionParams || 
+          reconstructionParams: props.cell?.initial_data?.reconstructionParams ||
+                                props.cell?.state?.reconstructionParams ||
                                 props.cell?.reconstructionParams || {
                                   targetFaces: 10000,
                                   enableDracoCompression: true,
@@ -330,19 +332,38 @@ const generate3DMesh = async () => {
     const result = await response.json()
     logger.debug('API response:', result)
 
-    // Extract job_id from nested API response
+    // Extract values from response (prioritize nested result.result which is the actual cell result)
+    const success = result.result?.success !== undefined ? result.result.success : result.success
     const jobIdValue = result.result?.job_id || result.job_id
-    
-    if (result.success && jobIdValue) {
-      logger.info(`Job queued: ${jobIdValue}`)
-      
-      // Start polling using composable
-      startPolling(jobIdValue, 2000)
-      
-    } else {
-      const errorMsg = result.error || result.result?.error || 'Failed to queue 3D generation job'
+    const meshData = result.result?.mesh_data || result.mesh_data
+    const metadata = result.result?.metadata || result.metadata
+    const errorMsg = result.result?.error || result.error || 'Unknown error'
+
+    if (!success) {
+      // Backend returned explicit failure
+      logger.error(`Generation failed: ${errorMsg}`)
       localError.value = errorMsg
-      logger.error('Job queueing failed', errorMsg)
+      localIsGenerating.value = false
+
+    } else if (jobIdValue) {
+      // Async job (local-gpu mode) - start polling
+      logger.info(`Job queued: ${jobIdValue}`)
+      startPolling(jobIdValue, 2000)
+
+    } else if (meshData) {
+      // Synchronous response (cloud-api mode) - load mesh directly
+      logger.info('Mesh generated successfully (cloud-api)')
+      localGeneratedMesh.value = meshData
+      localError.value = null
+      localIsGenerating.value = false
+      if (metadata) {
+        logger.debug('Mesh metadata:', metadata)
+      }
+    } else {
+      // Success but neither job_id nor mesh_data - unexpected
+      const unexpectedMsg = 'Unexpected response: no job ID or mesh data received'
+      logger.error(unexpectedMsg)
+      localError.value = unexpectedMsg
       localIsGenerating.value = false
     }
   } catch (err: any) {
