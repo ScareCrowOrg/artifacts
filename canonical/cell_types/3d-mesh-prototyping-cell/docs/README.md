@@ -28,6 +28,10 @@ The **3D Mesh Prototyping Cell** is an advanced interactive cell that enables th
 
 ### Core Capabilities
 - **Single Image-to-3D Reconstruction**: Upload a PNG image and generate a complete 3D mesh
+- **Multiple Generation Modes**:
+  - **Cloud-API**: Cloud-based generation using Stability AI's Stable Fast 3D API (no local GPU required)
+  - **Local-GPU**: Redis-based job queueing for Windows Worker GPU processing
+  - **Manual-Upload**: Direct GLB file upload without processing
 - **Real-Time Three.js Preview**: Interactive 3D viewport with orbit controls
 - **Optimized GLB Export**: Draco-compressed meshes targeting <5MB file size
 - **Viewport Controls**:
@@ -118,14 +122,34 @@ The **3D Mesh Prototyping Cell** is an advanced interactive cell that enables th
 async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]
 ```
 
-**Pipeline Architecture** (Production):
+**Generation Modes**:
+
+1. **Cloud-API Mode** (Stability AI Stable Fast 3D)
+   - Uses external cloud API for 3D generation
+   - No local GPU required
+   - Requires API key configuration
+   - Fast generation (1-5 seconds typical)
+   - See [STABLE_FAST_3D_INTEGRATION.md](./STABLE_FAST_3D_INTEGRATION.md) for setup
+
+2. **Local-GPU Mode** (Windows Worker)
+   - Redis-based job queueing
+   - GPU processing on Windows worker
+   - Async job status polling
+   - Ideal for local/on-premise deployments
+
+3. **Manual-Upload Mode**
+   - Direct GLB file upload
+   - No processing required
+   - Useful for pre-generated assets
+
+**Pipeline Architecture** (Local-GPU/Cloud-API):
 1. **Image Preprocessing**
    - Resize to model input size
    - Normalize pixel values
    - Format conversion
 
 2. **AI Model Inference**
-   - Stable Fast 3D (preferred, <1s on RTX 4070)
+   - Stable Fast 3D (cloud or local)
    - Alternative: InstantMesh
    - Single image → 3D mesh reconstruction
 
@@ -138,8 +162,6 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]
    - GLTF binary format
    - Draco compression (level 7)
    - Size optimization (<5MB target)
-
-**Current Status**: MVP implementation returns mock GLB cube for testing. Real 3D reconstruction requires GPU infrastructure setup.
 
 ### Cell Type Definition (`type.json`)
 
@@ -191,34 +213,42 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]
 {
   "cell_type": "3d-mesh-prototyping-cell",
   "input_data": {
+    "generationMode": "cloud-api",  // "cloud-api", "local-gpu", or "manual-upload"
     "inputImage": "data:image/png;base64,iVBORw0KGgo...",
     "reconstructionParams": {
-      "targetFaces": 50000,
-      "enableDracoCompression": true,
-      "compressionLevel": 7,
-      "targetFileSizeMB": 5
+      "targetFaces": 50000,           // For local-gpu mode
+      "enableDracoCompression": true, // For local-gpu mode
+      "compressionLevel": 7,          // For local-gpu mode
+      "targetFileSizeMB": 5,          // For local-gpu mode
+      "textureResolution": 1024,      // For cloud-api mode
+      "foregroundRatio": 0.85         // For cloud-api mode
     }
   }
 }
 ```
 
-**Response**:
+**Response (Cloud-API Mode)**:
 ```json
 {
   "success": true,
-  "cell_type": "3d-mesh-prototyping-cell",
-  "result": {
-    "success": true,
-    "generatedMesh": "data:model/gltf-binary;base64,...",
-    "meshMetadata": {
-      "vertices": 25341,
-      "faces": 50000,
-      "fileSizeBytes": 456789,
-      "compressionRatio": 0.23,
-      "generationTimeSeconds": 18.5
-    }
-  },
-  "message": "Ephemeral cell executed successfully"
+  "mode": "cloud-api",
+  "message": "3D mesh generated successfully via Stable Fast 3D API",
+  "mesh_data": "data:model/gltf-binary;base64,...",
+  "metadata": {
+    "fileSizeBytes": 456789,
+    "modelType": "stable_fast_3d",
+    "generationSource": "stability_ai_api"
+  }
+}
+```
+
+**Response (Local-GPU Mode)**:
+```json
+{
+  "success": true,
+  "job_id": "3d-mesh-abc123def456",
+  "mode": "local-gpu",
+  "message": "3D mesh generation job queued successfully"
 }
 ```
 
@@ -291,23 +321,35 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]
 
 ### Automated Tests
 
-**Backend Tests**: `backend/tests/test_3d_mesh_prototyping.py`
-```python
-# Test execute_cell function
-# Test mock mesh generation
-# Test error handling
+**Backend Tests**:
+```bash
+# Test Stable Fast 3D client (24 tests)
+cd backend
+poetry run pytest ../artifacts/canonical/cell_types/3d-mesh-prototyping-cell/backend/tests/test_stable_fast_3d_client.py -v
+
+# Test cloud-api integration (5 tests)
+poetry run pytest ../artifacts/canonical/cell_types/3d-mesh-prototyping-cell/backend/tests/test_main.py::TestCloudAPIGeneration -v
+
+# All tests (29 tests)
+poetry run pytest ../artifacts/canonical/cell_types/3d-mesh-prototyping-cell/backend/tests/ -v
 ```
 
-**Frontend Tests**: `frontend/tests/View.spec.ts`
-```typescript
-// Test component rendering
-// Test file upload
-// Test Three.js initialization
-// Test viewport controls
-// Test API integration
-```
+**Test Coverage**:
+- Client initialization and configuration
+- Image data encoding/decoding
+- API request formatting and authentication
+- Response parsing (success and error scenarios)
+- Error handling (network, timeout, API errors)
+- Integration with main.py handlers
 
 **Coverage Target**: 90% (per RULESET.md §3.1)
+
+## Related Documentation
+
+- **[Stable Fast 3D Integration Guide](./STABLE_FAST_3D_INTEGRATION.md)** - Comprehensive setup and usage guide
+- **[Babylon.js Migration](./BABYLON_MIGRATION.md)** - Migration details from TresJS to Babylon.js
+- **Cell Types Documentation**: `docs/official/backend/cell-types/`
+- **Infrastructure Setup**: `docs/official/infrastructure/`
 
 ## Performance
 
