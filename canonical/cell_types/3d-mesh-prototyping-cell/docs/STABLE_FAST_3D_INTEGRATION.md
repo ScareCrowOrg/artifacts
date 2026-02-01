@@ -1,3 +1,19 @@
+---
+processed: true
+processed_date: 2026-02-01
+updated_docs:
+  - docs/official/backend/ai-integration/stable-fast-3d-cloud-api.md
+themes:
+  - ai-integration
+  - 3d-generation
+  - setup-guide
+  - api-documentation
+modules:
+  - backend
+  - ai-integration
+code_verified: true
+dead_docs_found: false
+---
 # Stable Fast 3D API Integration Guide
 
 ## Overview
