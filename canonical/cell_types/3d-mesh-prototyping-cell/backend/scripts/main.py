@@ -122,42 +122,77 @@ async def route_generation_request(cell_data: Dict[str, Any], mode: str) -> Dict
 
 async def handle_cloud_api_generation(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Handle 3D generation via external cloud API.
+    Handle 3D generation via external cloud API (Stable Fast 3D).
     
-    This is a placeholder for future cloud API integration.
-    Currently returns mock data to demonstrate the architecture.
+    Integrates with Stability AI's Stable Fast 3D API to generate 3D meshes
+    from single images. Requires API key configuration.
     
     Args:
         cell_data: Cell instance data with input image and parameters
     
     Returns:
-        Dict with mock API response
+        Dict with API generation result (success/error, mesh data, metadata)
     """
-    logger.info("Cloud API generation requested (placeholder)")
+    logger.info("Cloud API generation requested (Stable Fast 3D)")
     
-    # Placeholder: Simulate API call
-    # In production, this would:
-    # 1. Send request to external API (e.g., Meshy, Rodin, etc.)
-    # 2. Poll for completion
-    # 3. Return generated mesh
+    # Import the Stable Fast 3D client
+    try:
+        from stable_fast_3d_client import create_client
+    except ImportError:
+        logger.error("Failed to import Stable Fast 3D client")
+        return {
+            "success": False,
+            "error": "Stable Fast 3D client module not available",
+            "mesh_data": None,
+            "metadata": None
+        }
     
+    # Create client (will load config from environment)
+    client = create_client()
+    
+    if client is None:
+        logger.error("Stable Fast 3D API key not configured")
+        return {
+            "success": False,
+            "error": "Stable Fast 3D API key not configured. Please set STABLE_FAST_3D_API_KEY in your environment.",
+            "mesh_data": None,
+            "metadata": None
+        }
+    
+    # Extract input image
+    input_image = cell_data.get('inputImage')
+    if not input_image:
+        logger.error("No input image provided")
+        return {
+            "success": False,
+            "error": "No input image provided for 3D generation",
+            "mesh_data": None,
+            "metadata": None
+        }
+    
+    # Extract reconstruction parameters
     reconstruction_params = cell_data.get('reconstructionParams', {})
+    texture_resolution = reconstruction_params.get('textureResolution', 1024)
+    foreground_ratio = reconstruction_params.get('foregroundRatio', 0.85)
     
-    logger.info(f"Simulating cloud API call with params: {reconstruction_params}")
+    logger.info(f"Generating 3D mesh with params: texture_resolution={texture_resolution}, foreground_ratio={foreground_ratio}")
     
-    # Generate mock result
-    mock_result = _generate_mock_glb_mesh(
-        target_faces=reconstruction_params.get('targetFaces', 50000),
-        enable_draco=reconstruction_params.get('enableDracoCompression', True)
+    # Call Stable Fast 3D API
+    result = client.generate_mesh(
+        image_data=input_image,
+        texture_resolution=texture_resolution,
+        foreground_ratio=foreground_ratio
     )
     
-    return {
-        "success": True,
-        "mode": "cloud-api",
-        "message": "Cloud API generation completed (mock)",
-        "mesh_data": mock_result.get("mesh_data"),
-        "metadata": mock_result.get("metadata")
-    }
+    # Add mode to result
+    if result.get("success"):
+        result["mode"] = "cloud-api"
+        result["message"] = "3D mesh generated successfully via Stable Fast 3D API"
+        logger.info("Cloud API generation completed successfully")
+    else:
+        logger.error(f"Cloud API generation failed: {result.get('error')}")
+    
+    return result
 
 
 async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, Any]:
