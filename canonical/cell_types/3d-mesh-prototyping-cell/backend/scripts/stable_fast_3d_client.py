@@ -85,37 +85,51 @@ class StableFast3DClient:
             ValueError: If image_data is invalid format
         """
         try:
-            logger.info("Starting 3D mesh generation via Stable Fast 3D API")
-            
+            logger.info("Starting 3D mesh generation via Stable Fast 3D API (v2beta)")
+
             # Convert base64 data URL to binary image data
             image_bytes = self._decode_image_data(image_data)
-            
-            # Prepare multipart form data
+
+            # Prepare multipart form data for v2beta endpoint
+            # v2beta requires image with specific key
             files = {
                 "image": ("image.png", io.BytesIO(image_bytes), "image/png"),
             }
-            
-            data = {
-                "texture_resolution": str(texture_resolution),
-                "foreground_ratio": str(foreground_ratio),
-            }
-            
+
+            # v2beta parameters (optional for now - v2beta may have different param support)
+            data = {}
+            if texture_resolution:
+                data["texture_resolution"] = str(texture_resolution)
+            if foreground_ratio:
+                data["foreground_ratio"] = str(foreground_ratio)
+
             # Prepare headers with authentication
+            # v2beta uses lowercase 'authorization' header
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
+                "authorization": f"Bearer {self.api_key}",
             }
-            
+
             # Make API request
             logger.debug(f"Sending request to {self.api_url}")
             logger.debug(f"Parameters: texture_resolution={texture_resolution}, foreground_ratio={foreground_ratio}")
-            
+            logger.debug(f"Request headers: {list(headers.keys())}")
+            logger.debug(f"Request data keys: {list(data.keys())}")
+
             with httpx.Client(timeout=self.timeout) as client:
                 response = client.post(
                     self.api_url,
                     headers=headers,
                     files=files,
-                    data=data
+                    data=data if data else None
                 )
+
+                # Log response details for debugging
+                logger.debug(f"Response status: {response.status_code}")
+                if response.status_code != 200:
+                    try:
+                        logger.debug(f"Response body: {response.text[:500]}")
+                    except Exception:
+                        pass
             
             # Handle response
             if response.status_code == 200:
@@ -238,38 +252,46 @@ class StableFast3DClient:
     def _handle_error_response(self, response: httpx.Response) -> Dict[str, Any]:
         """
         Handle error API response.
-        
+
         Args:
             response: HTTP response object
-        
+
         Returns:
             Dict with error details
         """
         status_code = response.status_code
-        
+
         # Try to parse error message from response
+        error_message = "Unknown error"
         try:
             error_data = response.json()
-            error_message = error_data.get("message", error_data.get("error", "Unknown error"))
+            error_message = error_data.get("message", error_data.get("error", error_data.get("detail", "Unknown error")))
         except Exception:
             error_message = response.text or "No error message provided"
-        
+
         logger.error(f"API error ({status_code}): {error_message}")
-        
+
+        # Log full response for 400 errors (helps with debugging v2beta compatibility)
+        if status_code == 400:
+            logger.error(f"Full response body: {response.text}")
+
         # Provide user-friendly error messages based on status code
-        if status_code == 401:
+        if status_code == 400:
+            # Provide more detailed debugging info for v2beta compatibility
+            user_message = f"Bad request from v2beta endpoint. Details: {error_message[:200]}"
+        elif status_code == 401:
             user_message = "Authentication failed. Please check your API key."
+        elif status_code == 402:
+            user_message = "Insufficient credits. Please check your Stability AI account balance."
         elif status_code == 403:
             user_message = "Access forbidden. Your API key may not have permission for this service."
         elif status_code == 429:
             user_message = "Rate limit exceeded. Please try again later."
-        elif status_code == 400:
-            user_message = f"Bad request: {error_message}"
         elif status_code >= 500:
             user_message = "Stability AI service error. Please try again later."
         else:
             user_message = f"API error ({status_code}): {error_message}"
-        
+
         return {
             "success": False,
             "error": user_message,

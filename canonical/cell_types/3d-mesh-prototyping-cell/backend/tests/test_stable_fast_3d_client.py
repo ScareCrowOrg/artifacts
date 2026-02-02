@@ -144,8 +144,8 @@ class TestGenerateMesh:
         mock_client_instance.post.assert_called_once()
         call_args = mock_client_instance.post.call_args
         assert call_args[0][0] == "https://api.stability.ai/v2beta/3d/stable-fast-3d"
-        assert "Authorization" in call_args[1]["headers"]
-        assert call_args[1]["headers"]["Authorization"] == "Bearer test_key_123"
+        assert "authorization" in call_args[1]["headers"]
+        assert call_args[1]["headers"]["authorization"] == "Bearer test_key_123"
     
     @patch('stable_fast_3d_client.httpx.Client')
     def test_generate_mesh_with_custom_params(self, mock_client_class):
