@@ -378,6 +378,86 @@ Generate the optimized Stable Diffusion prompt:"""
         }
 
 
+async def remove_background_from_png(
+    input_image_base64: str,
+    alpha_matting: bool = True,
+    timeout: float = 60.0
+) -> Dict[str, Any]:
+    """
+    Remove background from PNG image using GPU Worker.
+    
+    Delegates background removal to the Windows Worker via Redis queue.
+    The worker uses Rembg with GPU acceleration (CUDA) for fast processing.
+    
+    Args:
+        input_image_base64: Base64-encoded input PNG (with or without data URI prefix)
+        alpha_matting: Enable alpha matting for better edge quality (default: True)
+        timeout: Maximum time to wait for processing (default: 60 seconds)
+        
+    Returns:
+        Dict with processing results:
+            - success: Boolean indicating success/failure
+            - output_image_base64: Base64-encoded transparent PNG (if success)
+            - error: Error message (if failure)
+            - job_id: Unique job identifier
+            - processing_time: Time taken by GPU worker
+            
+    Example:
+        >>> await remove_background_from_png("iVBORw0KGgoAAAANS...")
+        {
+            "success": True,
+            "output_image_base64": "iVBORw0KGgoAAAANS...",
+            "job_id": "uuid-1234",
+            "processing_time": 2.5
+        }
+    """
+    try:
+        # Import background removal utility
+        from .background_removal import queue_background_removal_job
+        
+        logger.info("Queueing background removal job to GPU Worker")
+        
+        # Queue job to Redis and wait for result
+        result = await queue_background_removal_job(
+            input_image_base64=input_image_base64,
+            alpha_matting=alpha_matting,
+            timeout=timeout
+        )
+        
+        if result.get("success"):
+            logger.info(f"Background removal completed successfully (job: {result.get('job_id')})")
+            return {
+                "success": True,
+                "output_image_base64": result.get("output_image_base64"),
+                "job_id": result.get("job_id"),
+                "processing_time": result.get("processing_time", 0),
+                "metadata": {
+                    "alpha_matting": alpha_matting,
+                    "worker": "gpu"
+                }
+            }
+        else:
+            logger.warning(f"Background removal failed: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "job_id": result.get("job_id")
+            }
+            
+    except ImportError as e:
+        logger.error(f"Background removal service not available: {e}")
+        return {
+            "success": False,
+            "error": "Background removal service not available (import failed)"
+        }
+    except Exception as e:
+        logger.error(f"Error removing background: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"Error removing background: {str(e)}"
+        }
+
+
 if __name__ == "__main__":
     # Allow standalone execution for testing
     import json

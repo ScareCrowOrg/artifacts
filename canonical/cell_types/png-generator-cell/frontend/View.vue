@@ -154,8 +154,6 @@
           <span>{{ localIsGenerating ? $t('pngGeneratorCell.generating') : $t('pngGeneratorCell.generateButton') }}</span>
         </button>
       </div>
-
-      <!-- Error Display -->
       <div v-if="localError" class="error-section p-3 bg-error-light dark:bg-error-dark text-error-dark dark:text-error-light rounded border border-error">
         <p class="text-sm">{{ localError }}</p>
       </div>
@@ -167,6 +165,24 @@
             {{ $t('pngGeneratorCell.preview') }}
           </h4>
           <div class="flex gap-2">
+            <button
+              @click="handleCleanBackground"
+              :disabled="isProcessingBackground"
+              class="px-3 py-1 text-sm bg-primary dark:bg-primary-hover text-white rounded hover:bg-primary-light dark:hover:bg-primary transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              :title="$t('pngGeneratorCell.cleanBackground')"
+            >
+              <svg
+                v-if="isProcessingBackground"
+                class="animate-spin h-4 w-4"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span>{{ isProcessingBackground ? $t('pngGeneratorCell.processing') : $t('pngGeneratorCell.cleanBackground') }}</span>
+            </button>
             <button
               @click="handleCopy"
               class="px-3 py-1 text-sm bg-surface-light dark:bg-surface-dark-light border border-border dark:border-border-dark rounded hover:bg-surface-hover dark:hover:bg-surface-dark-hover transition"
@@ -296,6 +312,9 @@ const localParams = ref({
   ...props.generationParams,
   ...(initialData.value.generationParams || {})
 })
+
+// Background removal state
+const isProcessingBackground = ref(false)
 
 // Watch for prop changes
 watch(() => props.prompt, (newVal) => { if (newVal !== undefined) localPrompt.value = newVal })
@@ -467,6 +486,58 @@ const handleDownload = () => {
   } catch (error: any) {
     logger.error('Failed to download PNG', { error: error.message })
     localError.value = 'Failed to download image'
+  }
+}
+
+const handleCleanBackground = async () => {
+  if (!localGeneratedPng.value || isProcessingBackground.value) {
+    return
+  }
+
+  logger.info('Cleaning background from PNG', { 
+    cellId: effectiveCellId.value
+  })
+  
+  isProcessingBackground.value = true
+  localError.value = null
+  
+  try {
+    // Call background removal endpoint
+    const response = await apiService.fetch('/api/cells/png-generator/remove-background', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input_image_base64: localGeneratedPng.value,
+        alpha_matting: true
+      })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    
+    logger.info('Background removal completed', { 
+      success: data.success,
+      jobId: data.job_id
+    })
+    
+    if (data.success && data.output_image_base64) {
+      // Update the generated PNG with transparent version
+      localGeneratedPng.value = `data:image/png;base64,${data.output_image_base64}`
+      localError.value = null
+      
+      logger.info('PNG updated with transparent background')
+    } else {
+      throw new Error(data.error || 'Background removal failed')
+    }
+  } catch (error: any) {
+    logger.error('Background removal failed', { error: error.message })
+    localError.value = error.message || 'Failed to remove background'
+  } finally {
+    isProcessingBackground.value = false
   }
 }
 
