@@ -63,7 +63,7 @@ This document describes the integration of Stability AI's Stable Fast 3D API int
    ```bash
    # Stable Fast 3D API Configuration
    STABLE_FAST_3D_API_KEY=sk-your-api-key-here
-   STABLE_FAST_3D_URL=https://api.stability.ai/v1/generation/stable-fast-3d
+   STABLE_FAST_3D_URL=https://api.stability.ai/v2beta/3d/stable-fast-3d
    STABLE_FAST_3D_TIMEOUT=60
    ```
 
@@ -76,7 +76,7 @@ This document describes the integration of Stability AI's Stable Fast 3D API int
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `STABLE_FAST_3D_API_KEY` | Your Stability AI API key | None | Yes |
-| `STABLE_FAST_3D_URL` | API endpoint URL | `https://api.stability.ai/v1/generation/stable-fast-3d` | No |
+| `STABLE_FAST_3D_URL` | API endpoint URL | `https://api.stability.ai/v2beta/3d/stable-fast-3d` | No |
 | `STABLE_FAST_3D_TIMEOUT` | Request timeout in seconds | 60 | No |
 
 ## Usage

@@ -5,7 +5,7 @@ This module provides a client for interacting with the Stability AI Stable Fast 
 It handles authentication, image formatting, API requests, and response parsing.
 
 API Documentation: https://platform.stability.ai/docs/api-reference
-API Endpoint: https://api.stability.ai/v1/generation/stable-fast-3d
+API Endpoint: https://api.stability.ai/v2beta/3d/stable-fast-3d
 
 Authentication:
     Requires an API key from Stability AI, passed via the Authorization header
@@ -37,7 +37,7 @@ class StableFast3DClient:
     def __init__(
         self,
         api_key: str,
-        api_url: str = "https://api.stability.ai/v1/generation/stable-fast-3d",
+        api_url: str = "https://api.stability.ai/v2beta/3d/stable-fast-3d",
         timeout: int = 60
     ):
         """
@@ -317,7 +317,7 @@ def create_client(
             from app.config import STABLE_FAST_3D_URL as config_url
             api_url = config_url
         except ImportError:
-            api_url = os.getenv("STABLE_FAST_3D_URL", "https://api.stability.ai/v1/generation/stable-fast-3d")
+            api_url = os.getenv("STABLE_FAST_3D_URL", "https://api.stability.ai/v2beta/3d/stable-fast-3d")
 
     if not timeout:
         try:

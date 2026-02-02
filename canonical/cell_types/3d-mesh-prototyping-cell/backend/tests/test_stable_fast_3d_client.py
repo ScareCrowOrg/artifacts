@@ -29,9 +29,9 @@ class TestClientInitialization:
     def test_init_with_api_key(self):
         """Test successful initialization with API key."""
         client = StableFast3DClient(api_key="test_key_123")
-        
+
         assert client.api_key == "test_key_123"
-        assert client.api_url == "https://api.stability.ai/v1/generation/stable-fast-3d"
+        assert client.api_url == "https://api.stability.ai/v2beta/3d/stable-fast-3d"
         assert client.timeout == 60
     
     def test_init_with_custom_params(self):
@@ -143,7 +143,7 @@ class TestGenerateMesh:
         # Verify API was called correctly
         mock_client_instance.post.assert_called_once()
         call_args = mock_client_instance.post.call_args
-        assert call_args[0][0] == "https://api.stability.ai/v1/generation/stable-fast-3d"
+        assert call_args[0][0] == "https://api.stability.ai/v2beta/3d/stable-fast-3d"
         assert "Authorization" in call_args[1]["headers"]
         assert call_args[1]["headers"]["Authorization"] == "Bearer test_key_123"
     
@@ -386,7 +386,7 @@ class TestIntegration:
         # Create client
         client = StableFast3DClient(
             api_key="sk-test-key-12345",
-            api_url="https://api.stability.ai/v1/generation/stable-fast-3d",
+            api_url="https://api.stability.ai/v2beta/3d/stable-fast-3d",
             timeout=60
         )
         
