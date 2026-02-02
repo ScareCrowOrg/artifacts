@@ -1,0 +1,51 @@
+{
+  "id": "image-png",
+  "name": "PNG Image Asset",
+  "description": "Raster image in PNG format, suitable for screenshots, generated images, and UI assets",
+  "mime_type": "image/png",
+  "version": "1.0.0",
+  "expected_fragments": {
+    "width": {
+      "type": "integer",
+      "description": "Image width in pixels",
+      "minimum": 1
+    },
+    "height": {
+      "type": "integer",
+      "description": "Image height in pixels",
+      "minimum": 1
+    },
+    "color_mode": {
+      "type": "string",
+      "description": "Color mode (RGB, RGBA, L, LA)",
+      "enum": ["RGB", "RGBA", "L", "LA"],
+      "optional": true
+    },
+    "has_transparency": {
+      "type": "boolean",
+      "description": "Whether image has alpha channel",
+      "optional": true
+    },
+    "generation_method": {
+      "type": "string",
+      "description": "How the image was generated (ai, screenshot, upload, etc.)",
+      "optional": true
+    }
+  },
+  "render_hints": {
+    "component": "ImageViewer",
+    "viewport_params": {
+      "fit_mode": "contain",
+      "background": "transparent"
+    },
+    "interaction_mode": "view-only",
+    "additional_config": {
+      "allow_zoom": true,
+      "allow_download": true
+    }
+  },
+  "storage_policy": "local",
+  "storage_base_path": "/data/content/images",
+  "max_size_bytes": 10485760,
+  "allowed_extensions": [".png"]
+}

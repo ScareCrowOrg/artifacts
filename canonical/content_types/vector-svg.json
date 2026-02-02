@@ -1,0 +1,57 @@
+{
+  "id": "vector-svg",
+  "name": "SVG Vector Graphics",
+  "description": "Scalable vector graphics in SVG format, ideal for diagrams, icons, and illustrations",
+  "mime_type": "image/svg+xml",
+  "version": "1.0.0",
+  "expected_fragments": {
+    "viewBox": {
+      "type": "string",
+      "description": "SVG viewBox attribute (x y width height)",
+      "pattern": "^[0-9]+ [0-9]+ [0-9]+ [0-9]+$",
+      "optional": true
+    },
+    "width": {
+      "type": "string",
+      "description": "SVG width (can be px, %, em, etc.)",
+      "optional": true
+    },
+    "height": {
+      "type": "string",
+      "description": "SVG height (can be px, %, em, etc.)",
+      "optional": true
+    },
+    "element_count": {
+      "type": "integer",
+      "description": "Approximate number of SVG elements",
+      "optional": true
+    },
+    "has_animations": {
+      "type": "boolean",
+      "description": "Whether SVG contains animations",
+      "optional": true
+    },
+    "generation_method": {
+      "type": "string",
+      "description": "How the SVG was generated (ai, manual, export, etc.)",
+      "optional": true
+    }
+  },
+  "render_hints": {
+    "component": "SvgViewer",
+    "viewport_params": {
+      "fit_mode": "contain",
+      "preserve_aspect_ratio": true
+    },
+    "interaction_mode": "view-only",
+    "additional_config": {
+      "allow_zoom": true,
+      "allow_download": true,
+      "sanitize_svg": true
+    }
+  },
+  "storage_policy": "local",
+  "storage_base_path": "/data/content/vectors",
+  "max_size_bytes": 5242880,
+  "allowed_extensions": [".svg"]
+}

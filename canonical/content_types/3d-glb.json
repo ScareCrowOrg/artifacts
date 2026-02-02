@@ -1,0 +1,77 @@
+{
+  "id": "3d-glb",
+  "name": "3D Model GLB",
+  "description": "3D model in GLB (binary glTF) format, suitable for real-time rendering and web visualization",
+  "mime_type": "model/gltf-binary",
+  "version": "1.0.0",
+  "expected_fragments": {
+    "poly_count": {
+      "type": "integer",
+      "description": "Total polygon/triangle count",
+      "minimum": 0,
+      "optional": true
+    },
+    "vertex_count": {
+      "type": "integer",
+      "description": "Total vertex count",
+      "minimum": 0,
+      "optional": true
+    },
+    "has_textures": {
+      "type": "boolean",
+      "description": "Whether model includes texture maps",
+      "optional": true
+    },
+    "has_materials": {
+      "type": "boolean",
+      "description": "Whether model includes material definitions",
+      "optional": true
+    },
+    "has_animations": {
+      "type": "boolean",
+      "description": "Whether model includes animations",
+      "optional": true
+    },
+    "bounding_box": {
+      "type": "object",
+      "description": "Model bounding box dimensions",
+      "properties": {
+        "min": {"type": "array", "items": {"type": "number"}},
+        "max": {"type": "array", "items": {"type": "number"}}
+      },
+      "optional": true
+    },
+    "generation_method": {
+      "type": "string",
+      "description": "How the model was generated (ai, manual, scan, etc.)",
+      "optional": true
+    },
+    "source_format": {
+      "type": "string",
+      "description": "Original format if converted (OBJ, FBX, etc.)",
+      "optional": true
+    }
+  },
+  "render_hints": {
+    "component": "BabylonViewer",
+    "viewport_params": {
+      "camera_type": "arcRotate",
+      "camera_position": [0, 2, 5],
+      "camera_target": [0, 0, 0],
+      "lighting": "studio",
+      "background_color": [0.2, 0.2, 0.2, 1.0]
+    },
+    "interaction_mode": "orbit",
+    "additional_config": {
+      "allow_zoom": true,
+      "allow_pan": true,
+      "allow_download": true,
+      "show_wireframe_toggle": true,
+      "show_stats": true
+    }
+  },
+  "storage_policy": "local",
+  "storage_base_path": "/data/content/3d-models",
+  "max_size_bytes": 52428800,
+  "allowed_extensions": [".glb"]
+}
