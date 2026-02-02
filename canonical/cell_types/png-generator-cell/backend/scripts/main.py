@@ -104,46 +104,84 @@ def _create_fallback_png() -> str:
 
 async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Execute the PNG generator cell.
+    Execute the PNG generator cell with action-based routing.
 
-    This function generates a PNG image from a text prompt if one doesn't already exist.
-    Falls back to a mock placeholder if the Stable Diffusion service is unavailable.
+    This function supports two actions:
+    1. "generate" - Generate PNG from text prompt using Stable Diffusion
+    2. "removeBackground" - Remove background from existing PNG using GPU Worker
 
     Args:
         cell_data: Cell instance data containing:
-            - 'prompt': Text description for PNG generation
-            - 'generatedPng': Optional existing PNG to reuse
-            - 'removeBackground': Optional boolean to automatically remove background using GPU Worker
+            - 'action': Action to perform ("generate" or "removeBackground")
+            - 'prompt': Text description for PNG generation (required for "generate")
+            - 'generatedPng': Existing PNG to process (required for "removeBackground")
+            - 'generationParams': Optional parameters for PNG generation
+            - 'negativePrompt': Optional negative prompt for generation
+            - 'asset3dMode': Optional flag for 3D asset optimization
 
     Returns:
-        Dict with execution results including generated PNG
+        Dict with execution results based on action
 
-    Example:
-        >>> await execute_cell({"prompt": "A red dragon", "generatedPng": None, "removeBackground": True})
-        {
-            "success": True,
-            "message": "PNG generated and background removed successfully",
-            "prompt": "A red dragon",
-            "has_png": True,
-            "generatedPng": "data:image/png;base64,..."
+    Examples:
+        >>> # Generate PNG
+        >>> await execute_cell({
+        ...     "action": "generate",
+        ...     "prompt": "A red dragon",
+        ...     "generationParams": {"width": 512, "height": 512}
+        ... })
+
+        >>> # Remove background
+        >>> await execute_cell({
+        ...     "action": "removeBackground",
+        ...     "generatedPng": "data:image/png;base64,..."
+        ... })
+    """
+    action = cell_data.get('action', 'generate')  # Default to 'generate'
+
+    logger.info(f"PNG generator cell executed with action: {action}")
+
+    # Route to appropriate handler based on action
+    if action == 'generate':
+        return await handle_generate_png(cell_data)
+    elif action == 'removeBackground':
+        return await handle_remove_background(cell_data)
+    else:
+        logger.error(f"Unknown action: {action}")
+        return {
+            "success": False,
+            "error": f"Unknown action '{action}'. Supported actions: 'generate', 'removeBackground'",
+            "action": action
         }
+
+
+async def handle_generate_png(cell_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Handle PNG generation action.
+
+    Generates a PNG image from a text prompt.
+    Falls back to a mock placeholder if Stable Diffusion service is unavailable.
+
+    Args:
+        cell_data: Cell data containing prompt and generation parameters
+
+    Returns:
+        Dict with generation results
     """
     prompt = cell_data.get('prompt', '')
     generated_png = cell_data.get('generatedPng', None)
-    remove_background = cell_data.get('removeBackground', False)
-    
-    logger.info(f"PNG generator cell executed with prompt: {prompt[:50]}...")
+
+    logger.info(f"Generating PNG with prompt: {prompt[:50]}...")
     
     # If PNG already exists, just return success
     if generated_png:
         return {
             "success": True,
-            "message": "PNG generator cell ready",
+            "message": "PNG already exists",
             "prompt": prompt,
             "has_png": True,
             "generatedPng": generated_png
         }
-    
+
     # If no prompt provided, return without generating
     if not prompt or not prompt.strip():
         logger.warning("No prompt provided for PNG generation")
@@ -153,10 +191,7 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             "prompt": prompt,
             "has_png": False
         }
-    
-    # Generate PNG from prompt
-    logger.info(f"Generating PNG for prompt: {prompt}")
-    
+
     # Extract generation parameters if provided
     gen_params = cell_data.get('generationParams', {})
     width = gen_params.get('width', 512)
@@ -164,7 +199,7 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     steps = gen_params.get('steps', 20)
     cfg_scale = gen_params.get('cfg_scale', 7.0)
     seed = gen_params.get('seed', -1)
-    
+
     # Extract 3D Asset Mode and negative prompt from cell_data
     negative_prompt = cell_data.get('negativePrompt', '')
     asset_3d_mode = cell_data.get('asset3dMode', False)
@@ -191,42 +226,6 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 image_data = f"data:image/png;base64,{image_data}"
 
             logger.info("PNG generation successful")
-
-            # If background removal was requested, process it
-            if remove_background:
-                logger.info("Background removal requested, processing...")
-                bg_result = await remove_background_from_png(
-                    input_image_base64=image_data,
-                    alpha_matting=True,
-                    timeout=120.0  # Extended timeout for background removal
-                )
-
-                if bg_result.get("success"):
-                    logger.info("Background removal completed successfully")
-                    image_data = f"data:image/png;base64,{bg_result.get('output_image_base64', '')}"
-                    return {
-                        "success": True,
-                        "message": "PNG generated and background removed successfully",
-                        "prompt": prompt,
-                        "has_png": True,
-                        "generatedPng": image_data,
-                        "metadata": result.get("metadata", {}),
-                        "backgroundRemoved": True,
-                        "backgroundRemovalJobId": bg_result.get("job_id")
-                    }
-                else:
-                    logger.warning(f"Background removal failed: {bg_result.get('error')}")
-                    return {
-                        "success": True,
-                        "message": "PNG generated but background removal failed",
-                        "prompt": prompt,
-                        "has_png": True,
-                        "generatedPng": image_data,
-                        "metadata": result.get("metadata", {}),
-                        "backgroundRemoved": False,
-                        "backgroundRemovalError": bg_result.get("error")
-                    }
-
             return {
                 "success": True,
                 "message": "PNG generated successfully",
@@ -495,6 +494,74 @@ async def remove_background_from_png(
         return {
             "success": False,
             "error": f"Error removing background: {str(e)}"
+        }
+
+
+async def handle_remove_background(cell_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Handle background removal action.
+
+    Removes background from an existing PNG image using GPU Worker.
+    Delegates to the Windows Worker via Redis queue for GPU-accelerated processing.
+
+    Args:
+        cell_data: Cell data containing:
+            - 'generatedPng': Base64-encoded PNG (required)
+            - 'alpha_matting': Enable alpha matting (default: True)
+
+    Returns:
+        Dict with removal results
+    """
+    generated_png = cell_data.get('generatedPng', None)
+    alpha_matting = cell_data.get('alpha_matting', True)
+
+    logger.info("Handling background removal action")
+
+    if not generated_png:
+        logger.error("No PNG provided for background removal")
+        return {
+            "success": False,
+            "error": "No PNG image provided for background removal",
+            "action": "removeBackground"
+        }
+
+    try:
+        logger.info("Queuing background removal job to GPU Worker")
+
+        # Call the background removal function
+        result = await remove_background_from_png(
+            input_image_base64=generated_png,
+            alpha_matting=alpha_matting,
+            timeout=120.0  # Extended timeout for background removal
+        )
+
+        if result.get("success"):
+            logger.info(f"Background removal queued successfully (job: {result.get('job_id')})")
+            return {
+                "success": True,
+                "message": "Background removed successfully",
+                "has_png": True,
+                "generatedPng": f"data:image/png;base64,{result.get('output_image_base64', '')}",
+                "backgroundRemoved": True,
+                "backgroundRemovalJobId": result.get("job_id"),
+                "processingTime": result.get("processing_time", 0),
+                "action": "removeBackground"
+            }
+        else:
+            logger.error(f"Background removal failed: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get("error", "Background removal failed"),
+                "backgroundRemoved": False,
+                "action": "removeBackground"
+            }
+
+    except Exception as e:
+        logger.error(f"Error in background removal action: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"Error removing background: {str(e)}",
+            "action": "removeBackground"
         }
 
 
