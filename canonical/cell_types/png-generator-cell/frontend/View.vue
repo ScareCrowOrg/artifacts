@@ -409,6 +409,7 @@ const handleGenerate = async () => {
       body: JSON.stringify({
         cell_type: 'png-generator-cell',
         input_data: {
+          action: 'generate',
           prompt: localPrompt.value,
           negativePrompt: localNegativePrompt.value,
           asset3dMode: localAsset3dMode.value,
@@ -502,36 +503,47 @@ const handleCleanBackground = async () => {
   localError.value = null
   
   try {
-    // Call background removal endpoint
-    const response = await apiService.fetch('/api/cells/png-generator/remove-background', {
+    // Call ephemeral execution endpoint for background removal
+    const response = await apiService.fetch('/api/cells/execute-ephemeral', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        input_image_base64: localGeneratedPng.value,
-        alpha_matting: true
+        cell_type: 'png-generator-cell',
+        input_data: {
+          action: 'removeBackground',
+          generatedPng: localGeneratedPng.value,
+          alpha_matting: true
+        }
       })
     })
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
     }
-    
+
     const data = await response.json()
-    
-    logger.info('Background removal completed', { 
+
+    logger.info('Background removal completed', {
       success: data.success,
-      jobId: data.job_id
+      result: data.result
     })
-    
-    if (data.success && data.output_image_base64) {
-      // Update the generated PNG with transparent version
-      localGeneratedPng.value = `data:image/png;base64,${data.output_image_base64}`
-      localError.value = null
-      
-      logger.info('PNG updated with transparent background')
+
+    if (data.success && data.result) {
+      // Extract transparent PNG from result
+      if (data.result.generatedPng) {
+        localGeneratedPng.value = data.result.generatedPng
+        localError.value = null
+        logger.info('PNG updated with transparent background')
+      } else if (data.result.output_image_base64) {
+        localGeneratedPng.value = `data:image/png;base64,${data.result.output_image_base64}`
+        localError.value = null
+        logger.info('PNG updated with transparent background')
+      } else {
+        throw new Error('No image data in background removal response')
+      }
     } else {
-      throw new Error(data.error || 'Background removal failed')
+      throw new Error(data.message || data.result?.error || 'Background removal failed')
     }
   } catch (error: any) {
     logger.error('Background removal failed', { error: error.message })
