@@ -452,8 +452,15 @@ async def remove_background_from_png(
     """
     try:
         # Import background removal utility
-        from .background_removal import queue_background_removal_job
-        
+        # Use absolute import with sys.path manipulation to support dynamic module loading
+        import sys
+        import os
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+
+        from background_removal import queue_background_removal_job
+
         logger.info("Queueing background removal job to GPU Worker")
         
         # Queue job to Redis and wait for result
