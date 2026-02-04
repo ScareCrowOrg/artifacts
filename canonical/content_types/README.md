@@ -1,3 +1,17 @@
+---
+processed: true
+processed_date: 2026-02-04
+updated_docs:
+  - docs/official/backend/architecture/content-contenttypes-system.md
+themes:
+  - content-types
+  - canonical
+  - architecture
+modules:
+  - backend
+code_verified: true
+dead_docs_found: false
+---
 # Content Types
 
 ## Overview
