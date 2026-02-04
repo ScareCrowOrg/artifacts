@@ -27,8 +27,8 @@
 
 import { ref, computed, watch, onMounted, onUnmounted, defineOptions } from 'vue'
 import { createLogger } from '@/utils/logger'
-import { MeshPrototypingCell } from '@/cells/MeshPrototypingCell'
-import type { MeshPrototypingInput } from '@/cells/MeshPrototypingCell'
+import { MeshPrototypingCell } from './MeshPrototypingCell'
+import type { MeshPrototypingInput } from './MeshPrototypingCell'
 import authService from '@/services/authService'
 import { useJobPolling } from './composables/useJobPolling'
 import BabylonModelViewer from '@/components/viewers/BabylonModelViewer.vue'

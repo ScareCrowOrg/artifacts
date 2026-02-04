@@ -14,7 +14,7 @@
   ],
   "default_refs": {
     "view": [
-      "cockpit-vue/src/components/cells/calculator/View.vue"
+      "artifacts/canonical/cell_types/calculator-cell/frontend/View.vue"
     ],
     "handler": []
   },

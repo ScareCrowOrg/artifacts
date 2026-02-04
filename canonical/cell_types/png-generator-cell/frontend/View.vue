@@ -214,8 +214,8 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue'
 import { createLogger } from '@/utils/logger'
-import { PngGeneratorCell } from '@/cells/PngGeneratorCell'
-import type { PngGeneratorInput } from '@/cells/PngGeneratorCell'
+import { PngGeneratorCell } from './PngGeneratorCell'
+import type { PngGeneratorInput } from './PngGeneratorCell'
 
 const logger = createLogger('component:png-generator-cell')
 
