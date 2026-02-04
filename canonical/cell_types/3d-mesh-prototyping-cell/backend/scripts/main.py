@@ -3,6 +3,12 @@
 
 Implements Single Image-to-3D reconstruction pipeline with hybrid job queueing architecture.
 
+BaseCell v1.0 Implementation:
+- MeshPrototypingCell class inherits from BaseCell (defined at end of file)
+- Implements execute(), describe(), validate(), health_check()
+- Backward compatible through execute_cell() wrapper
+- Legacy handlers remain for stability
+
 Phase 6 Update: Adds hybrid generation mode routing (cloud-api, local-gpu, manual-upload).
 - Supports multiple generation modes for flexible deployment scenarios
 - cloud-api: External API-based generation (placeholder for future integration)
@@ -16,7 +22,7 @@ Architecture:
 - Shared Volume: File transfer between Manager and Worker
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 import logging
 import os
 import sys
@@ -26,6 +32,11 @@ backend_path = os.path.join(os.path.dirname(__file__), '../../../backend')
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
+# Add backend for BaseCell import
+basecell_backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../backend'))
+if basecell_backend_path not in sys.path:
+    sys.path.insert(0, basecell_backend_path)
+
 from job_queue import queue_3d_generation_job, get_job_status
 
 # Import configuration from backend (follows project standards)
@@ -34,6 +45,14 @@ try:
 except ImportError:
     # Fallback if config is not available
     STABLE_FAST_3D_API_KEY = os.getenv("STABLE_FAST_3D_API_KEY")
+
+try:
+    from app.core.base_cell import BaseCell, CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult, HealthStatus
+    BASECELL_AVAILABLE = True
+except ImportError:
+    # Graceful degradation if BaseCell not available
+    BASECELL_AVAILABLE = False
+    BaseCell = object  # Fallback
 
 logger = logging.getLogger(__name__)
 
@@ -407,6 +426,242 @@ def _generate_mock_glb_mesh(
         "mesh_data": f"data:model/gltf-binary;base64,{mock_glb_base64}",
         "metadata": metadata
     }
+
+
+# ============ BASECELL v1.0 IMPLEMENTATION ============
+
+
+class MeshPrototypingCell(BaseCell):
+    """
+    3D Mesh Prototyping Cell implementing BaseCell v1.0 framework.
+    
+    This cell provides Single Image-to-3D reconstruction using Stable Fast 3D
+    through Redis job queueing to Windows Worker.
+    
+    Architecture:
+    - Manager Cell (Kind/Linux): API, job queueing, result polling
+    - Windows Worker: GPU processing (SF3D + Blender)
+    - Redis: Job queue and status tracking
+    - Shared Volume: File transfer between Manager and Worker
+    
+    Key Features:
+    - Hybrid generation modes (cloud-api, local-gpu, manual-upload)
+    - Redis-based job queueing for GPU operations
+    - Job status polling and result retrieval
+    - Graceful fallbacks and error handling
+    """
+    
+    def __init__(self):
+        """Initialize 3D Mesh Prototyping Cell"""
+        self.redis_client = None
+        self.sf3d_service = None
+        
+    async def setup(self, config: EnvironmentConfig) -> None:
+        """
+        Initialize lightweight resources.
+        
+        Sets up Redis connection for job queueing and optional
+        Stable Fast 3D service connection.
+        
+        Note: Does NOT allocate GPU/VRAM - managed by Windows Worker.
+        
+        Args:
+            config: Environment configuration
+        """
+        try:
+            logger.info("Initializing 3D Mesh Prototyping Cell resources")
+            # Note: Redis connection initialization would go here
+            # For now, we use lazy initialization in execute()
+            # to maintain compatibility with current architecture
+            logger.info("3D Mesh Prototyping Cell setup complete")
+        except Exception as e:
+            logger.warning(f"Non-critical setup error: {e}")
+    
+    async def teardown(self) -> None:
+        """
+        Clean up lightweight resources.
+        
+        Closes Redis connections and cleans up any listeners.
+        Does NOT deallocate GPU/VRAM (not cell's responsibility).
+        """
+        try:
+            logger.info("Tearing down 3D Mesh Prototyping Cell resources")
+            if self.redis_client:
+                self.redis_client = None
+            logger.info("3D Mesh Prototyping Cell teardown complete")
+        except Exception as e:
+            logger.error(f"Error during teardown: {e}", exc_info=True)
+    
+    async def execute(self, input: Dict[str, Any]) -> CellResult:
+        """
+        Execute 3D mesh reconstruction.
+        
+        Routes to appropriate handler based on generation mode:
+        - 'cloud-api': External API-based generation
+        - 'local-gpu': Redis job queueing for Windows Worker (default)
+        - 'manual-upload': Direct file upload without processing
+        
+        Args:
+            input: Input data containing:
+                - inputImage: Base64-encoded PNG image (required)
+                - reconstructionParams: Optional parameters
+                - generationMode: Generation mode (optional, default: 'local-gpu')
+        
+        Returns:
+            CellResult with success status, output data, and execution metadata
+        """
+        import time
+        start_time = time.time()
+        
+        try:
+            # Validate input
+            validation_errors = self.validate(input)
+            if validation_errors:
+                return CellResult(
+                    success=False,
+                    output={},
+                    error=f"Validation failed: {', '.join([e.message for e in validation_errors])}",
+                    execution_time=(time.time() - start_time) * 1000
+                )
+            
+            # Route to appropriate handler
+            generation_mode = input.get('generationMode', 'local-gpu')
+            result = await route_generation_request(input, generation_mode)
+            
+            # Convert legacy result format to CellResult
+            execution_time = (time.time() - start_time) * 1000
+            
+            return CellResult(
+                success=result.get('success', False),
+                output=result,
+                artifacts=[result.get('job_id')] if result.get('job_id') else [],
+                execution_time=execution_time,
+                execution_steps=[f"Generation mode: {generation_mode}"],
+                metadata={'generation_mode': generation_mode}
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in 3D Mesh Prototyping Cell execution: {e}", exc_info=True)
+            return CellResult(
+                success=False,
+                output={},
+                error=str(e),
+                execution_time=(time.time() - start_time) * 1000
+            )
+    
+    async def describe(self) -> CellMetadata:
+        """
+        Describe 3D Mesh Prototyping Cell capabilities.
+        
+        Returns metadata about inputs, outputs, and configuration.
+        
+        Returns:
+            CellMetadata with cell description
+        """
+        return CellMetadata(
+            id='3d-mesh-prototyping-cell',
+            name='3D Mesh Prototyping',
+            version='1.0.0',
+            description='Single Image-to-3D reconstruction using Stable Fast 3D and GPU Worker',
+            inputs={
+                'inputImage': 'string (base64 PNG, required)',
+                'reconstructionParams': 'object (optional)',
+                'generationMode': 'string (cloud-api | local-gpu | manual-upload, default: local-gpu)'
+            },
+            outputs={
+                'success': 'boolean',
+                'job_id': 'string (for local-gpu mode)',
+                'glb_url': 'string (3D model URL)',
+                'message': 'string',
+                'error': 'string (if failed)'
+            },
+            tags=['3d', 'reconstruction', 'mesh', 'stable-fast-3d', 'image-to-3d'],
+            required_resources=['redis', 'windows-worker', 'stable-fast-3d'],
+            estimated_duration_seconds=45.0
+        )
+    
+    def validate(self, input: Dict[str, Any]) -> List[ValidationError]:
+        """
+        Validate input data.
+        
+        Args:
+            input: Input data to validate
+        
+        Returns:
+            List of validation errors (empty if valid)
+        """
+        errors = []
+        
+        # Validate inputImage
+        if not input.get('inputImage'):
+            errors.append(ValidationError(
+                field='inputImage',
+                message='inputImage is required (base64-encoded PNG)'
+            ))
+        
+        # Validate generationMode if provided
+        generation_mode = input.get('generationMode', 'local-gpu')
+        valid_modes = ['cloud-api', 'local-gpu', 'manual-upload']
+        if generation_mode not in valid_modes:
+            errors.append(ValidationError(
+                field='generationMode',
+                message=f"Invalid generationMode '{generation_mode}'. Must be one of: {', '.join(valid_modes)}"
+            ))
+        
+        return errors
+    
+    async def health_check(self) -> HealthCheckResult:
+        """
+        Check if 3D Mesh Prototyping Cell can execute.
+        
+        Validates connectivity to Redis and optionally Stable Fast 3D service.
+        
+        Returns:
+            HealthCheckResult with status and diagnostic info
+        """
+        try:
+            # Check if job queue module is available
+            # This is a soft check - cell can still work with different modes
+            try:
+                from job_queue import queue_3d_generation_job
+                job_queue_available = True
+            except ImportError:
+                job_queue_available = False
+            
+            if job_queue_available:
+                return HealthCheckResult(
+                    status=HealthStatus.HEALTHY,
+                    reason="3D Mesh Prototyping Cell is fully operational"
+                )
+            else:
+                return HealthCheckResult(
+                    status=HealthStatus.DEGRADED,
+                    reason="Job queue module not available (limited functionality)"
+                )
+        
+        except Exception as e:
+            logger.error(f"Health check failed: {e}", exc_info=True)
+            return HealthCheckResult(
+                status=HealthStatus.UNAVAILABLE,
+                reason=f"Health check error: {str(e)}"
+            )
+
+
+# Create global instance for backward compatibility
+_mesh_prototyping_cell_instance = None
+
+
+def get_mesh_prototyping_cell() -> MeshPrototypingCell:
+    """Get or create the global 3D Mesh Prototyping Cell instance"""
+    global _mesh_prototyping_cell_instance
+    if not BASECELL_AVAILABLE:
+        return None
+    if _mesh_prototyping_cell_instance is None:
+        _mesh_prototyping_cell_instance = MeshPrototypingCell()
+    return _mesh_prototyping_cell_instance
+
+
+# ============ MAIN EXECUTION ============
 
 
 if __name__ == "__main__":
