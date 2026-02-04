@@ -190,15 +190,17 @@ export class PngGeneratorCell implements BaseCell {
       
       if (!response.ok) {
         const errorText = await response.text()
-        log.error('Backend request failed', { 
-          status: response.status, 
+        log.error('Backend request failed', {
+          status: response.status,
           statusText: response.statusText,
-          errorText 
+          errorText
         })
         throw new Error(`Backend execution failed: ${response.statusText}`)
       }
-      
-      const result = await response.json() as PngGeneratorOutput
+
+      const responseData = await response.json() as any
+      // Extract the result field if it exists (API wraps response in 'result' field)
+      const result = (responseData.result || responseData) as PngGeneratorOutput
       
       const executionTime = performance.now() - startTime
       
