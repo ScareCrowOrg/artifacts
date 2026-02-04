@@ -27,7 +27,8 @@
 
 import { ref, computed, watch, onMounted, onUnmounted, defineOptions } from 'vue'
 import { createLogger } from '@/utils/logger'
-import { apiFetch } from '@/services/apiService'
+import { MeshPrototypingCell } from '@/cells/MeshPrototypingCell'
+import type { MeshPrototypingInput } from '@/cells/MeshPrototypingCell'
 import authService from '@/services/authService'
 import { useJobPolling } from './composables/useJobPolling'
 import BabylonModelViewer from '@/components/viewers/BabylonModelViewer.vue'
@@ -42,6 +43,9 @@ defineOptions({ name: 'MeshPrototypingCellView' })
 
 const logger = createLogger('component:3d-mesh-prototyping-cell-babylon')
 
+// Initialize MeshPrototypingCell instance
+const cellInstance = new MeshPrototypingCell()
+
 interface Props {
   cell: any // Flexible to handle initial_data, state, or direct properties
 }
@@ -50,15 +54,6 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'update:cell', value: any): void
 }>()
-
-// Debug logs to inspect cell structure (ITERATION #4)
-console.log('[DEBUG_ITERATION_4] props.cell:', JSON.parse(JSON.stringify(props.cell)))
-if (props.cell && props.cell.initial_data) {
-  console.log('[DEBUG_ITERATION_4] props.cell.initial_data:', JSON.parse(JSON.stringify(props.cell.initial_data)))
-}
-if (props.cell && props.cell.state) {
-  console.log('[DEBUG_ITERATION_4] props.cell.state:', JSON.parse(JSON.stringify(props.cell.state)))
-}
 
 // Local component state (ITERATION #5 - writable refs for user interactions)
 const uploadedImage = ref<string | null>(null) // User-uploaded image (writable)
@@ -86,12 +81,10 @@ const uploadedGLBUrl = ref<string | null>(null)
 // Now prioritizes local state over cell data (ITERATION #5)
 const inputImage = computed(() => {
   // Prioritize uploaded image, then fall back to cell data
-  const imageUrl = uploadedImage.value || 
-                   props.cell?.initial_data?.inputImage || 
-                   props.cell?.state?.inputImage || 
-                   props.cell?.inputImage || ''
-  console.log('[DEBUG_ITERATION_5] Computed inputImage:', imageUrl)
-  return imageUrl
+  return uploadedImage.value || 
+         props.cell?.initial_data?.inputImage || 
+         props.cell?.state?.inputImage || 
+         props.cell?.inputImage || ''
 })
 
 const generatedMesh = computed(() => {
@@ -247,7 +240,6 @@ const handleFileUpload = (event: Event) => {
     uploadedImage.value = result // ITERATION #5 - Now using writable ref
     localError.value = null
     logger.debug('Image loaded as base64 data URL')
-    console.log('[DEBUG_ITERATION_5] uploadedImage set:', result.substring(0, 50) + '...')
   }
   reader.onerror = () => {
     localError.value = 'Failed to read image file'
@@ -301,19 +293,8 @@ const generate3DMesh = async () => {
   localError.value = null
 
   try {
-    logger.info(`Sending generation request with mode: ${generationMode.value}`)
-
-    const response = await apiFetch('/api/cells/execute-ephemeral', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        cell_type: '3d-mesh-prototyping-cell',
-        input_data: {
-          generationMode: generationMode.value,
-          inputImage: inputImage.value,
-          reconstructionParams: props.cell?.initial_data?.reconstructionParams ||
+    // Prepare input for cell execution
+    const reconstructionParams = props.cell?.initial_data?.reconstructionParams ||
                                 props.cell?.state?.reconstructionParams ||
                                 props.cell?.reconstructionParams || {
                                   targetFaces: 10000,
@@ -321,47 +302,64 @@ const generate3DMesh = async () => {
                                   compressionLevel: 7,
                                   targetFileSizeMB: 10
                                 }
-        }
-      })
+    
+    const input: MeshPrototypingInput = {
+      inputImage: inputImage.value || '',
+      generationMode: generationMode.value,
+      reconstructionParams
+    }
+    
+    // Validate input using cell's validate method
+    const validationErrors = cellInstance.validate(input)
+    
+    if (validationErrors.length > 0) {
+      const errorMessages = validationErrors.map(e => `${e.field}: ${e.message}`).join(', ')
+      throw new Error(`Validation failed: ${errorMessages}`)
+    }
+    
+    logger.info(`Executing cell with mode: ${generationMode.value}`)
+
+    // Execute using cell instance
+    const result = await cellInstance.execute(input)
+    
+    logger.debug('Cell execution result:', { 
+      success: result.success,
+      executionTime: result.execution_time 
     })
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`)
-    }
-
-    const result = await response.json()
-    logger.debug('API response:', result)
-
-    // Extract values from response (prioritize nested result.result which is the actual cell result)
-    const success = result.result?.success !== undefined ? result.result.success : result.success
-    const jobIdValue = result.result?.job_id || result.job_id
-    const meshData = result.result?.mesh_data || result.mesh_data
-    const metadata = result.result?.metadata || result.metadata
-    const errorMsg = result.result?.error || result.error || 'Unknown error'
-
-    if (!success) {
+    if (!result.success) {
       // Backend returned explicit failure
+      const errorMsg = result.error || 'Unknown error'
       logger.error(`Generation failed: ${errorMsg}`)
       localError.value = errorMsg
       localIsGenerating.value = false
 
-    } else if (jobIdValue) {
-      // Async job (local-gpu mode) - start polling
-      logger.info(`Job queued: ${jobIdValue}`)
-      startPolling(jobIdValue, 2000)
+    } else if (result.output) {
+      const output = result.output as any
+      
+      if (output.job_id) {
+        // Async job (local-gpu mode) - start polling
+        logger.info(`Job queued: ${output.job_id}`)
+        startPolling(output.job_id, 2000)
 
-    } else if (meshData) {
-      // Synchronous response (cloud-api mode) - load mesh directly
-      logger.info('Mesh generated successfully (cloud-api)')
-      localGeneratedMesh.value = meshData
-      localError.value = null
-      localIsGenerating.value = false
-      if (metadata) {
-        logger.debug('Mesh metadata:', metadata)
+      } else if (output.glb_url) {
+        // Synchronous response (cloud-api mode) - load mesh directly
+        logger.info('Mesh generated successfully (cloud-api)')
+        localGeneratedMesh.value = output.glb_url
+        localError.value = null
+        localIsGenerating.value = false
+        if (output.metadata) {
+          logger.debug('Mesh metadata:', output.metadata)
+        }
+      } else {
+        // Success but neither job_id nor glb_url - unexpected
+        const unexpectedMsg = 'Unexpected response: no job ID or GLB URL received'
+        logger.error(unexpectedMsg)
+        localError.value = unexpectedMsg
+        localIsGenerating.value = false
       }
     } else {
-      // Success but neither job_id nor mesh_data - unexpected
-      const unexpectedMsg = 'Unexpected response: no job ID or mesh data received'
+      const unexpectedMsg = 'Unexpected response: no output data'
       logger.error(unexpectedMsg)
       localError.value = unexpectedMsg
       localIsGenerating.value = false
@@ -411,14 +409,33 @@ const toggleGrid = () => {
 }
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
   logger.info('3D Mesh Prototyping Cell (Babylon.js) mounted')
   
   // Debug check for inputImage availability (ITERATION #4)
   if (!inputImage.value) {
-    console.warn('[DEBUG_ITERATION_4] inputImage is empty on mount. Cell may not have initial data yet.')
+    logger.warn('inputImage is empty on mount. Cell may not have initial data yet.')
   } else {
-    logger.info('inputImage available on mount:', inputImage.value)
+    logger.info('inputImage available on mount')
+  }
+  
+  // Perform health check
+  try {
+    const health = await cellInstance.health_check()
+    if (health.status !== 'healthy') {
+      logger.warn('Cell health check warning', { 
+        status: health.status,
+        reason: health.reason 
+      })
+      // Optionally show a UI warning if service is degraded
+      if (!health.can_execute) {
+        localError.value = `Service unavailable: ${health.reason}`
+      }
+    } else {
+      logger.debug('Cell health check passed')
+    }
+  } catch (error: any) {
+    logger.error('Cell health check failed', { error: error.message })
   }
 })
 

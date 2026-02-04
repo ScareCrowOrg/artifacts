@@ -212,11 +212,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { createLogger } from '@/utils/logger'
-import apiService from '@/services/apiService'
+import { PngGeneratorCell } from '@/cells/PngGeneratorCell'
+import type { PngGeneratorInput } from '@/cells/PngGeneratorCell'
 
 const logger = createLogger('component:png-generator-cell')
+
+// Initialize PngGeneratorCell instance
+const cellInstance = new PngGeneratorCell()
 
 // Props
 interface CellObject {
@@ -381,68 +385,60 @@ const handleGenerate = async () => {
     return
   }
 
-  logger.info('Generating PNG image via ephemeral execution', { 
+  logger.info('Generating PNG image via BaseCell', { 
     prompt: localPrompt.value,
     cellId: effectiveCellId.value
   })
   
   // Emit generate event for backward compatibility
-  // NOTE: This event is emitted BEFORE the API call to allow parent components
-  // to intercept and handle generation themselves if needed (e.g., with custom logic).
-  // If parent components don't handle this event, the component will proceed with
-  // the default API call implementation below.
   emit('generate', {
     prompt: localPrompt.value,
     negativePrompt: localNegativePrompt.value,
     asset3dMode: localAsset3dMode.value,
-    ...localParams.value
+    generationParams: localParams.value
   })
   
   localIsGenerating.value = true
   localError.value = null
   
   try {
-    // Call ephemeral execution endpoint for PNG generation
-    const response = await apiService.fetch('/api/cells/execute-ephemeral', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cell_type: 'png-generator-cell',
-        input_data: {
-          action: 'generate',
-          prompt: localPrompt.value,
-          negativePrompt: localNegativePrompt.value,
-          asset3dMode: localAsset3dMode.value,
-          ...localParams.value
-        }
-      })
-    })
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+    // Validate input using cell's validate method
+    const input: PngGeneratorInput = {
+      action: 'generate',
+      prompt: localPrompt.value,
+      negativePrompt: localNegativePrompt.value,
+      asset3dMode: localAsset3dMode.value,
+      generationParams: localParams.value
     }
     
-    const data = await response.json()
+    const validationErrors = cellInstance.validate(input)
+    
+    if (validationErrors.length > 0) {
+      const errorMessages = validationErrors.map(e => `${e.field}: ${e.message}`).join(', ')
+      throw new Error(`Validation failed: ${errorMessages}`)
+    }
+    
+    // Execute using cell instance
+    const result = await cellInstance.execute(input)
     
     logger.info('PNG generation completed', { 
-      success: data.success,
-      hasResult: !!data.result
+      success: result.success,
+      executionTime: result.execution_time
     })
     
-    if (data.success && data.result) {
+    if (result.success && result.output) {
+      const output = result.output as any
+      
       // Extract generated PNG from result
-      if (data.result.image_data) {
-        localGeneratedPng.value = `data:image/png;base64,${data.result.image_data}`
-      } else if (data.result.generatedPng) {
-        localGeneratedPng.value = data.result.generatedPng
+      if (output.generatedPng) {
+        localGeneratedPng.value = output.generatedPng
       } else {
         throw new Error('No image data in response')
       }
       
       localError.value = null
     } else {
-      throw new Error(data.message || 'Generation failed')
+      throw new Error(result.error || 'Generation failed')
     }
   } catch (error: any) {
     logger.error('PNG generation failed', { error: error.message })
@@ -503,47 +499,41 @@ const handleCleanBackground = async () => {
   localError.value = null
   
   try {
-    // Call ephemeral execution endpoint for background removal
-    const response = await apiService.fetch('/api/cells/execute-ephemeral', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cell_type: 'png-generator-cell',
-        input_data: {
-          action: 'removeBackground',
-          generatedPng: localGeneratedPng.value,
-          alpha_matting: true
-        }
-      })
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+    // Validate input using cell's validate method
+    const input: PngGeneratorInput = {
+      action: 'removeBackground',
+      generatedPng: localGeneratedPng.value,
+      alpha_matting: true
     }
-
-    const data = await response.json()
+    
+    const validationErrors = cellInstance.validate(input)
+    
+    if (validationErrors.length > 0) {
+      const errorMessages = validationErrors.map(e => `${e.field}: ${e.message}`).join(', ')
+      throw new Error(`Validation failed: ${errorMessages}`)
+    }
+    
+    // Execute using cell instance
+    const result = await cellInstance.execute(input)
 
     logger.info('Background removal completed', {
-      success: data.success,
-      result: data.result
+      success: result.success,
+      executionTime: result.execution_time
     })
 
-    if (data.success && data.result) {
+    if (result.success && result.output) {
+      const output = result.output as any
+      
       // Extract transparent PNG from result
-      if (data.result.generatedPng) {
-        localGeneratedPng.value = data.result.generatedPng
-        localError.value = null
-        logger.info('PNG updated with transparent background')
-      } else if (data.result.output_image_base64) {
-        localGeneratedPng.value = `data:image/png;base64,${data.result.output_image_base64}`
+      if (output.generatedPng) {
+        localGeneratedPng.value = output.generatedPng
         localError.value = null
         logger.info('PNG updated with transparent background')
       } else {
         throw new Error('No image data in background removal response')
       }
     } else {
-      throw new Error(data.message || data.result?.error || 'Background removal failed')
+      throw new Error(result.error || 'Background removal failed')
     }
   } catch (error: any) {
     logger.error('Background removal failed', { error: error.message })
@@ -553,10 +543,28 @@ const handleCleanBackground = async () => {
   }
 }
 
-logger.debug('PNG Generator Cell mounted', { 
-  cellId: effectiveCellId.value,
-  hasCell: !!props.cell,
-  hasCellId: !!props.cellId
+// Check cell health on mount
+onMounted(async () => {
+  logger.debug('PNG Generator Cell mounted', { 
+    cellId: effectiveCellId.value,
+    hasCell: !!props.cell,
+    hasCellId: !!props.cellId
+  })
+  
+  // Perform health check
+  try {
+    const health = await cellInstance.health_check()
+    if (health.status !== 'healthy') {
+      logger.warn('Cell health check warning', { 
+        status: health.status,
+        reason: health.reason 
+      })
+    } else {
+      logger.debug('Cell health check passed')
+    }
+  } catch (error: any) {
+    logger.error('Cell health check failed', { error: error.message })
+  }
 })
 </script>
 
