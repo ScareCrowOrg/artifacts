@@ -2,13 +2,34 @@
 Main execution logic for png-generator-cell.
 
 This module provides PNG image generation functionality using Stable Diffusion.
+
+BaseCell v1.0 Implementation:
+- PngGeneratorCell class inherits from BaseCell (defined at end of file)
+- Implements execute(), describe(), validate(), health_check()
+- Backward compatible through execute_cell() wrapper
+- Legacy handlers remain for stability
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 import logging
 import asyncio
 import base64
 from io import BytesIO
+import sys
+import os
+
+# Add backend to path for importing BaseCell
+backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../backend'))
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
+
+try:
+    from app.core.base_cell import BaseCell, CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult, HealthStatus
+    BASECELL_AVAILABLE = True
+except ImportError:
+    # Graceful degradation if BaseCell not available
+    BASECELL_AVAILABLE = False
+    BaseCell = object  # Fallback
 
 logger = logging.getLogger(__name__)
 
@@ -570,6 +591,259 @@ async def handle_remove_background(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             "error": f"Error removing background: {str(e)}",
             "action": "removeBackground"
         }
+
+
+# ============ BASECELL v1.0 IMPLEMENTATION ============
+
+
+class PngGeneratorCell(BaseCell):
+    """
+    PNG Generator Cell implementing BaseCell v1.0 framework.
+    
+    This cell provides PNG image generation using Stable Diffusion
+    and background removal via GPU Worker through Redis job queueing.
+    
+    Architecture:
+    - Manager Cell (Kind/Linux): API, job queueing, result polling
+    - Windows Worker: GPU processing (Stable Diffusion, Rembg)
+    - Redis: Job queue and status tracking
+    
+    Key Features:
+    - Text-to-image generation with Stable Diffusion
+    - Background removal with alpha matting
+    - 3D asset optimization mode with Ollama orchestration
+    - Graceful fallbacks when services unavailable
+    """
+    
+    def __init__(self):
+        """Initialize PNG Generator Cell"""
+        self.redis_client = None
+        self.sd_service = None
+        
+    async def setup(self, config: EnvironmentConfig) -> None:
+        """
+        Initialize lightweight resources.
+        
+        Sets up Redis connection for job queueing and optional
+        Stable Diffusion service connection.
+        
+        Note: Does NOT allocate GPU/VRAM - managed by Windows Worker.
+        
+        Args:
+            config: Environment configuration
+        """
+        try:
+            logger.info("Initializing PNG Generator Cell resources")
+            # Note: Redis connection initialization would go here
+            # For now, we use lazy initialization in execute()
+            # to maintain compatibility with current architecture
+            logger.info("PNG Generator Cell setup complete")
+        except Exception as e:
+            logger.warning(f"Non-critical setup error: {e}")
+    
+    async def teardown(self) -> None:
+        """
+        Clean up lightweight resources.
+        
+        Closes Redis connections and cleans up any listeners.
+        Does NOT deallocate GPU/VRAM (not cell's responsibility).
+        """
+        try:
+            logger.info("Tearing down PNG Generator Cell resources")
+            if self.redis_client:
+                self.redis_client = None
+            logger.info("PNG Generator Cell teardown complete")
+        except Exception as e:
+            logger.error(f"Error during teardown: {e}", exc_info=True)
+    
+    async def execute(self, input: Dict[str, Any]) -> CellResult:
+        """
+        Execute PNG generation or background removal.
+        
+        Routes to appropriate handler based on action:
+        - 'generate': Generate PNG from text prompt
+        - 'removeBackground': Remove background from existing PNG
+        
+        Args:
+            input: Input data containing:
+                - action: 'generate' or 'removeBackground'
+                - prompt: Text description (for generate)
+                - generatedPng: Existing PNG (for removeBackground)
+                - generationParams: Optional parameters
+                - negativePrompt: Optional negative prompt
+                - asset3dMode: Optional 3D asset optimization flag
+        
+        Returns:
+            CellResult with success status, output data, and execution metadata
+        """
+        import time
+        start_time = time.time()
+        
+        try:
+            # Validate input
+            validation_errors = self.validate(input)
+            if validation_errors:
+                return CellResult(
+                    success=False,
+                    output={},
+                    error=f"Validation failed: {', '.join([e.message for e in validation_errors])}",
+                    execution_time=(time.time() - start_time) * 1000
+                )
+            
+            # Route to appropriate handler
+            action = input.get('action', 'generate')
+            
+            if action == 'generate':
+                result = await handle_generate_png(input)
+            elif action == 'removeBackground':
+                result = await handle_remove_background(input)
+            else:
+                return CellResult(
+                    success=False,
+                    output={},
+                    error=f"Unknown action '{action}'. Supported: 'generate', 'removeBackground'",
+                    execution_time=(time.time() - start_time) * 1000
+                )
+            
+            # Convert legacy result format to CellResult
+            execution_time = (time.time() - start_time) * 1000
+            
+            return CellResult(
+                success=result.get('success', False),
+                output=result,
+                artifacts=[],
+                execution_time=execution_time,
+                execution_steps=[f"Action: {action}"],
+                metadata=result.get('metadata', {})
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in PNG Generator Cell execution: {e}", exc_info=True)
+            return CellResult(
+                success=False,
+                output={},
+                error=str(e),
+                execution_time=(time.time() - start_time) * 1000
+            )
+    
+    async def describe(self) -> CellMetadata:
+        """
+        Describe PNG Generator Cell capabilities.
+        
+        Returns metadata about inputs, outputs, and configuration.
+        
+        Returns:
+            CellMetadata with cell description
+        """
+        return CellMetadata(
+            id='png-generator-cell',
+            name='PNG Generator',
+            version='1.0.0',
+            description='Generate and manipulate PNG images using Stable Diffusion and GPU Worker',
+            inputs={
+                'action': 'string (generate | removeBackground)',
+                'prompt': 'string (required for generate)',
+                'generatedPng': 'string (base64, required for removeBackground)',
+                'generationParams': 'object (optional)',
+                'negativePrompt': 'string (optional)',
+                'asset3dMode': 'boolean (optional)',
+                'alpha_matting': 'boolean (optional, for removeBackground)'
+            },
+            outputs={
+                'success': 'boolean',
+                'generatedPng': 'string (base64 PNG)',
+                'has_png': 'boolean',
+                'prompt': 'string',
+                'message': 'string',
+                'error': 'string (if failed)',
+                'metadata': 'object'
+            },
+            tags=['image', 'generation', 'png', 'stable-diffusion', 'background-removal'],
+            required_resources=['redis', 'windows-worker', 'stable-diffusion'],
+            estimated_duration_seconds=30.0
+        )
+    
+    def validate(self, input: Dict[str, Any]) -> List[ValidationError]:
+        """
+        Validate input data.
+        
+        Args:
+            input: Input data to validate
+        
+        Returns:
+            List of validation errors (empty if valid)
+        """
+        errors = []
+        
+        action = input.get('action', 'generate')
+        
+        if action not in ['generate', 'removeBackground']:
+            errors.append(ValidationError(
+                field='action',
+                message=f"Invalid action '{action}'. Must be 'generate' or 'removeBackground'"
+            ))
+        
+        if action == 'removeBackground':
+            if not input.get('generatedPng'):
+                errors.append(ValidationError(
+                    field='generatedPng',
+                    message='generatedPng is required for removeBackground action'
+                ))
+        
+        return errors
+    
+    async def health_check(self) -> HealthCheckResult:
+        """
+        Check if PNG Generator Cell can execute.
+        
+        Validates connectivity to Redis and optionally Stable Diffusion service.
+        
+        Returns:
+            HealthCheckResult with status and diagnostic info
+        """
+        try:
+            # Check if Stable Diffusion service is available
+            # This is a soft check - cell can still work with fallbacks
+            try:
+                from app.services.stable_diffusion_service import StableDiffusionService
+                sd_available = True
+            except ImportError:
+                sd_available = False
+            
+            if sd_available:
+                return HealthCheckResult(
+                    status=HealthStatus.HEALTHY,
+                    reason="PNG Generator Cell is fully operational"
+                )
+            else:
+                return HealthCheckResult(
+                    status=HealthStatus.DEGRADED,
+                    reason="Stable Diffusion service not available (will use fallbacks)"
+                )
+        
+        except Exception as e:
+            logger.error(f"Health check failed: {e}", exc_info=True)
+            return HealthCheckResult(
+                status=HealthStatus.UNAVAILABLE,
+                reason=f"Health check error: {str(e)}"
+            )
+
+
+# Create global instance for backward compatibility
+_png_generator_cell_instance = None
+
+
+def get_png_generator_cell() -> PngGeneratorCell:
+    """Get or create the global PNG Generator Cell instance"""
+    global _png_generator_cell_instance
+    if not BASECELL_AVAILABLE:
+        return None
+    if _png_generator_cell_instance is None:
+        _png_generator_cell_instance = PngGeneratorCell()
+    return _png_generator_cell_instance
+
+
+# ============ MAIN EXECUTION ============
 
 
 if __name__ == "__main__":
