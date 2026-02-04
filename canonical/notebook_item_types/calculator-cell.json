@@ -1,0 +1,155 @@
+{
+  "id": "calculator-cell",
+  "name": "Calculator Cell",
+  "description": "Simple calculator for basic math operations. Pure frontend implementation with no backend dependencies. Perfect for testing headless execution and demonstrating the BaseCell v1.0 framework.",
+  "version": "1.0.0",
+  "category": "utility",
+  "icon": "🧮",
+  "tags": [
+    "math",
+    "calculator",
+    "frontend-only",
+    "headless-capable",
+    "basecell-poc"
+  ],
+  "default_refs": {
+    "view": [
+      "artifacts/canonical/cell_types/calculator-cell/frontend/View.vue"
+    ],
+    "handler": []
+  },
+  "capabilities": {
+    "headless_execution": true,
+    "requires_backend": false,
+    "requires_gpu": false,
+    "composable": true,
+    "avg_execution_time_ms": 0.5
+  },
+  "properties_schema": {
+    "type": "object",
+    "properties": {
+      "a": {
+        "type": "number",
+        "description": "First operand",
+        "required": true
+      },
+      "b": {
+        "type": "number",
+        "description": "Second operand",
+        "required": true
+      },
+      "operation": {
+        "type": "string",
+        "description": "Operation to perform",
+        "required": true,
+        "enum": [
+          "add",
+          "subtract",
+          "multiply",
+          "divide",
+          "power",
+          "modulo"
+        ],
+        "default": "add"
+      },
+      "precision": {
+        "type": "number",
+        "description": "Decimal precision for result",
+        "required": false,
+        "default": 2,
+        "minimum": 0,
+        "maximum": 10
+      }
+    },
+    "required": [
+      "a",
+      "b",
+      "operation"
+    ]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "result": {
+        "type": "number",
+        "description": "Calculated result"
+      },
+      "formatted": {
+        "type": "string",
+        "description": "Formatted result string"
+      },
+      "expression": {
+        "type": "string",
+        "description": "Complete expression (e.g., '10 + 5 = 15.00')"
+      }
+    }
+  },
+  "examples": [
+    {
+      "name": "Simple Addition",
+      "input": {
+        "a": 10,
+        "b": 5,
+        "operation": "add",
+        "precision": 2
+      },
+      "expected_output": {
+        "result": 15,
+        "formatted": "15.00",
+        "expression": "10 + 5 = 15.00"
+      }
+    },
+    {
+      "name": "Division",
+      "input": {
+        "a": 22,
+        "b": 7,
+        "operation": "divide",
+        "precision": 4
+      },
+      "expected_output": {
+        "result": 3.142857142857143,
+        "formatted": "3.1429",
+        "expression": "22 ÷ 7 = 3.1429"
+      }
+    },
+    {
+      "name": "Power",
+      "input": {
+        "a": 2,
+        "b": 10,
+        "operation": "power",
+        "precision": 0
+      },
+      "expected_output": {
+        "result": 1024,
+        "formatted": "1024",
+        "expression": "2 ^ 10 = 1024"
+      }
+    }
+  ],
+  "validation_rules": {
+    "divide_by_zero": {
+      "field": "b",
+      "condition": "operation === 'divide' && b === 0",
+      "message": "Cannot divide by zero"
+    },
+    "modulo_by_zero": {
+      "field": "b",
+      "condition": "operation === 'modulo' && b === 0",
+      "message": "Cannot calculate modulo by zero"
+    },
+    "precision_range": {
+      "field": "precision",
+      "condition": "precision < 0 || precision > 10",
+      "message": "Precision must be between 0 and 10"
+    }
+  },
+  "metadata": {
+    "created_at": "2026-02-04",
+    "author": "GitHub Copilot Coding Agent",
+    "framework_version": "basecell-v1.0",
+    "implementation": "frontend-only",
+    "purpose": "poc-validation"
+  }
+}
