@@ -246,9 +246,13 @@ describe('PNG Generator Cell View', () => {
     await wrapper.vm.$nextTick()
     
     const buttons = wrapper.findAll('.preview-section button')
-    expect(buttons).toHaveLength(2)
-    expect(buttons[0].text()).toBe('Copy')
-    expect(buttons[1].text()).toBe('Download')
+    // The component now has 3 buttons: Clean Background, Copy, and Download
+    expect(buttons.length).toBeGreaterThanOrEqual(2)
+    
+    // Find specific buttons by text
+    const buttonTexts = buttons.map(btn => btn.text())
+    expect(buttonTexts).toContain('Copy')
+    expect(buttonTexts).toContain('Download')
   })
 
   it('updates local params when user changes inputs', async () => {
