@@ -181,15 +181,17 @@ export class MeshPrototypingCell implements BaseCell {
         throw new Error(`Backend execution failed: ${response.statusText}`)
       }
       
-      const result = await response.json() as MeshPrototypingOutput
-      
+      const responseData = await response.json() as any
+      // Extract the result field if it exists (API wraps response in 'result' field)
+      const result = (responseData.result || responseData) as MeshPrototypingOutput
+
       const executionTime = performance.now() - startTime
-      
-      log.info('Execution completed', { 
+
+      log.info('Execution completed', {
         success: result.success,
         hasJobId: !!result.job_id,
         hasGlbUrl: !!result.glb_url,
-        executionTime 
+        executionTime
       })
       
       // Collect artifacts
