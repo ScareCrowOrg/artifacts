@@ -403,6 +403,30 @@ poetry run pytest ../artifacts/canonical/cell_types/3d-mesh-prototyping-cell/bac
 
 ## Troubleshooting
 
+### Error: "Request Entity Too Large" (HTTP 413)
+**Cause**: Image payload exceeds server's request size limit (default: 2MB)
+
+**Solutions**:
+1. **Frontend Image Compression** (Automatic - v2.1+):
+   - Images are automatically compressed to max 1024x1024px
+   - JPEG quality reduced to 0.8 to minimize base64 size
+   - Reduces typical 5MB image to ~200KB-500KB after compression
+
+2. **Backend Configuration** (System Admin):
+   - FastAPI request size limit increased to 100MB
+   - Configure in `backend/app/main.py` via `REQUEST_SIZE_LIMIT`
+   - Uvicorn parameters:
+     - `limit_request_line`: HTTP request line size
+     - `limit_request_fields`: Number of header fields
+     - `limit_request_fields_size`: Total header size
+
+3. **Manual Fix (if still failing)**:
+   - Use external image editor to reduce dimensions before upload
+   - Convert to lower quality JPEG (quality: 60-70)
+   - Max recommended input size: 2000x2000px
+
+**Status**: ✅ **FIXED** in v2.1+ (automatic image compression)
+
 ### Cell Not Appearing
 - **Check Backend Logs**: Ensure cell type was discovered on startup
 - **Verify type.json**: Confirm symlink or file exists
@@ -413,9 +437,10 @@ poetry run pytest ../artifacts/canonical/cell_types/3d-mesh-prototyping-cell/bac
 - **Verify Input Image**: Must be valid PNG/JPG format
 - **Check Logs**: Review backend logs for detailed errors
 - **Simplify Image**: Try smaller, clearer input images
+- **Check Request Size**: See "Request Entity Too Large" above
 
 ### Mesh Not Loading
-- **Check Console**: Look for Three.js or GLTFLoader errors
+- **Check Console**: Look for Babylon.js or GLTFLoader errors
 - **Verify GLB Format**: Ensure valid GLTF binary structure
 - **Check Draco**: Verify Draco decoder path is accessible
 - **Browser Compatibility**: Requires WebGL 2.0 support
@@ -464,9 +489,15 @@ For issues or questions:
 
 ---
 
-**Version**: 2.0.0  
-**Created**: 2026-01-16  
-**Updated**: 2026-01-31 (Migrated to Babylon.js)  
-**Category**: prototyping  
-**Status**: MVP - Mock implementation, GPU integration pending  
+**Version**: 2.1.0
+**Created**: 2026-01-16
+**Updated**: 2026-02-04 (Fixed "Request Entity Too Large" error with automatic image compression)
+**Category**: prototyping
+**Status**: MVP - Mock implementation, GPU integration pending
 **Authors**: GitHub Copilot Agent
+
+### v2.1.0 Changes
+- ✅ Added automatic image compression to prevent HTTP 413 errors
+- ✅ Increased backend request size limit from 2MB to 100MB
+- ✅ Added troubleshooting guide for "Request Entity Too Large"
+- ✅ Frontend image optimization (max 1024x1024px, JPEG quality 0.8)
