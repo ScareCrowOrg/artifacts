@@ -60,21 +60,27 @@ export interface MeshPrototypingInput {
 export interface MeshPrototypingOutput {
   /** Whether execution was successful */
   success: boolean
-  
+
   /** Job ID for async local-gpu processing */
   job_id?: string
-  
-  /** URL to download the generated GLB file */
+
+  /** URL to download the generated GLB file (cloud-api) */
   glb_url?: string
-  
+
+  /** Base64-encoded mesh data (alternative to glb_url) */
+  mesh_data?: string
+
   /** Success message */
   message?: string
-  
+
   /** Error message if failed */
   error?: string
-  
+
   /** Additional metadata from backend */
   metadata?: Record<string, any>
+
+  /** Generation mode used */
+  mode?: string
 }
 
 /**
@@ -196,8 +202,8 @@ export class MeshPrototypingCell implements BaseCell {
       
       // Collect artifacts
       const artifacts: string[] = []
-      if (result.glb_url) {
-        artifacts.push(result.glb_url)
+      if (result.glb_url || result.mesh_data) {
+        artifacts.push(result.glb_url || result.mesh_data)
       }
       
       // Map backend response to CellResult

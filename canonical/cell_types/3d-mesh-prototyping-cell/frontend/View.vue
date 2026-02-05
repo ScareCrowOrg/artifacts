@@ -399,10 +399,10 @@ const generate3DMesh = async () => {
         logger.info(`Job queued: ${output.job_id}`)
         startPolling(output.job_id, 2000)
 
-      } else if (output.glb_url) {
+      } else if (output.glb_url || output.mesh_data) {
         // Synchronous response (cloud-api mode) - load mesh directly
         logger.info('Mesh generated successfully (cloud-api)')
-        localGeneratedMesh.value = output.glb_url
+        localGeneratedMesh.value = output.glb_url || output.mesh_data
         localError.value = null
         localIsGenerating.value = false
         if (output.metadata) {
@@ -432,16 +432,26 @@ const generate3DMesh = async () => {
  * Download generated GLB mesh
  */
 const downloadMesh = () => {
-  if (!generatedMesh.value) return
+  if (!meshBlobUrl.value && !uploadedGLBFile.value) return
 
   logger.info('Downloading GLB mesh')
 
   try {
     const link = document.createElement('a')
-    link.href = generatedMesh.value
-    link.download = `mesh_${Date.now()}.glb`
-    link.click()
 
+    // Use blob URL for generated meshes, or file blob for uploaded files
+    if (uploadedGLBFile.value) {
+      // Manual upload mode - use file blob
+      const blob = uploadedGLBFile.value
+      link.href = URL.createObjectURL(blob)
+      link.download = uploadedGLBFile.value.name || `mesh_${Date.now()}.glb`
+    } else {
+      // Generated mesh mode - use blob URL
+      link.href = meshBlobUrl.value!
+      link.download = `mesh_${Date.now()}.glb`
+    }
+
+    link.click()
     logger.debug('GLB download initiated')
   } catch (err) {
     logger.error('Error downloading mesh', err)
