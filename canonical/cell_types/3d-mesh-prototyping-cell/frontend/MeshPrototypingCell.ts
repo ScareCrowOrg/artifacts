@@ -24,6 +24,11 @@ const log = createLogger('cells:MeshPrototyping')
 export type GenerationMode = 'cloud-api' | 'local-gpu' | 'manual-upload'
 
 /**
+ * Supported 3D mesh generation models
+ */
+export type MeshGenerationModel = 'sf3d' | 'instantmesh'
+
+/**
  * Reconstruction parameters for mesh generation
  */
 export interface ReconstructionParams {
@@ -46,12 +51,15 @@ export interface ReconstructionParams {
 export interface MeshPrototypingInput {
   /** Base64-encoded PNG image (required) */
   inputImage: string
-  
+
   /** Reconstruction parameters (optional) */
   reconstructionParams?: ReconstructionParams
-  
+
   /** Generation mode (optional, defaults to 'cloud-api') */
   generationMode?: GenerationMode
+
+  /** 3D mesh generation model (optional, defaults to 'sf3d') */
+  modelType?: MeshGenerationModel
 }
 
 /**

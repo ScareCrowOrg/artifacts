@@ -246,28 +246,33 @@ async def handle_cloud_api_generation(cell_data: Dict[str, Any]) -> Dict[str, An
 async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle 3D generation via local GPU worker (Redis job queue).
-    
+
     This is the default mode for Windows Worker integration.
     Jobs are queued to Redis and processed asynchronously.
-    
+    Supports multiple 3D generation models via model_type parameter.
+
     Args:
         cell_data: Cell instance data with input image and parameters
-    
+
     Returns:
         Dict with job queueing result
     """
     logger.info("Local GPU generation requested (Redis job queue)")
-    
+
     input_image = cell_data.get('inputImage')
     reconstruction_params = cell_data.get('reconstructionParams', {})
-    
+    model_type = cell_data.get('modelType', 'sf3d')  # Default to sf3d for backward compatibility
+
+    logger.info(f"Using 3D generation model: {model_type}")
+
     # Queue job to Redis (non-blocking)
     job_result = await queue_3d_generation_job(
         input_image=input_image,
         target_faces=reconstruction_params.get('targetFaces', 50000),
         enable_draco=reconstruction_params.get('enableDracoCompression', True),
         compression_level=reconstruction_params.get('compressionLevel', 7),
-        target_size_mb=reconstruction_params.get('targetFileSizeMB', 5)
+        target_size_mb=reconstruction_params.get('targetFileSizeMB', 5),
+        model_type=model_type
     )
     
     if job_result.get("success"):

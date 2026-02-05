@@ -66,11 +66,21 @@ const localShowGrid = ref<boolean>(true) // Viewport setting (writable)
 
 // Generation mode state
 type GenerationMode = 'cloud-api' | 'local-gpu' | 'manual-upload'
+type MeshGenerationModel = 'sf3d' | 'instantmesh'
+
 const generationMode = ref<GenerationMode>(
-  (props.cell?.initial_data?.generationMode || 
-   props.cell?.state?.generationMode || 
-   props.cell?.generationMode || 
+  (props.cell?.initial_data?.generationMode ||
+   props.cell?.state?.generationMode ||
+   props.cell?.generationMode ||
    'local-gpu') as GenerationMode
+)
+
+// Model selection state (defaults to instantmesh due to SF3D FP16 precision issues)
+const selectedModel = ref<MeshGenerationModel>(
+  (props.cell?.initial_data?.modelType ||
+   props.cell?.state?.modelType ||
+   props.cell?.modelType ||
+   'instantmesh') as MeshGenerationModel
 )
 
 // Manual upload state
@@ -363,6 +373,7 @@ const generate3DMesh = async () => {
     const input: MeshPrototypingInput = {
       inputImage: inputImage.value || '',
       generationMode: generationMode.value,
+      modelType: selectedModel.value,
       reconstructionParams
     }
     
@@ -589,6 +600,43 @@ onUnmounted(() => {
       />
     </div>
 
+    <!-- Model Selection (only for local-gpu mode) -->
+    <div v-if="generationMode === 'local-gpu'" class="mb-6">
+      <label class="block text-sm font-medium mb-3 text-text-primary dark:text-text-primary-dark">3D Generation Model</label>
+      <div class="flex gap-4">
+        <label class="flex items-center cursor-pointer">
+          <input
+            type="radio"
+            name="mesh-model"
+            value="sf3d"
+            v-model="selectedModel"
+            :disabled="isGenerating"
+            class="w-4 h-4 text-primary dark:text-primary-light"
+          />
+          <span class="ml-2 text-sm text-text-primary dark:text-text-primary-dark">
+            SF3D (Fast, 15s)
+          </span>
+        </label>
+        <label class="flex items-center cursor-pointer">
+          <input
+            type="radio"
+            name="mesh-model"
+            value="instantmesh"
+            v-model="selectedModel"
+            :disabled="isGenerating"
+            class="w-4 h-4 text-primary dark:text-primary-light"
+          />
+          <span class="ml-2 text-sm text-text-primary dark:text-text-primary-dark">
+            InstantMesh (Free, 30-45s)
+          </span>
+        </label>
+      </div>
+      <p class="text-xs text-text-secondary dark:text-text-secondary-dark mt-2">
+        <span v-if="selectedModel === 'sf3d'">SF3D: Faster inference (15s), uses more VRAM (3-4GB)</span>
+        <span v-else>InstantMesh: Free local alternative, slower but uses less VRAM (2-3GB)</span>
+      </p>
+    </div>
+
     <!-- Generate Button (only for generation modes) -->
     <button
       v-if="generationMode !== 'manual-upload'"
@@ -597,7 +645,11 @@ onUnmounted(() => {
       class="bg-success dark:bg-success-light hover:bg-success-dark dark:hover:bg-success disabled:bg-surface-disabled dark:disabled:bg-surface-disabled disabled:cursor-not-allowed text-white font-semibold py-2 px-6 rounded mb-6 transition"
     >
       <span v-if="isGenerating">{{ jobStatus === 'processing' ? 'Processing...' : 'Queueing...' }}</span>
-      <span v-else>Generate 3D Mesh ({{ generationMode === 'cloud-api' ? 'Cloud' : 'Local GPU' }})</span>
+      <span v-else>
+        Generate 3D Mesh
+        <span v-if="generationMode === 'local-gpu'"> ({{ selectedModel === 'sf3d' ? 'SF3D' : 'InstantMesh' }})</span>
+        <span v-else> (Cloud API)</span>
+      </span>
     </button>
 
     <!-- Viewport Controls -->

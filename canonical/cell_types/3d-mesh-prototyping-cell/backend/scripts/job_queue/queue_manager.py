@@ -25,24 +25,26 @@ async def queue_3d_generation_job(
     target_faces: int = 50000,
     enable_draco: bool = True,
     compression_level: int = 7,
-    target_size_mb: float = 5.0
+    target_size_mb: float = 5.0,
+    model_type: str = "sf3d"
 ) -> Dict[str, Any]:
     """
     Queue a 3D generation job to Redis for processing by Windows Worker.
-    
-    Phase 5 Hybrid Architecture:
+
+    Phase 6 Hybrid Architecture with Model Routing:
     1. Generate unique job_id
     2. Write input image to shared volume
-    3. Queue job metadata to Redis
+    3. Queue job metadata to Redis (includes model_type for routing)
     4. Return job_id for client polling
-    
+
     Args:
         input_image: Base64-encoded PNG image
         target_faces: Target face count for decimation
         enable_draco: Enable Draco mesh compression
         compression_level: Draco compression level (0-10)
         target_size_mb: Target file size in MB
-    
+        model_type: 3D generation model to use ('sf3d' or 'instantmesh', default: 'sf3d')
+
     Returns:
         Dict containing:
             - success: Boolean
@@ -132,6 +134,7 @@ async def queue_3d_generation_job(
             "job_id": job_id,
             "status": "queued",
             "created_at": timestamp,
+            "model_type": model_type,  # Route to appropriate 3D service (sf3d or instantmesh)
             "input_image_path": worker_input_path,
             "output_dir": worker_output_dir,
             "parameters": json.dumps({
