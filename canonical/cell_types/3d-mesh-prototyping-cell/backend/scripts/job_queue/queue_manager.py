@@ -43,7 +43,7 @@ async def queue_3d_generation_job(
         enable_draco: Enable Draco mesh compression
         compression_level: Draco compression level (0-10)
         target_size_mb: Target file size in MB
-        model_type: 3D generation model to use ('sf3d' or 'instantmesh', default: 'sf3d')
+        model_type: 3D generation model to use ('sf3d' or 'instantmesh', default: 'instantmesh')
 
     Returns:
         Dict containing:
@@ -132,6 +132,7 @@ async def queue_3d_generation_job(
         
         job_data = {
             "job_id": job_id,
+            "job_type": "3d_generation",  # Worker needs to know this is a 3D job
             "status": "queued",
             "created_at": timestamp,
             "model_type": model_type,  # Route to appropriate 3D service (sf3d or instantmesh)

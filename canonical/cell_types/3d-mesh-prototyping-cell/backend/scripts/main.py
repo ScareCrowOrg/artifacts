@@ -76,7 +76,7 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             - inputImage: Base64-encoded PNG image for reconstruction
             - reconstructionParams: Parameters for 3D generation
             - generationMode: Generation mode (optional, defaults to 'local-gpu')
-            - modelType: 3D model to use (optional, defaults to 'sf3d')
+            - modelType: 3D model to use (optional, defaults to 'instantmesh')
 
     Returns:
         Dict with execution results:
