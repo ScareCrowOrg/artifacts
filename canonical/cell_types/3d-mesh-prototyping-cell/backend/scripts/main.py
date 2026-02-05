@@ -88,13 +88,16 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # DEBUG: Log all cell_data keys to see what's being received
         logger.info(f"🔍 DEBUG cell_data keys: {list(cell_data.keys())}")
-        logger.info(f"🔍 DEBUG cell_data['modelType']: {cell_data.get('modelType')}")
-        logger.info(f"🔍 DEBUG cell_data['model_type']: {cell_data.get('model_type')}")
+
+        # BaseCell wraps input in 'input_data', so modelType is nested
+        input_data = cell_data.get('input_data', {})
+        logger.info(f"🔍 DEBUG input_data keys: {list(input_data.keys())}")
+        logger.info(f"🔍 DEBUG modelType value: {input_data.get('modelType')}")
 
         input_image = cell_data.get('inputImage')
         reconstruction_params = cell_data.get('reconstructionParams', {})
         generation_mode = cell_data.get('generationMode', 'local-gpu')
-        model_type = cell_data.get('modelType', 'instantmesh')  # Default: InstantMesh (more stable than SF3D FP16)
+        model_type = input_data.get('modelType', 'instantmesh')  # Default: InstantMesh (more stable than SF3D FP16)
 
         if not input_image:
             return {
@@ -269,7 +272,10 @@ async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, An
 
     input_image = cell_data.get('inputImage')
     reconstruction_params = cell_data.get('reconstructionParams', {})
-    model_type = cell_data.get('modelType', 'instantmesh')  # Default: InstantMesh (more stable)
+
+    # Extract modelType from nested input_data (BaseCell wrapper structure)
+    input_data = cell_data.get('input_data', {})
+    model_type = input_data.get('modelType', 'instantmesh')  # Default: InstantMesh (more stable)
 
     logger.info(f"Using 3D generation model: {model_type}")
 
