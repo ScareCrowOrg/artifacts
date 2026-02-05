@@ -26,7 +26,7 @@ async def queue_3d_generation_job(
     enable_draco: bool = True,
     compression_level: int = 7,
     target_size_mb: float = 5.0,
-    model_type: str = "sf3d"
+    model_type: str = "instantmesh"
 ) -> Dict[str, Any]:
     """
     Queue a 3D generation job to Redis for processing by Windows Worker.

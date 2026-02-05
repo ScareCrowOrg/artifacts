@@ -89,7 +89,7 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         input_image = cell_data.get('inputImage')
         reconstruction_params = cell_data.get('reconstructionParams', {})
         generation_mode = cell_data.get('generationMode', 'local-gpu')
-        model_type = cell_data.get('modelType', 'sf3d')  # Extract model type here
+        model_type = cell_data.get('modelType', 'instantmesh')  # Default: InstantMesh (more stable than SF3D FP16)
         
         if not input_image:
             return {
@@ -264,7 +264,7 @@ async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, An
 
     input_image = cell_data.get('inputImage')
     reconstruction_params = cell_data.get('reconstructionParams', {})
-    model_type = cell_data.get('modelType', 'sf3d')  # Default to sf3d for backward compatibility
+    model_type = cell_data.get('modelType', 'instantmesh')  # Default: InstantMesh (more stable)
 
     logger.info(f"Using 3D generation model: {model_type}")
 
