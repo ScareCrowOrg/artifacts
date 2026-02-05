@@ -86,11 +86,16 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             - error: Error message if execution failed
     """
     try:
+        # DEBUG: Log all cell_data keys to see what's being received
+        logger.info(f"🔍 DEBUG cell_data keys: {list(cell_data.keys())}")
+        logger.info(f"🔍 DEBUG cell_data['modelType']: {cell_data.get('modelType')}")
+        logger.info(f"🔍 DEBUG cell_data['model_type']: {cell_data.get('model_type')}")
+
         input_image = cell_data.get('inputImage')
         reconstruction_params = cell_data.get('reconstructionParams', {})
         generation_mode = cell_data.get('generationMode', 'local-gpu')
         model_type = cell_data.get('modelType', 'instantmesh')  # Default: InstantMesh (more stable than SF3D FP16)
-        
+
         if not input_image:
             return {
                 "success": False,
