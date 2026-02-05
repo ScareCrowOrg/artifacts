@@ -17,7 +17,7 @@ Phase 6 Update: Adds hybrid generation mode routing (cloud-api, local-gpu, manua
 
 Architecture:
 - Manager Cell (Kind/Linux): API, job queueing, result retrieval
-- Windows Worker: GPU processing (SF3D + Blender)
+- Windows Worker: GPU processing (InstantMesh + Blender)
 - Redis: Job queue and status tracking
 - Shared Volume: File transfer between Manager and Worker
 """
