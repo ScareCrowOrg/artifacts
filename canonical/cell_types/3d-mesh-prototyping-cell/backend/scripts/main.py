@@ -60,23 +60,24 @@ logger = logging.getLogger(__name__)
 async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute the 3D mesh prototyping cell with hybrid generation mode routing.
-    
+
     Phase 6 Architecture:
     1. Extract generationMode from cell_data (default: 'local-gpu')
     2. Route to appropriate generation handler
     3. Return job_id for polling (local-gpu) or immediate result (other modes)
-    
+
     Generation Modes:
     - 'local-gpu': Redis job queueing for Windows Worker (default)
     - 'cloud-api': External API-based generation (placeholder)
     - 'manual-upload': Direct file upload without processing
-    
+
     Args:
         cell_data: Cell instance data containing:
             - inputImage: Base64-encoded PNG image for reconstruction
             - reconstructionParams: Parameters for 3D generation
             - generationMode: Generation mode (optional, defaults to 'local-gpu')
-    
+            - modelType: 3D model to use (optional, defaults to 'sf3d')
+
     Returns:
         Dict with execution results:
             - success: Boolean indicating if operation succeeded
@@ -88,6 +89,7 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         input_image = cell_data.get('inputImage')
         reconstruction_params = cell_data.get('reconstructionParams', {})
         generation_mode = cell_data.get('generationMode', 'local-gpu')
+        model_type = cell_data.get('modelType', 'sf3d')  # Extract model type here
         
         if not input_image:
             return {
@@ -97,8 +99,9 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             }
         
         logger.info(f"Executing 3D mesh reconstruction with mode: {generation_mode}")
+        logger.info(f"Using 3D model: {model_type}")
         logger.debug(f"Reconstruction params: {reconstruction_params}")
-        
+
         # Route to appropriate generation handler
         result = await route_generation_request(cell_data, generation_mode)
         
