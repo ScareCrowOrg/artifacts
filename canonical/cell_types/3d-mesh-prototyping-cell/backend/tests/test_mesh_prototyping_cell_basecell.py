@@ -20,13 +20,15 @@ import sys
 import os
 
 # Add paths for importing cell modules
-backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
+# Calculate path to backend directory from artifacts location
+backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../backend'))
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
+# Add path to cell scripts directory
 mesh_cell_path = os.path.abspath(os.path.join(
     os.path.dirname(__file__), 
-    '../../../../artifacts/canonical/cell_types/3d-mesh-prototyping-cell/backend/scripts'
+    '../scripts'
 ))
 if mesh_cell_path not in sys.path:
     sys.path.insert(0, mesh_cell_path)

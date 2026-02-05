@@ -20,13 +20,15 @@ import sys
 import os
 
 # Add paths for importing cell modules
-backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
+# Calculate path to backend directory from artifacts location
+backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../backend'))
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
+# Add path to cell scripts directory
 png_cell_path = os.path.abspath(os.path.join(
     os.path.dirname(__file__), 
-    '../../../../artifacts/canonical/cell_types/png-generator-cell/backend/scripts'
+    '../scripts'
 ))
 if png_cell_path not in sys.path:
     sys.path.insert(0, png_cell_path)
