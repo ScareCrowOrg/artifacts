@@ -33,6 +33,7 @@ dead_docs_found: false
 | **Books** | 2 | Livros canônicos do sistema |
 | **Cells** | 1 | Célula canônica padrão |
 | **Workflows** | 1 | Workflow de ingestão de issues |
+| **Content Types** 🆕 | 3+ | Blueprints tipados (image-png, vector-svg, 3d-glb) |
 
 ## 📚 Cell Types vs Book Types (Orquestração vs Célula Atômica)
 
@@ -131,6 +132,51 @@ Artefatos **criados durante execução**, baseados em NotebookItemType. Isolados
 **Armazenamento**: MongoDB + Storage para arquivos grandes
 **Uso**: Células ativas (Celula), livros voláteis (Livro), PipelineItem para execução
 
+### 🆕 Artefatos de Conteúdo (Content & ContentTypes)
+
+**Localização**: `artifacts/canonical/content_types/`
+**Documentação**: [content_types/README.md](./canonical/content_types/README.md)
+
+#### **ContentTypes** - Definição de Contratos
+ContentTypes são **blueprints tipados** que definem a estrutura de ativos de conteúdo:
+
+- **Schema Definition**: Campos de metadados esperados (`expected_fragments`)
+- **Rendering Hints**: Instruções para visualização no frontend (`render_hints`)
+- **Storage Policy**: Política de armazenamento para dados brutos
+- **Validation Rules**: Limites de tamanho, extensões permitidas, formatos aceitos
+
+**Exemplos implementados**:
+- `image-png.json` - Imagens PNG
+- `vector-svg.json` - Gráficos vetoriais SVG
+- `3d-glb.json` - Modelos 3D em formato GLB
+
+#### **Contents** - Produtos de Execução
+Contents são **produtos/resultados** gerados durante ou após execução de books e cells:
+
+- **Origem**: Produzidos por operações executadas (books/cells/workflows)
+- **Tipagem**: Cada content instancia um ContentType específico
+- **Persistência**: Armazenados conforme política definida no ContentType
+- **Referenciabilidade**: Consultáveis e reutilizáveis em operações posteriores
+- **Exemplos reais**:
+  - Imagens PNG geradas por `png-generator-cell`
+  - Modelos 3D produzidos por `3d-mesh-prototyping-cell`
+  - Gráficos SVG criados por `svg-generator-cell`
+  - Assets vetorizados por pipelines especializados
+
+#### Relacionamento Books/Cells → Contents
+
+```
+Book/Cell Execução
+    ↓
+[Workflow Processamento]
+    ↓
+Content Gerado (tipado)
+    ↓
+Persistido conforme ContentType
+    ↓
+Disponível para Reuso
+```
+
 ### 🔗 Descoberta Automática via Symlinks
 
 **Mecanismo de Relacionamento**:
@@ -208,9 +254,13 @@ artifacts/
 │   │   ├── README.md
 │   │   ├── SCHEMA.md
 │   │   └── *.json
-│   └── workflows/                     # Workflows canônicos
-│       ├── README.md
-│       └── *.json
+│   ├── workflows/                     # Workflows canônicos
+│   │   ├── README.md
+│   │   └── *.json
+│   │
+│   └── content_types/                 # 🆕 Tipos de conteúdo (ContentType)
+│       ├── README.md                  # Documentação de content types
+│       └── *.json                     # Definições de tipos (image-png, svg, 3d, etc)
 │
 └── runtime/                           # Docs de artefatos runtime
     ├── README.md                      # Doc de artefatos runtime (NotebookItem/PipelineItem)
@@ -376,6 +426,29 @@ O symlink permite que:
 2. **agent-type-workflow-orchestrator-v1** - Orquestração de workflows
    - Especialidades: Workflow management, agent coordination
 
+### 🆕 Content Types (Tipagem de Produtos)
+
+ContentTypes definem **blueprints para ativos de conteúdo** gerados durante execução:
+
+| ID | Nome | MIME Type | Uso |
+|----|------|-----------|-----|
+| `image-png` | PNG Image | `image/png` | Imagens raster (PNG generator cell) |
+| `vector-svg` | SVG Vector | `image/svg+xml` | Gráficos vetoriais (SVG generator cell) |
+| `3d-glb` | 3D Model | `model/gltf-binary` | Modelos 3D (mesh prototyping cell) |
+
+**Função**:
+- Definem schema esperado (`expected_fragments`)
+- Fornecem hints de renderização (`render_hints`)
+- Especificam política de armazenamento (`storage_policy`)
+- Validam formatos e tamanhos
+
+**Exemplos de uso**:
+```
+png-generator-cell → [executa] → Content (image-png) → [valida] → storage
+3d-mesh-prototyping-cell → [executa] → Content (3d-glb) → [valida] → storage
+svg-generator-cell → [executa] → Content (vector-svg) → [valida] → storage
+```
+
 ### 👥 Roles (4 funções de sistema)
 
 | ID | Nome | Permissões Principais |
@@ -445,6 +518,9 @@ O symlink permite que:
 - [canonical/workflows/](./canonical/workflows/) - Workflows canônicos
 - [canonical/books/](./canonical/books/) - Livros canônicos (Book)
 - [canonical/cells/](./canonical/cells/) - Células canônicas (Cell)
+
+**🆕 Content Management**:
+- [canonical/content_types/](./canonical/content_types/) - Blueprints de tipos de conteúdo (ContentType: image-png, vector-svg, 3d-glb, etc)
 
 ### Artefatos Runtime
 - [runtime/README.md](./runtime/README.md) - Documentação completa
@@ -892,6 +968,6 @@ backend/app/core/startup.py
 
 ---
 
-**Última Atualização**: 2026-02-02 (Atualizado com estatísticas reais de artefatos definidos)
-**Versão**: 2.1 (Type-Driven Architecture + Complete Artifact Catalog)
-**Status**: ✅ Produção - 70+ artefatos canônicos definidos e funcionais
+**Última Atualização**: 2026-02-06 (Adicionado Content e ContentTypes como artefatos-chave)
+**Versão**: 2.2 (Type-Driven Architecture + Content Management Layer)
+**Status**: ✅ Produção - 75+ artefatos canônicos definidos e funcionais (incluindo Content Types)
