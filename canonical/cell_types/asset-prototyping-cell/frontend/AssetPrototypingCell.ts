@@ -2,11 +2,23 @@
  * @file AssetPrototypingCell.ts
  * @description AssetPrototypingCell - Composed BaseCell implementation
  * 
+ * ⚠️ DEPRECATED: This cell is maintained for backward compatibility only.
+ * New code should use AssetPrototypingBook instead.
+ * 
+ * Migration: Replace with AssetPrototypingBook from
+ * artifacts/canonical/book_types/asset-prototyping-book/frontend/AssetPrototypingBook.ts
+ * 
+ * Reason: This cell violates the Single Responsibility Principle by acting
+ * as an orchestrator (Book pattern) rather than an atomic executor (Cell pattern).
+ * The orchestration logic has been moved to AssetPrototypingBook, which properly
+ * separates concerns and enables better reusability and testability.
+ * 
  * This cell demonstrates cell composition by orchestrating PNG generation
  * and 3D mesh prototyping cells to create complete 3D assets from text prompts.
  * 
  * Part of BaseCell v1.0 Framework Implementation - Phase 2: Composition
  * Task: [ASSET-001] Implement AssetPrototypingCell
+ * Superseded by: BaseBook v1.0 - AssetPrototypingBook
  * 
  * Note: File is 554 lines (slightly over 500-line guideline).
  * Justification: Complete cell implementation with comprehensive documentation,
@@ -86,6 +98,10 @@ export interface AssetPrototypingOutput {
 
 /**
  * AssetPrototypingCell - Composed BaseCell for complete asset creation
+ * 
+ * ⚠️ DEPRECATED: Use AssetPrototypingBook instead
+ * @deprecated This cell acts as an orchestrator, which violates the Cell pattern.
+ *             Use AssetPrototypingBook from book_types/asset-prototyping-book instead.
  * 
  * This cell demonstrates the power of composition in the BaseCell framework.
  * It orchestrates two specialized cells (PngGeneratorCell and MeshPrototypingCell)
