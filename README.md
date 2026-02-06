@@ -18,20 +18,89 @@ dead_docs_found: false
 
 **Artifacts** são a base fundamental do ScareVerse. Tudo no sistema é um artefato - código, texto, configurações, workflows. A nova arquitetura usa **type-driven behavior** baseado em NotebookItem e NotebookItemType.
 
-### 📊 Estatísticas do Sistema (70+ Artefatos Definidos)
+### 📊 Estatísticas do Sistema (75+ Artefatos Definidos)
 
 | Tipo | Quantidade | Descrição |
 |------|-----------|-----------|
-| **Notebook Item Types** | 25 | Células, livros e tipos de componentes |
+| **Notebook Item Types** | 27 | Tipos de célula (25) + tipos de livro (2) |
+| **Cell Types (Modular)** | 20 | Células com codebase (backend + frontend modular) |
+| **Book Types (Modular)** | 1 | Livros com codebase (DAG-based, TypeScript) |
 | **AI Models** | 10 | Modelos Ollama, Gemini, OpenAI, Aider, Interpreter |
 | **Permissions** | 22 | Permissões granulares do sistema |
 | **Agent Types** | 2 | Tipos de agentes (LLM Processor, Orchestrator) |
 | **Agents** | 4 | Instâncias de agentes (Phi, DeepSeek, Mistral, Orchestrator) |
 | **Roles** | 4 | Funções de usuário (user, admin, viewer, guest) |
 | **Books** | 2 | Livros canônicos do sistema |
-| **Legacy Cell Types** | 17 | Tipos de célula em formato antigo (TipoCelula) |
 | **Cells** | 1 | Célula canônica padrão |
 | **Workflows** | 1 | Workflow de ingestão de issues |
+
+## 📚 Cell Types vs Book Types (Orquestração vs Célula Atômica)
+
+### Células (Cell Types)
+**Foco**: Executores atômicos (fazem uma coisa bem)
+- Localização: `artifacts/canonical/cell_types/{cell_id}/`
+- Definição: `artifacts/canonical/notebook_item_types/{cell_id}.json`
+- Implementação: backend (Python/workflow) + frontend (Vue component)
+- Exemplo: `png-generator-cell`, `file-editor-v2`, `chat-ia`
+
+**Estrutura modular**:
+```
+png-generator-cell/
+├── type.json                           # 🔗 Symlink para ../notebook_item_types/png-generator-cell.json
+├── backend/
+│   ├── workflow.yaml                   # LangGraph workflow (LLM calls, img generation)
+│   ├── scripts/main.py
+│   └── tests/
+├── frontend/
+│   ├── View.vue                        # Component Vue (renderização)
+│   └── composables.js
+└── docs/README.md                      # Documentação da célula
+```
+
+### Livros (Book Types) - 🆕 Nova Implementação
+**Foco**: Orquestradores DAG (coordenam múltiplas células via workflow declarativo)
+- Localização: `artifacts/canonical/book_types/{book_id}/`
+- Definição: `artifacts/canonical/notebook_item_types/{book_id}.json`
+- Implementação: frontend (TypeScript, estende `AbstractBaseBook`)
+- Exemplo: `asset-prototyping-book` (compõe PNG generator + mesh prototyping)
+
+**Estrutura modular**:
+```
+asset-prototyping-book/
+├── type.json                           # 🔗 Symlink para ../notebook_item_types/book-type-generic-v1.json
+├── frontend/
+│   ├── AssetPrototypingBook.ts         # Classe que estende AbstractBaseBook
+│   │   ├── getDAG()                    # Define fluxo: nodes + edges
+│   │   ├── execute()                   # Executa DAG (topological sort)
+│   │   └── describe()                  # Metadata
+│   └── tests/AssetPrototypingBook.test.ts
+└── docs/README.md                      # Documentação do livro
+```
+
+**Diferença-chave - DAG Declarativo**:
+```typescript
+// Book define fluxo como DAG (Directed Acyclic Graph)
+getDAG() {
+  return {
+    nodes: [
+      { id: 'png_gen', cellType: 'png-generator-cell', input: (ctx) => ctx.bookInput },
+      { id: 'mesh_gen', cellType: '3d-mesh-prototyping-cell', input: (ctx) => ({ texture: ctx.outputs.png_gen.result }) }
+    ],
+    edges: [{ from: 'png_gen', to: 'mesh_gen' }]
+  }
+}
+```
+
+**Benefícios**:
+- ✅ Orquestração declarativa (legível, testável)
+- ✅ Transferência automática de estado entre nós
+- ✅ Células reutilizáveis em diferentes books
+- ✅ Sem duplicação de lógica de célula
+- ✅ Suporte a execução paralela (future)
+
+**Documentação Completa**: Ver [canonical/book_types/README.md](./canonical/book_types/README.md)
+
+---
 
 ## 🔄 Nova Arquitetura: NotebookItem/NotebookItemType/PipelineItem
 
@@ -58,9 +127,34 @@ Artefatos **base/templates** armazenados em **Git** (este repositório). São im
 ### Artefatos Instanciados (NotebookItem Runtime)
 Artefatos **criados durante execução**, baseados em NotebookItemType. Isolados por usuário/agente (`assignee_id`). Armazenados em **MongoDB**.
 
-**Localização**: MongoDB (collection por tipo)  
-**Armazenamento**: MongoDB + Storage para arquivos grandes  
+**Localização**: MongoDB (collection por tipo)
+**Armazenamento**: MongoDB + Storage para arquivos grandes
 **Uso**: Células ativas (Celula), livros voláteis (Livro), PipelineItem para execução
+
+### 🔗 Descoberta Automática via Symlinks
+
+**Mecanismo de Relacionamento**:
+
+Cada pasta modular (`cell_types/{id}/` ou `book_types/{id}/`) contém um **symlink `type.json`** que aponta para a definição em `notebook_item_types/{id}.json`:
+
+```bash
+# Exemplo: PNG Generator Cell
+artifacts/canonical/cell_types/png-generator-cell/
+  └── type.json → ../../notebook_item_types/png-generator-cell.json
+```
+
+**Como funciona**:
+
+1. **Descoberta**: Backend escaneia `cell_types/*/type.json` (seguindo symlinks)
+2. **Validação**: Carrega arquivo JSON apontado pelo symlink
+3. **Registro**: `NotebookItemTypeRegistry` registra o tipo com suas referências
+4. **Execução**: PipelineItem usa `default_refs` para localizar backend/frontend
+
+**Vantagens do Symlink**:
+- ✅ **Single Source of Truth**: Definição em um único lugar (`notebook_item_types/`)
+- ✅ **Descoberta Automática**: Não precisa de registro manual
+- ✅ **Modularidade**: Codebase pode estar em pasta separada
+- ✅ **Bidirecional**: Definição → Implementação e Implementação → Definição
 
 ## 📁 Estrutura do Módulo
 
@@ -69,13 +163,35 @@ artifacts/
 ├── README.md                          # Este arquivo
 ├── canonical/                         # Artefatos canônicos (Git)
 │   ├── README.md                      # Doc de artefatos canônicos
-│   ├── notebook_item_types/           # ✅ CURRENT: NotebookItemType (blueprints)
+│   │
+│   ├── notebook_item_types/           # ✅ Definições de tipos (blueprints JSON)
 │   │   ├── README.md
-│   │   └── *.json
-│   ├── cell_types/                    # ⚠️ LEGACY: TipoCelula (deprecated format)
-│   │   ├── README.md                  # Redirects to notebook_item_types/
-│   │   ├── SCHEMA.md
-│   │   └── *.json
+│   │   ├── *.json                     # Tipos de células e livros (definição)
+│   │   └── example: png-generator-cell.json
+│   │
+│   ├── cell_types/                    # 🔷 MODULAR CODEBASE: Implementação de células
+│   │   ├── README.md                  # Documentação e discovery
+│   │   ├── {cell_type_id}/            # Pasta por tipo (modular)
+│   │   │   ├── type.json              # 🔗 Symlink: -> ../notebook_item_types/{cell_type_id}.json
+│   │   │   ├── backend/               # Implementação Python/scripts
+│   │   │   │   ├── workflow.yaml
+│   │   │   │   ├── scripts/
+│   │   │   │   └── tests/
+│   │   │   ├── frontend/              # Componentes Vue + tests
+│   │   │   └── docs/                  # Documentação específica da célula
+│   │   └── example:
+│   │       └── png-generator-cell/
+│   │
+│   ├── book_types/                    # 🆕 MODULAR CODEBASE: Implementação de livros
+│   │   ├── README.md                  # Documentação e guide de DAG-based books
+│   │   ├── {book_type_id}/            # Pasta por tipo (modular)
+│   │   │   ├── frontend/              # Implementação TypeScript (BaseBook)
+│   │   │   │   ├── BookName.ts        # Classe que estende AbstractBaseBook
+│   │   │   │   └── tests/
+│   │   │   └── docs/                  # Documentação específica do livro
+│   │   └── example:
+│   │       └── asset-prototyping-book/
+│   │
 │   ├── agent_types/                   # Tipos de agentes (AgentType)
 │   │   ├── README.md
 │   │   └── *.json
@@ -117,10 +233,35 @@ artifacts/
 
 > **📌 NOTA**: O diretório `runtime/` contém apenas **documentação**. Os artefatos runtime reais estão armazenados em MongoDB.
 
-> **⚠️ LEGACY vs CURRENT**: 
-> - `canonical/cell_types/` = LEGACY (TipoCelula format, deprecated)
-> - `canonical/notebook_item_types/` = CURRENT (NotebookItemType format)
-> - See [canonical/cell_types/README.md](./canonical/cell_types/README.md) for migration guide
+### 🔗 Relacionamento: Cell/Book Types e Notebook Item Types
+
+A arquitetura separa **definição** de **implementação**:
+
+| Aspecto | Definição | Implementação | Relacionamento |
+|---------|-----------|---------------|---|
+| **Cell Types** | `notebook_item_types/*.json` | `cell_types/{id}/` (backend + frontend) | `cell_types/{id}/type.json` → symlink para definição |
+| **Book Types** | `notebook_item_types/*.json` | `book_types/{id}/` (frontend DAG-based) | `book_types/{id}/type.json` → symlink para definição |
+
+**Exemplo prático** - PNG Generator Cell:
+```
+artifacts/canonical/
+├── notebook_item_types/
+│   └── png-generator-cell.json              # Definição (id, schema, workflow, refs)
+└── cell_types/
+    └── png-generator-cell/
+        ├── type.json                        # 🔗 Symlink: -> ../notebook_item_types/png-generator-cell.json
+        ├── backend/
+        │   ├── workflow.yaml                # Workflow LangGraph
+        │   └── scripts/main.py              # Lógica Python
+        ├── frontend/
+        │   └── View.vue                     # Componente Vue
+        └── docs/README.md
+```
+
+O symlink permite que:
+1. **Descoberta automática**: Backend escaneia `cell_types/` buscando `type.json`
+2. **Relacionamento bidirecional**: Definição aponta para implementação via `default_refs`
+3. **Modularidade**: Cada tipo de célula tem sua pasta isolada (backend, frontend, docs)
 
 > **🆕 Evolução para Células Sandbox**: O sistema de células está sendo expandido para suportar runtime dinâmico, metadados avançados e controle de lifecycle. Consulte:
 > - [Análise de Gaps](../docs/project/SANDBOX_CELLS_GAP_ANALYSIS.md) - Identificação de 8 gaps críticos
@@ -283,9 +424,19 @@ artifacts/
 
 ### 📚 Documentação por Tipo
 
+**📋 Definições (Blueprints)**:
 - [canonical/README.md](./canonical/README.md) - Documentação completa
-- [canonical/notebook_item_types/](./canonical/notebook_item_types/) - ✅ CURRENT: Tipos de células (NotebookItemType)
-- [canonical/cell_types/](./canonical/cell_types/) - ⚠️ LEGACY: Tipos de células (TipoCelula, deprecated)
+- [canonical/notebook_item_types/](./canonical/notebook_item_types/) - ✅ CURRENT: Tipos de células (NotebookItemType) + tipos de livros
+
+**🔷 Implementação Modular (Codebase)**:
+- [canonical/cell_types/](./canonical/cell_types/) - Pasta com implementações modulares de células (backend + frontend)
+  - Cada célula tem `type.json` (symlink), `backend/`, `frontend/`, `docs/`
+  - Descoberta automática via `type.json`
+- [canonical/book_types/](./canonical/book_types/) - 🆕 Pasta com implementações modulares de livros (DAG-based)
+  - Cada livro tem `type.json` (symlink), `frontend/` (TypeScript), `docs/`
+  - Estende `AbstractBaseBook`, define `getDAG()`
+
+**⚙️ Configuração e Sistema**:
 - [canonical/ai_models/](./canonical/ai_models/) - Modelos de IA (AIModel: Ollama, Gemini, OpenAI)
 - [canonical/agent_types/](./canonical/agent_types/) - Tipos de agentes (AgentType)
 - [canonical/agents/](./canonical/agents/) - Instâncias de agentes (Agent)
@@ -531,47 +682,100 @@ Cada usuário/agente tem namespace isolado:
 
 ## 🚀 Adicionando Novos Tipos
 
-### 1. Criar NotebookItemType
+### Opção A: Nova Célula (Cell Type)
 
-```python
-# backend/app/models/content.py ou seed_data.py
-novo_tipo = NotebookItemType(
-    id="novo-tipo-name",  # ou UUID
-    name="Novo Tipo",
-    description="Descrição do novo tipo",
-    category="processing|visualization|utility",
-    default_refs={
-        "view": ["frontend/View.vue"],
-        "scripts": ["backend/scripts/main.py"],
-        "docs": ["docs/README.md"]
-    },
-    default_initial_data={"config": "default"},
-    allow_instance_override_refs=True,
-    properties_schema={...}
-)
+**Passos**:
 
-# Salvar em MongoDB (via seed_data ou API)
-db.insert("notebook_item_types", novo_tipo, is_canonical=True)
-```
+1. **Criar estrutura modular**:
+   ```bash
+   mkdir -p artifacts/canonical/cell_types/{cell_id}/{backend,frontend,docs}
+   ```
 
-### 2. Registrar em Git
+2. **Criar definição** em `artifacts/canonical/notebook_item_types/{cell_id}.json`:
+   ```json
+   {
+     "id": "meu-tipo-celula",
+     "name": "Meu Tipo",
+     "description": "...",
+     "category": "processing|visualization|utility",
+     "version": "1.0.0",
+     "can_render_dynamically": true,
+     "default_refs": {
+       "view": ["cell_types/meu-tipo-celula/frontend/View.vue"],
+       "scripts": ["cell_types/meu-tipo-celula/backend/scripts/main.py"],
+       "docs": ["cell_types/meu-tipo-celula/docs/README.md"]
+     },
+     "default_initial_data": {},
+     "allow_instance_override_refs": true,
+     "properties_schema": {}
+   }
+   ```
 
-1. Criar arquivo em `artifacts/canonical/notebook_item_types/{id}.json`
-2. Commit com mensagem: `feat: Add new NotebookItemType {id}`
+3. **Criar symlink** em `artifacts/canonical/cell_types/{cell_id}/type.json`:
+   ```bash
+   cd artifacts/canonical/cell_types/{cell_id}
+   ln -s ../../notebook_item_types/{cell_id}.json type.json
+   ```
 
-### 3. Documentar
+4. **Implementar** backend (Python) e frontend (Vue)
 
-1. Atualizar [canonical/notebook_item_types/README.md](./canonical/notebook_item_types/README.md)
-2. Adicionar entrada em [SCHEMA.md](./canonical/notebook_item_types/SCHEMA.md)
-3. Atualizar este README com referência
-4. Criar documentação no diretório do tipo se necessário
+5. **Testar via API**: `POST /api/cells/create` com o novo tipo
 
-### 4. Implementar e Testar
+### Opção B: Novo Livro (Book Type) - 🆕
 
-1. Implementar endpoints no backend se necessário
-2. Frontend: Se tiver `can_render_dynamically`, criar Vue component
-3. Adicionar testes unitários: `tests/unit/backend/test_notebook_item_type_{id}.py`
-4. Testar via API: `POST /api/cells/create` com o novo tipo
+**Passos**:
+
+1. **Criar estrutura modular**:
+   ```bash
+   mkdir -p artifacts/canonical/book_types/{book_id}/{frontend/tests,docs}
+   ```
+
+2. **Criar definição** em `artifacts/canonical/notebook_item_types/{book_id}.json`:
+   ```json
+   {
+     "id": "meu-livro",
+     "name": "Meu Livro",
+     "description": "Orquestrador DAG que compõe múltiplas células",
+     "category": "orchestrator",
+     "version": "1.0.0",
+     "default_refs": {
+       "view": ["book_types/meu-livro/frontend/MeuLivro.ts"],
+       "docs": ["book_types/meu-livro/docs/README.md"]
+     }
+   }
+   ```
+
+3. **Criar symlink** em `artifacts/canonical/book_types/{book_id}/type.json`:
+   ```bash
+   cd artifacts/canonical/book_types/{book_id}
+   ln -s ../../notebook_item_types/{book_id}.json type.json
+   ```
+
+4. **Implementar classe TypeScript** que estende `AbstractBaseBook`:
+   ```typescript
+   // artifacts/canonical/book_types/{book_id}/frontend/{BookName}.ts
+   export class MeuLivro extends AbstractBaseBook {
+     getDAG(): DAGDefinition {
+       return {
+         nodes: [
+           { id: 'step1', cellType: 'cell-a', input: (ctx) => ctx.bookInput },
+           { id: 'step2', cellType: 'cell-b', input: (ctx) => ({ data: ctx.outputs.step1 }) }
+         ],
+         edges: [{ from: 'step1', to: 'step2' }]
+       }
+     }
+
+     async describe(): Promise<CellMetadata> {
+       return { id: 'meu-livro', name: 'Meu Livro', ... }
+     }
+   }
+   ```
+
+5. **Escrever testes** em `frontend/tests/MeuLivro.test.ts`
+
+6. **Documentar** em `docs/README.md`
+
+Ver [canonical/book_types/README.md](./canonical/book_types/README.md) para detalhes completos.
 
 ## 📊 Estrutura Exemplo: PNG Generator Cell
 
@@ -631,8 +835,16 @@ Veja um tipo real implementado:
 - **[Backend API Docs](../backend/docs/)** - Documentação completa de APIs REST
 
 ### 🎯 Documentação Canônica
+
+**📋 Definições (Blueprints JSON)**:
 - **[canonical/README.md](./canonical/README.md)** - Overview de artefatos canônicos
-- **[canonical/notebook_item_types/README.md](./canonical/notebook_item_types/README.md)** - Tipos de célula disponíveis
+- **[canonical/notebook_item_types/README.md](./canonical/notebook_item_types/README.md)** - Tipos de célula (NotebookItemType)
+
+**🔷 Implementação Modular**:
+- **[canonical/cell_types/README.md](./canonical/cell_types/README.md)** - Descoberta automática, estrutura modular (backend + frontend)
+- **[canonical/book_types/README.md](./canonical/book_types/README.md)** - 🆕 DAG-based orchestrators (TypeScript, AbstractBaseBook)
+
+**⚙️ Configuração**:
 - **[canonical/ai_models/README.md](./canonical/ai_models/README.md)** - Documentação de modelos (v1.2)
 - **[canonical/ai_models/SCHEMA.md](./canonical/ai_models/SCHEMA.md)** - Schema detalhado (Pydantic)
 - **[canonical/agent_types/README.md](./canonical/agent_types/README.md)** - Tipos de agentes
@@ -645,11 +857,6 @@ Veja um tipo real implementado:
 - **[tests/unit/backend/test_adapter_dynamic_loading.py](../tests/unit/backend/test_adapter_dynamic_loading.py)** - Testes de workflows dinâmicos
 - **[tests/unit/backend/test_rbac.py](../tests/unit/backend/test_rbac.py)** - Testes de controle de acesso
 - **[tests/integration/test_artifact_lifecycle.py](../tests/integration/test_artifact_lifecycle.py)** - Testes de ciclo de vida
-
-### 📝 Como Migrar de Legacy
-
-- **[cell_types/README.md](./canonical/cell_types/README.md)** - Guia de migração de TipoCelula para NotebookItemType
-- **[LEGACY_TO_CURRENT_MIGRATION.md](./LEGACY_TO_CURRENT_MIGRATION.md)** - Mapeamento completo
 
 ### 🔓 Seeding de Dados
 
@@ -688,4 +895,3 @@ backend/app/core/startup.py
 **Última Atualização**: 2026-02-02 (Atualizado com estatísticas reais de artefatos definidos)
 **Versão**: 2.1 (Type-Driven Architecture + Complete Artifact Catalog)
 **Status**: ✅ Produção - 70+ artefatos canônicos definidos e funcionais
-**Compatibilidade**: Campos legacy mantidos com sincronização automática
