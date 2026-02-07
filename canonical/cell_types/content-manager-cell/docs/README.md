@@ -2,9 +2,13 @@
 
 Persistent content management with Cloudflare R2 storage. Provides list, load, and persist operations for typed content assets (images, vectors, 3D models).
 
+**✅ Implements BaseCell Interface** - Can be imported and used as an ephemeral utility by other cells.
+
 ## Overview
 
 The Content Manager Cell is a **modular, reusable cell** that acts as a proxy for content persistence and retrieval. It integrates with the ContentManager service and supports both Cloudflare R2 cloud storage and local filesystem storage.
+
+**New in v1.0**: Implements the BaseCell interface, enabling programmatic usage as an ephemeral utility cell.
 
 ### Key Features
 
@@ -13,27 +17,31 @@ The Content Manager Cell is a **modular, reusable cell** that acts as a proxy fo
 - **Persist Content**: Upload to R2 + MongoDB with schema validation
 - **Conditional UI**: Optional persistence form for interactive uploads
 - **Storage Modes**: Cloudflare R2 (production) or Local filesystem (development)
+- **BaseCell Interface**: Can be imported and used by other cells (png-generator, svg-generator, etc.)
+- **Ephemeral Execution**: No persistent cell instance required
 
 ## Architecture
 
 ```
 content-manager-cell/
-├── type.json                # Cell type definition
+├── type.json                      # Symlink to canonical definition (ephemeral)
 ├── backend/
 │   ├── scripts/
-│   │   ├── main.py         # execute_cell(action, params)
-│   │   ├── storage.py      # CloudflareR2Storage + LocalStorage
-│   │   └── utils.py        # Helper functions
+│   │   ├── main.py               # execute_cell(action, params)
+│   │   ├── storage.py            # CloudflareR2Storage + LocalStorage
+│   │   └── utils.py              # Helper functions
 │   └── tests/
-│       └── test_main.py    # Comprehensive tests
+│       └── test_main.py          # Comprehensive tests
 ├── frontend/
-│   ├── View.vue            # Content list + persistence form
-│   ├── composables.ts      # useContentManager hook
-│   ├── types.ts            # TypeScript interfaces
+│   ├── ContentManagerCell.ts     # ✅ BaseCell implementation (NEW)
+│   ├── View.vue                  # Content list + persistence form
+│   ├── composables.ts            # useContentManager hook
+│   ├── types.ts                  # TypeScript interfaces
 │   └── tests/
-│       └── View.spec.ts    # Component tests
+│       ├── ContentManagerCell.test.ts  # BaseCell tests (NEW)
+│       └── View.spec.ts          # Component tests
 └── docs/
-    └── README.md           # This file
+    └── README.md                 # This file
 ```
 
 ## Configuration
@@ -69,6 +77,119 @@ pip install boto3  # For R2 storage
 Frontend: No additional dependencies required (uses existing Vue.js/TypeScript setup).
 
 ## Usage
+
+There are two ways to use the Content Manager Cell:
+
+1. **As a BaseCell** - Import and use programmatically in other cells (recommended for cell-to-cell composition)
+2. **Via Backend API** - Direct HTTP calls to the execute-ephemeral endpoint
+
+### Option 1: Using as BaseCell (TypeScript)
+
+**Import and use in other cells:**
+
+```typescript
+// In png-generator-cell or any other cell:
+import { ContentManagerCell } from '@/cells/content-manager-cell/frontend/ContentManagerCell'
+import type { BaseCell, CellResult } from '@/types/BaseCell'
+
+export class PngGeneratorCell implements BaseCell {
+  private contentManager = new ContentManagerCell()
+
+  async execute(input: Record<string, any>): Promise<CellResult> {
+    // 1. Generate your PNG
+    const pngData = await this.generatePNG(input.prompt)
+    
+    // 2. Persist using ContentManagerCell
+    const persistResult = await this.contentManager.execute({
+      action: 'persist',
+      content_type_id: 'image-png',
+      filename: `${input.prompt.substring(0, 20)}.png`,
+      binary: pngData,  // Base64 or ArrayBuffer
+      fragments: { 
+        prompt: input.prompt,
+        generated_at: new Date().toISOString()
+      },
+      tags: ['generated', 'png', 'ai'],
+      origin_cell_id: this.cell_instance?.id
+    })
+    
+    if (!persistResult.success) {
+      return {
+        success: false,
+        output: {},
+        execution_time: 0,
+        error: `Failed to persist: ${persistResult.error}`
+      }
+    }
+    
+    // 3. Return result with content ID
+    return {
+      success: true,
+      output: {
+        content_id: persistResult.output.id,
+        data_ref: persistResult.output.data_ref,
+        png_url: `/api/content/${persistResult.output.id}`
+      },
+      execution_time: 100
+    }
+  }
+  
+  async describe() {
+    return {
+      id: 'png-generator-cell',
+      name: 'PNG Generator',
+      version: '1.0.0',
+      description: 'Generates PNG images and persists them using ContentManagerCell',
+      inputs: { prompt: { type: 'string', required: true } },
+      outputs: { content_id: { type: 'string' } },
+      tags: ['image', 'generator']
+    }
+  }
+  
+  validate(input: Record<string, any>) {
+    return []
+  }
+}
+```
+
+**List existing contents:**
+
+```typescript
+const contentManager = new ContentManagerCell()
+
+// List all PNG images
+const listResult = await contentManager.execute({
+  action: 'list',
+  filters: {
+    content_type_id: 'image-png',
+    is_latest: true
+  },
+  limit: 20,
+  offset: 0
+})
+
+if (listResult.success) {
+  const contents = listResult.output.contents
+  console.log(`Found ${contents.length} PNG images`)
+}
+```
+
+**Load a specific content:**
+
+```typescript
+const loadResult = await contentManager.execute({
+  action: 'load',
+  content_id: 'content-uuid-here',
+  direct_download: false  // Get presigned URL (faster)
+})
+
+if (loadResult.success) {
+  const url = loadResult.output.presigned_url
+  // Use the URL to display/download the content
+}
+```
+
+### Option 2: Backend API Usage
 
 ### 1. List Contents
 

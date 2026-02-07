@@ -1,7 +1,7 @@
 {
   "id": "content-manager-cell",
   "name": "Content Manager",
-  "description": "Persistent content management with Cloudflare R2 storage. Provides list, load, and persist operations for typed content assets (images, vectors, 3D models).",
+  "description": "Persistent content management with Cloudflare R2 storage. Provides list, load, and persist operations for typed content assets (images, vectors, 3D models). Implements BaseCell for ephemeral utility usage.",
   "version": "1.0.0",
   "category": "content-management",
   "can_render_dynamically": true,
@@ -10,7 +10,8 @@
     "docs": ["docs/README.md"],
     "backend": ["backend/scripts/main.py"],
     "storage": ["backend/scripts/storage.py"],
-    "utils": ["backend/scripts/utils.py"]
+    "utils": ["backend/scripts/utils.py"],
+    "basecell": ["frontend/ContentManagerCell.ts"]
   },
   "default_initial_data": {
     "show_persistence_form": false,
@@ -25,8 +26,15 @@
       "limit": 20,
       "offset": 0
     },
-    "category": "persistent",
+    "category": "ephemeral",
     "icon": "📦"
   },
-  "allow_instance_override_refs": true
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' marks this as ephemeral utility (not persisted)"
+    }
+  }
 }
