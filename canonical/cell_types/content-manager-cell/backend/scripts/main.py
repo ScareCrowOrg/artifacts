@@ -12,6 +12,7 @@ import sys
 import os
 from pathlib import Path
 from typing import Dict, Any, Optional
+from datetime import datetime
 
 # Add backend to path for imports
 backend_path = Path(__file__).resolve().parents[6] / "backend"
@@ -27,6 +28,14 @@ from .storage import get_storage_backend
 from .utils import decode_base64_binary, encode_binary_to_base64, extract_mime_type_from_filename
 
 logger = logging.getLogger(__name__)
+
+
+class PersistenceTransactionError(Exception):
+    """
+    Raised when persistence fails after partial completion.
+    Indicates potential orphaned files in storage.
+    """
+    pass
 
 
 async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -331,18 +340,73 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         
         # Validate and create content in database
         content = content_manager.create_content(create_request)
-        
+
         # Upload to storage backend
         storage = get_storage_backend()
-        data_ref = storage.upload(content.id, binary, filename, mime_type)
-        
-        # Update data_ref in database
-        db.update(
-            "contents",
-            {"id": content.id},
-            {"$set": {"data_ref": data_ref}}
-        )
-        
+
+        # Prepare metadata for integrity and observability
+        storage_metadata = {
+            "scareverse-content-id": content.id,
+            "persistence-status": "awaiting-db-metadata",
+            "origin-cell-id": origin_cell_id or "unknown",
+            "content-type-id": content_type_id,
+            "created-timestamp": datetime.utcnow().isoformat()
+        }
+
+        try:
+            # Upload with metadata for traceability
+            data_ref = storage.upload(
+                content.id,
+                binary,
+                filename,
+                mime_type,
+                metadata=storage_metadata
+            )
+        except Exception as storage_error:
+            # Upload failed - no persistence occurred, no cleanup needed
+            logger.error(f"Storage upload failed for {content_type_id}: {storage_error}", exc_info=True)
+            raise ValueError(f"Failed to upload content to storage: {str(storage_error)}")
+
+        # Update data_ref in database with error handling (CRITICAL: prevent orphaned files)
+        try:
+            db.update(
+                "contents",
+                {"id": content.id},
+                {
+                    "$set": {
+                        "data_ref": data_ref,
+                        "status": "live",
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+        except Exception as db_error:
+            # DB update failed - INITIATE CRITICAL CLEANUP
+            logger.error(
+                f"Database update failed for content {content.id}. Initiating cleanup of orphaned storage...",
+                exc_info=True
+            )
+
+            cleanup_success = False
+            try:
+                storage.delete(content.id, filename)
+                cleanup_success = True
+                logger.info(f"Cleanup SUCCESS: Orphaned file {content.id}/{filename} removed from storage")
+            except Exception as cleanup_error:
+                # CRITICAL FAILURE: orphaned file persisted
+                logger.critical(
+                    f"CLEANUP FAILED: Orphaned file {content.id}/{filename} remains in storage. "
+                    f"Manual intervention required. Original DB error: {db_error}, Cleanup error: {cleanup_error}",
+                    exc_info=True
+                )
+
+            # Re-raise with typed error
+            raise PersistenceTransactionError(
+                f"Persistence failed: Database metadata update error. "
+                f"Storage cleanup: {'SUCCESS' if cleanup_success else 'FAILED'}. "
+                f"Details: {str(db_error)}"
+            ) from db_error
+
         # Return created content metadata
         return {
             "success": True,

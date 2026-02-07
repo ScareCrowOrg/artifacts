@@ -19,16 +19,17 @@ class StorageBackend(ABC):
     """Abstract base class for storage backends."""
     
     @abstractmethod
-    def upload(self, content_id: str, binary: bytes, filename: str, mime_type: str) -> str:
+    def upload(self, content_id: str, binary: bytes, filename: str, mime_type: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         Upload binary content.
-        
+
         Args:
             content_id: Unique content identifier
             binary: Raw binary data
             filename: Original filename
             mime_type: MIME type
-            
+            metadata: Optional metadata to attach to the upload
+
         Returns:
             data_ref: Storage reference (e.g., "r2://bucket/path" or "file:///path")
         """
@@ -101,14 +102,21 @@ class LocalStorage(StorageBackend):
         """Get full file path for content."""
         return self.base_path / content_id / filename
     
-    def upload(self, content_id: str, binary: bytes, filename: str, mime_type: str) -> str:
+    def upload(self, content_id: str, binary: bytes, filename: str, mime_type: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """Upload file to local storage."""
         file_path = self._get_file_path(content_id, filename)
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         file_path.write_bytes(binary)
+
+        # Save metadata companion file if provided
+        if metadata:
+            import json
+            meta_path = Path(str(file_path) + ".meta")
+            meta_path.write_text(json.dumps(metadata, indent=2, default=str))
+
         logger.info(f"Uploaded to local storage: {file_path}")
-        
+
         return f"file://{file_path}"
     
     def get_presigned_url(self, content_id: str, filename: str, expires_in: int = 3600) -> Optional[str]:
@@ -203,17 +211,25 @@ class CloudflareR2Storage(StorageBackend):
         """Generate S3 object key for content."""
         return f"content/{content_id}/{filename}"
     
-    def upload(self, content_id: str, binary: bytes, filename: str, mime_type: str) -> str:
-        """Upload file to R2."""
+    def upload(self, content_id: str, binary: bytes, filename: str, mime_type: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+        """Upload file to R2 with metadata."""
         object_key = self._get_object_key(content_id, filename)
-        
+
+        # Prepare metadata as custom S3 headers
+        metadata_headers = {}
+        if metadata:
+            for key, value in metadata.items():
+                # S3 allows custom headers with "x-amz-meta-" prefix
+                metadata_headers[f"x-amz-meta-{key.lower()}"] = str(value)
+
         self.s3_client.put_object(
             Bucket=self.bucket_name,
             Key=object_key,
             Body=binary,
-            ContentType=mime_type
+            ContentType=mime_type,
+            Metadata=metadata_headers if metadata_headers else None
         )
-        
+
         logger.info(f"Uploaded to R2: {object_key}")
         return f"r2://{self.bucket_name}/{object_key}"
     
