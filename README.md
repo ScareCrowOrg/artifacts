@@ -35,10 +35,10 @@ dead_docs_found: false
 | **Workflows** | 1 | Workflow de ingestão de issues |
 | **Content Types** 🆕 | 3+ | Blueprints tipados (image-png, vector-svg, 3d-glb) |
 
-## 📚 Cell Types vs Book Types (Orquestração vs Célula Atômica)
+## 📚 Cell Types vs Book Types (Composição vs Orquestração)
 
 ### Células (Cell Types)
-**Foco**: Executores atômicos (fazem uma coisa bem)
+**Foco**: Executores de lógica de negócio (fazem uma coisa bem, podem chamar outras células se necessário)
 - Localização: `artifacts/canonical/cell_types/{cell_id}/`
 - Definição: `artifacts/canonical/notebook_item_types/{cell_id}.json`
 - Implementação: backend (Python/workflow) + frontend (Vue component)
@@ -58,8 +58,12 @@ png-generator-cell/
 └── docs/README.md                      # Documentação da célula
 ```
 
+**Padrões de Composição**:
+- Células podem chamar outras células diretamente (útil para operações utilitárias)
+- Células são flexíveis e podem implementar qualquer lógica necessária
+
 ### Livros (Book Types) - 🆕 Nova Implementação
-**Foco**: Orquestradores DAG (coordenam múltiplas células via workflow declarativo)
+**Foco**: Orquestradores DAG (recomendados para coordenar múltiplas células via workflow declarativo)
 - Localização: `artifacts/canonical/book_types/{book_id}/`
 - Definição: `artifacts/canonical/notebook_item_types/{book_id}.json`
 - Implementação: frontend (TypeScript, estende `AbstractBaseBook`)
