@@ -501,9 +501,14 @@ export class ContentManagerCell implements BaseCell {
   
   /**
    * Setup (optional) - Content manager needs no initialization
+   * 
+   * Note: In production, consider using a proper logging framework
+   * instead of console.log
    */
   async setup(config: EnvironmentConfig): Promise<void> {
-    console.log('[ContentManagerCell] Setup called')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ContentManagerCell] Setup called')
+    }
     
     // Extract auth token from environment if available
     if (config && 'auth_token' in config) {
@@ -513,9 +518,14 @@ export class ContentManagerCell implements BaseCell {
   
   /**
    * Teardown (optional) - Content manager needs no cleanup
+   * 
+   * Note: In production, consider using a proper logging framework
+   * instead of console.log
    */
   async teardown(): Promise<void> {
-    console.log('[ContentManagerCell] Teardown called')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ContentManagerCell] Teardown called')
+    }
     this._authToken = undefined
   }
   

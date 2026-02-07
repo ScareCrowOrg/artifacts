@@ -213,9 +213,10 @@ describe('ContentManagerCell', () => {
       
       await contentManager.setup(config)
       
-      // Auth token should be set (we can't directly test private field,
-      // but setup shouldn't throw)
-      expect(true).toBe(true)
+      // Verify token is being used by checking if execute would use it
+      // (we can't directly test private field, but we can verify setup completes)
+      const health = await contentManager.health_check()
+      expect(health).toHaveProperty('status')
     })
   })
 

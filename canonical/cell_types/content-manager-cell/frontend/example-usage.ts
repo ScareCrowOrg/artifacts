@@ -16,6 +16,18 @@ import type { BaseCell, CellResult, CellMetadata, ValidationError } from '@/type
  * cell as a utility to handle specific functionality (content persistence).
  */
 export class ExamplePngGeneratorCell implements BaseCell {
+  // Optional reference to the Cell runtime instance (for context-aware execution)
+  cell_instance?: {
+    id: string
+    assignee_id: string
+    initial_data: Record<string, any>
+    fragments: Array<string | Record<string, any>>
+    refs: Record<string, string[]>
+    version?: string
+    created_at?: string
+    updated_at?: string
+  }
+  
   // Compose ContentManagerCell as a utility
   private contentManager = new ContentManagerCell()
   
