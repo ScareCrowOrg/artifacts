@@ -147,64 +147,26 @@ export function useClientSideValidation() {
   
   /**
    * Validate useExtension composable
+   * 
+   * ⚠️ DEPRECATED: Extension infrastructure removed (2026-02-08)
+   * This validation always returns unavailable status.
    */
   async function validateUseExtension(): Promise<ClientValidationResult> {
-    try {
-      // Try to import the composable
-      const { useExtension } = await import('@/composables/useExtension.js')
-      
-      if (typeof useExtension === 'function') {
-        // Try to call it to ensure it works
-        const extension = useExtension()
-        
-        return {
-          id: 'frontend.use_extension',
-          name: 'useExtension Composable',
-          category: 'frontend',
-          status: 'healthy',
-          criticality: 'critical',
-          validation_method: 'import_and_instantiation_check',
-          monitoring_available: true,
-          details: {
-            available: true,
-            type: 'function',
-            instantiable: true,
-            location: '@/composables/useExtension.js'
-          },
-          timestamp: Date.now()
-        }
-      }
-      
-      return {
-        id: 'frontend.use_extension',
-        name: 'useExtension Composable',
-        category: 'frontend',
-        status: 'unhealthy',
-        criticality: 'critical',
-        validation_method: 'import_and_type_check',
-        monitoring_available: true,
-        details: {
-          available: false,
-          issue: 'Imported but not a function'
-        },
-        timestamp: Date.now()
-      }
-      
-    } catch (error) {
-      return {
-        id: 'frontend.use_extension',
-        name: 'useExtension Composable',
-        category: 'frontend',
-        status: 'unhealthy',
-        criticality: 'critical',
-        validation_method: 'import_check',
-        monitoring_available: false,
-        details: {
-          available: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        },
-        timestamp: Date.now()
-      }
+    // Extension has been removed - return unavailable status
+    return {
+      id: 'frontend.use_extension',
+      name: 'useExtension Composable',
+      category: 'frontend',
+      status: 'unhealthy',
+      criticality: 'low', // Reduced from critical since extension is no longer required
+      validation_method: 'static_check',
+      monitoring_available: false,
+      details: {
+        available: false,
+        issue: 'Browser extension infrastructure removed from project (2026-02-08)',
+        migration: 'Use backend APIs for credential management and external requests'
+      },
+      timestamp: Date.now()
     }
   }
   
