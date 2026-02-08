@@ -166,6 +166,24 @@
           </h4>
           <div class="flex gap-2">
             <button
+              @click="handlePersistAsset"
+              :disabled="isPersisting"
+              class="px-3 py-1 text-sm bg-success dark:bg-green-700 text-white rounded hover:bg-green-600 dark:hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              :title="$t('pngGeneratorCell.persistAsset') || 'Save asset to storage'"
+            >
+              <svg
+                v-if="isPersisting"
+                class="animate-spin h-4 w-4"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span>💾 {{ isPersisting ? ($t('pngGeneratorCell.persisting') || 'Persisting...') : ($t('pngGeneratorCell.persistAsset') || 'Persist Asset') }}</span>
+            </button>
+            <button
               @click="handleCleanBackground"
               :disabled="isProcessingBackground"
               class="px-3 py-1 text-sm bg-primary dark:bg-primary-hover text-white rounded hover:bg-primary-light dark:hover:bg-primary transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
@@ -207,7 +225,21 @@
           />
         </div>
       </div>
+      
+      <!-- Success Message for Persistence -->
+      <div v-if="persistSuccessMessage" class="success-section p-3 bg-success-light dark:bg-green-900 text-success-dark dark:text-green-100 rounded border border-success">
+        <p class="text-sm">{{ persistSuccessMessage }}</p>
+      </div>
     </div>
+    
+    <!-- Persist Modal Component -->
+    <PersistModal
+      v-if="showPersistModal"
+      :asset-data="assetDataForModal"
+      :is-visible="showPersistModal"
+      @confirm="handlePersistConfirm"
+      @cancel="handlePersistCancel"
+    />
   </div>
 </template>
 
@@ -216,6 +248,8 @@ import { ref, watch, computed, onMounted } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { PngGeneratorCell } from './PngGeneratorCell'
 import type { PngGeneratorInput } from './PngGeneratorCell'
+import PersistModal from '@/artifacts/canonical/cell_types/content-manager-cell/frontend/components/PersistModal.vue'
+import type { CellResult } from '@/types/BaseCell'
 
 const logger = createLogger('component:png-generator-cell')
 
@@ -319,6 +353,12 @@ const localParams = ref({
 
 // Background removal state
 const isProcessingBackground = ref(false)
+
+// Persistence state
+const showPersistModal = ref(false)
+const isPersisting = ref(false)
+const persistSuccessMessage = ref<string | null>(null)
+const assetDataForModal = ref<Record<string, any>>({})
 
 // Watch for prop changes
 watch(() => props.prompt, (newVal) => { if (newVal !== undefined) localPrompt.value = newVal })
@@ -541,6 +581,69 @@ const handleCleanBackground = async () => {
   } finally {
     isProcessingBackground.value = false
   }
+}
+
+/**
+ * Handle persist asset button click
+ * Opens the persist modal with current asset data
+ */
+const handlePersistAsset = async () => {
+  if (!localGeneratedPng.value) {
+    logger.warn('No PNG available to persist')
+    return
+  }
+
+  logger.info('Opening persist modal', { 
+    cellId: effectiveCellId.value,
+    hasPrompt: !!localPrompt.value
+  })
+
+  // Prepare asset data for modal
+  assetDataForModal.value = {
+    generatedPng: localGeneratedPng.value,
+    image_data: localGeneratedPng.value,
+    prompt: localPrompt.value,
+    width: localParams.value.width,
+    height: localParams.value.height,
+    timestamp: Date.now(),
+    generationParams: localParams.value
+  }
+
+  // Show modal
+  showPersistModal.value = true
+  persistSuccessMessage.value = null
+}
+
+/**
+ * Handle persist modal confirmation
+ * Called when user confirms persistence in the modal
+ */
+const handlePersistConfirm = (result: CellResult) => {
+  logger.info('Asset persisted successfully', { result })
+  
+  // Close modal
+  showPersistModal.value = false
+  
+  // Show success message
+  if (result.success) {
+    const contentId = result.output?.id || 'unknown'
+    persistSuccessMessage.value = `Asset persisted successfully! (ID: ${contentId})`
+    
+    // Clear success message after 5 seconds
+    setTimeout(() => {
+      persistSuccessMessage.value = null
+    }, 5000)
+  }
+}
+
+/**
+ * Handle persist modal cancellation
+ * Called when user cancels persistence in the modal
+ */
+const handlePersistCancel = () => {
+  logger.debug('Persist modal cancelled')
+  showPersistModal.value = false
+  assetDataForModal.value = {}
 }
 
 // Check cell health on mount

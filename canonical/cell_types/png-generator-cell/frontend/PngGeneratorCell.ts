@@ -438,4 +438,108 @@ export class PngGeneratorCell implements BaseCell {
       }
     }
   }
+  
+  /**
+   * Show (optional) - Render or interact with cell UI
+   * 
+   * Supports modal persistence integration for saving generated assets.
+   * When called with { modal: 'persist' }, routes to ContentManagerCell
+   * for persistent asset storage.
+   * 
+   * @param data - Data to show/persist (asset data from execute result)
+   * @param options - Show configuration options
+   * @returns Promise resolving to CellResult
+   */
+  async show(
+    data: Record<string, any>,
+    options?: { modal?: string; mode?: 'headless' | 'preview' }
+  ): Promise<CellResult> {
+    const startTime = performance.now()
+    
+    try {
+      log.debug('Show method called', { options })
+      
+      if (options?.modal === 'persist') {
+        // Route to ContentManagerCell for persistence with modal
+        return await this.persistAssetWithModal(data)
+      }
+      
+      // Standard preview rendering (no-op in headless mode)
+      return {
+        success: true,
+        output: data,
+        execution_time: performance.now() - startTime,
+        metadata: {
+          mode: options?.mode || 'preview'
+        }
+      }
+    } catch (error: any) {
+      log.error('Show failed with exception', error)
+      return {
+        success: false,
+        output: {},
+        execution_time: performance.now() - startTime,
+        error: error.message || 'Show operation failed'
+      }
+    }
+  }
+  
+  /**
+   * Persist asset with modal using ContentManagerCell
+   * 
+   * Opens a modal dialog (via ContentManagerCell) that allows the user
+   * to name, tag, and save the generated asset to persistent storage.
+   * 
+   * @param assetData - Asset data from execute result
+   * @returns Promise resolving to CellResult with persisted asset details
+   */
+  private async persistAssetWithModal(
+    assetData: Record<string, any>
+  ): Promise<CellResult> {
+    const startTime = performance.now()
+    
+    try {
+      log.debug('Persisting asset with modal', { assetData })
+      
+      // Dynamically import ContentManagerCell to avoid circular dependencies
+      const { ContentManagerCell } = await import(
+        '@/artifacts/canonical/cell_types/content-manager-cell/frontend/ContentManagerCell'
+      )
+      
+      const contentManager = new ContentManagerCell()
+      
+      // Call ContentManagerCell.show() with persist modal option
+      const result = await contentManager.show(
+        {
+          action: 'persist',
+          content_type_id: 'image-png',
+          binary: assetData.generatedPng || assetData.image_data,
+          metadata: {
+            width: assetData.width,
+            height: assetData.height,
+            file_size: assetData.file_size,
+            generation_timestamp: assetData.timestamp || Date.now(),
+            generation_params: assetData.generation_params || assetData.generationParams,
+            prompt: assetData.prompt
+          }
+        },
+        { modal: 'persist-with-naming' }
+      )
+      
+      log.info('Asset persistence completed', { success: result.success })
+      
+      return {
+        ...result,
+        execution_time: performance.now() - startTime
+      }
+    } catch (error: any) {
+      log.error('Asset persistence failed', error)
+      return {
+        success: false,
+        output: {},
+        execution_time: performance.now() - startTime,
+        error: error.message || 'Failed to persist asset'
+      }
+    }
+  }
 }

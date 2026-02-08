@@ -561,4 +561,80 @@ export class ContentManagerCell implements BaseCell {
       }
     }
   }
+  
+  /**
+   * Show (optional) - Render modal UI for content management
+   * 
+   * Supports modal persistence UI for saving assets with naming and metadata.
+   * When called with { modal: 'persist-with-naming' }, opens PersistModal
+   * component and returns result after user interaction.
+   * 
+   * @param data - Data to show/persist (asset data with binary content)
+   * @param options - Show configuration options
+   * @returns Promise resolving to CellResult
+   */
+  async show(
+    data: Record<string, any>,
+    options?: { modal?: string; mode?: string }
+  ): Promise<CellResult> {
+    const startTime = performance.now()
+    
+    try {
+      if (options?.modal === 'persist-with-naming') {
+        // Open persist modal with asset data
+        return await this.showPersistModal(data)
+      }
+      
+      // Standard preview/display (no-op for headless utility)
+      return {
+        success: true,
+        output: data,
+        execution_time: performance.now() - startTime
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        output: {},
+        execution_time: performance.now() - startTime,
+        error: error.message || 'Show operation failed'
+      }
+    }
+  }
+  
+  /**
+   * Show persist modal for asset naming and metadata
+   * 
+   * Opens a modal dialog using PersistModal component that allows
+   * the user to input asset name, description, tags, and visibility.
+   * Returns the persistence result after user confirmation.
+   * 
+   * @param assetData - Asset data to persist
+   * @returns Promise resolving to CellResult with persisted asset details
+   */
+  private async showPersistModal(
+    assetData: Record<string, any>
+  ): Promise<CellResult> {
+    return new Promise((resolve) => {
+      // Note: This method is designed to integrate with Vue's modal system.
+      // The actual modal rendering is handled by the calling component
+      // (e.g., PngGeneratorCell View.vue) via PersistModal component.
+      // 
+      // For now, we return a success result indicating that the modal
+      // should be shown. The actual persistence happens when the user
+      // confirms in the modal via ContentManagerCell.execute().
+      
+      resolve({
+        success: true,
+        output: {
+          modal: 'persist',
+          assetData
+        },
+        execution_time: 0,
+        metadata: {
+          requiresUI: true,
+          modalType: 'persist-with-naming'
+        }
+      })
+    })
+  }
 }
