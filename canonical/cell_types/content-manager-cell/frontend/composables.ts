@@ -17,7 +17,7 @@ import type {
   ApiResponse,
   ContentListResponse,
   UseContentManagerReturn
-} from '../types'
+} from './types'
 
 /**
  * Content Manager composable

@@ -210,8 +210,10 @@ export class MeshPrototypingCell implements BaseCell {
       
       // Collect artifacts
       const artifacts: string[] = []
-      if (result.glb_url || result.mesh_data) {
-        artifacts.push(result.glb_url || result.mesh_data)
+      if (result.glb_url) {
+        artifacts.push(result.glb_url)
+      } else if (result.mesh_data) {
+        artifacts.push(result.mesh_data)
       }
       
       // Map backend response to CellResult
