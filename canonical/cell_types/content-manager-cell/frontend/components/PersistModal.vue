@@ -169,6 +169,7 @@ import { ref, type PropType } from 'vue'
 import { ContentManagerCell } from '../ContentManagerCell'
 import type { CellResult } from '@/types/BaseCell'
 import { createLogger } from '@/utils/logger'
+import authService from '@/services/authService'
 
 const log = createLogger('components:PersistModal')
 
@@ -218,6 +219,15 @@ async function handlePersist(): Promise<void> {
 
   try {
     const contentManager = new ContentManagerCell()
+
+    // Set authentication token for API calls
+    const token = authService.getToken()
+    if (token) {
+      contentManager.setAuthToken(token)
+      log.debug('Auth token set for content persistence')
+    } else {
+      log.warn('No auth token found for content persistence')
+    }
 
     // Parse tags from comma-separated string
     const tags = formData.value.tags
