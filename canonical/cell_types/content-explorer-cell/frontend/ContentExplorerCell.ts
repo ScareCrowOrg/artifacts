@@ -343,7 +343,11 @@ export class ContentExplorerCell implements BaseCell {
       })
       
       if (response.ok) {
-        return createHealthyResult('Content Explorer Cell operational')
+        return {
+          healthy: true,
+          message: 'Content Explorer Cell operational',
+          timestamp: new Date().toISOString()
+        }
       } else {
         return {
           healthy: false,
