@@ -67,7 +67,7 @@ async def test_execute_cell_list_action(mock_content_type):
         mock_loader_class.return_value = mock_loader
         
         mock_manager = MagicMock()
-        mock_manager.list_contents = AsyncMock(return_value=[])
+        mock_manager.query_contents.return_value = []
         mock_manager_class.return_value = mock_manager
         
         # Execute
@@ -122,7 +122,7 @@ async def test_handle_list_with_selected_type(mock_content_type, mock_content):
         mock_loader_class.return_value = mock_loader
         
         mock_manager = MagicMock()
-        mock_manager.list_contents = AsyncMock(return_value=[mock_content])
+        mock_manager.query_contents.return_value = [mock_content]
         mock_manager_class.return_value = mock_manager
         
         # Execute
@@ -143,7 +143,7 @@ async def test_handle_list_with_selected_type(mock_content_type, mock_content):
         assert result["output"]["assets"]["items"][0]["id"] == "content-123"
         
         # Verify ContentManager was called with correct filters
-        mock_manager.list_contents.assert_called_once()
+        mock_manager.query_contents.assert_called_once()
 
 
 @pytest.mark.asyncio

@@ -79,7 +79,7 @@
               :disabled="isLoading"
               @change="handleFilterChange"
             >
-              <option :value="undefined">All Versions</option>
+              <option :value="null">All Versions</option>
               <option :value="true">Latest Only</option>
               <option :value="false">Older Versions</option>
             </select>
@@ -235,6 +235,8 @@ async function handleNextPage() {
 }
 
 async function handleDeleteAsset(assetId: string) {
+  // TODO: Replace with custom modal dialog for better accessibility
+  // See: RULESET.md Rule 4.8 - Accessibility Requirements
   if (confirm('Are you sure you want to delete this asset? This action cannot be undone.')) {
     await deleteAsset(assetId)
   }

@@ -115,13 +115,13 @@ async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 is_latest=filters_dict.get("is_latest", True)
             )
             
-            # Query assets
+            # Query assets (get all matching, then paginate)
             content_manager = ContentManager()
-            contents = await content_manager.list_contents(
-                filters=content_filters,
-                limit=limit,
-                offset=offset
-            )
+            all_contents = content_manager.query_contents(content_filters)
+            
+            # Apply pagination
+            total = len(all_contents)
+            paginated_contents = all_contents[offset:offset + limit]
             
             assets_response = {
                 "items": [
@@ -139,9 +139,9 @@ async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                         "assignee_id": content.assignee_id,
                         "origin_cell_id": content.origin_cell_id
                     }
-                    for content in contents
+                    for content in paginated_contents
                 ],
-                "total": len(contents),
+                "total": total,
                 "limit": limit,
                 "offset": offset
             }
