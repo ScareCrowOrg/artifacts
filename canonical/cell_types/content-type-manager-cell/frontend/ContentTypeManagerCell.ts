@@ -205,16 +205,15 @@ export class ContentTypeManagerCell implements BaseCell {
   
   /**
    * Describe cell capabilities
-   * 
+   *
    * @returns Cell metadata
    */
-  describe(): CellMetadata {
+  async describe(): Promise<CellMetadata> {
     return {
       id: 'content-type-manager-cell',
       name: 'Content Type Manager',
       version: '1.0.0',
       description: 'List available content types with metadata',
-      author: 'ScareVerse',
       inputs: {
         action: {
           type: 'string',
@@ -236,17 +235,18 @@ export class ContentTypeManagerCell implements BaseCell {
           type: 'number',
           description: 'Total number of content types available'
         }
-      }
+      },
+      tags: ['content-types', 'metadata', 'utility']
     }
   }
   
   /**
    * Validate input parameters
-   * 
+   *
    * @param input - Input to validate
    * @returns Array of validation errors (empty if valid)
    */
-  async validate(input: Record<string, any>): Promise<ValidationError[]> {
+  validate(input: Record<string, any>): ValidationError[] {
     const errors: ValidationError[] = []
     
     // Check action is present

@@ -16,9 +16,9 @@ describe('ContentTypeManagerCell', () => {
   })
   
   describe('describe()', () => {
-    it('should return correct cell metadata', () => {
-      const metadata = cell.describe()
-      
+    it('should return correct cell metadata', async () => {
+      const metadata = await cell.describe()
+
       expect(metadata.id).toBe('content-type-manager-cell')
       expect(metadata.name).toBe('Content Type Manager')
       expect(metadata.version).toBe('1.0.0')
@@ -26,26 +26,26 @@ describe('ContentTypeManagerCell', () => {
       expect(metadata.inputs).toBeDefined()
       expect(metadata.outputs).toBeDefined()
     })
-    
-    it('should define required inputs', () => {
-      const metadata = cell.describe()
-      
+
+    it('should define required inputs', async () => {
+      const metadata = await cell.describe()
+
       expect(metadata.inputs.action).toBeDefined()
       expect(metadata.inputs.action.type).toBe('string')
       expect(metadata.inputs.action.required).toBe(true)
     })
-    
-    it('should define optional inputs', () => {
-      const metadata = cell.describe()
-      
+
+    it('should define optional inputs', async () => {
+      const metadata = await cell.describe()
+
       expect(metadata.inputs.limit).toBeDefined()
       expect(metadata.inputs.limit.type).toBe('number')
       expect(metadata.inputs.limit.required).toBe(false)
     })
-    
-    it('should define expected outputs', () => {
-      const metadata = cell.describe()
-      
+
+    it('should define expected outputs', async () => {
+      const metadata = await cell.describe()
+
       expect(metadata.outputs.types).toBeDefined()
       expect(metadata.outputs.types.type).toBe('array')
       expect(metadata.outputs.total).toBeDefined()
@@ -54,42 +54,42 @@ describe('ContentTypeManagerCell', () => {
   })
   
   describe('validate()', () => {
-    it('should validate correct list input', async () => {
+    it('should validate correct list input', () => {
       const input = { action: 'list' }
-      const errors = await cell.validate(input)
-      
+      const errors = cell.validate(input)
+
       expect(errors).toHaveLength(0)
     })
-    
-    it('should validate list input with limit', async () => {
+
+    it('should validate list input with limit', () => {
       const input = { action: 'list', limit: 50 }
-      const errors = await cell.validate(input)
-      
+      const errors = cell.validate(input)
+
       expect(errors).toHaveLength(0)
     })
-    
-    it('should reject missing action', async () => {
+
+    it('should reject missing action', () => {
       const input = {}
-      const errors = await cell.validate(input)
-      
+      const errors = cell.validate(input)
+
       expect(errors).toHaveLength(1)
       expect(errors[0].field).toBe('action')
       expect(errors[0].message).toContain('required')
     })
-    
-    it('should reject invalid action', async () => {
+
+    it('should reject invalid action', () => {
       const input = { action: 'invalid' }
-      const errors = await cell.validate(input)
-      
+      const errors = cell.validate(input)
+
       expect(errors).toHaveLength(1)
       expect(errors[0].field).toBe('action')
       expect(errors[0].message).toContain('Invalid action')
     })
-    
-    it('should reject non-numeric limit', async () => {
+
+    it('should reject non-numeric limit', () => {
       const input = { action: 'list', limit: 'invalid' }
-      const errors = await cell.validate(input)
-      
+      const errors = cell.validate(input)
+
       expect(errors).toHaveLength(1)
       expect(errors[0].field).toBe('limit')
       expect(errors[0].message).toContain('must be a number')

@@ -212,7 +212,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useBaseCellFeatures } from '../composables/useBaseCellFeatures'
@@ -304,7 +304,7 @@ const cellType = computed(() => {
 
 const baseCellApi = useBaseCellFeatures(
   cellId,
-  cellType
+  cellType as Ref<string>
 )
 
 // Extract needed properties and methods
