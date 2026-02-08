@@ -1,0 +1,48 @@
+{
+  "id": "content-explorer-cell",
+  "name": "Content Explorer",
+  "description": "Browse and manage assets by type. Composes ContentTypeManagerCell and ContentManagerCell to provide a unified asset browsing experience with type selection, asset listing, and management actions.",
+  "version": "1.0.0",
+  "category": "content-management",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "docs": ["docs/README.md"],
+    "backend": ["backend/scripts/main.py"],
+    "basecell": ["frontend/ContentExplorerCell.ts"]
+  },
+  "default_initial_data": {
+    "selected_type_id": null,
+    "show_type_selector": true,
+    "view_mode": "grid",
+    "filters": {
+      "assignee_id": null,
+      "tags": [],
+      "is_latest": true
+    },
+    "pagination": {
+      "limit": 20,
+      "offset": 0
+    },
+    "category": "ephemeral",
+    "icon": "🔍"
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' marks this as ephemeral utility (not persisted)"
+    },
+    "selected_type_id": {
+      "type": "string",
+      "description": "Currently selected content type ID for filtering assets"
+    },
+    "view_mode": {
+      "type": "string",
+      "enum": ["grid", "list"],
+      "default": "grid",
+      "description": "Display mode for assets"
+    }
+  }
+}
