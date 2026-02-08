@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { ContentExplorerCell } from '../ContentExplorerCell'
+import type { EnvironmentConfig } from '@/types/BaseCell'
 
 describe('ContentExplorerCell', () => {
   let cell: ContentExplorerCell
@@ -29,7 +30,6 @@ describe('ContentExplorerCell', () => {
       expect(metadata.id).toBe('content-explorer-cell')
       expect(metadata.name).toBe('Content Explorer')
       expect(metadata.version).toBe('1.0.0')
-      expect(metadata.category).toBe('content-management')
       expect(metadata.description).toContain('Browse and manage assets')
     })
 
@@ -282,7 +282,14 @@ describe('ContentExplorerCell', () => {
 
   describe('setup()', () => {
     it('should complete without errors', async () => {
-      await expect(cell.setup({})).resolves.toBeUndefined()
+      const config: EnvironmentConfig = {
+        has_gpu: false,
+        gpu_vram_mb: 0,
+        cpu_cores: 4,
+        headless_mode: true,
+        timeout_seconds: 30
+      }
+      await expect(cell.setup(config)).resolves.toBeUndefined()
     })
   })
 
@@ -298,9 +305,8 @@ describe('ContentExplorerCell', () => {
 
       const result = await cell.health_check()
 
-      expect(result.healthy).toBe(true)
-      expect(result.message).toContain('operational')
-      expect(result.timestamp).toBeDefined()
+      expect(result.status).toBe('healthy')
+      expect(result.can_execute).toBe(true)
     })
 
     it('should return unhealthy when backend is not responding', async () => {
@@ -308,8 +314,9 @@ describe('ContentExplorerCell', () => {
 
       const result = await cell.health_check()
 
-      expect(result.healthy).toBe(false)
-      expect(result.message).toContain('not responding')
+      expect(result.status).toBe('unavailable')
+      expect(result.can_execute).toBe(false)
+      expect(result.reason).toContain('not responding')
     })
 
     it('should return unhealthy on fetch error', async () => {
@@ -317,8 +324,9 @@ describe('ContentExplorerCell', () => {
 
       const result = await cell.health_check()
 
-      expect(result.healthy).toBe(false)
-      expect(result.message).toContain('Connection failed')
+      expect(result.status).toBe('unavailable')
+      expect(result.can_execute).toBe(false)
+      expect(result.reason).toContain('Connection failed')
     })
   })
 })

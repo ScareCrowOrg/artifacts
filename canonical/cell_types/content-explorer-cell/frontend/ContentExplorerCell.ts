@@ -24,8 +24,20 @@ import type {
   EnvironmentConfig,
   HealthCheckResult 
 } from '@/types/BaseCell'
-import { createHealthyResult } from '@/types/BaseCell'
-import type { ContentTypeMetadata } from '../content-type-manager-cell/frontend/ContentTypeManagerCell'
+
+/**
+ * Content Type metadata structure (from ContentTypeManagerCell)
+ */
+export interface ContentTypeMetadata {
+  id: string
+  name: string
+  description: string
+  mime_type: string
+  version: string
+  max_size_bytes: number
+  allowed_extensions: string[]
+  render_hints?: Record<string, any>
+}
 
 /**
  * Content Explorer actions
@@ -196,10 +208,7 @@ export class ContentExplorerCell implements BaseCell {
       name: 'Content Explorer',
       description: 'Browse and manage assets by content type',
       version: '1.0.0',
-      category: 'content-management',
       tags: ['content', 'assets', 'browser', 'explorer'],
-      supports_streaming: false,
-      requires_backend: true,
       inputs: {
         type: 'object',
         properties: {
@@ -282,8 +291,7 @@ export class ContentExplorerCell implements BaseCell {
     if (action !== 'list') {
       errors.push({
         field: 'action',
-        message: `Invalid action '${action}'. Only 'list' is supported.`,
-        code: 'invalid_action'
+        message: `Invalid action '${action}'. Only 'list' is supported.`
       })
     }
     
@@ -293,8 +301,7 @@ export class ContentExplorerCell implements BaseCell {
       if (isNaN(limit) || limit < 1 || limit > 100) {
         errors.push({
           field: 'limit',
-          message: 'Limit must be between 1 and 100',
-          code: 'invalid_limit'
+          message: 'Limit must be between 1 and 100'
         })
       }
     }
@@ -305,8 +312,7 @@ export class ContentExplorerCell implements BaseCell {
       if (isNaN(offset) || offset < 0) {
         errors.push({
           field: 'offset',
-          message: 'Offset must be >= 0',
-          code: 'invalid_offset'
+          message: 'Offset must be >= 0'
         })
       }
     }
@@ -344,22 +350,21 @@ export class ContentExplorerCell implements BaseCell {
       
       if (response.ok) {
         return {
-          healthy: true,
-          message: 'Content Explorer Cell operational',
-          timestamp: new Date().toISOString()
+          status: 'healthy',
+          can_execute: true
         }
       } else {
         return {
-          healthy: false,
-          message: 'Backend not responding',
-          timestamp: new Date().toISOString()
+          status: 'unavailable',
+          can_execute: false,
+          reason: 'Backend not responding'
         }
       }
     } catch (error) {
       return {
-        healthy: false,
-        message: error instanceof Error ? error.message : 'Health check failed',
-        timestamp: new Date().toISOString()
+        status: 'unavailable',
+        can_execute: false,
+        reason: error instanceof Error ? error.message : 'Health check failed'
       }
     }
   }

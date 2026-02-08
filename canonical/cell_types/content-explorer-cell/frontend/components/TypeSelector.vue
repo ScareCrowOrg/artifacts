@@ -55,7 +55,7 @@
  */
 
 import { ref, computed } from 'vue'
-import type { ContentTypeMetadata } from '../../content-type-manager-cell/frontend/ContentTypeManagerCell'
+import type { ContentTypeMetadata } from '../ContentExplorerCell'
 
 interface Props {
   types: ContentTypeMetadata[]

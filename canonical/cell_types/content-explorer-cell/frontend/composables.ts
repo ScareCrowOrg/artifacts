@@ -7,8 +7,7 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
-import { createContentExplorerCell } from './ContentExplorerCell'
-import type { ContentTypeMetadata } from '../content-type-manager-cell/frontend/ContentTypeManagerCell'
+import { createContentExplorerCell, type ContentTypeMetadata } from './ContentExplorerCell'
 import type { AssetItem, ExplorerFilters } from './ContentExplorerCell'
 
 /**
