@@ -13,7 +13,8 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
-import type { BaseCellAPI, CellFragment, BaseCellFeaturesOptions, SubViewConfig, ParentCellContext } from '@/types/baseCell'
+import type { BaseCellAPI, CellFragment, BaseCellFeaturesOptions } from '@/types/composables.d'
+import type { SubViewConfig, ParentCellContext } from '@/types/RenderableCell'
 import type { CompleteCell } from '@/types/cell'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useCellsStore } from '@/stores/cells'

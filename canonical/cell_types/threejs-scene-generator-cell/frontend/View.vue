@@ -426,6 +426,7 @@ animate();`
       thread_id: '',
       assistant_id: '',
       selected_collections: [],
+      conversation_id: '',
     })
     
     console.log('[DEBUG] Response received from processMessage')

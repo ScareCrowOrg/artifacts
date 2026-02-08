@@ -257,7 +257,7 @@ import {
   Mesh,
   MeshBuilder
 } from '@babylonjs/core'
-import * as earcut from 'earcut'
+import earcut from 'earcut'
 
 // Define props interface
 interface Props {
@@ -493,8 +493,9 @@ function initBabylonJS(): void {
     if (generatedSvg.value) {
       createMeshFromSVG(generatedSvg.value)
     }
-  } catch (error) {
-    console.error('Error initializing Babylon.js:', error)
+  } catch (err) {
+    console.error('Error initializing Babylon.js:', err)
+    const errorMessage = err instanceof Error ? err.message : String(err)
     error.value = 'Failed to initialize 3D viewport'
   }
 }

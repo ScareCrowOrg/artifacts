@@ -306,6 +306,7 @@ Include proper viewBox and dimensions. Keep it simple and readable.`
       thread_id: '',
       assistant_id: '',
       selected_collections: [],
+      conversation_id: '',
     })
 
     // Extract SVG from response

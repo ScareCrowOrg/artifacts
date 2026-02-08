@@ -94,13 +94,10 @@ export class PromptEnhancerCell implements BaseCell {
       if (errors.length > 0) {
         return {
           success: false,
-          data: null,
-          error: {
-            message: 'Validation failed',
-            details: errors.map(e => e.message).join('; ')
-          },
+          output: {},
+          error: `Validation failed: ${errors.map(e => e.message).join('; ')}`,
+          execution_time: 0,
           metadata: {
-            executionTime: 0,
             timestamp: new Date().toISOString()
           }
         }
@@ -147,9 +144,9 @@ export class PromptEnhancerCell implements BaseCell {
 
       return {
         success: true,
-        data: output,
+        output: output as unknown as Record<string, any>,
+        execution_time: executionTime,
         metadata: {
-          executionTime,
           timestamp: new Date().toISOString()
         }
       }
@@ -157,12 +154,10 @@ export class PromptEnhancerCell implements BaseCell {
       log.error('Prompt enhancement failed', error)
       return {
         success: false,
-        data: null,
-        error: {
-          message: error.message || 'Unknown error during prompt enhancement'
-        },
+        output: {},
+        error: error.message || 'Unknown error during prompt enhancement',
+        execution_time: 0,
         metadata: {
-          executionTime: 0,
           timestamp: new Date().toISOString()
         }
       }
@@ -178,7 +173,6 @@ export class PromptEnhancerCell implements BaseCell {
       name: 'Prompt Enhancer',
       version: '1.0.0',
       description: 'Utility cell for enhancing prompts with context and best practices',
-      author: 'ScareVerse Team',
       tags: ['utility', 'prompt', 'enhancement', 'headless'],
       inputs: {
         prompt: { type: 'string', required: true, description: 'Original prompt to enhance' },
@@ -192,12 +186,6 @@ export class PromptEnhancerCell implements BaseCell {
         originalPrompt: { type: 'string', description: 'Original prompt' },
         enhancements: { type: 'array', description: 'List of applied enhancements' },
         estimatedTokens: { type: 'number', description: 'Estimated token count' }
-      },
-      capabilities: {
-        headless: true,
-        composable: true,
-        stateless: true,
-        cacheable: true
       }
     }
   }
@@ -211,40 +199,35 @@ export class PromptEnhancerCell implements BaseCell {
     if (!input.prompt || typeof input.prompt !== 'string') {
       errors.push({
         field: 'prompt',
-        message: 'Prompt is required and must be a string',
-        code: 'INVALID_PROMPT'
+        message: 'Prompt is required and must be a string'
       })
     }
 
     if (input.prompt && input.prompt.length === 0) {
       errors.push({
         field: 'prompt',
-        message: 'Prompt cannot be empty',
-        code: 'EMPTY_PROMPT'
+        message: 'Prompt cannot be empty'
       })
     }
 
     if (input.mode && !['concise', 'detailed', 'technical', 'creative'].includes(input.mode)) {
       errors.push({
         field: 'mode',
-        message: 'Mode must be one of: concise, detailed, technical, creative',
-        code: 'INVALID_MODE'
+        message: 'Mode must be one of: concise, detailed, technical, creative'
       })
     }
 
     if (input.audience && !['developer', 'user', 'ai', 'general'].includes(input.audience)) {
       errors.push({
         field: 'audience',
-        message: 'Audience must be one of: developer, user, ai, general',
-        code: 'INVALID_AUDIENCE'
+        message: 'Audience must be one of: developer, user, ai, general'
       })
     }
 
     if (input.maxLength !== undefined && (typeof input.maxLength !== 'number' || input.maxLength <= 0)) {
       errors.push({
         field: 'maxLength',
-        message: 'maxLength must be a positive number',
-        code: 'INVALID_MAX_LENGTH'
+        message: 'maxLength must be a positive number'
       })
     }
 
@@ -274,7 +257,7 @@ export class PromptEnhancerCell implements BaseCell {
     return {
       status: 'healthy',
       can_execute: true,
-      message: 'Utility cell is always healthy (stateless)'
+      reason: 'Utility cell is always healthy (stateless)'
     }
   }
 

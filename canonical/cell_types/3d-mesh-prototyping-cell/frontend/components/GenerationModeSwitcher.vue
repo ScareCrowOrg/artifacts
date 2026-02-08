@@ -39,7 +39,13 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: GenerationMode): void
 }>()
 
-const modes = [
+const modes: Array<{
+  value: GenerationMode
+  label: string
+  description: string
+  icon: string
+  badge: string | null
+}> = [
   {
     value: 'cloud-api',
     label: 'Cloud API',
