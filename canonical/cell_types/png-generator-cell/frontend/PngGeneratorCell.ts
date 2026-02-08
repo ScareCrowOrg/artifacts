@@ -503,7 +503,7 @@ export class PngGeneratorCell implements BaseCell {
       
       // Dynamically import ContentManagerCell to avoid circular dependencies
       const { ContentManagerCell } = await import(
-        '@/artifacts/canonical/cell_types/content-manager-cell/frontend/ContentManagerCell'
+        '#artifacts/canonical/cell_types/content-manager-cell/frontend/ContentManagerCell'
       )
       
       const contentManager = new ContentManagerCell()
