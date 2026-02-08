@@ -23,9 +23,9 @@ from app.services.content_manager import ContentManager, ContentTypeLoader
 from app.models.content_types import CreateContentRequest, ContentQueryFilters
 from app.database import db
 
-# Import cell-specific modules
-from .storage import get_storage_backend
-from .utils import decode_base64_binary, encode_binary_to_base64, extract_mime_type_from_filename
+# Import cell-specific modules (using absolute imports for dynamic loading)
+from storage import get_storage_backend
+from utils import decode_base64_binary, encode_binary_to_base64, extract_mime_type_from_filename
 
 logger = logging.getLogger(__name__)
 
