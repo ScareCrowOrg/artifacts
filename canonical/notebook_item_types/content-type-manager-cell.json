@@ -1,0 +1,25 @@
+{
+  "id": "content-type-manager-cell",
+  "name": "Content Type Manager",
+  "description": "List available content types with metadata. Ephemeral utility cell that provides content type discovery for building type-aware asset browsers and filters.",
+  "version": "1.0.0",
+  "category": "content-management",
+  "can_render_dynamically": false,
+  "default_refs": {
+    "docs": ["docs/README.md"],
+    "backend": ["backend/scripts/main.py"],
+    "basecell": ["frontend/ContentTypeManagerCell.ts"]
+  },
+  "default_initial_data": {
+    "category": "ephemeral",
+    "icon": "📋"
+  },
+  "allow_instance_override_refs": false,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' marks this as ephemeral utility (not persisted)"
+    }
+  }
+}
