@@ -257,7 +257,7 @@ import {
   Mesh,
   MeshBuilder
 } from '@babylonjs/core'
-import * as earcut from 'earcut'
+import earcut from 'earcut'
 
 // Define props interface
 interface Props {

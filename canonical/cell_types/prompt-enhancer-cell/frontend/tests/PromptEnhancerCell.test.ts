@@ -23,9 +23,7 @@ describe('PromptEnhancerCell', () => {
       expect(metadata.version).toBe('1.0.0')
       expect(metadata.tags).toContain('utility')
       expect(metadata.tags).toContain('headless')
-      expect(// capabilities removed?.headless).toBe(true)
-      expect(// capabilities removed?.composable).toBe(true)
-      expect(// capabilities removed?.stateless).toBe(true)
+      // capabilities property removed from CellMetadata interface
     })
   })
 
@@ -45,7 +43,8 @@ describe('PromptEnhancerCell', () => {
       const errors = cell.validate(input)
       expect(errors).toHaveLength(1)
       expect(errors[0].field).toBe('prompt')
-      expect('INVALID_PROMPT').toBe('INVALID_PROMPT')
+      // ValidationError no longer has 'code' property
+      expect(errors[0].message).toContain('required')
     })
 
     it('should fail validation for empty prompt', () => {
@@ -98,7 +97,7 @@ describe('PromptEnhancerCell', () => {
       const result = await cell.execute(input)
 
       expect(result.success).toBe(true)
-      expect(result.data).toBeDefined()
+      expect(result.output).toBeDefined()
       expect(result.output.enhancedPrompt).toBeDefined()
       expect(result.output.originalPrompt).toBe(input.prompt)
       expect(result.output.enhancements).toBeInstanceOf(Array)
@@ -196,7 +195,7 @@ describe('PromptEnhancerCell', () => {
       expect(result.success).toBe(true)
       expect(result.output.enhancedPrompt.length).toBeLessThanOrEqual(50)
       expect(result.output.enhancedPrompt).toMatch(/\.\.\.$/)
-      expect(result.output.enhancements.some(e => e.includes('Truncated'))).toBe(true)
+      expect(result.output.enhancements.some((e: string) => e.includes('Truncated'))).toBe(true)
     })
 
     it('should return error for invalid input', async () => {
@@ -259,7 +258,7 @@ describe('PromptEnhancerCell', () => {
       const shortResult = await cell.execute(shortPrompt)
       const longResult = await cell.execute(longPrompt)
 
-      expect(shortResult.data.estimatedTokens).toBeLessThan(longResult.data.estimatedTokens)
+      expect(shortResult.output.estimatedTokens).toBeLessThan(longResult.output.estimatedTokens)
     })
   })
 })
