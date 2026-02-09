@@ -320,9 +320,8 @@ describe('SvgGeneratorCell', () => {
       
       expect(health.status).toBe('healthy')
       expect(health.can_execute).toBe(true)
-      expect(health.message).toContain('available')
-      expect(health.metadata?.available_models).toBe(2)
-      expect(health.metadata?.model_list).toHaveLength(2)
+      expect(health.reason).toContain('available')
+      expect(health.reason).toContain('2 models')
     })
     
     it('should return degraded when no models found', async () => {
@@ -332,8 +331,7 @@ describe('SvgGeneratorCell', () => {
       
       expect(health.status).toBe('degraded')
       expect(health.can_execute).toBe(true)
-      expect(health.message).toContain('no models')
-      expect(health.metadata?.available_models).toBe(0)
+      expect(health.reason).toContain('no models')
     })
     
     it('should return degraded when service is unavailable', async () => {
@@ -345,9 +343,8 @@ describe('SvgGeneratorCell', () => {
       
       expect(health.status).toBe('degraded')
       expect(health.can_execute).toBe(true)
-      expect(health.message).toContain('unavailable')
-      expect(health.error).toBe('Service unavailable')
-      expect(health.metadata?.fallback_available).toBe(true)
+      expect(health.reason).toContain('unavailable')
+      expect(health.reason).toContain('Service unavailable')
     })
   })
   

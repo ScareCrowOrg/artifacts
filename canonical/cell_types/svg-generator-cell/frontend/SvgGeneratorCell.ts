@@ -315,31 +315,20 @@ Include proper viewBox and dimensions. Keep it simple and readable.`
         return {
           status: 'healthy',
           can_execute: true,
-          message: `LLM service available with ${models.length} models`,
-          metadata: {
-            available_models: models.length,
-            model_list: models.map(m => m.value)
-          }
+          reason: `LLM service available with ${models.length} models`
         }
       } else {
         return {
           status: 'degraded',
           can_execute: true,
-          message: 'LLM service available but no models found. Will use fallback.',
-          metadata: {
-            available_models: 0
-          }
+          reason: 'LLM service available but no models found. Will use fallback.'
         }
       }
     } catch (error: any) {
       return {
         status: 'degraded',
         can_execute: true,
-        message: 'LLM service unavailable. Will use fallback SVG.',
-        error: error.message,
-        metadata: {
-          fallback_available: true
-        }
+        reason: `LLM service unavailable: ${error.message}. Will use fallback SVG.`
       }
     }
   }
