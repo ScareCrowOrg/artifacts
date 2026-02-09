@@ -63,6 +63,7 @@ const localIsGenerating = ref<boolean>(false) // Generation status (writable)
 const localAutoRotate = ref<boolean>(false) // Viewport setting (writable)
 const localWireframeMode = ref<boolean>(false) // Viewport setting (writable)
 const localShowGrid = ref<boolean>(true) // Viewport setting (writable)
+const localSolidifySilhouette = ref<boolean>(false) // Silhouette processing (writable)
 
 // Generation mode state
 type GenerationMode = 'cloud-api' | 'local-gpu' | 'manual-upload'
@@ -232,49 +233,6 @@ watch(meshBlobUrl, (newUrl, oldUrl) => {
  * Compress image to reduce payload size for 3D mesh generation
  * Addresses "Request Entity Too Large" (HTTP 413) errors
  */
-const compressImage = (dataUrl: string, maxWidth: number = 1024, maxHeight: number = 1024, quality: number = 0.8): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      let width = img.width
-      let height = img.height
-
-      // Calculate dimensions while maintaining aspect ratio
-      if (width > height) {
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width)
-          width = maxWidth
-        }
-      } else {
-        if (height > maxHeight) {
-          width = Math.round((width * maxHeight) / height)
-          height = maxHeight
-        }
-      }
-
-      canvas.width = width
-      canvas.height = height
-
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        reject(new Error('Failed to get canvas context'))
-        return
-      }
-
-      ctx.drawImage(img, 0, 0, width, height)
-
-      // Convert to JPEG with quality setting to reduce size
-      const compressedUrl = canvas.toDataURL('image/jpeg', quality)
-      logger.info(`Image compressed: ${img.width}x${img.height} → ${width}x${height}, quality: ${quality}`)
-      resolve(compressedUrl)
-    }
-    img.onerror = () => {
-      reject(new Error('Failed to load image'))
-    }
-    img.src = dataUrl
-  })
-}
 
 /**
  * Handle image file upload
@@ -297,15 +255,14 @@ const handleFileUpload = async (event: Event) => {
     try {
       const result = e.target?.result as string
 
-      // Compress image to reduce payload size and prevent HTTP 413 errors
-      const compressedImage = await compressImage(result, 1024, 1024, 0.8)
-
-      uploadedImage.value = compressedImage // ITERATION #5 - Now using writable ref
+      // Use image as-is (user responsible for size and quality)
+      // InstantMesh will handle any resolution
+      uploadedImage.value = result
       localError.value = null
-      logger.debug('Image loaded and compressed as base64 data URL')
+      logger.debug('Image loaded as base64 (no processing)')
     } catch (err: any) {
-      localError.value = `Image compression failed: ${err.message}`
-      logger.error('Image compression error', err)
+      localError.value = `Image load failed: ${err.message}`
+      logger.error('Image load error', err)
     }
   }
   reader.onerror = () => {
@@ -374,7 +331,8 @@ const generate3DMesh = async () => {
       inputImage: inputImage.value || '',
       generationMode: generationMode.value,
       modelType: selectedModel.value,
-      reconstructionParams
+      reconstructionParams,
+      solidifySilhouette: localSolidifySilhouette.value  // User-controlled option
     }
     
     // Validate input using cell's validate method
@@ -635,6 +593,31 @@ onUnmounted(() => {
         <span v-if="selectedModel === 'sf3d'">SF3D: Faster inference (15s), uses more VRAM (3-4GB)</span>
         <span v-else>InstantMesh: Free local alternative, slower but uses less VRAM (2-3GB)</span>
       </p>
+    </div>
+
+    <!-- Silhouette Solidifier Option -->
+    <div v-if="generationMode === 'local-gpu' && selectedModel === 'instantmesh'" class="mb-6">
+      <label class="flex items-center cursor-pointer p-3 bg-surface-light dark:bg-surface-dark-light border border-border dark:border-border-dark rounded">
+        <input
+          v-model="localSolidifySilhouette"
+          type="checkbox"
+          :disabled="isGenerating"
+          class="w-5 h-5 rounded border-border dark:border-border-dark text-primary focus:ring-2 focus:ring-primary"
+        />
+        <div class="ml-3 flex-1">
+          <div class="text-sm font-medium text-text-primary dark:text-text-primary-dark">
+            Solidify Silhouette
+          </div>
+          <div class="text-xs text-text-secondary dark:text-text-secondary-dark mt-1">
+            <span v-if="localSolidifySilhouette">
+              🔧 Enabled: Fixes incomplete geometry (good for objects with fine details like fur, whiskers)
+            </span>
+            <span v-else>
+              ⚡ Disabled: Fast mode (good for clean silhouettes like boxes, simple shapes)
+            </span>
+          </div>
+        </div>
+      </label>
     </div>
 
     <!-- Generate Button (only for generation modes) -->
