@@ -15,15 +15,16 @@
  * Part of content-manager-cell refactoring to implement BaseCell interface
  */
 
-import type { 
-  BaseCell, 
-  CellResult, 
-  CellMetadata, 
-  ValidationError, 
+import type {
+  BaseCell,
+  CellResult,
+  CellMetadata,
+  ValidationError,
   EnvironmentConfig,
-  HealthCheckResult 
+  HealthCheckResult
 } from '@/types/BaseCell'
 import { createHealthyResult } from '@/types/BaseCell'
+import { apiFetch } from '@/services/apiService'
 
 /**
  * Content Manager actions
@@ -238,13 +239,15 @@ export class ContentManagerCell implements BaseCell {
       }
       
       const action = input.action as ContentManagerAction
-      
+
       // Call backend via execute-ephemeral endpoint
-      const response = await fetch(`${this._apiBaseUrl}/execute-ephemeral`, {
+      // Using apiFetch ensures Authorization header is included automatically
+      // and handles token refresh on 401 errors
+      const response = await apiFetch(`${this._apiBaseUrl}/execute-ephemeral`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          ...(this._authToken ? { 'Authorization': `Bearer ${this._authToken}` } : {})
+          'Content-Type': 'application/json'
+          // Do NOT add Authorization manually - apiFetch handles it automatically
         },
         body: JSON.stringify({
           cell_type: 'content-manager-cell',
@@ -535,11 +538,10 @@ export class ContentManagerCell implements BaseCell {
   async health_check(): Promise<HealthCheckResult> {
     try {
       // Quick ping to verify backend is accessible
-      const response = await fetch(`${this._apiBaseUrl}/types/list`, {
-        method: 'GET',
-        headers: {
-          ...(this._authToken ? { 'Authorization': `Bearer ${this._authToken}` } : {})
-        }
+      // Using apiFetch ensures Authorization header is included automatically
+      const response = await apiFetch(`${this._apiBaseUrl}/types/list`, {
+        method: 'GET'
+        // Do NOT add Authorization manually - apiFetch handles it automatically
       })
       
       if (response.ok) {

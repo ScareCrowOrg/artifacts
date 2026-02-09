@@ -5,6 +5,7 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
+import { apiFetch } from '@/services/apiService'
 import type {
   Content,
   ContentFilters,
@@ -58,7 +59,8 @@ export function useContentManager(
    * Execute cell action via API
    */
   async function executeAction<T>(action: string, params: Record<string, any>): Promise<ApiResponse<T>> {
-    const response = await fetch(`/api/cells/${cellId}/execute`, {
+    // Using apiFetch ensures Authorization header is included automatically
+    const response = await apiFetch(`/api/cells/${cellId}/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -172,8 +174,9 @@ export function useContentManager(
         if (request.assignee_id) {
           formData.append('assignee_id', request.assignee_id)
         }
-        
-        const httpResponse = await fetch(`/api/cells/${cellId}/execute`, {
+
+        // Using apiFetch ensures Authorization header is included automatically
+        const httpResponse = await apiFetch(`/api/cells/${cellId}/execute`, {
           method: 'POST',
           body: formData
         })

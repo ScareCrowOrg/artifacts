@@ -15,15 +15,16 @@
  * Part of content-type-manager-cell implementation following BaseCell interface
  */
 
-import type { 
-  BaseCell, 
-  CellResult, 
-  CellMetadata, 
-  ValidationError, 
+import type {
+  BaseCell,
+  CellResult,
+  CellMetadata,
+  ValidationError,
   EnvironmentConfig,
-  HealthCheckResult 
+  HealthCheckResult
 } from '@/types/BaseCell'
 import { createHealthyResult } from '@/types/BaseCell'
+import { apiFetch } from '@/services/apiService'
 
 /**
  * Content Type Manager actions
@@ -148,7 +149,8 @@ export class ContentTypeManagerCell implements BaseCell {
   ): Promise<CellResult> {
     try {
       // Call backend execute-ephemeral endpoint
-      const response = await fetch('/api/cells/execute-ephemeral', {
+      // Using apiFetch ensures Authorization header is included automatically
+      const response = await apiFetch('/api/cells/execute-ephemeral', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

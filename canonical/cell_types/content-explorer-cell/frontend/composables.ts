@@ -7,6 +7,7 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
+import { apiFetch } from '@/services/apiService'
 import { createContentExplorerCell, type ContentTypeMetadata } from './ContentExplorerCell'
 import type { AssetItem, ExplorerFilters } from './ContentExplorerCell'
 
@@ -141,7 +142,8 @@ export function useContentExplorer() {
     
     try {
       // Call ContentManagerCell delete endpoint
-      const response = await fetch('/api/cells/execute-ephemeral', {
+      // Using apiFetch ensures Authorization header is included automatically
+      const response = await apiFetch('/api/cells/execute-ephemeral', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

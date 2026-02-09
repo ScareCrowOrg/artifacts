@@ -16,14 +16,15 @@
  * Part of content-explorer-cell implementation following BaseCell interface
  */
 
-import type { 
-  BaseCell, 
-  CellResult, 
-  CellMetadata, 
-  ValidationError, 
+import type {
+  BaseCell,
+  CellResult,
+  CellMetadata,
+  ValidationError,
   EnvironmentConfig,
-  HealthCheckResult 
+  HealthCheckResult
 } from '@/types/BaseCell'
+import { apiFetch } from '@/services/apiService'
 
 /**
  * Content Type metadata structure (from ContentTypeManagerCell)
@@ -162,7 +163,8 @@ export class ContentExplorerCell implements BaseCell {
       }
       
       // Call backend via execute-ephemeral endpoint
-      const response = await fetch('/api/cells/execute-ephemeral', {
+      // Using apiFetch ensures Authorization header is included automatically
+      const response = await apiFetch('/api/cells/execute-ephemeral', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -344,7 +346,8 @@ export class ContentExplorerCell implements BaseCell {
   async health_check(): Promise<HealthCheckResult> {
     try {
       // Verify backend is reachable
-      const response = await fetch('/api/health', {
+      // Using apiFetch ensures Authorization header is included automatically
+      const response = await apiFetch('/api/health', {
         method: 'GET'
       })
       
