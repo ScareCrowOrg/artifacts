@@ -53,9 +53,11 @@ export interface SvgGeneratorOutput {
 }
 
 /**
- * Minimal fallback SVG (red circle)
+ * Minimal fallback SVG (red circle) for when LLM service is unavailable
  */
-const MINIMAL_FALLBACK_SVG = '<svg viewBox="0 0 100 100" width="100" height="100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" fill="red"/></svg>'
+const MINIMAL_FALLBACK_SVG = `<svg viewBox="0 0 100 100" width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="50" cy="50" r="40" fill="red"/>
+</svg>`
 
 /**
  * SvgGeneratorCell - BaseCell implementation for SVG generation
