@@ -241,17 +241,18 @@ async function handlePersist(): Promise<void> {
       content_type_id: 'image-png',
       filename: `${formData.value.name}.png`,
       binary: props.assetData.image_data || props.assetData.generatedPng,
+      // Fragments are required fields for image-png ContentType
+      fragments: {
+        width: props.assetData.width,
+        height: props.assetData.height
+      },
       metadata: {
         description: formData.value.description,
         tags,
         public: formData.value.make_public,
         generated_at: props.assetData.generation_timestamp || props.assetData.timestamp,
         generation_params: props.assetData.generation_params || props.assetData.generationParams,
-        prompt: props.assetData.prompt,
-        dimensions: {
-          width: props.assetData.width,
-          height: props.assetData.height
-        }
+        prompt: props.assetData.prompt
       }
     })
 
