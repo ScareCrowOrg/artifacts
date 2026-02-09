@@ -302,7 +302,13 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 "success": False,
                 "error": "Missing 'binary' parameter"
             }
-        
+
+        if not assignee_id:
+            return {
+                "success": False,
+                "error": "Missing 'assignee_id' parameter. Must specify content owner."
+            }
+
         # Decode binary data
         if isinstance(binary_data, str):
             binary, detected_mime = decode_base64_binary(binary_data)
