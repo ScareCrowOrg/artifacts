@@ -232,49 +232,6 @@ watch(meshBlobUrl, (newUrl, oldUrl) => {
  * Compress image to reduce payload size for 3D mesh generation
  * Addresses "Request Entity Too Large" (HTTP 413) errors
  */
-const compressImage = (dataUrl: string, maxWidth: number = 1024, maxHeight: number = 1024, quality: number = 0.8): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      let width = img.width
-      let height = img.height
-
-      // Calculate dimensions while maintaining aspect ratio
-      if (width > height) {
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width)
-          width = maxWidth
-        }
-      } else {
-        if (height > maxHeight) {
-          width = Math.round((width * maxHeight) / height)
-          height = maxHeight
-        }
-      }
-
-      canvas.width = width
-      canvas.height = height
-
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        reject(new Error('Failed to get canvas context'))
-        return
-      }
-
-      ctx.drawImage(img, 0, 0, width, height)
-
-      // Convert to JPEG with quality setting to reduce size
-      const compressedUrl = canvas.toDataURL('image/jpeg', quality)
-      logger.info(`Image compressed: ${img.width}x${img.height} → ${width}x${height}, quality: ${quality}`)
-      resolve(compressedUrl)
-    }
-    img.onerror = () => {
-      reject(new Error('Failed to load image'))
-    }
-    img.src = dataUrl
-  })
-}
 
 /**
  * Handle image file upload
@@ -297,15 +254,14 @@ const handleFileUpload = async (event: Event) => {
     try {
       const result = e.target?.result as string
 
-      // Compress image to reduce payload size and prevent HTTP 413 errors
-      const compressedImage = await compressImage(result, 1024, 1024, 0.8)
-
-      uploadedImage.value = compressedImage // ITERATION #5 - Now using writable ref
+      // Use image as-is (user responsible for size and quality)
+      // InstantMesh will handle any resolution
+      uploadedImage.value = result
       localError.value = null
-      logger.debug('Image loaded and compressed as base64 data URL')
+      logger.debug('Image loaded as base64 (no processing)')
     } catch (err: any) {
-      localError.value = `Image compression failed: ${err.message}`
-      logger.error('Image compression error', err)
+      localError.value = `Image load failed: ${err.message}`
+      logger.error('Image load error', err)
     }
   }
   reader.onerror = () => {
