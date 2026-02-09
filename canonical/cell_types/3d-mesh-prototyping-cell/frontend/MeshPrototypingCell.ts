@@ -60,6 +60,9 @@ export interface MeshPrototypingInput {
 
   /** 3D mesh generation model (optional, defaults to 'sf3d') */
   modelType?: MeshGenerationModel
+
+  /** Solidify silhouette to fix incomplete geometry (optional, defaults to false) */
+  solidifySilhouette?: boolean
 }
 
 /**

@@ -63,6 +63,7 @@ const localIsGenerating = ref<boolean>(false) // Generation status (writable)
 const localAutoRotate = ref<boolean>(false) // Viewport setting (writable)
 const localWireframeMode = ref<boolean>(false) // Viewport setting (writable)
 const localShowGrid = ref<boolean>(true) // Viewport setting (writable)
+const localSolidifySilhouette = ref<boolean>(false) // Silhouette processing (writable)
 
 // Generation mode state
 type GenerationMode = 'cloud-api' | 'local-gpu' | 'manual-upload'
@@ -330,7 +331,8 @@ const generate3DMesh = async () => {
       inputImage: inputImage.value || '',
       generationMode: generationMode.value,
       modelType: selectedModel.value,
-      reconstructionParams
+      reconstructionParams,
+      solidifySilhouette: localSolidifySilhouette.value  // User-controlled option
     }
     
     // Validate input using cell's validate method
@@ -591,6 +593,31 @@ onUnmounted(() => {
         <span v-if="selectedModel === 'sf3d'">SF3D: Faster inference (15s), uses more VRAM (3-4GB)</span>
         <span v-else>InstantMesh: Free local alternative, slower but uses less VRAM (2-3GB)</span>
       </p>
+    </div>
+
+    <!-- Silhouette Solidifier Option -->
+    <div v-if="generationMode === 'local-gpu' && selectedModel === 'instantmesh'" class="mb-6">
+      <label class="flex items-center cursor-pointer p-3 bg-surface-light dark:bg-surface-dark-light border border-border dark:border-border-dark rounded">
+        <input
+          v-model="localSolidifySilhouette"
+          type="checkbox"
+          :disabled="isGenerating"
+          class="w-5 h-5 rounded border-border dark:border-border-dark text-primary focus:ring-2 focus:ring-primary"
+        />
+        <div class="ml-3 flex-1">
+          <div class="text-sm font-medium text-text-primary dark:text-text-primary-dark">
+            Solidify Silhouette
+          </div>
+          <div class="text-xs text-text-secondary dark:text-text-secondary-dark mt-1">
+            <span v-if="localSolidifySilhouette">
+              🔧 Enabled: Fixes incomplete geometry (good for objects with fine details like fur, whiskers)
+            </span>
+            <span v-else>
+              ⚡ Disabled: Fast mode (good for clean silhouettes like boxes, simple shapes)
+            </span>
+          </div>
+        </div>
+      </label>
     </div>
 
     <!-- Generate Button (only for generation modes) -->
