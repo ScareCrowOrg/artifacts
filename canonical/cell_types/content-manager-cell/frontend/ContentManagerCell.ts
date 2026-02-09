@@ -273,9 +273,10 @@ export class ContentManagerCell implements BaseCell {
       }
       
       // Return successful result
+      // Result structure: { success, output, ... } or legacy { success, data, ... }
       return {
         success: true,
-        output: result.data || {},
+        output: result.output || result.data || {},
         execution_time: performance.now() - startTime,
         execution_steps: ['validate', 'backend_call', `action_${action}`],
         metadata: {

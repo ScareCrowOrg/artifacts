@@ -71,7 +71,7 @@ export interface PromptEnhancerOutput {
  *   audience: 'developer'
  * })
  * 
- * console.log(result.data.enhancedPrompt)
+ * console.log(result.output.enhancedPrompt)
  * // Output: "Create a secure login form component with the following requirements:..."
  * ```
  */

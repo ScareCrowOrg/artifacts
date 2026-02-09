@@ -186,11 +186,12 @@ export class ContentTypeManagerCell implements BaseCell {
           execution_time: performance.now() - startTime
         }
       }
-      
+
       // Return successful result
+      // Result structure: { success, output, ... } or legacy { success, data, ... }
       return {
         success: true,
-        output: result.data,
+        output: result.output || result.data || {},
         execution_time: performance.now() - startTime
       }
       
