@@ -94,7 +94,8 @@ describe('AssetPrototypingCell', () => {
       expect(metadata.id).toBe('asset-prototyping-cell')
       expect(metadata.name).toBe('Asset Prototyping Cell')
       expect(metadata.version).toBe('1.0.0')
-      expect(metadata.description).toContain('composition')
+      // App uses "Composes" not "composition" in description
+      expect(metadata.description).toContain('Composes')
       expect(metadata.tags).toContain('composition')
       expect(metadata.tags).toContain('pipeline')
       expect(metadata.required_resources).toContain('backend')
