@@ -204,8 +204,13 @@ class CloudflareR2Storage(StorageBackend):
             aws_secret_access_key=secret_access_key,
             config=Config(signature_version='s3v4')
         )
-        
+
         logger.info(f"CloudflareR2Storage initialized: bucket={bucket_name}")
+        logger.debug(f"[DEBUG] CloudflareR2Storage initialized with:")
+        logger.debug(f"[DEBUG]   - endpoint_url: {endpoint_url}")
+        logger.debug(f"[DEBUG]   - bucket_name: {bucket_name}")
+        logger.debug(f"[DEBUG]   - public_url: {public_url if public_url else '(not set)'}")
+        logger.debug(f"[DEBUG]   - account_id used in endpoint: {account_id}")
     
     def _get_object_key(self, content_id: str, filename: str) -> str:
         """Generate S3 object key for content."""
@@ -222,16 +227,33 @@ class CloudflareR2Storage(StorageBackend):
                 # S3 allows custom headers with "x-amz-meta-" prefix
                 metadata_headers[f"x-amz-meta-{key.lower()}"] = str(value)
 
-        self.s3_client.put_object(
-            Bucket=self.bucket_name,
-            Key=object_key,
-            Body=binary,
-            ContentType=mime_type,
-            Metadata=metadata_headers if metadata_headers else None
-        )
+        logger.debug(f"[DEBUG] R2 upload details:")
+        logger.debug(f"[DEBUG]   - endpoint: {self.endpoint_url}")
+        logger.debug(f"[DEBUG]   - bucket: {self.bucket_name}")
+        logger.debug(f"[DEBUG]   - object_key: {object_key}")
+        logger.debug(f"[DEBUG]   - content_size: {len(binary)} bytes")
+        logger.debug(f"[DEBUG]   - content_type: {mime_type}")
+        logger.debug(f"[DEBUG]   - metadata_headers: {list(metadata_headers.keys())}")
 
-        logger.info(f"Uploaded to R2: {object_key}")
-        return f"r2://{self.bucket_name}/{object_key}"
+        try:
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=object_key,
+                Body=binary,
+                ContentType=mime_type,
+                Metadata=metadata_headers if metadata_headers else None
+            )
+
+            logger.info(f"Uploaded to R2: {object_key}")
+            return f"r2://{self.bucket_name}/{object_key}"
+        except Exception as e:
+            logger.error(f"[DEBUG] R2 upload failed:")
+            logger.error(f"[DEBUG]   - error_type: {type(e).__name__}")
+            logger.error(f"[DEBUG]   - error_message: {str(e)}")
+            logger.error(f"[DEBUG]   - endpoint_url: {self.endpoint_url}")
+            logger.error(f"[DEBUG]   - bucket_name: {self.bucket_name}")
+            logger.error(f"[DEBUG]   - object_key: {object_key}")
+            raise
     
     def get_presigned_url(self, content_id: str, filename: str, expires_in: int = 3600) -> Optional[str]:
         """Generate presigned URL for R2 object."""
@@ -289,20 +311,24 @@ class CloudflareR2Storage(StorageBackend):
 def get_storage_backend() -> StorageBackend:
     """
     Get configured storage backend based on environment variables.
-    
+
     Returns:
         StorageBackend instance (CloudflareR2Storage or LocalStorage)
     """
     storage_mode = os.getenv("STORAGE_MODE", "local").lower()
-    
+    logger.debug(f"[DEBUG] STORAGE_MODE={storage_mode}")
+
     if storage_mode == "r2":
         # Check R2 configuration
         r2_enabled = os.getenv("R2_ENABLED", "false").lower() == "true"
-        
+        logger.debug(f"[DEBUG] R2_ENABLED={r2_enabled}")
+
         if not r2_enabled:
             logger.warning("R2 mode requested but R2_ENABLED=false. Falling back to local storage.")
-            return LocalStorage(os.getenv("STORAGE_LOCAL_PATH", "/data/content"))
-        
+            local_path = os.getenv("STORAGE_LOCAL_PATH", "/data/content")
+            logger.info(f"[DEBUG] Using LocalStorage at {local_path}")
+            return LocalStorage(local_path)
+
         # Get R2 credentials
         account_id = os.getenv("R2_ACCOUNT_ID")
         access_key_id = os.getenv("R2_ACCESS_KEY_ID")
@@ -310,12 +336,25 @@ def get_storage_backend() -> StorageBackend:
         bucket_name = os.getenv("R2_BUCKET_NAME", "scareverse-content")
         endpoint_url = os.getenv("R2_ENDPOINT_URL")
         public_url = os.getenv("R2_PUBLIC_URL")
-        
+
+        # Log R2 configuration (sanitized)
+        logger.info(f"[DEBUG] R2 Configuration:")
+        logger.info(f"[DEBUG]   - account_id: {'SET' if account_id else 'NOT SET'}")
+        logger.info(f"[DEBUG]   - access_key_id: {'SET' if access_key_id else 'NOT SET'}")
+        logger.info(f"[DEBUG]   - secret_access_key: {'SET' if secret_access_key else 'NOT SET'}")
+        logger.info(f"[DEBUG]   - bucket_name: {bucket_name}")
+        logger.info(f"[DEBUG]   - endpoint_url: {endpoint_url if endpoint_url else '(auto-generated)'}")
+        logger.info(f"[DEBUG]   - public_url: {public_url if public_url else '(not set)'}")
+
         if not all([account_id, access_key_id, secret_access_key]):
             logger.error("R2 credentials not configured. Falling back to local storage.")
-            return LocalStorage(os.getenv("STORAGE_LOCAL_PATH", "/data/content"))
-        
+            logger.error(f"[DEBUG] Missing credentials: account_id={bool(account_id)}, access_key={bool(access_key_id)}, secret={bool(secret_access_key)}")
+            local_path = os.getenv("STORAGE_LOCAL_PATH", "/data/content")
+            logger.info(f"[DEBUG] Using LocalStorage fallback at {local_path}")
+            return LocalStorage(local_path)
+
         try:
+            logger.info(f"[DEBUG] Initializing CloudflareR2Storage with bucket '{bucket_name}'")
             return CloudflareR2Storage(
                 account_id=account_id,
                 access_key_id=access_key_id,
@@ -326,7 +365,12 @@ def get_storage_backend() -> StorageBackend:
             )
         except Exception as e:
             logger.error(f"Failed to initialize R2 storage: {e}. Falling back to local storage.")
-            return LocalStorage(os.getenv("STORAGE_LOCAL_PATH", "/data/content"))
-    
+            logger.error(f"[DEBUG] R2 initialization error: {type(e).__name__}: {str(e)}")
+            local_path = os.getenv("STORAGE_LOCAL_PATH", "/data/content")
+            logger.info(f"[DEBUG] Using LocalStorage fallback at {local_path}")
+            return LocalStorage(local_path)
+
     # Default to local storage
-    return LocalStorage(os.getenv("STORAGE_LOCAL_PATH", "/data/content"))
+    local_path = os.getenv("STORAGE_LOCAL_PATH", "/data/content")
+    logger.info(f"[DEBUG] Using LocalStorage (default) at {local_path}")
+    return LocalStorage(local_path)

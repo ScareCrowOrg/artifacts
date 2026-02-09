@@ -266,14 +266,18 @@ async def handle_load(cell_data: Dict[str, Any]) -> Dict[str, Any]:
 async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle persist action - upload content to storage.
-    
+
     Args:
         cell_data: Contains content_type_id, filename, binary, fragments, etc.
-        
+
     Returns:
         Created content metadata
     """
     try:
+        # Log incoming request
+        logger.info("[DEBUG] ===== PERSIST ACTION STARTED =====")
+        logger.info(f"[DEBUG] cell_data keys: {list(cell_data.keys())}")
+
         # Extract parameters
         content_type_id = cell_data.get("content_type_id")
         filename = cell_data.get("filename")
@@ -284,6 +288,12 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         origin_cell_id = cell_data.get("origin_cell_id")
         # Use assignee_id if provided, otherwise use user_id from current user context
         assignee_id = cell_data.get("assignee_id") or cell_data.get("user_id")
+
+        logger.info(f"[DEBUG] Extracted parameters:")
+        logger.info(f"[DEBUG]   - content_type_id: {content_type_id}")
+        logger.info(f"[DEBUG]   - filename: {filename}")
+        logger.info(f"[DEBUG]   - binary_data type: {type(binary_data).__name__}")
+        logger.info(f"[DEBUG]   - assignee_id: {assignee_id}")
         
         # Validate required parameters
         if not content_type_id:
@@ -366,7 +376,19 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         content = await content_manager.create_content(create_request)
 
         # Upload to storage backend
+        logger.info("[DEBUG] ===== STORAGE BACKEND INITIALIZATION =====")
         storage = get_storage_backend()
+        logger.info(f"[DEBUG] Storage backend type: {type(storage).__name__}")
+
+        # Log storage configuration
+        if hasattr(storage, 'bucket_name'):
+            logger.info(f"[DEBUG] R2 Configuration:")
+            logger.info(f"[DEBUG]   - bucket_name: {storage.bucket_name}")
+            logger.info(f"[DEBUG]   - endpoint_url: {storage.endpoint_url}")
+            logger.info(f"[DEBUG]   - public_url: {storage.public_url if hasattr(storage, 'public_url') else 'N/A'}")
+        elif hasattr(storage, 'base_path'):
+            logger.info(f"[DEBUG] LocalStorage Configuration:")
+            logger.info(f"[DEBUG]   - base_path: {storage.base_path}")
 
         # Prepare metadata for integrity and observability
         storage_metadata = {
@@ -377,6 +399,15 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             "created-timestamp": datetime.utcnow().isoformat()
         }
 
+        # Log upload details
+        logger.info("[DEBUG] ===== UPLOAD DETAILS =====")
+        logger.info(f"[DEBUG]   - content_id: {content.id}")
+        logger.info(f"[DEBUG]   - filename: {filename}")
+        logger.info(f"[DEBUG]   - size_bytes: {size_bytes}")
+        logger.info(f"[DEBUG]   - mime_type: {mime_type}")
+        logger.info(f"[DEBUG]   - fragments: {fragments}")
+        logger.info(f"[DEBUG] Starting upload...")
+
         try:
             # Upload with metadata for traceability
             data_ref = storage.upload(
@@ -386,9 +417,20 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 mime_type,
                 metadata=storage_metadata
             )
+            logger.info(f"[DEBUG] ✓ Upload successful!")
+            logger.info(f"[DEBUG]   - data_ref: {data_ref}")
         except Exception as storage_error:
             # Upload failed - no persistence occurred, no cleanup needed
-            logger.error(f"Storage upload failed for {content_type_id}: {storage_error}", exc_info=True)
+            logger.error("[DEBUG] ===== STORAGE UPLOAD FAILED =====")
+            logger.error(f"[DEBUG] Error Type: {type(storage_error).__name__}")
+            logger.error(f"[DEBUG] Error Message: {str(storage_error)}")
+            logger.error(f"[DEBUG] Content Type: {content_type_id}")
+            logger.error(f"[DEBUG] Filename: {filename}")
+            logger.error(f"[DEBUG] Storage Backend: {type(storage).__name__}")
+            if hasattr(storage, 'bucket_name'):
+                logger.error(f"[DEBUG] R2 Bucket: {storage.bucket_name}")
+                logger.error(f"[DEBUG] R2 Endpoint: {storage.endpoint_url}")
+            logger.error(f"[DEBUG] Full traceback:", exc_info=True)
             raise ValueError(f"Failed to upload content to storage: {str(storage_error)}")
 
         # Update data_ref in database with error handling (CRITICAL: prevent orphaned files)
