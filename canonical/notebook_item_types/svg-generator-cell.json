@@ -1,28 +1,32 @@
 {
   "id": "svg-generator-cell",
   "name": "SVG Generator Cell",
-  "description": "Interactive cell for generating SVG visualizations from text prompts using AI",
-  "version": "1.0.0",
+  "description": "BaseCell-compliant cell for generating SVG visualizations from text prompts using AI. Implements standardized execution interface with fallback mechanism.",
+  "version": "2.0.0",
   "category": "visualization",
   "can_render_dynamically": true,
+  "base_cell_compliant": true,
   "default_refs": {
+    "basecell": ["frontend/SvgGeneratorCell.ts"],
     "view": ["frontend/View.vue"],
     "scripts": ["backend/scripts/main.py"],
-    "docs": ["docs/README.md"]
+    "docs": ["docs/README.md"],
+    "tests": ["frontend/tests/SvgGeneratorCell.test.ts"]
   },
   "default_initial_data": {
-    "category": "ephemeral",
+    "category": "visualization",
     "prompt": "",
     "generatedSvg": null,
     "isGenerating": false,
-    "error": null
+    "error": null,
+    "selectedModel": "mistral"
   },
   "allow_instance_override_refs": true,
   "properties_schema": {
     "category": {
       "type": "string",
-      "default": "ephemeral",
-      "description": "Cell category - 'ephemeral' marks this as ephemeral (not persisted)"
+      "default": "visualization",
+      "description": "Cell category - 'visualization' for SVG generation cells"
     },
     "prompt": {
       "type": "string",
@@ -43,6 +47,11 @@
       "type": ["string", "null"],
       "default": null,
       "description": "Error message if generation fails"
+    },
+    "selectedModel": {
+      "type": "string",
+      "default": "mistral",
+      "description": "Currently selected LLM model for generation"
     }
   }
 }

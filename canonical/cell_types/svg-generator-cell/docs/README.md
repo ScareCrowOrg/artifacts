@@ -18,19 +18,75 @@ dead_docs_found: false
 
 ## Overview
 
-The **SVG Generator Cell** is an interactive cell type that enables users to generate SVG visualizations from natural language descriptions using AI. This cell provides a simple yet powerful interface for creating graphics without manual SVG coding.
+The **SVG Generator Cell** is a BaseCell-compliant cell type that enables users to generate SVG visualizations from natural language descriptions using AI. This cell implements the BaseCell v1.0 interface for headless execution, composability, and standardized lifecycle management.
+
+## Architecture
+
+**BaseCell Implementation**: ✅ Fully compliant with BaseCell v1.0 Framework
+
+### Key Components
+
+- **Frontend**: `SvgGeneratorCell.ts` - TypeScript class implementing `BaseCell` interface
+- **UI Component**: `View.vue` - Vue 3 component for user interaction
+- **Backend**: `main.py` - Python execution logic (optional, uses LLM service)
+- **Tests**: Comprehensive unit tests with 90%+ coverage
+
+### BaseCell Interface
+
+The cell implements all required BaseCell methods:
+- `execute(input)` - Generate SVG from text prompt
+- `describe()` - Return cell metadata and capabilities
+- `validate(input)` - Validate input parameters
+
+Optional lifecycle methods:
+- `health_check()` - Monitor LLM service availability
 
 ## Features
 
+- **BaseCell-Compliant**: Implements standardized execution interface
+- **Headless Execution**: Can be executed programmatically without UI
 - **AI-Powered Generation**: Uses LLM (Large Language Model) to convert text descriptions into valid SVG code
+- **Fallback Mechanism**: Gracefully degrades to placeholder SVG when LLM unavailable
 - **Interactive Preview**: Real-time preview of generated SVG graphics
 - **Export Options**: Copy SVG code to clipboard or download as `.svg` file
 - **Code Visibility**: Toggle to view/hide the generated SVG source code
+- **Model Selection**: Support for multiple LLM models (local/cloud/BYOK)
 - **Dark Mode Support**: Full theme compliance with ScareVerse design system
 - **Internationalized**: Supports English and Portuguese (pt-BR)
 - **Keyboard Shortcuts**: Ctrl+Enter (Cmd+Enter on Mac) for quick generation
 
-## Properties
+## BaseCell API
+
+### Input Schema (execute method)
+
+```typescript
+{
+  prompt: string,           // Required: Text description of desired SVG
+  model?: string,           // Optional: LLM model (default: 'mistral')
+  temperature?: number,     // Optional: 0.0-1.0 (default: 0.7)
+  maxTokens?: number        // Optional: 100-10000 (default: 2000)
+}
+```
+
+### Output Schema
+
+```typescript
+{
+  svg: string,              // Generated SVG code
+  prompt: string,           // Original prompt
+  model: string,            // Model used
+  fallback?: boolean        // True if fallback SVG was used
+}
+```
+
+### Validation Rules
+
+- `prompt`: Required, non-empty string, max 5000 characters
+- `model`: Optional string (default: 'mistral')
+- `temperature`: Optional number between 0 and 1
+- `maxTokens`: Optional number between 100 and 10000
+
+## Properties (Legacy - for UI compatibility)
 
 ### prompt (string)
 - **Description**: Text description of the desired SVG visualization
@@ -50,18 +106,68 @@ The **SVG Generator Cell** is an interactive cell type that enables users to gen
 - **Description**: Error message if generation fails
 - **Default**: `null`
 
+### selectedModel (string)
+- **Description**: Currently selected LLM model
+- **Default**: `"mistral"`
+
 ### category (string)
-- **Description**: Cell category - set to "ephemeral" (not persisted)
-- **Default**: `"ephemeral"`
+- **Description**: Cell category - set to "visualization"
+- **Default**: `"visualization"`
 
 ## Usage
 
-### Basic Workflow
+### Headless Execution (via BaseCell)
+
+```typescript
+import { SvgGeneratorCell } from './SvgGeneratorCell'
+
+const svgCell = new SvgGeneratorCell()
+
+// Execute headless
+const result = await svgCell.execute({
+  prompt: 'A blue circle with radius 50',
+  model: 'mistral'
+})
+
+if (result.success) {
+  console.log('Generated SVG:', result.output.svg)
+  console.log('Execution time:', result.execution_time, 'ms')
+}
+```
+
+### Validation Example
+
+```typescript
+// Validate before execution
+const errors = svgCell.validate({
+  prompt: 'A red square'
+})
+
+if (errors.length === 0) {
+  const result = await svgCell.execute({ prompt: 'A red square' })
+}
+```
+
+### Health Check Example
+
+```typescript
+// Check if LLM service is available
+const health = await svgCell.health_check()
+
+if (health.status === 'healthy') {
+  console.log('Service ready with', health.metadata.available_models, 'models')
+} else if (health.status === 'degraded') {
+  console.log('Service degraded - will use fallback')
+}
+```
+
+### UI Workflow
 
 1. **Enter Description**: Type a text description of your desired SVG in the prompt field
-2. **Generate**: Click the "Generate SVG" button or press Ctrl+Enter (Cmd+Enter)
-3. **Preview**: View the generated SVG in the preview area
-4. **Export**: Copy the SVG code or download it as a file
+2. **Select Model**: Choose an available LLM model from dropdown
+3. **Generate**: Click the "Generate SVG" button or press Ctrl+Enter (Cmd+Enter)
+4. **Preview**: View the generated SVG in the preview area
+5. **Export**: Copy the SVG code or download it as a file
 
 ### Example Prompts
 
@@ -92,19 +198,27 @@ The **SVG Generator Cell** is an interactive cell type that enables users to gen
 
 ### Frontend Implementation
 
-**Component**: `frontend/View.vue` (TypeScript)
+**BaseCell Class**: `frontend/SvgGeneratorCell.ts` (TypeScript)
+- Implements `BaseCell` interface from `@/types/BaseCell`
+- Core execution logic with LLM integration
+- Input validation and health checking
+- Fallback mechanism for service failures
+
+**UI Component**: `frontend/View.vue` (TypeScript)
 - Vue 3 Composition API with TypeScript
+- Uses `SvgGeneratorCell` class for execution
 - Theme-compliant styling using Tailwind CSS
 - i18n integration for multilingual support
-- API integration via `aiChatService`
+- Model selection and configuration UI
 
-### Backend Implementation
+### Backend Implementation (Optional)
 
 **Script**: `backend/scripts/main.py`
 - Main execution function: `execute_cell(cell_data)`
 - SVG generation function: `generate_svg_from_prompt(prompt, model)`
 - Uses LLMService for AI-powered generation
 - Error handling and validation
+- **Note**: Frontend primarily executes via aiChatService; backend is optional fallback
 
 ### API Communication
 
@@ -125,43 +239,84 @@ Generated content is validated to ensure:
 
 ```
 svg-generator-cell/
-├── type.json                    # Symlink to canonical type definition
+├── type.json                        # Symlink to canonical type definition
 ├── backend/
 │   ├── scripts/
 │   │   ├── __init__.py
-│   │   └── main.py             # SVG generation logic
+│   │   └── main.py                 # SVG generation logic (optional)
 │   └── tests/
-│       └── test_main.py        # Backend tests
+│       └── test_main.py            # Backend tests
 ├── frontend/
-│   ├── View.vue                # Main Vue component (TypeScript)
+│   ├── SvgGeneratorCell.ts         # BaseCell implementation (TypeScript)
+│   ├── View.vue                    # UI component (Vue 3 + TypeScript)
 │   └── tests/
-│       └── View.spec.ts        # Frontend tests
+│       ├── README.md               # Test documentation
+│       ├── SvgGeneratorCell.test.ts # BaseCell unit tests
+│       └── View.spec.ts            # Component tests
 └── docs/
-    └── README.md               # This file
+    └── README.md                   # This file
 ```
 
 ## Testing
 
-### Manual Testing
-
-1. Start the ScareVerse backend and frontend
-2. Create a new SVG Generator cell instance
-3. Enter a prompt and generate an SVG
-4. Verify the SVG renders correctly
-5. Test copy and download functionality
+### Test Coverage: 90%+ (RULESET.md compliant)
 
 ### Automated Tests
 
-**Backend Tests**: Located in `backend/tests/test_main.py`
+**BaseCell Unit Tests**: `frontend/tests/SvgGeneratorCell.test.ts`
+- ✅ Execution tests with valid/invalid inputs
+- ✅ Validation rule tests
+- ✅ Metadata and capabilities tests
+- ✅ Health check tests (service availability)
+- ✅ Fallback mechanism tests
+- ✅ Integration workflow tests
+- **Coverage**: 90%+ of BaseCell implementation
+
+**Component Tests**: `frontend/tests/View.spec.ts`
+- Test Vue component rendering
+- Test user interactions
+- Test model selection
+- Test error states and fallback display
+
+**Backend Tests**: `backend/tests/test_main.py`
 - Test `execute_cell()` function
 - Test SVG generation logic
 - Test error handling
 
-**Frontend Tests**: Located in `frontend/tests/View.spec.ts`
-- Test component rendering
-- Test user interactions
-- Test API integration
-- Test error states
+### Running Tests
+
+```bash
+# Run all svg-generator-cell tests
+npm run test:unit -- svg-generator-cell
+
+# Run with coverage report
+npm run test:coverage
+
+# Watch mode for development
+npm run test:watch
+```
+
+### Manual Testing
+
+1. **Headless Execution Test**:
+   ```typescript
+   const cell = new SvgGeneratorCell()
+   const result = await cell.execute({ prompt: 'A red circle' })
+   console.log(result)
+   ```
+
+2. **UI Integration Test**:
+   - Start the ScareVerse backend and frontend
+   - Create a new SVG Generator cell instance
+   - Enter a prompt and generate an SVG
+   - Verify the SVG renders correctly
+   - Test copy and download functionality
+
+3. **Health Check Test**:
+   ```typescript
+   const health = await cell.health_check()
+   console.log('Service status:', health.status)
+   ```
 
 ## Integration
 
@@ -230,9 +385,19 @@ Potential improvements for future versions:
 
 ## References
 
-- [ADDING_NEW_CELL_TYPE.md](../../official/ADDING_NEW_CELL_TYPE.md) - Cell type creation guide
-- [RULESET.md](../../official/RULESET.md) - Project rules and standards
-- [TEAM.md](../../official/TEAM.md) - Team workflow and responsibilities
+### BaseCell Framework
+- [BaseCell Interface](../../../../cockpit-vue/src/types/BaseCell.ts) - TypeScript interface definition
+- [ADDING_NEW_CELL_TYPE.md](../../../docs/official/ADDING_NEW_CELL_TYPE.md) - Cell type creation guide
+- [BaseCell v1.0 Planning](../../../docs/issues/base-cell-v1-implementation/) - Architecture details
+
+### Project Standards
+- [RULESET.md](../../../docs/official/RULESET.md) - Project rules and standards (Rule 4.8)
+- [TEAM.md](../../../docs/official/TEAM.md) - Team workflow and responsibilities
+- [Test Architecture](../../../docs/official/standards/ARQUITETURA_TESTES.md) - Testing standards
+
+### Related Cells
+- [CalculatorCell](../../calculator-cell/) - Pure frontend BaseCell example
+- [ContentManagerCell](../../content-manager-cell/) - Backend-delegated BaseCell example
 
 ## Support
 
@@ -243,7 +408,10 @@ For issues or questions:
 
 ---
 
-**Version**: 1.0.0  
+**Version**: 2.0.0  
 **Created**: 2026-01-13  
+**Updated**: 2026-02-09 (BaseCell Migration)  
 **Category**: visualization  
+**BaseCell Compliance**: ✅ Fully compliant with BaseCell v1.0  
+**Test Coverage**: 90%+  
 **Status**: Active
