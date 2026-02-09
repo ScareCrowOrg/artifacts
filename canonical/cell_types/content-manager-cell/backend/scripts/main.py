@@ -10,6 +10,7 @@ Provides:
 import logging
 import sys
 import os
+import importlib.util
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -23,9 +24,25 @@ from app.services.content_manager import ContentManager, ContentTypeLoader
 from app.models.content_types import CreateContentRequest, ContentQueryFilters
 from app.database import db
 
-# Import cell-specific modules (using absolute imports for dynamic loading)
-from storage import get_storage_backend
-from utils import decode_base64_binary, encode_binary_to_base64, extract_mime_type_from_filename
+# Import cell-specific modules (using importlib to avoid sys.path conflicts with backend.utils)
+# storage and utils are in the same directory as this script
+_this_dir = Path(__file__).parent
+_storage_path = _this_dir / "storage.py"
+_utils_path = _this_dir / "utils.py"
+
+# Load storage module
+_storage_spec = importlib.util.spec_from_file_location("_cell_storage", _storage_path)
+_storage = importlib.util.module_from_spec(_storage_spec)
+_storage_spec.loader.exec_module(_storage)
+get_storage_backend = _storage.get_storage_backend
+
+# Load utils module
+_utils_spec = importlib.util.spec_from_file_location("_cell_utils", _utils_path)
+_utils = importlib.util.module_from_spec(_utils_spec)
+_utils_spec.loader.exec_module(_utils)
+decode_base64_binary = _utils.decode_base64_binary
+encode_binary_to_base64 = _utils.encode_binary_to_base64
+extract_mime_type_from_filename = _utils.extract_mime_type_from_filename
 
 logger = logging.getLogger(__name__)
 
