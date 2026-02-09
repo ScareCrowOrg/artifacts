@@ -175,10 +175,14 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, type Ref, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { processMessage, fetchAvailableModels } from '@/services/aiChatService.js'
+import { fetchAvailableModels } from '@/services/aiChatService.js'
+import { SvgGeneratorCell } from './SvgGeneratorCell'
 
 // i18n
 const { t: $t } = useI18n()
+
+// Initialize BaseCell implementation
+const svgGeneratorCell = new SvgGeneratorCell()
 
 // AI Model interface
 interface AIModel {
@@ -275,7 +279,7 @@ onMounted(async () => {
   }
 })
 
-// Handle SVG generation
+// Handle SVG generation using BaseCell
 async function handleGenerate(): Promise<void> {
   if (!prompt.value.trim() || isGenerating.value) {
     return
@@ -287,49 +291,23 @@ async function handleGenerate(): Promise<void> {
     generatedSvg.value = null
     updateCell()
 
-    // Create a specialized prompt for SVG generation
-    const svgPrompt = `Generate a clean, valid SVG visualization based on this description: "${prompt.value}"
-
-IMPORTANT: Return ONLY the SVG code, no explanations. Start with <svg> and end with </svg>.
-Include proper viewBox and dimensions. Keep it simple and readable.`
-
-    // Call the chat API with the prompt
-    // Note: assignee_id is not required - backend uses authenticated user from JWT token
-    // Use the selected model from the dropdown
-    const response = await processMessage({
-      intention: svgPrompt,
-      assignee_id: '',
-      history: [],
-      model: selectedModel.value,
-      classifyIntention: false,
-      attachments: [],
-      thread_id: '',
-      assistant_id: '',
-      selected_collections: [],
-      conversation_id: '',
+    // Execute via BaseCell interface
+    const result = await svgGeneratorCell.execute({
+      prompt: prompt.value,
+      model: selectedModel.value
     })
 
-    // Extract SVG from response
-    const content = (response as any).message || (response as any).response || ''
-    
-    // Try to extract SVG from the response
-    let extractedSvg = content
-    
-    // If wrapped in code blocks, extract
-    const svgMatch = content.match(/```(?:svg|xml)?\s*\n?([\s\S]*?)\n?```/) || 
-                     content.match(/<svg[\s\S]*?<\/svg>/i)
-    
-    if (svgMatch) {
-      extractedSvg = svgMatch[1] || svgMatch[0]
+    if (result.success) {
+      generatedSvg.value = result.output.svg
+      error.value = null
+      
+      // Show info if fallback was used
+      if (result.output.fallback) {
+        console.warn('[SvgGeneratorCell] Using fallback SVG due to LLM service issue')
+      }
+    } else {
+      throw new Error(result.error || 'SVG generation failed')
     }
-    
-    // Validate that we have SVG
-    if (!extractedSvg.trim().startsWith('<svg')) {
-      throw new Error('Generated content is not valid SVG')
-    }
-
-    generatedSvg.value = extractedSvg.trim()
-    error.value = null
 
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred'
