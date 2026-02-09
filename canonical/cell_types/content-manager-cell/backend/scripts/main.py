@@ -282,7 +282,8 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         tags = cell_data.get("tags", [])
         metadata = cell_data.get("metadata", {})
         origin_cell_id = cell_data.get("origin_cell_id")
-        assignee_id = cell_data.get("assignee_id")
+        # Use assignee_id if provided, otherwise use user_id from current user context
+        assignee_id = cell_data.get("assignee_id") or cell_data.get("user_id")
         
         # Validate required parameters
         if not content_type_id:
@@ -306,7 +307,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         if not assignee_id:
             return {
                 "success": False,
-                "error": "Missing 'assignee_id' parameter. Must specify content owner."
+                "error": "No assignee_id provided and no user context available"
             }
 
         # Decode binary data
