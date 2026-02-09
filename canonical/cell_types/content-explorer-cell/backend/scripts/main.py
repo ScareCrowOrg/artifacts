@@ -117,7 +117,7 @@ async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             
             # Query assets (get all matching, then paginate)
             content_manager = ContentManager()
-            all_contents = content_manager.query_contents(content_filters)
+            all_contents = await content_manager.query_contents(content_filters)
             
             # Apply pagination
             total = len(all_contents)

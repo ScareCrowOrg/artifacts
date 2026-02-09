@@ -109,7 +109,7 @@ async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         
         # Query contents from ContentManager
         content_manager = ContentManager()
-        all_contents = content_manager.query_contents(filters)
+        all_contents = await content_manager.query_contents(filters)
         
         # Apply pagination
         total = len(all_contents)
@@ -339,7 +339,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         )
         
         # Validate and create content in database
-        content = content_manager.create_content(create_request)
+        content = await content_manager.create_content(create_request)
 
         # Upload to storage backend
         storage = get_storage_backend()
@@ -369,7 +369,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
 
         # Update data_ref in database with error handling (CRITICAL: prevent orphaned files)
         try:
-            db.update(
+            await db.update(
                 "contents",
                 {"id": content.id},
                 {
