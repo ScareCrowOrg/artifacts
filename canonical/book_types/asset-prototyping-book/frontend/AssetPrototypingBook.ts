@@ -91,6 +91,8 @@ export function registerAssetPrototypingCells(): void {
  * This book orchestrates PNG generation and 3D mesh creation to produce
  * complete textured 3D assets from text prompts.
  * 
+ * Execution Mode: DAG (declarative, parallel)
+ * 
  * Key Improvements Over AssetPrototypingCell:
  * - Declarative DAG definition (no manual orchestration)
  * - Automatic state transfer between cells
@@ -120,6 +122,14 @@ export function registerAssetPrototypingCells(): void {
  * ```
  */
 export class AssetPrototypingBook extends AbstractBaseBook {
+  /**
+   * Declare execution mode as DAG
+   * This book uses declarative DAG-based orchestration
+   */
+  getExecutionMode(): import('@/types/BaseBook').ExecutionMode {
+    return 'dag'
+  }
+  
   /**
    * Define the DAG workflow for asset prototyping
    * 
