@@ -6,9 +6,15 @@
   "category": "debugging",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/RedisExplorerView.vue"],
-    "scripts": ["backend/scripts/main.py"],
-    "docs": ["docs/README.md"]
+    "view": [
+      "frontend/RedisExplorerView.vue"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
   },
   "default_initial_data": {
     "category": "ephemeral",
@@ -44,5 +50,31 @@
       "default": 1,
       "description": "Maximum depth levels to display"
     }
+  },
+  "_discovery": {
+    "labels": [
+      "#redis",
+      "#database",
+      "#utility",
+      "#debug"
+    ],
+    "describe": "Redis database explorer and management utility. Provides key-value browsing, search, and inspection capabilities. Supports all Redis data types (strings, lists, sets, hashes, sorted sets). Includes commands execution console and TTL management. Real-time key monitoring with pub/sub visualization. Fast queries (~100-500ms depending on key count). Useful for debugging application state, inspecting cache data, and managing Redis-backed workflows.",
+    "estimated_duration_seconds": 1,
+    "required_resources": [
+      "redis"
+    ],
+    "dependencies": [],
+    "tags": [
+      "redis",
+      "database",
+      "debug",
+      "exploration"
+    ],
+    "use_cases": [
+      "Inspect Redis cache data",
+      "Debug application state",
+      "Monitor pub/sub messages",
+      "Manage Redis keys and values"
+    ]
   }
 }

@@ -6,9 +6,15 @@
   "category": "editor",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "docs": ["docs/README.md"],
-    "composables": ["frontend/composables/useFileEditor.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
+    "composables": [
+      "frontend/composables/useFileEditor.ts"
+    ]
   },
   "default_initial_data": {
     "fileName": "untitled.md",
@@ -16,7 +22,33 @@
     "language": "markdown",
     "readOnly": false,
     "category": "ephemeral",
-    "icon": "📄"
+    "icon": "\ud83d\udcc4"
   },
-  "allow_instance_override_refs": true
+  "allow_instance_override_refs": true,
+  "_discovery": {
+    "labels": [
+      "#editor",
+      "#file",
+      "#utility",
+      "#typescript"
+    ],
+    "describe": "Advanced file editor with syntax highlighting and TypeScript implementation. Supports multiple programming languages (markdown, JSON, Python, JavaScript, TypeScript, YAML, etc.) with Monaco editor integration. Full DynamicWorkspace compatibility with real-time updates. Includes features like auto-save, line numbers, code folding, and find/replace. Instant file loading and editing (~100ms for typical files). Perfect for editing configuration files, scripts, documentation, and code during development workflows.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [],
+    "dependencies": [
+      "monaco-editor"
+    ],
+    "tags": [
+      "editor",
+      "file",
+      "syntax-highlighting",
+      "utility"
+    ],
+    "use_cases": [
+      "Edit configuration files in workflows",
+      "Modify scripts and code",
+      "Update documentation",
+      "Quick file editing without external tools"
+    ]
+  }
 }

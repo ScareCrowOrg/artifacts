@@ -1,14 +1,20 @@
 {
   "id": "asset-prototyping-cell",
   "name": "Asset Prototyping Cell",
-  "description": "Complete pipeline for creating 3D assets: AI image generation → SVG vectorization → 3D prototyping with human validation checkpoints",
+  "description": "Complete pipeline for creating 3D assets: AI image generation \u2192 SVG vectorization \u2192 3D prototyping with human validation checkpoints",
   "version": "1.0.0",
   "category": "prototyping",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "scripts": ["backend/scripts/main.py"],
-    "docs": ["docs/README.md"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
   },
   "default_initial_data": {
     "category": "ephemeral",
@@ -47,17 +53,26 @@
       "description": "Text prompt for AI image generation"
     },
     "generatedPng": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Base64-encoded PNG image data or URL"
     },
     "selectedPng": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "User-selected PNG for vectorization (after validation)"
     },
     "generatedSvg": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Generated SVG markup code"
     },
@@ -83,7 +98,10 @@
       "description": "Flag indicating if SVG vectorization is in progress"
     },
     "error": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Error message if any operation fails"
     },
@@ -92,5 +110,38 @@
       "default": "mistral",
       "description": "Selected AI model for prompt engineering"
     }
+  },
+  "_discovery": {
+    "labels": [
+      "#prototyping",
+      "#pipeline",
+      "#3d",
+      "#ai",
+      "#workflow"
+    ],
+    "describe": "Complete end-to-end pipeline for creating 3D game assets with human validation checkpoints. Orchestrates three-stage workflow: (1) AI image generation from text prompts using Stable Diffusion, (2) SVG vectorization for clean edges, (3) 3D mesh extrusion with configurable depth and beveling. Each stage includes human validation before proceeding to next. Supports multiple AI models (Mistral default) for prompt engineering. Processing time: ~60-90 seconds for full pipeline (20s PNG + 15s SVG + 30s 3D). Best for creating game icons, logo assets, UI elements that need depth. Requires GPU for image generation.",
+    "estimated_duration_seconds": 75,
+    "required_resources": [
+      "gpu",
+      "stable-diffusion",
+      "llm-service"
+    ],
+    "dependencies": [
+      "png-generator-cell",
+      "svg-generator-cell"
+    ],
+    "tags": [
+      "prototyping",
+      "pipeline",
+      "3d",
+      "workflow",
+      "multi-stage"
+    ],
+    "use_cases": [
+      "Create 3D game icons from text descriptions",
+      "Generate extruded logos and UI elements",
+      "Rapid prototyping of 3D assets with validation",
+      "Educational pipeline for understanding AI asset creation"
+    ]
   }
 }

@@ -41,5 +41,31 @@
       "default": "",
       "description": "Current DEBUG pattern (e.g., 'auth:*', 'api,store')"
     }
+  },
+  "_discovery": {
+    "labels": [
+      "#logging",
+      "#utility",
+      "#debug",
+      "#monitoring"
+    ],
+    "describe": "Utility cell for toggling application logging levels and viewing logs in real-time. Provides controls for adjusting log verbosity (DEBUG, INFO, WARNING, ERROR) and filtering log sources. Displays streaming logs with syntax highlighting and search capabilities. Instant log level changes with WebSocket updates. Essential for debugging workflows and monitoring system behavior. No external dependencies, negligible performance impact.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [],
+    "dependencies": [
+      "websocket"
+    ],
+    "tags": [
+      "logging",
+      "debug",
+      "utility",
+      "monitoring"
+    ],
+    "use_cases": [
+      "Debug workflow execution issues",
+      "Monitor system behavior in real-time",
+      "Adjust logging verbosity dynamically",
+      "Troubleshoot cell execution problems"
+    ]
   }
 }

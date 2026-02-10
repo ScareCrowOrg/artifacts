@@ -6,10 +6,18 @@
   "category": "content-management",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "docs": ["docs/README.md"],
-    "backend": ["backend/scripts/main.py"],
-    "basecell": ["frontend/ContentExplorerCell.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
+    "backend": [
+      "backend/scripts/main.py"
+    ],
+    "basecell": [
+      "frontend/ContentExplorerCell.ts"
+    ]
   },
   "default_initial_data": {
     "selected_type_id": null,
@@ -25,7 +33,7 @@
       "offset": 0
     },
     "category": "ephemeral",
-    "icon": "🔍"
+    "icon": "\ud83d\udd0d"
   },
   "allow_instance_override_refs": true,
   "properties_schema": {
@@ -40,9 +48,41 @@
     },
     "view_mode": {
       "type": "string",
-      "enum": ["grid", "list"],
+      "enum": [
+        "grid",
+        "list"
+      ],
       "default": "grid",
       "description": "Display mode for assets"
     }
+  },
+  "_discovery": {
+    "labels": [
+      "#content",
+      "#exploration",
+      "#browse",
+      "#utility"
+    ],
+    "describe": "Visual content browser for exploring typed assets across the project. Provides grid/list views with filtering, sorting, and preview capabilities. Supports thumbnails for images, metadata previews for 3D models, and quick actions (open, download, delete). Integrates with ContentType system for type-aware rendering. Fast browsing experience (~1-2 seconds for queries). Useful for discovering existing content before creating new assets.",
+    "estimated_duration_seconds": 2,
+    "required_resources": [
+      "mongodb",
+      "cloudflare-r2"
+    ],
+    "dependencies": [
+      "content-types"
+    ],
+    "tags": [
+      "content",
+      "browser",
+      "exploration",
+      "utility"
+    ],
+    "use_cases": [
+      "Browse existing project assets",
+      "Find content by type or tags",
+      "Preview content before using in cells",
+      "Discover reusable assets"
+    ]
   }
 }

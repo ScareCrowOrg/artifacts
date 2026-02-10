@@ -6,9 +6,15 @@
   "category": "viewer",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "docs": ["docs/README.md"],
-    "composables": ["frontend/composables/useUnclassifiedCell.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
+    "composables": [
+      "frontend/composables/useUnclassifiedCell.ts"
+    ]
   },
   "dynamic_views": {
     "fragments-manager": {
@@ -19,10 +25,33 @@
     }
   },
   "default_initial_data": {
-    "title": "Nova Célula Sem Título",
+    "title": "Nova C\u00e9lula Sem T\u00edtulo",
     "content": "",
     "category": "persistida",
-    "icon": "📋"
+    "icon": "\ud83d\udccb"
   },
-  "allow_instance_override_refs": true
+  "allow_instance_override_refs": true,
+  "_discovery": {
+    "labels": [
+      "#unclassified",
+      "#sandbox",
+      "#experimental"
+    ],
+    "describe": "Experimental sandbox cell for testing unclassified or prototype functionality. Provides flexible container for features that don't fit into existing cell categories. No enforced schema or structure - suitable for rapid experimentation and POCs. Can be promoted to a proper cell type after validation. Instant execution with no dependencies. Use for testing new ideas before creating dedicated cell types.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [],
+    "dependencies": [],
+    "tags": [
+      "sandbox",
+      "experimental",
+      "unclassified",
+      "prototype"
+    ],
+    "use_cases": [
+      "Test new cell concepts",
+      "Prototype experimental features",
+      "Sandbox for rapid iteration",
+      "POC validation before promotion"
+    ]
+  }
 }

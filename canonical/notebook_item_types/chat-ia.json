@@ -6,9 +6,15 @@
   "category": "ai-interaction",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "docs": ["docs/README.md"],
-    "composables": ["frontend/composables/useChatIA.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
+    "composables": [
+      "frontend/composables/useChatIA.ts"
+    ]
   },
   "default_initial_data": {
     "category": "ephemeral",
@@ -49,9 +55,41 @@
       "description": "Custom system prompt for the conversation"
     },
     "conversationId": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "ID of the current conversation for persistence"
     }
+  },
+  "_discovery": {
+    "labels": [
+      "#chat",
+      "#ai",
+      "#llm",
+      "#interactive"
+    ],
+    "describe": "Interactive AI chat interface for conversing with LLM models. Supports multiple model providers and conversation contexts. Real-time streaming responses with markdown rendering. Includes conversation history and context management. Processing time varies by model and response length (~2-10 seconds). Requires LLM API access (OpenAI, Anthropic, or local models).",
+    "estimated_duration_seconds": 5,
+    "required_resources": [
+      "llm-service"
+    ],
+    "dependencies": [
+      "llm-router"
+    ],
+    "tags": [
+      "chat",
+      "ai",
+      "llm",
+      "interactive",
+      "conversation"
+    ],
+    "use_cases": [
+      "Interactive AI conversations",
+      "LLM-powered assistance",
+      "Testing AI model responses",
+      "Building chatbot interfaces"
+    ]
   }
 }

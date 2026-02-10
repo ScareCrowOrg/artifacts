@@ -89,5 +89,19 @@
       },
       "description": "Three.js viewport display settings"
     }
+  },
+  "_discovery": {
+    "labels": ["#3d", "#generation", "#mesh", "#prototyping", "#ai-powered"],
+    "describe": "Generates real volumetric 3D meshes with 360-degree volume from single images using AI-powered reconstruction. Supports multiple generation modes: cloud API (default, requires API key), local GPU (experimental, requires powerful GPU), and manual upload. Produces optimized GLB meshes with configurable polygon count (default 50k faces), Draco compression, and target file size. Best for creating game-ready 3D assets from concept art or reference images. Processing time varies: ~30-60 seconds (cloud API), ~2-5 minutes (local GPU). Outputs include mesh geometry, textures, and metadata.",
+    "estimated_duration_seconds": 45,
+    "required_resources": ["cloud-api", "gpu"],
+    "dependencies": ["sf3d-runtime", "three.js"],
+    "tags": ["3d", "mesh", "prototyping", "volumetric", "reconstruction"],
+    "use_cases": [
+      "Convert 2D concept art to 3D game assets",
+      "Generate 3D models for AR/VR applications",
+      "Create volumetric prototypes from reference images",
+      "Rapid 3D asset creation for game development"
+    ]
   }
 }

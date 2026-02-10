@@ -4,7 +4,7 @@
   "description": "Simple calculator for basic math operations. Pure frontend implementation with no backend dependencies. Perfect for testing headless execution and demonstrating the BaseCell v1.0 framework.",
   "version": "1.0.0",
   "category": "utility",
-  "icon": "🧮",
+  "icon": "\ud83e\uddee",
   "tags": [
     "math",
     "calculator",
@@ -110,7 +110,7 @@
       "expected_output": {
         "result": 3.142857142857143,
         "formatted": "3.1429",
-        "expression": "22 ÷ 7 = 3.1429"
+        "expression": "22 \u00f7 7 = 3.1429"
       }
     },
     {
@@ -151,5 +151,31 @@
     "framework_version": "basecell-v1.0",
     "implementation": "frontend-only",
     "purpose": "poc-validation"
+  },
+  "_discovery": {
+    "labels": [
+      "#utility",
+      "#math",
+      "#headless",
+      "#frontend-only",
+      "#poc"
+    ],
+    "describe": "Pure frontend calculator for basic math operations (add, subtract, multiply, divide, power, modulo). Perfect for testing headless execution and demonstrating BaseCell v1.0 framework. No backend dependencies, instant execution (<1ms), fully composable. Supports configurable decimal precision (0-10 digits). Implements comprehensive validation (divide-by-zero checks, precision bounds). Ideal for simple calculations, unit testing, and as reference implementation for frontend-only cells.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [],
+    "dependencies": [],
+    "tags": [
+      "math",
+      "calculator",
+      "utility",
+      "frontend-only",
+      "basecell-poc"
+    ],
+    "use_cases": [
+      "Simple mathematical calculations in workflows",
+      "Testing headless cell execution",
+      "Reference implementation for frontend-only cells",
+      "Educational example for BaseCell framework"
+    ]
   }
 }

@@ -6,9 +6,15 @@
   "category": "prototyping",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "scripts": ["backend/scripts/main.py"],
-    "docs": ["docs/README.md"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
   },
   "default_initial_data": {
     "category": "ephemeral",
@@ -31,7 +37,10 @@
       "description": "Text description of the desired 3D scene"
     },
     "generatedScript": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Generated Three.js JavaScript code"
     },
@@ -41,7 +50,10 @@
       "description": "Flag indicating if scene generation is in progress"
     },
     "error": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Error message if generation fails"
     },
@@ -50,5 +62,35 @@
       "default": "mistral",
       "description": "Selected AI model for code generation"
     }
+  },
+  "_discovery": {
+    "labels": [
+      "#3d",
+      "#scene",
+      "#generation",
+      "#threejs",
+      "#ai"
+    ],
+    "describe": "AI-powered Three.js scene code generator from text prompts. Generates complete Three.js JavaScript code for 3D scenes including geometry, materials, lighting, and camera setup. Supports multiple AI models (Mistral default) for code generation. Produces executable JavaScript code that can be immediately tested in the cell's integrated Three.js viewport. Processing time ~15-30 seconds. Best for rapid prototyping of 3D scenes, learning Three.js patterns, and generating starter code for custom 3D visualizations. Requires LLM API access.",
+    "estimated_duration_seconds": 20,
+    "required_resources": [
+      "llm-service"
+    ],
+    "dependencies": [
+      "three.js"
+    ],
+    "tags": [
+      "3d",
+      "scene",
+      "generation",
+      "threejs",
+      "code-gen"
+    ],
+    "use_cases": [
+      "Rapid prototyping of 3D scenes",
+      "Generate Three.js starter code",
+      "Learn Three.js patterns and techniques",
+      "Create custom 3D visualizations"
+    ]
   }
 }

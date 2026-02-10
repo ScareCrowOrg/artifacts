@@ -7,11 +7,21 @@
   "can_render_dynamically": true,
   "base_cell_compliant": true,
   "default_refs": {
-    "basecell": ["frontend/SvgGeneratorCell.ts"],
-    "view": ["frontend/View.vue"],
-    "scripts": ["backend/scripts/main.py"],
-    "docs": ["docs/README.md"],
-    "tests": ["frontend/tests/SvgGeneratorCell.test.ts"]
+    "basecell": [
+      "frontend/SvgGeneratorCell.ts"
+    ],
+    "view": [
+      "frontend/View.vue"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
+    "tests": [
+      "frontend/tests/SvgGeneratorCell.test.ts"
+    ]
   },
   "default_initial_data": {
     "category": "visualization",
@@ -34,7 +44,10 @@
       "description": "Text description of the desired SVG visualization"
     },
     "generatedSvg": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Generated SVG markup code"
     },
@@ -44,7 +57,10 @@
       "description": "Flag indicating if SVG generation is in progress"
     },
     "error": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Error message if generation fails"
     },
@@ -53,5 +69,33 @@
       "default": "mistral",
       "description": "Currently selected LLM model for generation"
     }
+  },
+  "_discovery": {
+    "labels": [
+      "#svg",
+      "#vector",
+      "#generation",
+      "#ai",
+      "#2d"
+    ],
+    "describe": "AI-powered SVG vector graphics generator from text prompts. Generates clean, scalable SVG code for icons, illustrations, logos, and diagrams. Implements BaseCell standardized execution interface with fallback mechanism. Supports multiple AI models (Mistral default) for generation. Produces valid SVG markup with proper viewBox, paths, and styling. Processing time ~10-20 seconds. Best for creating vector graphics, UI icons, and scalable illustrations. Output SVGs can be directly used in web applications or further processed in 3D extrusion pipelines.",
+    "estimated_duration_seconds": 15,
+    "required_resources": [
+      "llm-service"
+    ],
+    "dependencies": [],
+    "tags": [
+      "svg",
+      "vector",
+      "generation",
+      "ai",
+      "graphics"
+    ],
+    "use_cases": [
+      "Generate vector icons for UI",
+      "Create scalable logos and illustrations",
+      "Produce diagrams and flowcharts",
+      "Generate graphics for 3D extrusion"
+    ]
   }
 }

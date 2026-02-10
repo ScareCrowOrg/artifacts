@@ -6,8 +6,12 @@
   "category": "observability",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "docs": ["docs/README.md"],
+    "view": [
+      "frontend/View.vue"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
     "composables": [
       "frontend/composables/useMonitoring.ts",
       "frontend/composables/useHealthChecks.ts",
@@ -57,5 +61,34 @@
       "default": 100,
       "description": "Number of historical readings to retain"
     }
+  },
+  "_discovery": {
+    "labels": [
+      "#monitoring",
+      "#pipeline",
+      "#observability",
+      "#dashboard"
+    ],
+    "describe": "Real-time pipeline execution monitoring dashboard. Visualizes workflow DAGs with live status updates for each node (pending, running, success, failed). Displays execution metrics (duration, throughput, error rates) and resource usage. Supports pipeline comparison and historical analysis. Updates via WebSocket (~200ms latency). Essential for observing complex multi-cell workflows and identifying bottlenecks. Includes alerting for failures and performance degradation.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [
+      "redis",
+      "websocket"
+    ],
+    "dependencies": [
+      "execution-engine"
+    ],
+    "tags": [
+      "monitoring",
+      "pipeline",
+      "observability",
+      "metrics"
+    ],
+    "use_cases": [
+      "Monitor workflow execution in real-time",
+      "Identify pipeline bottlenecks",
+      "Track cell execution metrics",
+      "Debug failed workflow steps"
+    ]
   }
 }

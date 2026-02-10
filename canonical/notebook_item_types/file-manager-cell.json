@@ -6,17 +6,51 @@
   "category": "file-management",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "docs": ["docs/README.md"],
-    "composables": ["frontend/composables/useFileManager.ts"],
-    "types": ["frontend/types.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
+    "composables": [
+      "frontend/composables/useFileManager.ts"
+    ],
+    "types": [
+      "frontend/types.ts"
+    ]
   },
   "default_initial_data": {
     "searchQuery": "",
     "selectedFiles": [],
     "expandedPaths": [],
     "category": "ephemeral",
-    "icon": "📁"
+    "icon": "\ud83d\udcc1"
   },
-  "allow_instance_override_refs": true
+  "allow_instance_override_refs": true,
+  "_discovery": {
+    "labels": [
+      "#file-manager",
+      "#storage",
+      "#utility",
+      "#crud"
+    ],
+    "describe": "File management utility for browsing, uploading, downloading, and organizing project files. Provides tree view of directory structure with file operations (create, delete, rename, move). Supports drag-and-drop upload and bulk operations. Integrates with local filesystem or cloud storage. Fast directory listing (~500ms for typical folders). Useful for managing assets, scripts, and configuration files. Includes file search and filtering capabilities.",
+    "estimated_duration_seconds": 1,
+    "required_resources": [
+      "filesystem"
+    ],
+    "dependencies": [],
+    "tags": [
+      "file-manager",
+      "storage",
+      "utility",
+      "organization"
+    ],
+    "use_cases": [
+      "Browse and organize project files",
+      "Upload assets and resources",
+      "Download generated files",
+      "Manage project directory structure"
+    ]
+  }
 }

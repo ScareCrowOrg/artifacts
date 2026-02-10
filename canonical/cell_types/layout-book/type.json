@@ -6,7 +6,9 @@
   "category": "workspace",
   "can_render_dynamically": false,
   "default_refs": {
-    "docs": ["docs/README.md"]
+    "docs": [
+      "docs/README.md"
+    ]
   },
   "default_initial_data": {
     "layout_version": "1.0.0",
@@ -14,7 +16,10 @@
     "grid_config": {
       "cols": 12,
       "rowHeight": 30,
-      "margin": [10, 10]
+      "margin": [
+        10,
+        10
+      ]
     },
     "metadata": {
       "cell_count": 0,
@@ -43,7 +48,10 @@
           },
           "category": {
             "type": "string",
-            "enum": ["persistent", "ephemeral"],
+            "enum": [
+              "persistent",
+              "ephemeral"
+            ],
             "description": "Cell category"
           },
           "type": {
@@ -57,18 +65,35 @@
           "position": {
             "type": "object",
             "properties": {
-              "x": {"type": "integer"},
-              "y": {"type": "integer"},
-              "w": {"type": "integer"},
-              "h": {"type": "integer"}
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              },
+              "w": {
+                "type": "integer"
+              },
+              "h": {
+                "type": "integer"
+              }
             },
-            "required": ["x", "y", "w", "h"]
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ]
           },
           "state": {
             "type": "object",
             "properties": {
-              "isMinimized": {"type": "boolean"},
-              "isMaximized": {"type": "boolean"}
+              "isMinimized": {
+                "type": "boolean"
+              },
+              "isMaximized": {
+                "type": "boolean"
+              }
             }
           },
           "initialization_data": {
@@ -76,28 +101,75 @@
             "description": "Initialization data for ephemeral cells"
           }
         },
-        "required": ["category", "type", "title", "position", "state"]
+        "required": [
+          "category",
+          "type",
+          "title",
+          "position",
+          "state"
+        ]
       }
     },
     "grid_config": {
       "type": "object",
       "description": "Grid layout configuration snapshot",
       "properties": {
-        "cols": {"type": "integer"},
-        "rowHeight": {"type": "integer"},
-        "margin": {"type": "array"}
+        "cols": {
+          "type": "integer"
+        },
+        "rowHeight": {
+          "type": "integer"
+        },
+        "margin": {
+          "type": "array"
+        }
       }
     },
     "metadata": {
       "type": "object",
       "description": "Layout book metadata",
       "properties": {
-        "cell_count": {"type": "integer"},
-        "persistent_count": {"type": "integer"},
-        "ephemeral_count": {"type": "integer"},
-        "last_applied": {"type": "string", "format": "date-time"},
-        "created_from_layout": {"type": "boolean"}
+        "cell_count": {
+          "type": "integer"
+        },
+        "persistent_count": {
+          "type": "integer"
+        },
+        "ephemeral_count": {
+          "type": "integer"
+        },
+        "last_applied": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created_from_layout": {
+          "type": "boolean"
+        }
       }
     }
+  },
+  "_discovery": {
+    "labels": [
+      "#layout",
+      "#book",
+      "#organization",
+      "#ui"
+    ],
+    "describe": "Book-type cell for organizing and layouting multiple cells in a structured workspace. Provides grid/flow layouts with drag-and-drop cell arrangement. Supports cell grouping, tabs, and collapsible sections. Enables creation of dashboards and multi-cell workflows. Instant layout operations with persistent configuration. Useful for creating complex multi-step workflows and dashboards.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [],
+    "dependencies": [],
+    "tags": [
+      "layout",
+      "book",
+      "workspace",
+      "organization"
+    ],
+    "use_cases": [
+      "Create multi-cell dashboards",
+      "Organize complex workflows",
+      "Build structured notebook layouts",
+      "Design custom workspace arrangements"
+    ]
   }
 }

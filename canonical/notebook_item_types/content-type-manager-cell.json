@@ -6,13 +6,19 @@
   "category": "content-management",
   "can_render_dynamically": false,
   "default_refs": {
-    "docs": ["docs/README.md"],
-    "backend": ["backend/scripts/main.py"],
-    "basecell": ["frontend/ContentTypeManagerCell.ts"]
+    "docs": [
+      "docs/README.md"
+    ],
+    "backend": [
+      "backend/scripts/main.py"
+    ],
+    "basecell": [
+      "frontend/ContentTypeManagerCell.ts"
+    ]
   },
   "default_initial_data": {
     "category": "ephemeral",
-    "icon": "📋"
+    "icon": "\ud83d\udccb"
   },
   "allow_instance_override_refs": false,
   "properties_schema": {
@@ -21,5 +27,31 @@
       "default": "ephemeral",
       "description": "Cell category - 'ephemeral' marks this as ephemeral utility (not persisted)"
     }
+  },
+  "_discovery": {
+    "labels": [
+      "#content-types",
+      "#schema",
+      "#management",
+      "#admin"
+    ],
+    "describe": "Administrative utility for managing ContentType definitions. Allows creation, editing, and validation of content type schemas (MIME types, expected fragments, render hints, storage policies). Provides schema designer with JSON validation and documentation generation. Essential for extending the content system with new asset types. Instant operations for schema management. Requires admin permissions.",
+    "estimated_duration_seconds": 1,
+    "required_resources": [
+      "mongodb"
+    ],
+    "dependencies": [],
+    "tags": [
+      "content-types",
+      "schema",
+      "admin",
+      "utility"
+    ],
+    "use_cases": [
+      "Define new content types for custom assets",
+      "Configure storage policies and render hints",
+      "Validate content type schemas",
+      "Extend content system capabilities"
+    ]
   }
 }

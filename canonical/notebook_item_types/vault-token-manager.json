@@ -18,5 +18,32 @@
     "category": "ephemeral"
   },
   "allow_instance_override_refs": false,
-  "can_render_dynamically": true
+  "can_render_dynamically": true,
+  "_discovery": {
+    "labels": [
+      "#security",
+      "#secrets",
+      "#vault",
+      "#admin"
+    ],
+    "describe": "Administrative utility for managing HashiCorp Vault tokens and secrets. Provides secure interface for token generation, renewal, revocation, and TTL management. Supports role-based token creation and policy assignment. Includes secret browser with KV store visualization. All operations are audited and encrypted. Processing time ~500ms-2s for token operations. Requires Vault server connection and admin permissions. Essential for secure credential management in production environments.",
+    "estimated_duration_seconds": 2,
+    "required_resources": [
+      "vault-server"
+    ],
+    "dependencies": [],
+    "tags": [
+      "security",
+      "secrets",
+      "vault",
+      "tokens",
+      "admin"
+    ],
+    "use_cases": [
+      "Manage application secrets securely",
+      "Generate temporary access tokens",
+      "Configure secret access policies",
+      "Audit secret access patterns"
+    ]
+  }
 }
