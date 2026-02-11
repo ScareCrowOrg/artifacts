@@ -15,15 +15,14 @@
  * Part of content-type-manager-cell implementation following BaseCell interface
  */
 
+import { BaseCell, createHealthyResult } from '@/types/BaseCell'
 import type {
-  BaseCell,
   CellResult,
   CellMetadata,
   ValidationError,
   EnvironmentConfig,
   HealthCheckResult
 } from '@/types/BaseCell'
-import { createHealthyResult } from '@/types/BaseCell'
 import { apiFetch } from '@/services/apiService'
 
 /**
@@ -84,7 +83,7 @@ export interface ListContentTypesOutput {
  * by other cells to discover available content types. It delegates execution
  * to the backend via the execute-ephemeral endpoint.
  */
-export class ContentTypeManagerCell implements BaseCell {
+export class ContentTypeManagerCell extends BaseCell {
   /**
    * Execute content type manager action
    * 
@@ -292,7 +291,7 @@ export class ContentTypeManagerCell implements BaseCell {
    * Setup cell (optional)
    * No setup required for this ephemeral cell
    */
-  async setup?(config?: EnvironmentConfig): Promise<void> {
+  async setup(config?: EnvironmentConfig): Promise<void> {
     // No setup needed
   }
   
@@ -309,7 +308,7 @@ export class ContentTypeManagerCell implements BaseCell {
    * 
    * @returns Health check result
    */
-  async health_check?(): Promise<HealthCheckResult> {
+  async health_check(): Promise<HealthCheckResult> {
     return createHealthyResult()
   }
 }

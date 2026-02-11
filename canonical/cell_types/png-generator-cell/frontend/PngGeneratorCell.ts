@@ -10,8 +10,8 @@
  * Task: [PNG-FE-001] Create PngGeneratorCell TypeScript Implementation
  */
 
-import type { BaseCell, CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
-import { createHealthyResult } from '@/types/BaseCell'
+import { BaseCell, createHealthyResult } from '@/types/BaseCell'
+import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
 import apiService from '@/services/apiService.js'
 import { ENDPOINTS } from '@/config/endpoints.js'
 import { createLogger } from '@/utils/logger'
@@ -134,7 +134,7 @@ export interface PngGeneratorOutput {
  * })
  * ```
  */
-export class PngGeneratorCell implements BaseCell {
+export class PngGeneratorCell extends BaseCell {
   private _isSetup: boolean = false
   
   /**

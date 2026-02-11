@@ -9,7 +9,8 @@
  * Task: [UTIL-CELLS] Implement utility cells
  */
 
-import type { BaseCell, CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
+import { BaseCell } from '@/types/BaseCell'
+import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('cell:prompt-enhancer')
@@ -75,7 +76,7 @@ export interface PromptEnhancerOutput {
  * // Output: "Create a secure login form component with the following requirements:..."
  * ```
  */
-export class PromptEnhancerCell implements BaseCell {
+export class PromptEnhancerCell extends BaseCell {
   private isSetup = false
 
   // ============================================================

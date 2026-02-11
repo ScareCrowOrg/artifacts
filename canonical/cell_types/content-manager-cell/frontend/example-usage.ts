@@ -7,7 +7,8 @@
  */
 
 import { ContentManagerCell } from './ContentManagerCell'
-import type { BaseCell, CellResult, CellMetadata, ValidationError } from '@/types/BaseCell'
+import { BaseCell } from '@/types/BaseCell'
+import type { CellResult, CellMetadata, ValidationError } from '@/types/BaseCell'
 
 /**
  * Example: PNG Generator Cell that uses ContentManagerCell
@@ -15,19 +16,7 @@ import type { BaseCell, CellResult, CellMetadata, ValidationError } from '@/type
  * This demonstrates the composition pattern where one cell uses another
  * cell as a utility to handle specific functionality (content persistence).
  */
-export class ExamplePngGeneratorCell implements BaseCell {
-  // Optional reference to the Cell runtime instance (for context-aware execution)
-  cell_instance?: {
-    id: string
-    assignee_id: string
-    initial_data: Record<string, any>
-    fragments: Array<string | Record<string, any>>
-    refs: Record<string, string[]>
-    version?: string
-    created_at?: string
-    updated_at?: string
-  }
-  
+export class ExamplePngGeneratorCell extends BaseCell {
   // Compose ContentManagerCell as a utility
   private contentManager = new ContentManagerCell()
   

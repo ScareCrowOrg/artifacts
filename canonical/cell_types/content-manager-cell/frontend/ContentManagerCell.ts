@@ -15,15 +15,14 @@
  * Part of content-manager-cell refactoring to implement BaseCell interface
  */
 
+import { BaseCell, createHealthyResult } from '@/types/BaseCell'
 import type {
-  BaseCell,
   CellResult,
   CellMetadata,
   ValidationError,
   EnvironmentConfig,
   HealthCheckResult
 } from '@/types/BaseCell'
-import { createHealthyResult } from '@/types/BaseCell'
 import { apiFetch } from '@/services/apiService'
 
 /**
@@ -156,7 +155,7 @@ export interface PersistContentOutput {
  * // In png-generator-cell:
  * import { ContentManagerCell } from '@/cells/content-manager-cell/frontend/ContentManagerCell'
  * 
- * export class PngGeneratorCell implements BaseCell {
+ * export class PngGeneratorCell extends BaseCell {
  *   private contentManager = new ContentManagerCell()
  * 
  *   async execute(input: Record<string, any>): Promise<CellResult> {
@@ -205,7 +204,7 @@ export interface PersistContentOutput {
  * })
  * ```
  */
-export class ContentManagerCell implements BaseCell {
+export class ContentManagerCell extends BaseCell {
   private _apiBaseUrl: string = '/api/cells'
   private _authToken?: string
   

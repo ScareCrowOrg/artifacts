@@ -10,8 +10,8 @@
  * Task: [3D-FE-001] Create MeshPrototypingCell TypeScript Implementation
  */
 
-import type { BaseCell, CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
-import { createHealthyResult } from '@/types/BaseCell'
+import { BaseCell, createHealthyResult } from '@/types/BaseCell'
+import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
 import apiService from '@/services/apiService.js'
 import { ENDPOINTS } from '@/config/endpoints.js'
 import { createLogger } from '@/utils/logger'
@@ -132,7 +132,7 @@ export interface MeshPrototypingOutput {
  * // Poll backend with job_id to get final GLB URL
  * ```
  */
-export class MeshPrototypingCell implements BaseCell {
+export class MeshPrototypingCell extends BaseCell {
   private _isSetup: boolean = false
   
   /**

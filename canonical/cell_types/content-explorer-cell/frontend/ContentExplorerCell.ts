@@ -16,8 +16,8 @@
  * Part of content-explorer-cell implementation following BaseCell interface
  */
 
+import { BaseCell } from '@/types/BaseCell'
 import type {
-  BaseCell,
   CellResult,
   CellMetadata,
   ValidationError,
@@ -126,7 +126,7 @@ export interface ListExplorerOutput {
  * to provide a unified browsing experience for typed assets.
  * Designed as an ephemeral utility for asset exploration.
  */
-export class ContentExplorerCell implements BaseCell {
+export class ContentExplorerCell extends BaseCell {
   /**
    * Execute content explorer action
    * 

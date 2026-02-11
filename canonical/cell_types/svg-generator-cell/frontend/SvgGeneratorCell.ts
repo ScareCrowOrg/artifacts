@@ -9,8 +9,8 @@
  * Category: visualization
  */
 
+import { BaseCell } from '@/types/BaseCell'
 import type { 
-  BaseCell, 
   CellResult, 
   CellMetadata, 
   ValidationError, 
@@ -90,7 +90,7 @@ const MINIMAL_FALLBACK_SVG = `<svg viewBox="0 0 100 100" width="100" height="100
  * // => [{ field: 'prompt', message: 'Prompt is required' }]
  * ```
  */
-export class SvgGeneratorCell implements BaseCell {
+export class SvgGeneratorCell extends BaseCell {
   /**
    * Execute SVG generation from text prompt
    * 

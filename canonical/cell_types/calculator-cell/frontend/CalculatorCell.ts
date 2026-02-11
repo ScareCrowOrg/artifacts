@@ -11,8 +11,8 @@
  * Task: [CALC-001] Implement CalculatorCell logic
  */
 
-import type { BaseCell, CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
-import { createHealthyResult } from '@/types/BaseCell'
+import { BaseCell, createHealthyResult } from '@/types/BaseCell'
+import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
 
 /**
  * Supported calculator operations
@@ -82,7 +82,7 @@ export interface CalculatorOutput {
  * // => [{ field: 'b', message: 'Cannot divide by zero' }]
  * ```
  */
-export class CalculatorCell implements BaseCell {
+export class CalculatorCell extends BaseCell {
   private _isSetup: boolean = false
   
   /**
