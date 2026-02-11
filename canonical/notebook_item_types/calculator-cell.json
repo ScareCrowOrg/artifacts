@@ -14,7 +14,7 @@
   ],
   "default_refs": {
     "view": [
-      "artifacts/canonical/cell_types/calculator-cell/frontend/View.vue"
+      "frontend/View.vue"
     ],
     "handler": []
   },
