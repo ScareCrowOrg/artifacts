@@ -11,7 +11,7 @@
  */
 
 import { BaseCell, createHealthyResult } from '@/types/BaseCell'
-import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
+import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult, ShowConfig } from '@/types/BaseCell'
 import apiService from '@/services/apiService.js'
 import { ENDPOINTS } from '@/config/endpoints.js'
 import { createLogger } from '@/utils/logger'
@@ -448,39 +448,33 @@ export class PngGeneratorCell extends BaseCell {
    * 
    * @param data - Data to show/persist (asset data from execute result)
    * @param options - Show configuration options
-   * @returns Promise resolving to CellResult
    */
   async show(
     data: Record<string, any>,
-    options?: { modal?: string; mode?: 'headless' | 'preview' }
-  ): Promise<CellResult> {
+    options: ShowConfig
+  ): Promise<void> {
     const startTime = performance.now()
     
     try {
       log.debug('Show method called', { options })
       
-      if (options?.modal === 'persist') {
+      // Check for persist modal option (custom extension of ShowConfig)
+      const modal = (options as any).modal
+      
+      if (modal === 'persist') {
         // Route to ContentManagerCell for persistence with modal
-        return await this.persistAssetWithModal(data)
+        await this.persistAssetWithModal(data)
+        return
       }
       
       // Standard preview rendering (no-op in headless mode)
-      return {
-        success: true,
-        output: data,
-        execution_time: performance.now() - startTime,
-        metadata: {
-          mode: options?.mode || 'preview'
-        }
-      }
+      log.debug('Show completed', {
+        mode: options?.mode || 'preview',
+        execution_time: performance.now() - startTime
+      })
     } catch (error: any) {
       log.error('Show failed with exception', error)
-      return {
-        success: false,
-        output: {},
-        execution_time: performance.now() - startTime,
-        error: error.message || 'Show operation failed'
-      }
+      throw error
     }
   }
   
@@ -491,11 +485,10 @@ export class PngGeneratorCell extends BaseCell {
    * to name, tag, and save the generated asset to persistent storage.
    * 
    * @param assetData - Asset data from execute result
-   * @returns Promise resolving to CellResult with persisted asset details
    */
   private async persistAssetWithModal(
     assetData: Record<string, any>
-  ): Promise<CellResult> {
+  ): Promise<void> {
     const startTime = performance.now()
     
     try {
@@ -509,7 +502,7 @@ export class PngGeneratorCell extends BaseCell {
       const contentManager = new ContentManagerCell()
       
       // Call ContentManagerCell.show() with persist modal option
-      const result = await contentManager.show(
+      await contentManager.show(
         {
           action: 'persist',
           content_type_id: 'image-png',
@@ -523,23 +516,15 @@ export class PngGeneratorCell extends BaseCell {
             prompt: assetData.prompt
           }
         },
-        { modal: 'persist-with-naming' }
+        { modal: 'persist-with-naming' } as any
       )
       
-      log.info('Asset persistence completed', { success: result.success })
-      
-      return {
-        ...result,
+      log.info('Asset persistence completed', {
         execution_time: performance.now() - startTime
-      }
+      })
     } catch (error: any) {
       log.error('Asset persistence failed', error)
-      return {
-        success: false,
-        output: {},
-        execution_time: performance.now() - startTime,
-        error: error.message || 'Failed to persist asset'
-      }
+      throw error
     }
   }
 }

@@ -299,7 +299,7 @@ export class ContentTypeManagerCell extends BaseCell {
    * Teardown cell (optional)
    * No teardown required for this ephemeral cell
    */
-  async teardown?(): Promise<void> {
+  async teardown(): Promise<void> {
     // No teardown needed
   }
   
