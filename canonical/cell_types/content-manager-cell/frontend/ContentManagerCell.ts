@@ -605,7 +605,6 @@ export class ContentManagerCell extends BaseCell {
   }
   
   /**
-  /**
    * Show persist modal for asset naming and metadata
    * 
    * Opens a modal dialog using PersistModal component that allows
