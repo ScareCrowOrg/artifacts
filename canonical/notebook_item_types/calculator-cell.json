@@ -12,6 +12,7 @@
     "headless-capable",
     "basecell-poc"
   ],
+  "can_render_dynamically": true,
   "default_refs": {
     "view": [
       "frontend/View.vue"
