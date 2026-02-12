@@ -348,6 +348,15 @@ const emit = defineEmits<{
   (e: 'generate', params: any): void
 }>()
 
+// Default generation parameters
+const DEFAULT_GENERATION_PARAMS = {
+  width: 1024,
+  height: 1024,
+  steps: 20,
+  cfg_scale: 7.0,
+  seed: -1
+}
+
 // Local state - Initialize from props or initial_data
 const localPrompt = ref(props.prompt || initialData.value.prompt || '')
 const localGeneratedPng = ref(props.generatedPng || initialData.value.generatedPng || null)
@@ -355,9 +364,10 @@ const localIsGenerating = ref(props.isGenerating || initialData.value.isGenerati
 const localError = ref(props.error || initialData.value.error || null)
 const localNegativePrompt = ref(props.negativePrompt || initialData.value.negativePrompt || '')
 const localAsset3dMode = ref(props.asset3dMode || initialData.value.asset3dMode || false)
-const localParams = ref({ 
-  ...props.generationParams,
-  ...(initialData.value.generationParams || {})
+const localParams = ref({
+  ...DEFAULT_GENERATION_PARAMS,
+  ...(initialData.value.generationParams || {}),
+  ...props.generationParams
 })
 
 // Background removal state
