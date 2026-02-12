@@ -62,6 +62,7 @@ async def queue_background_removal_job(
         job_data = {
             "job_id": job_id,
             "job_type": "REMOTE_REMBG",
+            "service": "rembg",
             "input_image_base64": input_image_base64,
             "alpha_matting": alpha_matting,
             "timestamp": time.time()
