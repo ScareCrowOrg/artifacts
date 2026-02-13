@@ -353,29 +353,12 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 "error": f"File too large. Max size for {content_type_id}: {max_size} bytes, got: {size_bytes} bytes"
             }
         
-        # Create Content instance with ContentManager (validates fragments)
-        content_manager = ContentManager(content_type_loader)
+        # ======================================================================
+        # CRITICAL FIX: Upload to R2 FIRST, then create MongoDB entry with real data_ref
+        # This prevents orphaned files by ensuring R2 upload succeeds before DB insert
+        # ======================================================================
         
-        # Generate a temporary data_ref (will be updated after upload)
-        temp_data_ref = f"pending://{content_type_id}"
-        
-        # Create content request
-        create_request = CreateContentRequest(
-            content_type_id=content_type_id,
-            assignee_id=assignee_id,
-            data_ref=temp_data_ref,
-            filename=filename,
-            size_bytes=size_bytes,
-            fragments=fragments,
-            tags=tags,
-            metadata=metadata,
-            origin_cell_id=origin_cell_id
-        )
-        
-        # Validate and create content in database
-        content = await content_manager.create_content(create_request)
-
-        # Upload to storage backend
+        # Step 1: Upload to storage backend FIRST (get real data_ref)
         logger.info("[DEBUG] ===== STORAGE BACKEND INITIALIZATION =====")
         storage = get_storage_backend()
         logger.info(f"[DEBUG] Storage backend type: {type(storage).__name__}")
@@ -390,9 +373,13 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             logger.info(f"[DEBUG] LocalStorage Configuration:")
             logger.info(f"[DEBUG]   - base_path: {storage.base_path}")
 
+        # Generate temporary content ID for upload (will be used if MongoDB succeeds)
+        import uuid
+        temp_content_id = str(uuid.uuid4())
+
         # Prepare metadata for integrity and observability
         storage_metadata = {
-            "scareverse-content-id": content.id,
+            "scareverse-content-id": temp_content_id,
             "persistence-status": "awaiting-db-metadata",
             "origin-cell-id": origin_cell_id or "unknown",
             "content-type-id": content_type_id,
@@ -401,7 +388,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
 
         # Log upload details
         logger.info("[DEBUG] ===== UPLOAD DETAILS =====")
-        logger.info(f"[DEBUG]   - content_id: {content.id}")
+        logger.info(f"[DEBUG]   - temp_content_id: {temp_content_id}")
         logger.info(f"[DEBUG]   - filename: {filename}")
         logger.info(f"[DEBUG]   - size_bytes: {size_bytes}")
         logger.info(f"[DEBUG]   - mime_type: {mime_type}")
@@ -411,7 +398,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         try:
             # Upload with metadata for traceability
             data_ref = storage.upload(
-                content.id,
+                temp_content_id,
                 binary,
                 filename,
                 mime_type,
@@ -431,49 +418,125 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 logger.error(f"[DEBUG] R2 Bucket: {storage.bucket_name}")
                 logger.error(f"[DEBUG] R2 Endpoint: {storage.endpoint_url}")
             logger.error(f"[DEBUG] Full traceback:", exc_info=True)
-            raise ValueError(f"Failed to upload content to storage: {str(storage_error)}")
-
-        # Update data_ref in database with error handling (CRITICAL: prevent orphaned files)
-        try:
-            await db.update(
-                "contents",
-                {"id": content.id},
-                {
-                    "$set": {
-                        "data_ref": data_ref,
-                        "status": "live",
-                        "updated_at": datetime.utcnow()
-                    }
+            
+            # Return detailed error response
+            return {
+                "success": False,
+                "action": "persist",
+                "error": "Failed to upload content to R2",
+                "error_code": "R2_UPLOAD_FAILED",
+                "details": {
+                    "content_type_id": content_type_id,
+                    "filename": filename,
+                    "size_bytes": size_bytes,
+                    "r2_error": str(storage_error),
+                    "status": "NO_FILES_CREATED",
+                    "cleanup": "NONE_NEEDED"
                 }
-            )
+            }
+        
+        # Step 2: Create MongoDB entry with REAL data_ref (not pending://)
+        # Validate fragments first
+        content_manager = ContentManager(content_type_loader)
+        try:
+            # Validate fragments against ContentType schema
+            content_manager.validate_content_fragments(content_type, fragments)
+        except ValueError as validation_error:
+            # Validation failed - cleanup R2 file
+            logger.warning(f"Fragment validation failed: {validation_error}")
+            try:
+                storage.delete(temp_content_id, filename)
+                logger.info(f"✓ Cleanup successful: Deleted {data_ref} from R2 after validation failure")
+            except Exception as cleanup_err:
+                logger.error(f"Cleanup failed: {cleanup_err}")
+            
+            return {
+                "success": False,
+                "error": str(validation_error),
+                "error_code": "VALIDATION_ERROR"
+            }
+        
+        # Create content request with REAL data_ref
+        create_request = CreateContentRequest(
+            content_type_id=content_type_id,
+            assignee_id=assignee_id,
+            data_ref=data_ref,  # REAL data_ref from R2, not pending://
+            filename=filename,
+            size_bytes=size_bytes,
+            fragments=fragments,
+            tags=tags,
+            metadata=metadata,
+            origin_cell_id=origin_cell_id
+        )
+        
+        # Override the auto-generated ID with the one used for R2 upload
+        create_request_dict = create_request.dict()
+        create_request_dict['id'] = temp_content_id
+        
+        # Create Content instance
+        from ..models.content_types import Content
+        content = Content(**create_request_dict)
+        
+        # Insert to MongoDB
+        try:
+            await db.insert("contents_runtime", content)
+            logger.info(f"✓ Content saved to MongoDB: {content.id}")
         except Exception as db_error:
-            # DB update failed - INITIATE CRITICAL CLEANUP
-            logger.error(
-                f"Database update failed for content {content.id}. Initiating cleanup of orphaned storage...",
-                exc_info=True
-            )
+            # MongoDB failed → Cleanup R2
+            logger.error(f"MongoDB insert failed: {db_error}")
 
             cleanup_success = False
+            cleanup_error = None
             try:
-                storage.delete(content.id, filename)
+                storage.delete(temp_content_id, filename)
                 cleanup_success = True
-                logger.info(f"Cleanup SUCCESS: Orphaned file {content.id}/{filename} removed from storage")
-            except Exception as cleanup_error:
-                # CRITICAL FAILURE: orphaned file persisted
+                logger.info(f"✓ Cleanup successful: Deleted {data_ref} from R2")
+            except Exception as cleanup_err:
+                cleanup_error = str(cleanup_err)
                 logger.critical(
-                    f"CLEANUP FAILED: Orphaned file {content.id}/{filename} remains in storage. "
-                    f"Manual intervention required. Original DB error: {db_error}, Cleanup error: {cleanup_error}",
+                    f"CLEANUP FAILED: Orphaned file {data_ref} remains in R2. "
+                    f"Original error: {db_error}. Cleanup error: {cleanup_err}",
                     exc_info=True
                 )
 
-            # Re-raise with typed error
-            raise PersistenceTransactionError(
-                f"Persistence failed: Database metadata update error. "
-                f"Storage cleanup: {'SUCCESS' if cleanup_success else 'FAILED'}. "
-                f"Details: {str(db_error)}"
-            ) from db_error
+            # Return detailed error with cleanup status
+            if cleanup_success:
+                return {
+                    "success": False,
+                    "action": "persist",
+                    "error": "Failed to save content metadata to MongoDB",
+                    "error_code": "MONGODB_INSERT_FAILED",
+                    "details": {
+                        "content_type_id": content_type_id,
+                        "filename": filename,
+                        "r2_status": "UPLOADED_SUCCESSFULLY",
+                        "r2_data_ref": data_ref,
+                        "mongodb_error": str(db_error),
+                        "cleanup_attempted": True,
+                        "cleanup_status": "SUCCESS",
+                        "status": "ORPHANED_FILE_CLEANED_UP",
+                        "action_needed": "NONE - file was deleted from R2"
+                    }
+                }
+            else:
+                return {
+                    "success": False,
+                    "action": "persist",
+                    "error": "CRITICAL: Orphaned file remains in R2",
+                    "error_code": "ORPHANED_FILE_CLEANUP_FAILED",
+                    "details": {
+                        "content_type_id": content_type_id,
+                        "filename": filename,
+                        "r2_data_ref": data_ref,
+                        "mongodb_error": str(db_error),
+                        "cleanup_error": cleanup_error,
+                        "status": "ORPHANED_FILE_IN_R2",
+                        "action_needed": f"MANUAL - Contact admin: Delete {data_ref} from R2 console",
+                        "alert_level": "CRITICAL"
+                    }
+                }
 
-        # Return created content metadata
+        # Step 3: Success! Return created content metadata
         return {
             "success": True,
             "action": "persist",
