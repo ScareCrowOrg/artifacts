@@ -427,21 +427,41 @@ Three canonical types are supported:
 
 ## Error Handling
 
-All actions return standardized error responses:
+The Content Manager Cell implements atomic persistence with comprehensive error handling. For detailed error codes, recovery procedures, and monitoring guidelines, see **[ERROR_CODES.md](./ERROR_CODES.md)**.
 
-```python
+### Quick Reference
+
+All actions return standardized error responses with detailed context:
+
+```json
 {
     "success": false,
-    "error": "Descriptive error message"
+    "action": "persist",
+    "error": "User-friendly error message",
+    "error_code": "MACHINE_READABLE_CODE",
+    "details": {
+        "context": "...",
+        "cleanup_status": "...",
+        "action_needed": "..."
+    }
 }
 ```
 
-Common errors:
+### Error Codes Summary
+
+- **R2_UPLOAD_FAILED**: R2 upload failure (no files created)
+- **MONGODB_INSERT_FAILED**: MongoDB failure after R2 success (cleanup succeeded)
+- **ORPHANED_FILE_CLEANUP_FAILED**: Critical - orphaned file in R2 (manual intervention required)
+- **VALIDATION_ERROR**: Input validation failure (missing/invalid parameters)
+
+Common validation errors:
 - `"Missing 'action' parameter"` - No action specified
 - `"ContentType not found: ..."` - Invalid content type ID
 - `"File too large. Max size: ..."` - File exceeds ContentType limit
 - `"Missing required fragment '...' for ContentType"` - Fragment validation failed
 - `"Content not found: ..."` - Invalid content ID
+
+**See [ERROR_CODES.md](./ERROR_CODES.md) for complete error documentation.**
 
 ## Testing
 
