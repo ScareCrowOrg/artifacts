@@ -561,3 +561,218 @@ class TestHandlePersist:
         
         assert result["success"] is False
         assert "too large" in result["error"].lower()
+    
+    @pytest.mark.asyncio
+    @patch('main.get_storage_backend')
+    @patch('main.ContentTypeLoader')
+    async def test_persist_r2_upload_fails(self, mock_loader_class, mock_get_storage):
+        """Test R2 upload failure - no cleanup needed."""
+        # Mock ContentTypeLoader
+        mock_loader = MagicMock()
+        mock_content_type = MagicMock()
+        mock_content_type.id = "image-png"
+        mock_content_type.max_size_bytes = 10485760
+        mock_loader.load_content_type.return_value = mock_content_type
+        mock_loader_class.return_value = mock_loader
+        
+        # Mock storage to fail on upload
+        mock_storage = MagicMock()
+        mock_storage.upload.side_effect = Exception("R2 connection error")
+        mock_get_storage.return_value = mock_storage
+        
+        # Create test data
+        test_binary = b"Hello, World!"
+        encoded = base64.b64encode(test_binary).decode('utf-8')
+        
+        result = await handle_persist({
+            "content_type_id": "image-png",
+            "filename": "test.png",
+            "binary": encoded,
+            "fragments": {"width": 100, "height": 100},
+            "assignee_id": "user-123"
+        })
+        
+        # Verify error response
+        assert result["success"] is False
+        assert result["error_code"] == "R2_UPLOAD_FAILED"
+        assert "Failed to upload content to R2" in result["error"]
+        assert result["details"]["status"] == "NO_FILES_CREATED"
+        assert result["details"]["cleanup"] == "NONE_NEEDED"
+        
+        # Verify storage delete was NOT called (nothing to cleanup)
+        assert not mock_storage.delete.called
+    
+    @pytest.mark.asyncio
+    @patch('main.db')
+    @patch('main.get_storage_backend')
+    @patch('main.ContentManager')
+    @patch('main.ContentTypeLoader')
+    async def test_persist_mongodb_fails_cleanup_succeeds(
+        self,
+        mock_loader_class,
+        mock_manager_class,
+        mock_get_storage,
+        mock_db
+    ):
+        """Test MongoDB insert failure after R2 success - cleanup succeeds."""
+        # Mock ContentTypeLoader
+        mock_loader = MagicMock()
+        mock_content_type = MagicMock()
+        mock_content_type.id = "image-png"
+        mock_content_type.max_size_bytes = 10485760
+        mock_content_type.expected_fragments = {"width": int, "height": int}
+        mock_loader.load_content_type.return_value = mock_content_type
+        mock_loader_class.return_value = mock_loader
+        
+        # Mock ContentManager
+        mock_manager = MagicMock()
+        mock_manager.validate_content_fragments.return_value = True
+        mock_manager_class.return_value = mock_manager
+        
+        # Mock storage - upload succeeds
+        mock_storage = MagicMock()
+        mock_storage.upload.return_value = "r2://bucket/content/test-id/test.png"
+        mock_storage.delete.return_value = True  # Cleanup succeeds
+        mock_get_storage.return_value = mock_storage
+        
+        # Mock DB - insert fails
+        mock_db.insert = AsyncMock(side_effect=Exception("MongoDB connection lost"))
+        
+        # Create test data
+        test_binary = b"Hello, World!"
+        encoded = base64.b64encode(test_binary).decode('utf-8')
+        
+        result = await handle_persist({
+            "content_type_id": "image-png",
+            "filename": "test.png",
+            "binary": encoded,
+            "fragments": {"width": 100, "height": 100},
+            "assignee_id": "user-123"
+        })
+        
+        # Verify error response
+        assert result["success"] is False
+        assert result["error_code"] == "MONGODB_INSERT_FAILED"
+        assert "Failed to save content metadata to MongoDB" in result["error"]
+        assert result["details"]["r2_status"] == "UPLOADED_SUCCESSFULLY"
+        assert result["details"]["cleanup_status"] == "SUCCESS"
+        assert result["details"]["status"] == "ORPHANED_FILE_CLEANED_UP"
+        assert result["details"]["action_needed"] == "NONE - file was deleted from R2"
+        
+        # Verify storage delete WAS called (cleanup executed)
+        assert mock_storage.delete.called
+    
+    @pytest.mark.asyncio
+    @patch('main.db')
+    @patch('main.get_storage_backend')
+    @patch('main.ContentManager')
+    @patch('main.ContentTypeLoader')
+    async def test_persist_mongodb_fails_cleanup_fails(
+        self,
+        mock_loader_class,
+        mock_manager_class,
+        mock_get_storage,
+        mock_db
+    ):
+        """Test MongoDB insert failure AND cleanup fails - CRITICAL alert."""
+        # Mock ContentTypeLoader
+        mock_loader = MagicMock()
+        mock_content_type = MagicMock()
+        mock_content_type.id = "image-png"
+        mock_content_type.max_size_bytes = 10485760
+        mock_content_type.expected_fragments = {"width": int, "height": int}
+        mock_loader.load_content_type.return_value = mock_content_type
+        mock_loader_class.return_value = mock_loader
+        
+        # Mock ContentManager
+        mock_manager = MagicMock()
+        mock_manager.validate_content_fragments.return_value = True
+        mock_manager_class.return_value = mock_manager
+        
+        # Mock storage - upload succeeds, delete fails
+        mock_storage = MagicMock()
+        data_ref = "r2://bucket/content/test-id/test.png"
+        mock_storage.upload.return_value = data_ref
+        mock_storage.delete.side_effect = Exception("R2 connection lost during cleanup")
+        mock_get_storage.return_value = mock_storage
+        
+        # Mock DB - insert fails
+        mock_db.insert = AsyncMock(side_effect=Exception("MongoDB connection lost"))
+        
+        # Create test data
+        test_binary = b"Hello, World!"
+        encoded = base64.b64encode(test_binary).decode('utf-8')
+        
+        result = await handle_persist({
+            "content_type_id": "image-png",
+            "filename": "test.png",
+            "binary": encoded,
+            "fragments": {"width": 100, "height": 100},
+            "assignee_id": "user-123"
+        })
+        
+        # Verify CRITICAL error response
+        assert result["success"] is False
+        assert result["error_code"] == "ORPHANED_FILE_CLEANUP_FAILED"
+        assert "CRITICAL: Orphaned file remains in R2" in result["error"]
+        assert result["details"]["status"] == "ORPHANED_FILE_IN_R2"
+        assert result["details"]["alert_level"] == "CRITICAL"
+        assert "MANUAL" in result["details"]["action_needed"]
+        assert data_ref in result["details"]["action_needed"]
+        
+        # Verify storage delete WAS attempted (but failed)
+        assert mock_storage.delete.called
+    
+    @pytest.mark.asyncio
+    @patch('main.db')
+    @patch('main.get_storage_backend')
+    @patch('main.ContentManager')
+    @patch('main.ContentTypeLoader')
+    async def test_persist_validation_fails_after_upload(
+        self,
+        mock_loader_class,
+        mock_manager_class,
+        mock_get_storage,
+        mock_db
+    ):
+        """Test fragment validation failure after R2 upload - cleanup succeeds."""
+        # Mock ContentTypeLoader
+        mock_loader = MagicMock()
+        mock_content_type = MagicMock()
+        mock_content_type.id = "image-png"
+        mock_content_type.max_size_bytes = 10485760
+        mock_content_type.expected_fragments = {"width": int, "height": int, "required_field": str}
+        mock_loader.load_content_type.return_value = mock_content_type
+        mock_loader_class.return_value = mock_loader
+        
+        # Mock ContentManager - validation fails
+        mock_manager = MagicMock()
+        mock_manager.validate_content_fragments.side_effect = ValueError("Missing required fragment: required_field")
+        mock_manager_class.return_value = mock_manager
+        
+        # Mock storage - upload succeeds, delete succeeds
+        mock_storage = MagicMock()
+        mock_storage.upload.return_value = "r2://bucket/content/test-id/test.png"
+        mock_storage.delete.return_value = True
+        mock_get_storage.return_value = mock_storage
+        
+        # Create test data
+        test_binary = b"Hello, World!"
+        encoded = base64.b64encode(test_binary).decode('utf-8')
+        
+        result = await handle_persist({
+            "content_type_id": "image-png",
+            "filename": "test.png",
+            "binary": encoded,
+            "fragments": {"width": 100, "height": 100},  # Missing required_field
+            "assignee_id": "user-123"
+        })
+        
+        # Verify validation error response
+        assert result["success"] is False
+        assert result["error_code"] == "VALIDATION_ERROR"
+        assert "Missing required fragment" in result["error"]
+        
+        # Verify storage delete WAS called (cleanup after validation failure)
+        assert mock_storage.delete.called
+
