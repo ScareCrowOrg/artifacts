@@ -43,6 +43,7 @@ file-manager-cell/
 - **Multiple Selection**: Select and open multiple files
 - **Cache Invalidation**: Refresh button clears backend Redis cache
 - **FileEditorCell Integration**: Opens files for editing
+- **Frontend-Only Architecture**: Operates entirely in the browser, no dedicated backend implementation.
 
 ## Quick Start
 
