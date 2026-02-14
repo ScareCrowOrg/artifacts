@@ -61,7 +61,7 @@ Output format: Return ONLY the optimized prompt string. Do not explain, do not a
 NEGATIVE_PROMPT_3D_ASSET_BASE = "humans, people, hands, fingers, faces, portraits, person, man, woman, child, body parts, biological elements, dramatic lighting, shadows, high contrast, depth of field, bokeh, cluttered background, side view, back view, artistic interpretation"
 
 # Static enhancement suffixes for 3D asset mode (used in fallback)
-POSITIVE_SUFFIX_3D_ASSET = ", full body, standing, centered, front view, flat lighting, studio background, neutral gray background, high resolution, orthographic view"
+POSITIVE_SUFFIX_3D_ASSET = ", centered, front view, flat lighting, studio background, neutral gray background, high resolution, orthographic view"
 NEGATIVE_SUFFIX_3D_ASSET = ", shadows, dramatic lighting, high contrast, depth of field, bokeh, cluttered background, side view, back view"
 
 
