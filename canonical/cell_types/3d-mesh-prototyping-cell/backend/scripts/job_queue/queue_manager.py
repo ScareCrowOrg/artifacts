@@ -158,9 +158,18 @@ async def queue_3d_generation_job(
         await redis_client.expire(status_key, 3600)  # Expire after 1 hour
         
         logger.debug(f"Stored job status in Redis: {status_key}")
-        
-        # Queue job for worker
-        queue_key = "scareverse:3d-jobs:queue"
+
+        # Queue job for worker (route to appropriate service based on model_type)
+        # model_type can be: instantmesh, sf3d, blender, etc.
+        # Each service has its own queue that worker listens on
+        if model_type == "instantmesh":
+            queue_key = "scareverse:instantmesh-jobs:queue"
+        elif model_type == "sf3d":
+            queue_key = "scareverse:sf3d-jobs:queue"
+        else:
+            # Default to instantmesh for unknown types
+            queue_key = "scareverse:instantmesh-jobs:queue"
+
         await redis_client.lpush(queue_key, json.dumps(job_data))
         
         logger.info(f"Job {job_id} queued successfully")
