@@ -220,7 +220,7 @@ This cell is the first component of the **Asset Prototyping Book** initiative:
 
 1. ✅ **Phase 1**: Three.js Scene Generator (Current)
 2. **Phase 2**: Blender Script Generator Cell
-3. **Phase 3**: Unity Addressables Generator Cell
+
 4. **Phase 4**: Integrated Asset Pipeline
 
 ## Troubleshooting

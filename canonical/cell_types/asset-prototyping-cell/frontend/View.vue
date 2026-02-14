@@ -735,8 +735,8 @@ function cleanupBabylonJS(): void {
 }
 
 function handleExport(): void {
-  error.value = 'Export functionality not yet implemented. This feature will export assets to Unity Addressables format.'
-  // TODO: Implement export to Unity Addressables
+  error.value = 'Export functionality not yet implemented. This feature will export assets to a compatible 3D asset format.'
+
 }
 
 function handleReset(): void {

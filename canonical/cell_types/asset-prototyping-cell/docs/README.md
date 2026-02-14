@@ -233,7 +233,7 @@ This ensures quality control and prevents automatic pipeline execution without h
 
 ## Limitations
 
-1. **3D Export**: Export to Unity Addressables is planned but not yet implemented.
+1. **3D Export**: Export to a compatible 3D asset format is planned but not yet implemented.
 
 2. **Stable Diffusion Availability**: Requires a running Stable Diffusion instance on the configured port.
 
@@ -241,7 +241,7 @@ This ensures quality control and prevents automatic pipeline execution without h
 
 ## Future Enhancements
 
-- [ ] Export to Unity Addressables format
+
 - [ ] Support for texture mapping
 - [ ] Material and color customization
 - [ ] Batch processing multiple assets
