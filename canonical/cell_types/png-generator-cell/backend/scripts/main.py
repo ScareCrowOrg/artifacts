@@ -384,15 +384,15 @@ Generate the optimized Stable Diffusion prompt:"""
             enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
     
     logger.info(f"Generating PNG - Asset 3D Mode: {asset_3d_mode}, Prompt length: {len(enhanced_prompt)}")
-    # Try to import and use Stable Diffusion service
+    # Try to import and use Stable Diffusion Queue Bridge client
     try:
-        from app.services.stable_diffusion_service import StableDiffusionService
+        from app.services.stable_diffusion_queue_client import StableDiffusionQueueClient
         
-        # Initialize Stable Diffusion service
-        sd_service = StableDiffusionService()
+        # Initialize Stable Diffusion Queue client
+        sd_client = StableDiffusionQueueClient()
         
-        # Generate image with enhanced prompts
-        result = await sd_service.generate_image(
+        # Generate image with enhanced prompts via queue bridge
+        result = await sd_client.generate_image(
             prompt=enhanced_prompt,
             negative_prompt=enhanced_negative,
             width=width,
@@ -419,11 +419,11 @@ Generate the optimized Stable Diffusion prompt:"""
             }
     
     except ImportError as e:
-        # Service not available in path
-        logger.warning(f"StableDiffusionService not available: {e}")
+        # Queue client not available in path
+        logger.warning(f"StableDiffusionQueueClient not available: {e}")
         return {
             "success": False,
-            "error": "Stable Diffusion service not available (import failed)",
+            "error": "Stable Diffusion Queue Bridge not available (import failed)",
             "prompt": prompt
         }
     
@@ -800,10 +800,10 @@ class PngGeneratorCell(BaseCell):
             HealthCheckResult with status and diagnostic info
         """
         try:
-            # Check if Stable Diffusion service is available
+            # Check if Stable Diffusion Queue Bridge is available
             # This is a soft check - cell can still work with fallbacks
             try:
-                from app.services.stable_diffusion_service import StableDiffusionService
+                from app.services.stable_diffusion_queue_client import StableDiffusionQueueClient
                 sd_available = True
             except ImportError:
                 sd_available = False
@@ -816,7 +816,7 @@ class PngGeneratorCell(BaseCell):
             else:
                 return HealthCheckResult(
                     status=HealthStatus.DEGRADED,
-                    reason="Stable Diffusion service not available (will use fallbacks)"
+                    reason="Stable Diffusion Queue Bridge not available (will use fallbacks)"
                 )
         
         except Exception as e:
