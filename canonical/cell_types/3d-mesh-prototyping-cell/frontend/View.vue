@@ -534,79 +534,46 @@ onUnmounted(() => {
       class="mb-6"
     />
 
-    <!-- Image Upload Section (for generation modes) -->
-    <div v-if="generationMode !== 'manual-upload'" class="mb-6">
-      <label class="block text-sm font-medium mb-2 text-text-primary dark:text-text-primary-dark">Upload Image for 3D Reconstruction</label>
+    <!-- Image Upload Section (Card Container) -->
+    <div v-if="generationMode !== 'manual-upload'" class="p-6 bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-lg mb-6">
+      <!-- Header with Icon -->
+      <div class="flex items-center gap-2 mb-4">
+        <span class="text-2xl">📤</span>
+        <h3 class="text-lg font-semibold text-text-primary dark:text-text-primary-dark">
+          Upload Image for 3D Reconstruction
+        </h3>
+      </div>
+
+      <!-- Description -->
+      <p class="text-sm text-text-secondary dark:text-text-secondary-dark mb-1">
+        Generate volumetric 3D meshes from 2D images
+      </p>
+      <p class="text-xs text-text-secondary dark:text-text-secondary-dark mb-4">
+        Supported formats: PNG, JPG, JPEG
+      </p>
+
+      <!-- File Input -->
       <input
         ref="fileInput"
         type="file"
         accept="image/*"
         @change="handleFileUpload"
-        class="block w-full text-sm text-text-secondary dark:text-text-secondary-dark file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary dark:file:bg-primary-light file:text-white hover:file:bg-primary-hover dark:hover:file:bg-primary"
+        class="block w-full text-sm text-text-secondary dark:text-text-secondary-dark p-3 border border-dashed border-border dark:border-border-dark rounded mb-4 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary dark:file:bg-primary-light file:text-white hover:file:bg-primary-hover dark:hover:file:bg-primary"
         :disabled="isGenerating"
       />
-      <p class="text-xs text-text-secondary dark:text-text-secondary-dark mt-1">Supported formats: PNG, JPG, JPEG</p>
-    </div>
 
-    <!-- Image Preview (only for generation modes) -->
-    <div v-if="hasInputImage && generationMode !== 'manual-upload'" class="mb-6">
-      <label class="block text-sm font-medium mb-2 text-text-primary dark:text-text-primary-dark">Input Image Preview</label>
-      <img
-        :src="inputImage"
-        alt="Input for reconstruction"
-        class="max-w-xs max-h-64 rounded border border-border dark:border-border-dark"
-      />
-    </div>
-
-    <!-- Model Selection (only for local-gpu mode) -->
-    <div v-if="generationMode === 'local-gpu'" class="mb-6">
-      <label class="block text-sm font-medium mb-3 text-text-primary dark:text-text-primary-dark">3D Generation Model</label>
-      <div class="flex gap-4">
-        <label class="flex items-center cursor-pointer">
-          <input
-            type="radio"
-            name="mesh-model"
-            value="sf3d"
-            v-model="selectedModel"
-            :disabled="isGenerating"
-            class="w-4 h-4 text-primary dark:text-primary-light"
-          />
-          <span class="ml-2 text-sm text-text-primary dark:text-text-primary-dark">
-            SF3D (Fast, 15s)
-          </span>
-        </label>
-        <label class="flex items-center cursor-pointer">
-          <input
-            type="radio"
-            name="mesh-model"
-            value="instantmesh"
-            v-model="selectedModel"
-            :disabled="isGenerating"
-            class="w-4 h-4 text-primary dark:text-primary-light"
-          />
-          <span class="ml-2 text-sm text-text-primary dark:text-text-primary-dark">
-            InstantMesh (Free, 30-45s)
-          </span>
-        </label>
-      </div>
-      <p class="text-xs text-text-secondary dark:text-text-secondary-dark mt-2">
-        <span v-if="selectedModel === 'sf3d'">SF3D: Faster inference (15s), uses more VRAM (3-4GB)</span>
-        <span v-else>InstantMesh: Free local alternative, slower but uses less VRAM (2-3GB)</span>
-      </p>
-    </div>
-
-    <!-- Silhouette Solidifier Option -->
-    <div v-if="generationMode === 'local-gpu' && selectedModel === 'instantmesh'" class="mb-6">
-      <label class="flex items-center cursor-pointer p-3 bg-surface-light dark:bg-surface-dark-light border border-border dark:border-border-dark rounded">
+      <!-- Solidify Silhouette Option (moved inside card) -->
+      <label v-if="selectedModel === 'instantmesh'" class="flex items-start gap-3 p-3 bg-surface-light dark:bg-surface-dark-light rounded border border-border dark:border-border-dark cursor-pointer">
         <input
           v-model="localSolidifySilhouette"
           type="checkbox"
           :disabled="isGenerating"
-          class="w-5 h-5 rounded border-border dark:border-border-dark text-primary focus:ring-2 focus:ring-primary"
+          class="w-5 h-5 rounded border-border dark:border-border-dark text-primary focus:ring-2 focus:ring-primary mt-0.5"
         />
-        <div class="ml-3 flex-1">
+        <div class="flex-1">
           <div class="text-sm font-medium text-text-primary dark:text-text-primary-dark">
             Solidify Silhouette
+            <span class="text-xs text-text-secondary dark:text-text-secondary-dark font-normal">(Only for InstantMesh)</span>
           </div>
           <div class="text-xs text-text-secondary dark:text-text-secondary-dark mt-1">
             <span v-if="localSolidifySilhouette">
@@ -620,6 +587,16 @@ onUnmounted(() => {
       </label>
     </div>
 
+    <!-- Image Preview (only for generation modes) -->
+    <div v-if="hasInputImage && generationMode !== 'manual-upload'" class="mb-6">
+      <label class="block text-sm font-medium mb-2 text-text-primary dark:text-text-primary-dark">Input Image Preview</label>
+      <img
+        :src="inputImage"
+        alt="Input for reconstruction"
+        class="max-w-xs max-h-64 rounded border border-border dark:border-border-dark"
+      />
+    </div>
+
     <!-- Generate Button (only for generation modes) -->
     <button
       v-if="generationMode !== 'manual-upload'"
@@ -630,8 +607,7 @@ onUnmounted(() => {
       <span v-if="isGenerating">{{ jobStatus === 'processing' ? 'Processing...' : 'Queueing...' }}</span>
       <span v-else>
         Generate 3D Mesh
-        <span v-if="generationMode === 'local-gpu'"> ({{ selectedModel === 'sf3d' ? 'SF3D' : 'InstantMesh' }})</span>
-        <span v-else> (Cloud API)</span>
+        <span v-if="generationMode === 'cloud-api'"> (Cloud API)</span>
       </span>
     </button>
 

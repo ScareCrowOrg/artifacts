@@ -94,7 +94,7 @@ const isSelected = (mode: GenerationMode) => {
       Generation Mode
     </label>
     
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div class="grid grid-cols-3 gap-2">
       <button
         v-for="mode in modes"
         :key="mode.value"
@@ -156,7 +156,7 @@ const isSelected = (mode: GenerationMode) => {
 
 <style scoped>
 .mode-card {
-  min-height: 120px;
+  min-height: 80px;
   position: relative;
   cursor: pointer;
 }
