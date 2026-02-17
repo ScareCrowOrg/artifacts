@@ -474,7 +474,8 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         create_request_dict['id'] = temp_content_id
         
         # Create Content instance
-        from ..models.content_types import Content
+        # Use absolute import (ephemeral cells can't use relative imports)
+        from app.models.content_types import Content
         content = Content(**create_request_dict)
         
         # Insert to MongoDB
