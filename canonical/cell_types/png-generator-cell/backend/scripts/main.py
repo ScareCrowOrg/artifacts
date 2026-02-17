@@ -346,7 +346,9 @@ async def generate_png_from_prompt(
     # Initialize prompt variables
     enhanced_prompt = prompt
     enhanced_negative = negative_prompt or ""
-    
+
+    logger.info(f"[Prompt Mode] Asset 3D Mode: {asset_3d_mode}")
+
     # If 3D Asset Mode is enabled, use Ollama orchestration
     if asset_3d_mode:
         logger.info(f"3D Asset Mode enabled - orchestrating with Ollama for prompt optimization")
@@ -423,7 +425,15 @@ Generate the optimized negative prompt:"""
             logger.error(f"🚨 OLLAMA ERROR - {type(e).__name__}: {e}", exc_info=True)
             logger.warning("Falling back to static 3D asset enhancement")
             enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
-    
+    else:
+        # Asset 3D Mode is DISABLED - use prompts as-is (user has full freedom)
+        logger.info(f"[Prompt Mode] Asset 3D Mode DISABLED - using user prompts as-is (no Ollama optimization)")
+        logger.info(f"[User Prompt] POSITIVE:\n{enhanced_prompt}")
+        if enhanced_negative:
+            logger.info(f"[User Prompt] NEGATIVE:\n{enhanced_negative}")
+        else:
+            logger.info(f"[User Prompt] NEGATIVE: (empty - no negative prompt provided)")
+
     logger.info(f"Generating PNG - Asset 3D Mode: {asset_3d_mode}, Prompt length: {len(enhanced_prompt)}")
     logger.info(f"[PNG Generation] FINAL PROMPT:\n{enhanced_prompt}")
     logger.info(f"[PNG Generation] FINAL NEGATIVE PROMPT:\n{enhanced_negative}")
