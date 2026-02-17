@@ -377,6 +377,12 @@ Generate the optimized Stable Diffusion prompt:"""
                 # Extract the optimized prompt from Ollama response
                 optimized_prompt = ollama_result.get("response", "").strip()
 
+                # Remove extra quotes if Ollama wrapped the response in quotes
+                # This can happen if Ollama returns: "\"Render a high-resolution...\""
+                if optimized_prompt.startswith('"') and optimized_prompt.endswith('"'):
+                    optimized_prompt = optimized_prompt[1:-1].strip()
+                    logger.debug(f"[Ollama] Removed wrapper quotes from prompt")
+
                 if optimized_prompt:
                     logger.info(f"✅ Ollama optimization successful - Enhanced prompt length: {len(optimized_prompt)}")
                     logger.info(f"[Ollama Response] OPTIMIZED POSITIVE PROMPT:\n{optimized_prompt}")
@@ -394,6 +400,11 @@ Generate the optimized negative prompt:"""
 
                             negative_ollama_result = await chamar_ollama(negative_prompt_instruction)
                             optimized_negative = negative_ollama_result.get("response", "").strip()
+
+                            # Remove extra quotes if Ollama wrapped the response in quotes
+                            if optimized_negative.startswith('"') and optimized_negative.endswith('"'):
+                                optimized_negative = optimized_negative[1:-1].strip()
+                                logger.debug(f"[Ollama] Removed wrapper quotes from negative prompt")
 
                             if optimized_negative:
                                 logger.info(f"✅ Ollama negative prompt optimization successful")
