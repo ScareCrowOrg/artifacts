@@ -58,12 +58,14 @@ Rules:
 Output format: Return ONLY the optimized prompt string. Do not explain, do not add commentary. Just the prompt."""
 
 # Base negative prompt keywords for 3D asset generation
-# These prevent biological contamination and ensure technical precision
-NEGATIVE_PROMPT_3D_ASSET_BASE = "humans, people, hands, fingers, faces, portraits, person, man, woman, child, body parts, biological elements, dramatic lighting, shadows, high contrast, depth of field, bokeh, cluttered background, side view, back view, artistic interpretation"
+# These prevent artistic rendering styles and ensure technical precision
+# NOTE: Removed "humans, people, hands, faces" - those are WANTED for character assets!
+# Only exclude artistic effects that should NOT appear in technical renders
+NEGATIVE_PROMPT_3D_ASSET_BASE = "dramatic lighting, shadows, high contrast, depth of field, bokeh, cluttered background, side view, back view, artistic interpretation, painting style, watercolor, sketch, pencil drawing"
 
 # Static enhancement suffixes for 3D asset mode (used in fallback)
 POSITIVE_SUFFIX_3D_ASSET = ", centered, front view, flat lighting, studio background, neutral gray background, high resolution, orthographic view"
-NEGATIVE_SUFFIX_3D_ASSET = ", shadows, dramatic lighting, high contrast, depth of field, bokeh, cluttered background, side view, back view"
+NEGATIVE_SUFFIX_3D_ASSET = ", shadows, dramatic lighting, high contrast, depth of field, bokeh, cluttered background, side view, back view, artistic painting, watercolor, sketch"
 
 
 def _apply_static_3d_enhancement(prompt: str, negative_prompt: str = None) -> tuple:
@@ -358,19 +360,19 @@ Generate the optimized Stable Diffusion prompt:"""
 
                 if optimized_prompt:
                     logger.info(f"✅ Ollama optimization successful - Enhanced prompt length: {len(optimized_prompt)}")
+                    logger.info(f"[Ollama Response] OPTIMIZED PROMPT:\n{optimized_prompt}")
                     enhanced_prompt = optimized_prompt
 
-                    # Enhance negative prompt using module-level constant
-                    if enhanced_negative:
-                        # Merge user negative prompt with base negative
-                        user_keywords = [k.strip() for k in enhanced_negative.split(',')]
-                        base_keywords = [k.strip() for k in NEGATIVE_PROMPT_3D_ASSET_BASE.split(',')]
-                        all_keywords = user_keywords + [k for k in base_keywords if k not in user_keywords]
-                        enhanced_negative = ', '.join(all_keywords)
-                    else:
+                    # Handle negative prompt:
+                    # If user provided one, respect it (don't add base)
+                    # If user didn't, use base negative for technical rendering
+                    if not enhanced_negative:
+                        # No user negative prompt - use base technical rendering guidelines
                         enhanced_negative = NEGATIVE_PROMPT_3D_ASSET_BASE
-
-                    logger.debug(f"Final enhanced negative prompt: {enhanced_negative[:100]}...")
+                        logger.info(f"[3D Asset Mode] Using BASE NEGATIVE PROMPT (user did not provide one):\n{enhanced_negative}")
+                    else:
+                        # User provided negative prompt - keep it as-is
+                        logger.info(f"[3D Asset Mode] Using USER-PROVIDED NEGATIVE PROMPT:\n{enhanced_negative}")
                 else:
                     logger.warning("⚠️ Ollama returned empty response, falling back to static enhancement")
                     enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
@@ -388,8 +390,8 @@ Generate the optimized Stable Diffusion prompt:"""
             enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
     
     logger.info(f"Generating PNG - Asset 3D Mode: {asset_3d_mode}, Prompt length: {len(enhanced_prompt)}")
-    logger.debug(f"[PNG Generation] Prompt: {enhanced_prompt[:100]}...")
-    logger.debug(f"[PNG Generation] Negative Prompt: {enhanced_negative[:100]}...")
+    logger.info(f"[PNG Generation] FINAL PROMPT:\n{enhanced_prompt}")
+    logger.info(f"[PNG Generation] FINAL NEGATIVE PROMPT:\n{enhanced_negative}")
 
     # Try to import and use Stable Diffusion Queue Bridge client
     try:
