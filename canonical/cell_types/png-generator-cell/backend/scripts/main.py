@@ -17,6 +17,7 @@ import base64
 from io import BytesIO
 import sys
 import os
+import httpx
 
 # Add backend to path for importing BaseCell
 backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../backend'))
@@ -330,16 +331,16 @@ async def generate_png_from_prompt(
     # If 3D Asset Mode is enabled, use Ollama orchestration
     if asset_3d_mode:
         logger.info(f"3D Asset Mode enabled - orchestrating with Ollama for prompt optimization")
-        
+
         try:
             # Import Ollama service for prompt orchestration
             # NOTE: Import is conditional because this is an optional enhancement.
             # If import fails, we gracefully fall back to static enhancement.
             from app.ollama_service import chamar_ollama, verificar_ollama_disponivel
-            
+
             # Check if Ollama is available
             ollama_available = await verificar_ollama_disponivel()
-            
+
             if ollama_available:
                 # Build the full prompt for Ollama using module-level constant
                 ollama_prompt = f"""{OLLAMA_SYSTEM_PROMPT_3D_ARCHITECT}
@@ -351,14 +352,14 @@ Generate the optimized Stable Diffusion prompt:"""
                 # Call Ollama with timeout handling
                 logger.debug(f"Calling Ollama for prompt optimization - Original: {prompt[:50]}...")
                 ollama_result = await chamar_ollama(ollama_prompt)
-                
+
                 # Extract the optimized prompt from Ollama response
                 optimized_prompt = ollama_result.get("response", "").strip()
-                
+
                 if optimized_prompt:
-                    logger.info(f"Ollama optimization successful - Enhanced prompt length: {len(optimized_prompt)}")
+                    logger.info(f"✅ Ollama optimization successful - Enhanced prompt length: {len(optimized_prompt)}")
                     enhanced_prompt = optimized_prompt
-                    
+
                     # Enhance negative prompt using module-level constant
                     if enhanced_negative:
                         # Merge user negative prompt with base negative
@@ -368,29 +369,37 @@ Generate the optimized Stable Diffusion prompt:"""
                         enhanced_negative = ', '.join(all_keywords)
                     else:
                         enhanced_negative = NEGATIVE_PROMPT_3D_ASSET_BASE
-                    
+
                     logger.debug(f"Final enhanced negative prompt: {enhanced_negative[:100]}...")
                 else:
-                    logger.warning("Ollama returned empty response, falling back to static enhancement")
+                    logger.warning("⚠️ Ollama returned empty response, falling back to static enhancement")
                     enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
-                    
+
             else:
-                logger.warning("Ollama not available, falling back to static 3D asset enhancement")
+                logger.warning("⚠️ Ollama not available (health check failed), falling back to static 3D asset enhancement")
                 enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
-                
+
+        except asyncio.TimeoutError:
+            logger.error("🚨 OLLAMA TIMEOUT - Prompt optimization took > 120s, using fallback")
+            enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
         except Exception as e:
-            logger.error(f"Error during Ollama orchestration: {e}", exc_info=True)
+            logger.error(f"🚨 OLLAMA ERROR - {type(e).__name__}: {e}", exc_info=True)
             logger.warning("Falling back to static 3D asset enhancement")
             enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
     
     logger.info(f"Generating PNG - Asset 3D Mode: {asset_3d_mode}, Prompt length: {len(enhanced_prompt)}")
+    logger.debug(f"[PNG Generation] Prompt: {enhanced_prompt[:100]}...")
+    logger.debug(f"[PNG Generation] Negative Prompt: {enhanced_negative[:100]}...")
+
     # Try to import and use Stable Diffusion Queue Bridge client
     try:
         from app.services.stable_diffusion_queue_client import StableDiffusionQueueClient
-        
+
         # Initialize Stable Diffusion Queue client
         sd_client = StableDiffusionQueueClient()
-        
+
+        logger.info(f"[SD Queue] Calling Stable Diffusion via queue bridge...")
+
         # Generate image with enhanced prompts via queue bridge
         result = await sd_client.generate_image(
             prompt=enhanced_prompt,
@@ -401,9 +410,9 @@ Generate the optimized Stable Diffusion prompt:"""
             cfg_scale=cfg_scale,
             seed=seed
         )
-        
+
         if result.get("success"):
-            logger.info(f"Successfully generated PNG from prompt: {prompt[:50]}...")
+            logger.info(f"✅ Successfully generated PNG from prompt: {prompt[:50]}...")
             return {
                 "success": True,
                 "image_base64": result.get("image_base64"),
@@ -411,7 +420,7 @@ Generate the optimized Stable Diffusion prompt:"""
                 "metadata": result.get("metadata", {})
             }
         else:
-            logger.warning(f"PNG generation failed: {result.get('error')}")
+            logger.error(f"❌ PNG generation failed: {result.get('error')}")
             return {
                 "success": False,
                 "error": result.get("error", "Unknown error"),
