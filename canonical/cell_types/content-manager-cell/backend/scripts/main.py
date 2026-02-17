@@ -480,7 +480,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         
         # Insert to MongoDB
         try:
-            await db.insert("contents_runtime", content)
+            await db.insert("contents", content)
             logger.info(f"✓ Content saved to MongoDB: {content.id}")
         except Exception as db_error:
             # MongoDB failed → Cleanup R2
