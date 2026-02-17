@@ -10,7 +10,7 @@ BaseCell v1.0 Implementation:
 - Legacy handlers remain for stability
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 import asyncio
 import base64
@@ -18,6 +18,9 @@ from io import BytesIO
 import sys
 import os
 import httpx
+import hashlib
+import json
+import redis
 
 # Add backend to path for importing BaseCell
 backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../backend'))
@@ -92,6 +95,126 @@ NEGATIVE_PROMPT_3D_ASSET_BASE = "dramatic lighting, shadows, high contrast, dept
 # Static enhancement suffixes for 3D asset mode (used in fallback)
 POSITIVE_SUFFIX_3D_ASSET = ", centered, front view, flat lighting, studio background, neutral gray background, high resolution, orthographic view"
 NEGATIVE_SUFFIX_3D_ASSET = ", shadows, dramatic lighting, high contrast, depth of field, bokeh, cluttered background, side view, back view, artistic painting, watercolor, sketch"
+
+# Redis Cache Configuration for Prompt Architect Results
+# Caches Ollama-optimized prompts to avoid re-calling LLM with identical inputs
+REDIS_PROMPT_CACHE_ENABLED = True
+REDIS_PROMPT_CACHE_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PROMPT_CACHE_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_PROMPT_CACHE_DB = int(os.getenv("REDIS_DB", "0"))
+REDIS_PROMPT_CACHE_PASSWORD = os.getenv("REDIS_PASSWORD", None)
+REDIS_PROMPT_CACHE_TTL = int(os.getenv("REDIS_PROMPT_CACHE_TTL", "3600"))  # 1 hour
+REDIS_PROMPT_CACHE_KEY_PREFIX = "scareverse:prompt-cache"
+
+_redis_client: Optional[redis.Redis] = None
+
+
+def _get_redis_client() -> Optional[redis.Redis]:
+    """
+    Get or create Redis client singleton for prompt caching.
+
+    Returns:
+        redis.Redis or None if connection fails
+    """
+    global _redis_client
+
+    if not REDIS_PROMPT_CACHE_ENABLED:
+        return None
+
+    if _redis_client is None:
+        try:
+            if REDIS_PROMPT_CACHE_PASSWORD:
+                redis_url = f"redis://:{REDIS_PROMPT_CACHE_PASSWORD}@{REDIS_PROMPT_CACHE_HOST}:{REDIS_PROMPT_CACHE_PORT}/{REDIS_PROMPT_CACHE_DB}"
+            else:
+                redis_url = f"redis://{REDIS_PROMPT_CACHE_HOST}:{REDIS_PROMPT_CACHE_PORT}/{REDIS_PROMPT_CACHE_DB}"
+
+            _redis_client = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=5)
+            _redis_client.ping()
+            logger.info(f"✅ Redis prompt cache connected: {REDIS_PROMPT_CACHE_HOST}:{REDIS_PROMPT_CACHE_PORT}")
+        except Exception as e:
+            logger.warning(f"⚠️ Redis prompt cache unavailable: {e}")
+            _redis_client = None
+
+    return _redis_client
+
+
+def _compute_prompt_hash(prompt: str) -> str:
+    """
+    Compute MD5 hash of prompt for cache key generation.
+
+    Normalizes prompt (strip, lowercase) before hashing to ensure
+    "A robot" and "a robot" generate the same cache key.
+
+    Args:
+        prompt: Original user prompt
+
+    Returns:
+        str: MD5 hash of normalized prompt (32 hex chars)
+    """
+    normalized = prompt.strip().lower()
+    return hashlib.md5(normalized.encode()).hexdigest()
+
+
+def _get_cached_enhanced_prompts(original_prompt: str, session_id: str = "default") -> Optional[Dict[str, str]]:
+    """
+    Retrieve cached enhanced prompts from Redis.
+
+    Args:
+        original_prompt: User's original prompt input
+        session_id: User session identifier (for isolation)
+
+    Returns:
+        Dict with 'enhanced_prompt' and 'enhanced_negative' if found, None otherwise
+    """
+    try:
+        redis_client = _get_redis_client()
+        if not redis_client:
+            return None
+
+        prompt_hash = _compute_prompt_hash(original_prompt)
+        cache_key = f"{REDIS_PROMPT_CACHE_KEY_PREFIX}:{session_id}:{prompt_hash}"
+
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            cache_json = json.loads(cached_data)
+            logger.info(f"🎯 Prompt Cache HIT - skipping Ollama for: {original_prompt[:50]}...")
+            return cache_json
+
+        return None
+    except Exception as e:
+        logger.warning(f"⚠️ Error retrieving from prompt cache: {e}")
+        return None
+
+
+def _store_enhanced_prompts(original_prompt: str, enhanced_prompt: str, enhanced_negative: str, session_id: str = "default"):
+    """
+    Store enhanced prompts in Redis cache for future reuse.
+
+    Args:
+        original_prompt: User's original prompt input
+        enhanced_prompt: Ollama-optimized positive prompt
+        enhanced_negative: Ollama-optimized negative prompt
+        session_id: User session identifier (for isolation)
+    """
+    try:
+        redis_client = _get_redis_client()
+        if not redis_client:
+            return
+
+        prompt_hash = _compute_prompt_hash(original_prompt)
+        cache_key = f"{REDIS_PROMPT_CACHE_KEY_PREFIX}:{session_id}:{prompt_hash}"
+
+        cache_data = {
+            "enhanced_prompt": enhanced_prompt,
+            "enhanced_negative": enhanced_negative,
+            "original_prompt": original_prompt,
+            "hash": prompt_hash
+        }
+
+        redis_client.set(cache_key, json.dumps(cache_data), ex=REDIS_PROMPT_CACHE_TTL)
+        logger.info(f"💾 Cached enhanced prompts for: {original_prompt[:50]}... (TTL: {REDIS_PROMPT_CACHE_TTL}s)")
+    except Exception as e:
+        logger.warning(f"⚠️ Error storing to prompt cache: {e}")
 
 
 def _apply_static_3d_enhancement(prompt: str, negative_prompt: str = None) -> tuple:
@@ -362,89 +485,100 @@ async def generate_png_from_prompt(
     if asset_3d_mode:
         logger.info(f"3D Asset Mode enabled - orchestrating with Ollama for prompt optimization")
 
-        try:
-            # Import Ollama service for prompt orchestration
-            # NOTE: Import is conditional because this is an optional enhancement.
-            # If import fails, we gracefully fall back to static enhancement.
-            from app.ollama_service import chamar_ollama, verificar_ollama_disponivel
+        # Check Redis cache first (BEFORE calling Ollama)
+        cached_prompts = _get_cached_enhanced_prompts(prompt)
+        if cached_prompts:
+            enhanced_prompt = cached_prompts.get("enhanced_prompt", prompt)
+            enhanced_negative = cached_prompts.get("enhanced_negative", negative_prompt or "")
+            logger.info(f"[Prompt Cache] Using cached enhanced prompts (saved Ollama call)")
+        else:
+            # Cache miss - proceed with Ollama optimization
+            try:
+                # Import Ollama service for prompt orchestration
+                # NOTE: Import is conditional because this is an optional enhancement.
+                # If import fails, we gracefully fall back to static enhancement.
+                from app.ollama_service import chamar_ollama, verificar_ollama_disponivel
 
-            # Check if Ollama is available
-            ollama_available = await verificar_ollama_disponivel()
+                # Check if Ollama is available
+                ollama_available = await verificar_ollama_disponivel()
 
-            if ollama_available:
-                # Build the full prompt for Ollama using module-level constant
-                ollama_prompt = f"""{OLLAMA_SYSTEM_PROMPT_3D_ARCHITECT}
+                if ollama_available:
+                    # Build the full prompt for Ollama using module-level constant
+                    ollama_prompt = f"""{OLLAMA_SYSTEM_PROMPT_3D_ARCHITECT}
 
 User Description: {prompt}
 
 Generate the optimized Stable Diffusion prompt:"""
 
-                # Call Ollama with timeout handling
-                logger.debug(f"Calling Ollama for prompt optimization - Original: {prompt[:50]}...")
-                ollama_result = await chamar_ollama(ollama_prompt)
+                    # Call Ollama with timeout handling
+                    logger.debug(f"Calling Ollama for prompt optimization - Original: {prompt[:50]}...")
+                    ollama_result = await chamar_ollama(ollama_prompt)
 
-                # Extract the optimized prompt from Ollama response
-                optimized_prompt = ollama_result.get("response", "").strip()
+                    # Extract the optimized prompt from Ollama response
+                    optimized_prompt = ollama_result.get("response", "").strip()
 
-                # Remove extra quotes if Ollama wrapped the response in quotes
-                # This can happen if Ollama returns: "\"Render a high-resolution...\""
-                if optimized_prompt.startswith('"') and optimized_prompt.endswith('"'):
-                    optimized_prompt = optimized_prompt[1:-1].strip()
-                    logger.debug(f"[Ollama] Removed wrapper quotes from prompt")
+                    # Remove extra quotes if Ollama wrapped the response in quotes
+                    # This can happen if Ollama returns: "\"Render a high-resolution...\""
+                    if optimized_prompt.startswith('"') and optimized_prompt.endswith('"'):
+                        optimized_prompt = optimized_prompt[1:-1].strip()
+                        logger.debug(f"[Ollama] Removed wrapper quotes from prompt")
 
-                if optimized_prompt:
-                    logger.info(f"✅ Ollama optimization successful - Enhanced prompt length: {len(optimized_prompt)}")
-                    logger.info(f"[Ollama Response] OPTIMIZED POSITIVE PROMPT:\n{optimized_prompt}")
-                    enhanced_prompt = optimized_prompt
+                    if optimized_prompt:
+                        logger.info(f"✅ Ollama optimization successful - Enhanced prompt length: {len(optimized_prompt)}")
+                        logger.info(f"[Ollama Response] OPTIMIZED POSITIVE PROMPT:\n{optimized_prompt}")
+                        enhanced_prompt = optimized_prompt
 
-                    # Optimize negative prompt via Ollama if user provided one
-                    if enhanced_negative:
-                        try:
-                            logger.info(f"[Ollama] Optimizing negative prompt via Ollama...")
-                            negative_prompt_instruction = f"""{OLLAMA_SYSTEM_PROMPT_NEGATIVE}
+                        # Optimize negative prompt via Ollama if user provided one
+                        if enhanced_negative:
+                            try:
+                                logger.info(f"[Ollama] Optimizing negative prompt via Ollama...")
+                                negative_prompt_instruction = f"""{OLLAMA_SYSTEM_PROMPT_NEGATIVE}
 
 User's Negative Prompt: {enhanced_negative}
 
 Generate the optimized negative prompt:"""
 
-                            negative_ollama_result = await chamar_ollama(negative_prompt_instruction)
-                            optimized_negative = negative_ollama_result.get("response", "").strip()
+                                negative_ollama_result = await chamar_ollama(negative_prompt_instruction)
+                                optimized_negative = negative_ollama_result.get("response", "").strip()
 
-                            # Remove extra quotes if Ollama wrapped the response in quotes
-                            if optimized_negative.startswith('"') and optimized_negative.endswith('"'):
-                                optimized_negative = optimized_negative[1:-1].strip()
-                                logger.debug(f"[Ollama] Removed wrapper quotes from negative prompt")
+                                # Remove extra quotes if Ollama wrapped the response in quotes
+                                if optimized_negative.startswith('"') and optimized_negative.endswith('"'):
+                                    optimized_negative = optimized_negative[1:-1].strip()
+                                    logger.debug(f"[Ollama] Removed wrapper quotes from negative prompt")
 
-                            if optimized_negative:
-                                logger.info(f"✅ Ollama negative prompt optimization successful")
-                                logger.info(f"[Ollama Response] OPTIMIZED NEGATIVE PROMPT:\n{optimized_negative}")
-                                enhanced_negative = optimized_negative
-                            else:
-                                logger.warning(f"⚠️ Ollama returned empty negative prompt, keeping original")
-                                logger.info(f"[3D Asset Mode] Using ORIGINAL USER NEGATIVE PROMPT:\n{enhanced_negative}")
+                                if optimized_negative:
+                                    logger.info(f"✅ Ollama negative prompt optimization successful")
+                                    logger.info(f"[Ollama Response] OPTIMIZED NEGATIVE PROMPT:\n{optimized_negative}")
+                                    enhanced_negative = optimized_negative
+                                else:
+                                    logger.warning(f"⚠️ Ollama returned empty negative prompt, keeping original")
+                                    logger.info(f"[3D Asset Mode] Using ORIGINAL USER NEGATIVE PROMPT:\n{enhanced_negative}")
 
-                        except Exception as e:
-                            logger.warning(f"⚠️ Failed to optimize negative prompt via Ollama: {e}")
-                            logger.info(f"[3D Asset Mode] Keeping ORIGINAL USER NEGATIVE PROMPT:\n{enhanced_negative}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Failed to optimize negative prompt via Ollama: {e}")
+                                logger.info(f"[3D Asset Mode] Keeping ORIGINAL USER NEGATIVE PROMPT:\n{enhanced_negative}")
+                        else:
+                            # No user negative prompt - use base technical rendering guidelines
+                            enhanced_negative = NEGATIVE_PROMPT_3D_ASSET_BASE
+                            logger.info(f"[3D Asset Mode] Using BASE NEGATIVE PROMPT (user did not provide one):\n{enhanced_negative}")
+
+                        # Cache the successfully enhanced prompts for future reuse
+                        _store_enhanced_prompts(prompt, enhanced_prompt, enhanced_negative)
                     else:
-                        # No user negative prompt - use base technical rendering guidelines
-                        enhanced_negative = NEGATIVE_PROMPT_3D_ASSET_BASE
-                        logger.info(f"[3D Asset Mode] Using BASE NEGATIVE PROMPT (user did not provide one):\n{enhanced_negative}")
+                        logger.warning("⚠️ Ollama returned empty response, falling back to static enhancement")
+                        enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
+
                 else:
-                    logger.warning("⚠️ Ollama returned empty response, falling back to static enhancement")
+                    logger.warning("⚠️ Ollama not available (health check failed), falling back to static 3D asset enhancement")
                     enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
 
-            else:
-                logger.warning("⚠️ Ollama not available (health check failed), falling back to static 3D asset enhancement")
+            except asyncio.TimeoutError:
+                logger.error("🚨 OLLAMA TIMEOUT - Prompt optimization took > 120s, using fallback")
                 enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
-
-        except asyncio.TimeoutError:
-            logger.error("🚨 OLLAMA TIMEOUT - Prompt optimization took > 120s, using fallback")
-            enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
-        except Exception as e:
-            logger.error(f"🚨 OLLAMA ERROR - {type(e).__name__}: {e}", exc_info=True)
-            logger.warning("Falling back to static 3D asset enhancement")
-            enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
+            except Exception as e:
+                logger.error(f"🚨 OLLAMA ERROR - {type(e).__name__}: {e}", exc_info=True)
+                logger.warning("Falling back to static 3D asset enhancement")
+                enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
     else:
         # Asset 3D Mode is DISABLED - use prompts as-is (user has full freedom)
         logger.info(f"[Prompt Mode] Asset 3D Mode DISABLED - using user prompts as-is (no Ollama optimization)")
