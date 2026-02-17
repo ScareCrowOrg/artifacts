@@ -57,6 +57,23 @@ Rules:
 
 Output format: Return ONLY the optimized prompt string. Do not explain, do not add commentary. Just the prompt."""
 
+# System prompt for optimizing negative prompts
+OLLAMA_SYSTEM_PROMPT_NEGATIVE = """You are the ScareVerse Negative Prompt Optimizer. Your mission is to refine negative prompts for technical 3D asset rendering.
+
+Objective: Expand and optimize negative prompts to exclude unwanted visual styles while preserving essential elements.
+
+Rules:
+- Expand vague terms into specific exclusions
+- Add related terms that would produce similar unwanted effects
+- Exclude artistic styles: painting, watercolor, sketch, illustration, artistic interpretation
+- Exclude problematic lighting: dramatic shadows, high contrast, shadows, reflections, highlights
+- Exclude depth effects: bokeh, depth of field, blur, soft focus
+- Exclude bad composition: side view, back view, cluttered, messy, chaotic
+- DO NOT exclude fundamental elements (humans, faces, hands, etc.) unless explicitly needed
+- Keep technical precision focus
+
+Output format: Return ONLY the optimized negative prompt string. Do not explain, do not add commentary. Just the prompt."""
+
 # Base negative prompt keywords for 3D asset generation
 # These prevent artistic rendering styles and ensure technical precision
 # NOTE: Removed "humans, people, hands, faces" - those are WANTED for character assets!
@@ -360,19 +377,37 @@ Generate the optimized Stable Diffusion prompt:"""
 
                 if optimized_prompt:
                     logger.info(f"✅ Ollama optimization successful - Enhanced prompt length: {len(optimized_prompt)}")
-                    logger.info(f"[Ollama Response] OPTIMIZED PROMPT:\n{optimized_prompt}")
+                    logger.info(f"[Ollama Response] OPTIMIZED POSITIVE PROMPT:\n{optimized_prompt}")
                     enhanced_prompt = optimized_prompt
 
-                    # Handle negative prompt:
-                    # If user provided one, respect it (don't add base)
-                    # If user didn't, use base negative for technical rendering
-                    if not enhanced_negative:
+                    # Optimize negative prompt via Ollama if user provided one
+                    if enhanced_negative:
+                        try:
+                            logger.info(f"[Ollama] Optimizing negative prompt via Ollama...")
+                            negative_prompt_instruction = f"""{OLLAMA_SYSTEM_PROMPT_NEGATIVE}
+
+User's Negative Prompt: {enhanced_negative}
+
+Generate the optimized negative prompt:"""
+
+                            negative_ollama_result = await chamar_ollama(negative_prompt_instruction)
+                            optimized_negative = negative_ollama_result.get("response", "").strip()
+
+                            if optimized_negative:
+                                logger.info(f"✅ Ollama negative prompt optimization successful")
+                                logger.info(f"[Ollama Response] OPTIMIZED NEGATIVE PROMPT:\n{optimized_negative}")
+                                enhanced_negative = optimized_negative
+                            else:
+                                logger.warning(f"⚠️ Ollama returned empty negative prompt, keeping original")
+                                logger.info(f"[3D Asset Mode] Using ORIGINAL USER NEGATIVE PROMPT:\n{enhanced_negative}")
+
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to optimize negative prompt via Ollama: {e}")
+                            logger.info(f"[3D Asset Mode] Keeping ORIGINAL USER NEGATIVE PROMPT:\n{enhanced_negative}")
+                    else:
                         # No user negative prompt - use base technical rendering guidelines
                         enhanced_negative = NEGATIVE_PROMPT_3D_ASSET_BASE
                         logger.info(f"[3D Asset Mode] Using BASE NEGATIVE PROMPT (user did not provide one):\n{enhanced_negative}")
-                    else:
-                        # User provided negative prompt - keep it as-is
-                        logger.info(f"[3D Asset Mode] Using USER-PROVIDED NEGATIVE PROMPT:\n{enhanced_negative}")
                 else:
                     logger.warning("⚠️ Ollama returned empty response, falling back to static enhancement")
                     enhanced_prompt, enhanced_negative = _apply_static_3d_enhancement(prompt, negative_prompt)
