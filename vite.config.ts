@@ -144,10 +144,6 @@ export default defineConfig({
       // Map #shared to shared infrastructure mirror (isolated utilities)
       '#shared': '/app/artifacts/shared',
 
-      // Map #cells to canonical cell types (for cross-cell component reuse)
-      // Usage: import Modal from '#cells/content-manager-cell/components/Modal.vue'
-      '#cells': '/app/artifacts/canonical/cell_types',
-
       // Note: @/ is NOT aliased here - it's marked as external by migrationWarningPlugin
       // At runtime, browser import maps resolve @/ to cockpit-vue via http
     },
