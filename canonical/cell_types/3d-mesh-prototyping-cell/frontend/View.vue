@@ -26,12 +26,12 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted, defineOptions } from 'vue'
-import { createLogger } from '#shared/logger'
+import { createLogger } from '@/utils/logger'
 import { MeshPrototypingCell } from './MeshPrototypingCell'
 import type { MeshPrototypingInput } from './MeshPrototypingCell'
-import authService from '#shared/authService'
+import authService from '@/services/authService'
 import { useJobPolling } from './composables/useJobPolling'
-import BabylonModelViewer from '#shared/components/viewers/BabylonModelViewer.vue'
+import BabylonModelViewer from '@/components/viewers/BabylonModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
 import ViewportControls from './components/ViewportControls.vue'
 import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'

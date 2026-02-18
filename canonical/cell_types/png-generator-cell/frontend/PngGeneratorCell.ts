@@ -10,11 +10,11 @@
  * Task: [PNG-FE-001] Create PngGeneratorCell TypeScript Implementation
  */
 
-import { BaseCell, createHealthyResult } from '#shared/BaseCell'
-import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult, ShowConfig } from '#shared/BaseCell'
-import apiService from '#shared/apiService.js'
-import { ENDPOINTS } from '#shared/endpoints.js'
-import { createLogger } from '#shared/logger'
+import { BaseCell, createHealthyResult } from '@/types/BaseCell'
+import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult, ShowConfig } from '@/types/BaseCell'
+import apiService from '@/services/apiService.js'
+import { ENDPOINTS } from '@/config/endpoints.js'
+import { createLogger } from '@/utils/logger'
 
 const log = createLogger('cells:PngGenerator')
 

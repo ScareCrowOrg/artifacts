@@ -254,11 +254,11 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue'
-import { createLogger } from '#shared/logger'
+import { createLogger } from '@/utils/logger'
 import { PngGeneratorCell } from './PngGeneratorCell'
 import type { PngGeneratorInput } from './PngGeneratorCell'
 import PersistModal from '#artifacts/canonical/cell_types/content-manager-cell/frontend/components/PersistModal.vue'
-import type { CellResult } from '#shared/BaseCell'
+import type { CellResult } from '@/types/BaseCell'
 
 const logger = createLogger('component:png-generator-cell')
 

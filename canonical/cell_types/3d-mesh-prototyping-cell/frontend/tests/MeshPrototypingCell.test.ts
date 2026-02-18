@@ -36,7 +36,7 @@ vi.mock('@/utils/logger', () => ({
   })
 }))
 
-import apiService from '#shared/apiService.js'
+import apiService from '@/services/apiService.js'
 
 describe('MeshPrototypingCell', () => {
   let meshCell: MeshPrototypingCell

@@ -18,7 +18,7 @@
  * @component
  */
 import { ref } from 'vue'
-import { createLogger } from '#shared/logger'
+import { createLogger } from '@/utils/logger'
 
 const logger = createLogger('component:glb-file-uploader')
 

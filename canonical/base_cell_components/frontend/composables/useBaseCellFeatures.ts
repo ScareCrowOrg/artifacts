@@ -20,8 +20,8 @@ import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useCellsStore } from '@/stores/cells'
 import { useChatStore } from '@/stores/chat'
 import { useLayoutStore } from '@/stores/layout'
-import apiService from '#shared/apiService.js'
-import { ENDPOINTS } from '#shared/endpoints.js'
+import apiService from '@/services/apiService.js'
+import { ENDPOINTS } from '@/config/endpoints.js'
 
 /**
  * Build complete cell payload for API persistence

@@ -10,7 +10,7 @@
  */
 
 import { ref, onUnmounted, type Ref } from 'vue'
-import { createLogger } from '#shared/logger'
+import { createLogger } from '@/utils/logger'
 import authService from '@/services/authService.js'
 
 const log = createLogger('composable:useMonitoringWebSocket')

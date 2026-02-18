@@ -116,7 +116,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import { CalculatorCell } from './CalculatorCell'
-import type { CellResult, CellMetadata, ValidationError } from '#shared/BaseCell'
+import type { CellResult, CellMetadata, ValidationError } from '@/types/BaseCell'
 
 // Props
 interface Props {

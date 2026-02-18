@@ -124,9 +124,9 @@ import { ref, computed, watch, onMounted } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 
 // Note: In a real Vue 3 SFC setup, você deve importar apiService para garantir headers de autenticação
-import apiService from '#shared/apiService'
+import apiService from '@/services/apiService'
 // Import logger runtime configuration functions
-import { setDebugPattern, getDebugPatternValue, getRegisteredNamespaces, createLogger } from '#shared/logger'
+import { setDebugPattern, getDebugPatternValue, getRegisteredNamespaces, createLogger } from '@/utils/logger'
 
 // Create logger for this component
 const cellLog = createLogger('log-toggle-cell')

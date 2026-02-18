@@ -8,9 +8,9 @@
  */
 
 import { ref, type Ref } from 'vue'
-import { createLogger } from '#shared/logger'
+import { createLogger } from '@/utils/logger'
 import { useFrontendHealthChecks } from '@/composables/useFrontendHealthChecks'
-import apiService from '#shared/apiService'
+import apiService from '@/services/apiService'
 
 const log = createLogger('composable:useMonitoring')
 

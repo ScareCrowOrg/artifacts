@@ -12,8 +12,8 @@ import type {
   UseFileManagerReturn,
   FileOperationResult
 } from '../types'
-import { ENDPOINTS } from '#shared/endpoints'
-import apiService, { SessionExpiredError } from '#shared/apiService'
+import { ENDPOINTS } from '@/config/endpoints'
+import apiService, { SessionExpiredError } from '@/services/apiService'
 import { useDynamicLayout } from '@/composables/useDynamicLayout'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useAuthStore } from '@/stores/auth'

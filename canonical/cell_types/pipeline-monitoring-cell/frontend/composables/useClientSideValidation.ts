@@ -10,7 +10,7 @@
  */
 
 import { ref, type Ref } from 'vue'
-import { createLogger } from '#shared/logger'
+import { createLogger } from '@/utils/logger'
 
 const log = createLogger('composable:useClientSideValidation')
 

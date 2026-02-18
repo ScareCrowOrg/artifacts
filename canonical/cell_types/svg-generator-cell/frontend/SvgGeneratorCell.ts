@@ -9,13 +9,13 @@
  * Category: visualization
  */
 
-import { BaseCell } from '#shared/BaseCell'
+import { BaseCell } from '@/types/BaseCell'
 import type { 
   CellResult, 
   CellMetadata, 
   ValidationError, 
   HealthCheckResult 
-} from '#shared/BaseCell'
+} from '@/types/BaseCell'
 import { processMessage, fetchAvailableModels } from '@/services/aiChatService'
 
 /**

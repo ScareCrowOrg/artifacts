@@ -2,31 +2,17 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
-// Migration Warning Plugin - Pedagogical approach
-// Audits imports and guides developers toward artifact-isolated architecture
-// Keeps system working while providing clear roadmap for refactoring
+// Migration Warning Plugin - Pedagogical approach (DISABLED)
+// Previously warned about @/ imports, but now @/ is resolved to #shared/ via alias
+// This allows shared utilities to use @/ imports which work in both contexts:
+// - In cockpit-vue: @/ → cockpit-vue/src (normal resolution)
+// - In Vite: @/ → #shared/ (via alias)
 const migrationWarningPlugin = {
   name: 'migration-warning',
   enforce: 'pre',
   resolveId(id, importer) {
-    if (id.startsWith('@/')) {
-      // Extract the import path for readable warning
-      const importPath = id.replace('@/', '')
-      const importerName = importer ? importer.split('/').pop() : 'unknown'
-
-      // Emit warning to Vite console (yellow color in terminal)
-      console.warn(
-        `\x1b[33m[ScareVite] ⚠️  Legacy Import Detected\x1b[0m\n` +
-        `  File: ${importerName}\n` +
-        `  Import: import '${importPath}' from '@/'\n` +
-        `  Action: Refactor this dependency into a Headless Cell\n` +
-        `  Location: /app/artifacts/shared/${importPath}\n` +
-        `  Note: This import works via cockpit-vue proxy but should be isolated.\n`
-      )
-
-      // Mark as external - browser will resolve via import map
-      return { id, external: true }
-    }
+    // Plugin disabled - @/ is now properly resolved via alias
+    // No more warnings needed
   },
 }
 
@@ -144,8 +130,16 @@ export default defineConfig({
       // Map #shared to shared infrastructure mirror (isolated utilities)
       '#shared': '/app/artifacts/shared',
 
-      // Note: @/ is NOT aliased here - it's marked as external by migrationWarningPlugin
-      // At runtime, browser import maps resolve @/ to cockpit-vue via http
+      // Map @/ to #shared for shared utilities (apiService, authService, etc)
+      // This allows files that import @/utils/logger to resolve to #shared/utils/logger
+      // In cockpit-vue context: @/ → cockpit-vue/src (normal)
+      // In Vite context: @/ → #shared/ (this alias, preserving folder structure)
+      '@': '/app/artifacts/shared',
+      '@/utils': '/app/artifacts/shared/utils',
+      '@/services': '/app/artifacts/shared/services',
+      '@/config': '/app/artifacts/shared/config',
+      '@/components': '/app/artifacts/shared/components',
+      '@/types': '/app/artifacts/shared/types',
     },
     extensions: ['.ts', '.tsx', '.vue', '.js', '.jsx', '.json'],
   },
