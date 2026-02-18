@@ -9,7 +9,9 @@ const artifactsRewritePlugin = {
     return () => {
       server.middlewares.use((req, res, next) => {
         if (req.url.startsWith('/artifacts/')) {
+          const original = req.url
           req.url = req.url.replace('/artifacts', '')
+          console.log(`[artifacts-rewrite] ${original} → ${req.url}`)
         }
         next()
       })
