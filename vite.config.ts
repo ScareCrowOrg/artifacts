@@ -41,13 +41,14 @@ const artifactsRewritePlugin = {
  */
 
 export default defineConfig({
+  root: '/app/artifacts',
   plugins: [
     artifactsRewritePlugin,
     vue({
       include: [/\.vue$/],
     })
   ],
-  
+
   // Development server configuration
   server: {
     port: 5052,
