@@ -133,9 +133,11 @@ export default defineConfig({
   // Module resolution
   resolve: {
     alias: {
-      // Map #artifacts to artifacts root
+      // Map #artifacts to artifacts root (for cell types)
       '#artifacts': path.resolve(__dirname, '.'),
-      // Note: @/ is NOT aliased here - it's marked as external by externalCockpitVuePlugin
+      // Map #shared to shared infrastructure mirror (isolated utilities)
+      '#shared': path.resolve(__dirname, './shared'),
+      // Note: @/ is NOT aliased here - it's marked as external by migrationWarningPlugin
       // At runtime, browser import maps resolve @/ to cockpit-vue via http
     },
     extensions: ['.ts', '.tsx', '.vue', '.js', '.jsx', '.json'],
