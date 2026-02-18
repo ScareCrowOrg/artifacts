@@ -33,7 +33,7 @@ export default defineConfig({
     port: 5052,
     host: '0.0.0.0',  // Listen on all interfaces (container networking)
     strictPort: true,  // Fail if port 5052 is already in use
-    
+
     // CORS configuration for cross-origin requests from frontend
     cors: {
       origin: [
@@ -43,14 +43,25 @@ export default defineConfig({
       ],
       credentials: true,
     },
-    
+
     // HMR (Hot Module Replacement) configuration
     hmr: {
       host: 'localhost',
       port: 5052,
       protocol: 'ws',
     },
-    
+
+    // Middleware to rewrite /artifacts/* to /*
+    // Allows import map to use http://localhost:5052/artifacts/canonical/...
+    // while Vite serves from root
+    middlewareMode: false,
+    middleware: (req, res, next) => {
+      if (req.url.startsWith('/artifacts/')) {
+        req.url = req.url.replace('/artifacts/', '/')
+      }
+      next()
+    },
+
     // Serve files from artifacts root
     fs: {
       // Allow serving files from artifacts directory
