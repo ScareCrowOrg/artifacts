@@ -21,6 +21,23 @@ const artifactsRewritePlugin = {
   },
 }
 
+// Plugin to handle URL rewriting for /artifacts/* requests
+// This allows the dev server to serve /artifacts/canonical/... correctly
+// when running from /app with root=/app/artifacts
+const urlRewritePlugin = {
+  name: 'url-rewrite',
+  apply: 'serve',
+  configResolved(config) {
+    config.middlewares.use((req, res, next) => {
+      // Rewrite /artifacts/* URLs to /* for file serving
+      if (req.url.startsWith('/artifacts/')) {
+        req.url = req.url.replace('/artifacts', '')
+      }
+      next()
+    })
+  },
+}
+
 /**
  * Vite configuration for ScareVerse Artifacts Compilation Service
  * 
@@ -43,6 +60,7 @@ const artifactsRewritePlugin = {
 export default defineConfig({
   root: '/app/artifacts',
   plugins: [
+    urlRewritePlugin,
     artifactsRewritePlugin,
     vue({
       include: [/\.vue$/],
