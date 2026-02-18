@@ -2,14 +2,29 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
-// Plugin to mark @/ imports as external (resolved by browser import maps at runtime)
-// This allows cell types to import from cockpit-vue without requiring it in the container
-const externalCockpitVuePlugin = {
-  name: 'external-cockpit-vue',
+// Migration Warning Plugin - Pedagogical approach
+// Audits imports and guides developers toward artifact-isolated architecture
+// Keeps system working while providing clear roadmap for refactoring
+const migrationWarningPlugin = {
+  name: 'migration-warning',
   enforce: 'pre',
-  resolveId(id) {
-    // Mark @/ imports as external for browser import map resolution
+  resolveId(id, importer) {
     if (id.startsWith('@/')) {
+      // Extract the import path for readable warning
+      const importPath = id.replace('@/', '')
+      const importerName = importer ? importer.split('/').pop() : 'unknown'
+
+      // Emit warning to Vite console (yellow color in terminal)
+      console.warn(
+        `\x1b[33m[ScareVite] ⚠️  Legacy Import Detected\x1b[0m\n` +
+        `  File: ${importerName}\n` +
+        `  Import: import '${importPath}' from '@/'\n` +
+        `  Action: Refactor this dependency into a Headless Cell\n` +
+        `  Location: /app/artifacts/shared/${importPath}\n` +
+        `  Note: This import works via cockpit-vue proxy but should be isolated.\n`
+      )
+
+      // Mark as external - browser will resolve via import map
       return { id, external: true }
     }
   },
@@ -74,7 +89,7 @@ const urlRewritePlugin = {
 export default defineConfig({
   root: '/app/artifacts',
   plugins: [
-    externalCockpitVuePlugin,
+    migrationWarningPlugin,
     urlRewritePlugin,
     artifactsRewritePlugin,
     vue({
