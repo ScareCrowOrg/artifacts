@@ -122,9 +122,11 @@ export default defineConfig({
 
     // Serve files from artifacts root
     fs: {
-      // Allow serving files from artifacts directory only
+      // Allow Vite to resolve files from these directories
+      // Critical: Use absolute paths for container compatibility
       allow: [
-        '.',  // artifacts root
+        '/app/artifacts',           // Artifacts root (for all cell types)
+        '/app/node_modules',        // Dependencies (Vue, etc)
       ],
       strict: true,
     },
@@ -133,10 +135,19 @@ export default defineConfig({
   // Module resolution
   resolve: {
     alias: {
-      // Map #artifacts to artifacts root (for cell types)
-      '#artifacts': path.resolve(__dirname, '.'),
+      // Use ABSOLUTE paths for container compatibility
+      // This prevents Vite's "cegueira de contexto" with relative paths in docker
+
+      // Map #artifacts to artifacts root (for all cell types and composition)
+      '#artifacts': '/app/artifacts',
+
       // Map #shared to shared infrastructure mirror (isolated utilities)
-      '#shared': path.resolve(__dirname, './shared'),
+      '#shared': '/app/artifacts/shared',
+
+      // Map #cells to canonical cell types (for cross-cell component reuse)
+      // Usage: import Modal from '#cells/content-manager-cell/components/Modal.vue'
+      '#cells': '/app/artifacts/canonical/cell_types',
+
       // Note: @/ is NOT aliased here - it's marked as external by migrationWarningPlugin
       // At runtime, browser import maps resolve @/ to cockpit-vue via http
     },
