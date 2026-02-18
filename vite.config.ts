@@ -2,19 +2,21 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
-// Plugin to rewrite /artifacts/* URLs to /*
+// Plugin to handle /artifacts/* file serving
 const artifactsRewritePlugin = {
   name: 'artifacts-rewrite',
-  configureServer(server) {
-    return () => {
-      server.middlewares.use((req, res, next) => {
-        if (req.url.startsWith('/artifacts/')) {
-          const original = req.url
-          req.url = req.url.replace('/artifacts', '')
-          console.log(`[artifacts-rewrite] ${original} → ${req.url}`)
-        }
-        next()
-      })
+  enforce: 'pre',
+  resolveId(id) {
+    // Handle /artifacts/ prefixes in import paths
+    if (id.startsWith('/artifacts/')) {
+      return { id: id.replace('/artifacts', ''), external: false }
+    }
+  },
+  load(id) {
+    // Handle /artifacts/ prefixes in file paths from middleware
+    if (id.startsWith('/artifacts/')) {
+      const newId = id.replace('/artifacts', '')
+      return this.load(newId)
     }
   },
 }
