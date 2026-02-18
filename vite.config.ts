@@ -2,6 +2,21 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
+// Plugin to rewrite /artifacts/* URLs to /*
+const artifactsRewritePlugin = {
+  name: 'artifacts-rewrite',
+  configureServer(server) {
+    return () => {
+      server.middlewares.use((req, res, next) => {
+        if (req.url.startsWith('/artifacts/')) {
+          req.url = req.url.replace('/artifacts', '')
+        }
+        next()
+      })
+    }
+  },
+}
+
 /**
  * Vite configuration for ScareVerse Artifacts Compilation Service
  * 
@@ -23,6 +38,7 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [
+    artifactsRewritePlugin,
     vue({
       include: [/\.vue$/],
     })
@@ -49,17 +65,6 @@ export default defineConfig({
       host: 'localhost',
       port: 5052,
       protocol: 'ws',
-    },
-
-    // Middleware to rewrite /artifacts/* to /*
-    // Allows import map to use http://localhost:5052/artifacts/canonical/...
-    // while Vite serves from root
-    middlewareMode: false,
-    middleware: (req, res, next) => {
-      if (req.url.startsWith('/artifacts/')) {
-        req.url = req.url.replace('/artifacts/', '/')
-      }
-      next()
     },
 
     // Serve files from artifacts root
