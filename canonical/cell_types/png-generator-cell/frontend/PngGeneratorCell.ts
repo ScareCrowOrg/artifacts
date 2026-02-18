@@ -14,7 +14,7 @@ import { BaseCell, createHealthyResult } from '@/types/BaseCell'
 import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult, ShowConfig } from '@/types/BaseCell'
 import apiService from '@/services/apiService.js'
 import { ENDPOINTS } from '@/config/endpoints.js'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 
 const log = createLogger('cells:PngGenerator')
 

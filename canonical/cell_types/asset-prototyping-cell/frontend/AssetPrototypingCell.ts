@@ -29,7 +29,7 @@ import { BaseCell, createHealthyResult } from '@/types/BaseCell'
 import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
 import { PngGeneratorCell } from '../../png-generator-cell/frontend/PngGeneratorCell'
 import { MeshPrototypingCell } from '../../3d-mesh-prototyping-cell/frontend/MeshPrototypingCell'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 
 const log = createLogger('cells:AssetPrototyping')
 

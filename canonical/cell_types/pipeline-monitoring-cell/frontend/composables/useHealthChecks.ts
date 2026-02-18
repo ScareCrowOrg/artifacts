@@ -9,7 +9,7 @@
 
 import { ref, type Ref } from 'vue'
 import { useMonitoring } from './useMonitoring'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 
 const log = createLogger('composable:useHealthChecks')
 

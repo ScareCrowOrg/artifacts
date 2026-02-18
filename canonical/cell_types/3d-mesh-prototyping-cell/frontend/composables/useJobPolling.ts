@@ -9,7 +9,7 @@
 
 import { ref, Ref } from 'vue'
 import { apiFetch } from '@/services/apiService'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 
 const logger = createLogger('composable:use-job-polling')
 

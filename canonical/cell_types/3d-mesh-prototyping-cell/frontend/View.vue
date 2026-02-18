@@ -26,7 +26,7 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted, defineOptions } from 'vue'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 import { MeshPrototypingCell } from './MeshPrototypingCell'
 import type { MeshPrototypingInput } from './MeshPrototypingCell'
 import authService from '@/services/authService'

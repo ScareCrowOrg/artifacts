@@ -265,7 +265,7 @@ import { useBaseCellFeatures } from '#artifacts/canonical/base_cell_components/f
 import { useCellFactory } from '@/composables/useCellFactory.js'
 import { useTransmutation } from '@/composables/useTransmutation.js'
 import { useCellsStore } from '@/stores/cells.js'
-import { createLogger } from '@/utils/logger.js'
+import { createLogger } from '#shared/logger.js'
 import type { UseCellFactoryReturn, UseTransmutationReturn, UseBaseCellFeaturesReturn } from '@/types/composables'
 import type { CompleteCell } from '@/types/cell'
 

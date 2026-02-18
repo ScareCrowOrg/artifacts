@@ -11,7 +11,7 @@
 
 import { BaseCell } from '@/types/BaseCell'
 import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 
 const log = createLogger('cell:prompt-enhancer')
 

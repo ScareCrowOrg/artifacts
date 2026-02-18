@@ -8,7 +8,7 @@
  */
 
 import { ref, type Ref } from 'vue'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 import { useFrontendHealthChecks } from '@/composables/useFrontendHealthChecks'
 import apiService from '@/services/apiService'
 

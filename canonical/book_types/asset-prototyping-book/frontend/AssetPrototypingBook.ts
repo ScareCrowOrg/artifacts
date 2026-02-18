@@ -21,7 +21,7 @@ import type { DAGDefinition, ExecutionContext } from '@/types/BaseBook'
 import type { CellMetadata } from '@/types/BaseCell'
 import { PngGeneratorCell } from '../../../cell_types/png-generator-cell/frontend/PngGeneratorCell'
 import { MeshPrototypingCell } from '../../../cell_types/3d-mesh-prototyping-cell/frontend/MeshPrototypingCell'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 
 const log = createLogger('books:AssetPrototyping')
 

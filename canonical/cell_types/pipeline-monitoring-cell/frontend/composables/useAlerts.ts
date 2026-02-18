@@ -8,7 +8,7 @@
  */
 
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 
 const log = createLogger('composable:useAlerts')
 

@@ -20,7 +20,7 @@
  * @component
  */
 import { computed } from 'vue'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 
 const logger = createLogger('component:generation-mode-switcher')
 

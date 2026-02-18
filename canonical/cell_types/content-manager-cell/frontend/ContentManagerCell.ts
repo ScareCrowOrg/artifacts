@@ -25,7 +25,7 @@ import type {
   ShowConfig
 } from '@/types/BaseCell'
 import { apiFetch } from '@/services/apiService'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '#shared/logger'
 
 const log = createLogger('cells:ContentManager')
 
