@@ -42,15 +42,13 @@ const urlRewritePlugin = {
   apply: 'serve',
   configureServer(server) {
     // Add middleware to rewrite /artifacts/* URLs to /* for file serving
-    return () => {
-      server.middlewares.use((req, res, next) => {
-        // Rewrite /artifacts/* URLs to /* for file serving
-        if (req.url.startsWith('/artifacts/')) {
-          req.url = req.url.replace('/artifacts', '')
-        }
-        next()
-      })
-    }
+    server.middlewares.use((req, res, next) => {
+      // Rewrite /artifacts/* URLs to /* for file serving
+      if (req.url.startsWith('/artifacts/')) {
+        req.url = req.url.replace('/artifacts', '')
+      }
+      next()
+    })
   },
 }
 
