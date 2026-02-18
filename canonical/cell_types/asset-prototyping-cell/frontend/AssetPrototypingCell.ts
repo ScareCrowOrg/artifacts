@@ -25,8 +25,8 @@
  * error handling, and lifecycle management. Splitting would reduce cohesion.
  */
 
-import { BaseCell, createHealthyResult } from '@/types/BaseCell'
-import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
+import { BaseCell, createHealthyResult } from '#shared/BaseCell'
+import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '#shared/BaseCell'
 import { PngGeneratorCell } from '../../png-generator-cell/frontend/PngGeneratorCell'
 import { MeshPrototypingCell } from '../../3d-mesh-prototyping-cell/frontend/MeshPrototypingCell'
 import { createLogger } from '#shared/logger'

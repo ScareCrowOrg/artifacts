@@ -124,7 +124,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 
 // Note: In a real Vue 3 SFC setup, você deve importar apiService para garantir headers de autenticação
-import apiService from '@/services/apiService'
+import apiService from '#shared/apiService'
 // Import logger runtime configuration functions
 import { setDebugPattern, getDebugPatternValue, getRegisteredNamespaces, createLogger } from '#shared/logger'
 

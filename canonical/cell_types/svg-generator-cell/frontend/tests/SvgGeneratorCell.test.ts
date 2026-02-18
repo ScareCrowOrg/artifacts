@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SvgGeneratorCell } from '../SvgGeneratorCell'
-import type { CellResult, CellMetadata, ValidationError } from '@/types/BaseCell'
+import type { CellResult, CellMetadata, ValidationError } from '#shared/BaseCell'
 import * as aiChatService from '@/services/aiChatService'
 
 // Mock the AI chat service

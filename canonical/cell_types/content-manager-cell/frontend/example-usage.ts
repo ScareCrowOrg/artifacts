@@ -7,8 +7,8 @@
  */
 
 import { ContentManagerCell } from './ContentManagerCell'
-import { BaseCell } from '@/types/BaseCell'
-import type { CellResult, CellMetadata, ValidationError } from '@/types/BaseCell'
+import { BaseCell } from '#shared/BaseCell'
+import type { CellResult, CellMetadata, ValidationError } from '#shared/BaseCell'
 
 /**
  * Example: PNG Generator Cell that uses ContentManagerCell

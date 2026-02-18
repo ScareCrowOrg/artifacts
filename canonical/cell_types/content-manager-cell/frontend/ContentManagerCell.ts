@@ -15,7 +15,7 @@
  * Part of content-manager-cell refactoring to implement BaseCell interface
  */
 
-import { BaseCell, createHealthyResult } from '@/types/BaseCell'
+import { BaseCell, createHealthyResult } from '#shared/BaseCell'
 import type {
   CellResult,
   CellMetadata,
@@ -23,8 +23,8 @@ import type {
   EnvironmentConfig,
   HealthCheckResult,
   ShowConfig
-} from '@/types/BaseCell'
-import { apiFetch } from '@/services/apiService'
+} from '#shared/BaseCell'
+import { apiFetch } from '#shared/apiService'
 import { createLogger } from '#shared/logger'
 
 const log = createLogger('cells:ContentManager')

@@ -11,8 +11,8 @@
  * Task: [CALC-001] Implement CalculatorCell logic
  */
 
-import { BaseCell, createHealthyResult } from '@/types/BaseCell'
-import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
+import { BaseCell, createHealthyResult } from '#shared/BaseCell'
+import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '#shared/BaseCell'
 
 /**
  * Supported calculator operations

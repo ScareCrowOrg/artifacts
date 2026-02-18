@@ -6,8 +6,8 @@
  */
 
 import { ref, computed, watch, type Ref } from 'vue'
-import apiService from '@/services/apiService.js'
-import { ENDPOINTS } from '@/config/endpoints.js'
+import apiService from '#shared/apiService.js'
+import { ENDPOINTS } from '#shared/endpoints.js'
 import { useCellsStore } from '@/stores/cells.js'
 import { useChatStore } from '@/stores/chat.js'
 import type { FileEditorCell, FileEditorCellData } from '@/types'

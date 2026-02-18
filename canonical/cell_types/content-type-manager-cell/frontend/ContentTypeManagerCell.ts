@@ -15,15 +15,15 @@
  * Part of content-type-manager-cell implementation following BaseCell interface
  */
 
-import { BaseCell, createHealthyResult } from '@/types/BaseCell'
+import { BaseCell, createHealthyResult } from '#shared/BaseCell'
 import type {
   CellResult,
   CellMetadata,
   ValidationError,
   EnvironmentConfig,
   HealthCheckResult
-} from '@/types/BaseCell'
-import { apiFetch } from '@/services/apiService'
+} from '#shared/BaseCell'
+import { apiFetch } from '#shared/apiService'
 
 /**
  * Content Type Manager actions

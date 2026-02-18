@@ -9,8 +9,8 @@
  * Task: [UTIL-CELLS] Implement utility cells
  */
 
-import { BaseCell } from '@/types/BaseCell'
-import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '@/types/BaseCell'
+import { BaseCell } from '#shared/BaseCell'
+import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig, HealthCheckResult } from '#shared/BaseCell'
 import { createLogger } from '#shared/logger'
 
 const log = createLogger('cell:prompt-enhancer')

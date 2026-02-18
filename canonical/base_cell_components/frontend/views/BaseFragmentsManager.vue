@@ -217,7 +217,7 @@ import { useI18n } from 'vue-i18n'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useBaseCellFeatures } from '../composables/useBaseCellFeatures'
 import { useParentCellContext } from '@/composables/useParentCellContext'
-import type { CellFragment } from '@/types/BaseCell'
+import type { CellFragment } from '#shared/BaseCell'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
 const { t } = useI18n()

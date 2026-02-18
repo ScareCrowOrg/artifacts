@@ -152,7 +152,7 @@ import { useChatHistory } from '@/composables/useChatHistory'
 import { useChatIA } from '@/composables/useChatIA'
 import { useChatStore } from '@/stores/chat'
 import { useUIStore } from '@/stores/ui'
-import authService from '@/services/authService'
+import authService from '#shared/authService'
 
 /**
  * Props interface for Chat IA Cell

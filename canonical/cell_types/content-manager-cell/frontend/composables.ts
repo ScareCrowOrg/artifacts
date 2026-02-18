@@ -5,7 +5,7 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
-import { apiFetch } from '@/services/apiService'
+import { apiFetch } from '#shared/apiService'
 import type {
   Content,
   ContentFilters,

@@ -16,15 +16,15 @@
  * Part of content-explorer-cell implementation following BaseCell interface
  */
 
-import { BaseCell } from '@/types/BaseCell'
+import { BaseCell } from '#shared/BaseCell'
 import type {
   CellResult,
   CellMetadata,
   ValidationError,
   EnvironmentConfig,
   HealthCheckResult
-} from '@/types/BaseCell'
-import { apiFetch } from '@/services/apiService'
+} from '#shared/BaseCell'
+import { apiFetch } from '#shared/apiService'
 
 /**
  * Content Type metadata structure (from ContentTypeManagerCell)

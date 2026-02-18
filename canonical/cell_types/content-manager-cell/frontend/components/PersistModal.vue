@@ -167,9 +167,9 @@
 <script setup lang="ts">
 import { ref, type PropType } from 'vue'
 import { ContentManagerCell } from '../ContentManagerCell'
-import type { CellResult } from '@/types/BaseCell'
+import type { CellResult } from '#shared/BaseCell'
 import { createLogger } from '#shared/logger'
-import authService from '@/services/authService'
+import authService from '#shared/authService'
 
 const log = createLogger('components:PersistModal')
 

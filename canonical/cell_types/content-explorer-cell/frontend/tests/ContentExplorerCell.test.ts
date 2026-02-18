@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { ContentExplorerCell } from '../ContentExplorerCell'
-import type { EnvironmentConfig } from '@/types/BaseCell'
+import type { EnvironmentConfig } from '#shared/BaseCell'
 
 describe('ContentExplorerCell', () => {
   let cell: ContentExplorerCell

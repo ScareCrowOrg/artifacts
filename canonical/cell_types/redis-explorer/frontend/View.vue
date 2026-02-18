@@ -248,7 +248,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, type Ref } from 'vue'
 import { createLogger } from '#shared/logger.js'
-import { apiFetch } from '@/services/apiService'
+import { apiFetch } from '#shared/apiService'
 const logger = createLogger('cell:redis-explorer')
 
 // Define props interface

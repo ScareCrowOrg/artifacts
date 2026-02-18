@@ -15,7 +15,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { AssetPrototypingCell } from '../AssetPrototypingCell'
-import type { CellResult, HealthCheckResult } from '@/types/BaseCell'
+import type { CellResult, HealthCheckResult } from '#shared/BaseCell'
 
 // Mock sub-cells
 vi.mock('../../png-generator-cell/frontend/PngGeneratorCell', () => ({

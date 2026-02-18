@@ -7,7 +7,7 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
-import { apiFetch } from '@/services/apiService'
+import { apiFetch } from '#shared/apiService'
 import { createContentExplorerCell, type ContentTypeMetadata } from './ContentExplorerCell'
 import type { AssetItem, ExplorerFilters } from './ContentExplorerCell'
 
