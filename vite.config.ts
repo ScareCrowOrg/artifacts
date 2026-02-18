@@ -2,6 +2,19 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
+// Plugin to mark @/ imports as external (resolved by browser import maps at runtime)
+// This allows cell types to import from cockpit-vue without requiring it in the container
+const externalCockpitVuePlugin = {
+  name: 'external-cockpit-vue',
+  enforce: 'pre',
+  resolveId(id) {
+    // Mark @/ imports as external for browser import map resolution
+    if (id.startsWith('@/')) {
+      return { id, external: true }
+    }
+  },
+}
+
 // Plugin to handle /artifacts/* file serving
 const artifactsRewritePlugin = {
   name: 'artifacts-rewrite',
@@ -63,6 +76,7 @@ const urlRewritePlugin = {
 export default defineConfig({
   root: '/app/artifacts',
   plugins: [
+    externalCockpitVuePlugin,
     urlRewritePlugin,
     artifactsRewritePlugin,
     vue({
@@ -95,10 +109,9 @@ export default defineConfig({
 
     // Serve files from artifacts root
     fs: {
-      // Allow serving files from artifacts directory
+      // Allow serving files from artifacts directory only
       allow: [
         '.',  // artifacts root
-        '../cockpit-vue',  // Allow imports from frontend (for @/ resolution)
       ],
       strict: true,
     },
@@ -109,8 +122,8 @@ export default defineConfig({
     alias: {
       // Map #artifacts to artifacts root
       '#artifacts': path.resolve(__dirname, '.'),
-      // Map @/ to cockpit-vue (for BaseCell and core imports)
-      '@': path.resolve(__dirname, '../cockpit-vue/src'),
+      // Note: @/ is NOT aliased here - it's marked as external by externalCockpitVuePlugin
+      // At runtime, browser import maps resolve @/ to cockpit-vue via http
     },
     extensions: ['.ts', '.tsx', '.vue', '.js', '.jsx', '.json'],
   },
