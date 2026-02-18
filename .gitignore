@@ -1,0 +1,38 @@
+# Vite Compilation Service - Artifacts Directory
+# This directory serves dynamic cell/book types via Vite Dev Server
+
+# Node modules (Vite dependencies)
+node_modules/
+
+# Vite cache and build artifacts
+.vite/
+dist/
+dist-ssr/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Lock files (we use package-lock.json in root)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
