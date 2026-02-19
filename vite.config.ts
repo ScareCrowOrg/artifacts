@@ -157,6 +157,9 @@ export default defineConfig({
       'vue',
       '@vue/runtime-core',
       '@vue/runtime-dom',
+      '@babylonjs/core',
+      '@babylonjs/loaders',
+      '@babylonjs/materials',
     ],
   },
   

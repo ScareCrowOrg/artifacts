@@ -8,7 +8,10 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0 --port 5052"
   },
   "dependencies": {
-    "vue": "^3.4.0"
+    "vue": "^3.4.0",
+    "@babylonjs/core": "^8.49.6",
+    "@babylonjs/loaders": "^8.49.6",
+    "@babylonjs/materials": "^8.49.6"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",
