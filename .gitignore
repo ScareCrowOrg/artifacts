@@ -1,6 +1,17 @@
 # Vite Compilation Service - Artifacts Directory
 # This directory serves dynamic cell/book types via Vite Dev Server
 
+# Ignore all runtime artifacts (user-generated content, session data)
+runtime/*
+!runtime/.gitkeep
+!runtime/README.md
+
+# Ignore all sandbox artifacts (user-private, draft data - NEVER published)
+# PRIVACY GUARANTEE: Sandbox data stays local and is never committed to Git
+sandbox/*
+!sandbox/.gitkeep
+!sandbox/README.md
+
 # Node modules (Vite dependencies)
 node_modules/
 
