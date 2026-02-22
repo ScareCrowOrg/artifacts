@@ -136,46 +136,68 @@ import {
   toRef,
 } from 'vue'
 import type { Ref } from 'vue'
-import type { ChatComponentAPI, FileProposal } from '@/types/chat'
-import ChatHeader from '@/components/chat/ChatHeader.vue'
-import WelcomeMessage from '@/components/chat/WelcomeMessage.vue'
-import ChatLoadingIndicator from '@/components/chat/ChatLoadingIndicator.vue'
-import ChatMessage from '@/components/chat/ChatMessage.vue'
-import ChatInput from '@/components/chat/ChatInput.vue'
-import ChatSettingsModal from '@/components/chat/ChatSettingsModal.vue'
-import ChatHistorySidebar from '@/components/ChatHistorySidebar.vue'
-import TraceTimelineModal from '@/components/chat/TraceTimelineModal.vue'
-import FileProposalModal from '@/components/chat/FileProposalModal.vue'
-import AgentTerminal from '@/components/chat/AgentTerminal.vue'
-import ContextBar from '@/components/chat/ContextBar.vue'
-import { useChatHistory } from '@/composables/useChatHistory'
-import { useChatIA } from '@/composables/useChatIA'
-import { useChatStore } from '@/stores/chat'
-import { useUIStore } from '@/stores/ui'
+import type { ChatComponentAPI, FileProposal } from './types/chat'
+import type { ChatIACell } from './ChatCell'
+import ChatHeader from './components/chat/ChatHeader.vue'
+import WelcomeMessage from './components/chat/WelcomeMessage.vue'
+import ChatLoadingIndicator from './components/chat/ChatLoadingIndicator.vue'
+import ChatMessage from './components/chat/ChatMessage.vue'
+import ChatInput from './components/chat/ChatInput.vue'
+import ChatSettingsModal from './components/chat/ChatSettingsModal.vue'
+import ChatHistorySidebar from './components/ChatHistorySidebar.vue'
+import TraceTimelineModal from './components/chat/TraceTimelineModal.vue'
+import FileProposalModal from './components/chat/FileProposalModal.vue'
+import AgentTerminal from './components/chat/AgentTerminal.vue'
+import ContextBar from './components/chat/ContextBar.vue'
+import { useChatHistory } from './composables/useChatHistory'
+import { useChatIA } from './composables/useChatIA'
+import { useChatStore } from './stores/chat'
+import { useUIStore } from './stores/ui'
 import authService from '@/services/authService'
 
 /**
- * Props interface for Chat IA Cell
+ * Props interface for Chat IA Cell View
  */
-interface Props {
-  /** The chat IA cell instance */
-  cell: {
-    id?: string
-    initial_data?: {
-      selectedModel?: string
-      enableIntentionClassification?: boolean
-      selectedCollections?: string[]
-      systemPrompt?: string
-      conversationId?: string | null
-    }
+interface CellObject {
+  id?: string
+  initial_data?: {
+    selectedModel?: string
+    enableIntentionClassification?: boolean
+    selectedCollections?: string[]
+    systemPrompt?: string
+    conversationId?: string | null
   }
+}
+
+interface Props {
+  /**
+   * The Chat IA cell instance (created externally by framework)
+   * View only renders and calls methods on this instance
+   */
+  cellInstance: ChatIACell
+
+  /** The cell metadata object */
+  cell?: CellObject
 }
 
 const props = defineProps<Props>()
 
+// ============ ARCHITECTURE NOTE ============
+// This View component RECEIVES cellInstance as a prop from the framework.
+// It does NOT create the instance itself.
+//
+// Flow:
+//   Framework → creates ChatIACell instance
+//   Framework → passes instance to View via prop
+//   View → renders UI and calls methods on cellInstance
+//
+// Why: ChatIACell is the entity (business logic), View is just its presentation layer.
+// View is part of ChatIACell, not the other way around.
+// ==========================================
+
 // Define emits for cell lifecycle events
 const emit = defineEmits<{
-  'update:cell': [cell: Props['cell']]
+  'update:cell': [cell: CellObject]
   'celula-criada': [content: string]
   'copy-to-manual': [content: string]
 }>()
