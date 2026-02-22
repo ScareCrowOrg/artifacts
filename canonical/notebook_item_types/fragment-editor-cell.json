@@ -1,0 +1,42 @@
+{
+  "id": "fragment-editor-cell",
+  "name": "Fragment Editor",
+  "description": "Create and edit cell fragments with markdown support",
+  "version": "1.0.0",
+  "category": "content",
+  "can_render_dynamically": false,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "docs": ["docs/README.md"]
+  },
+  "default_initial_data": {
+    "cellId": null,
+    "fragmentId": null,
+    "content": "",
+    "action": "create"
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "cellId": {
+      "type": "string",
+      "default": null,
+      "description": "ID of the cell to which the fragment belongs"
+    },
+    "fragmentId": {
+      "type": "string",
+      "default": null,
+      "description": "ID of the fragment being edited (null for new fragments)"
+    },
+    "content": {
+      "type": "string",
+      "default": "",
+      "description": "Fragment content (markdown)"
+    },
+    "action": {
+      "type": "string",
+      "default": "create",
+      "enum": ["create", "edit", "load"],
+      "description": "Action to perform: create, edit, or load fragment"
+    }
+  }
+}
