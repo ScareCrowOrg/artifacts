@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "vue": "^3.4.0",
+    "pinia": "^2.1.0",
+    "vue-i18n": "^9.8.0",
     "@babylonjs/core": "^8.49.6",
     "@babylonjs/loaders": "^8.49.6",
     "@babylonjs/materials": "^8.49.6"

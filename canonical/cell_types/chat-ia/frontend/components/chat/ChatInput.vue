@@ -119,7 +119,6 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useCellManagement } from '../../composables/useCellManagement'
 
 const props = defineProps({
   chat: {
@@ -142,9 +141,6 @@ const props = defineProps({
 
 const promptWarning = computed(() => props.chat.promptWarning.value)
 const promptLimitReached = computed(() => props.chat.promptLimitReached.value)
-
-// Get cell management composable for opening files
-const cellMgmt = useCellManagement()
 
 function handleInput(event) {
   // TODO: Refactor to emit event instead of mutating prop

@@ -48,7 +48,6 @@ import {
 import { SessionExpiredError } from '@/services/apiService.js'
 import authService from '@/services/authService.js'
 import * as aiChatService from '../services/aiChatService.js'
-import { getNotebookItemTypeId } from '../types/notebook.js'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('chat:ia')
@@ -361,15 +360,6 @@ export function useChatIA(props: UseChatIAProps): UseChatIAReturn {
       }
       if (assistantId.value) {
         payload.assistant_id = assistantId.value
-      }
-
-      // Include notebook_item context if active cell is available (for NotebookItem awareness)
-      if (activeCellRef && activeCellRef.value) {
-        payload.notebook_item_id = activeCellRef.value.id
-        const typeId = getNotebookItemTypeId(activeCellRef.value)
-        if (typeId) {
-          payload.notebook_item_type_id = typeId
-        }
       }
 
       // Include selected RAG collections if any are selected
