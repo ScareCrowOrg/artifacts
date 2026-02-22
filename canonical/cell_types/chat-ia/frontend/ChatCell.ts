@@ -14,7 +14,7 @@ import type {
   EnvironmentConfig
 } from '@/types/BaseCell'
 
-export class ChatIACell implements BaseCell {
+export class ChatIACell extends BaseCell {
   private conversationId: string | null = null
 
   /**
