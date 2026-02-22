@@ -91,10 +91,7 @@ export default defineConfig({
 
     // CORS configuration for cross-origin requests from frontend
     cors: {
-      origin: [
-        'http://localhost:5173',   // Vite dev frontend
-        'http://localhost:5050',   // ScareRunner
-      ],
+      origin: (process.env.VITE_CORS_ORIGINS || 'http://localhost:5173,http://localhost:5050').split(','),
       credentials: true,
     },
 
