@@ -159,7 +159,7 @@
  * Technical naming: All functions and variables in English
  */
 import { ref } from 'vue'
-import { getStageColor } from '@/services/tracesService.js'
+import { getStageColor } from '../../services/tracesService'
 
 /**
  * Props

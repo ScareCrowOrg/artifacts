@@ -45,8 +45,8 @@ import {
   validateTotalAttachmentsSize,
   validatePromptLength,
 } from '../config/chatLimits.js'
-import { SessionExpiredError } from '../services/apiService.js'
-import authService from '../services/authService.js'
+import { SessionExpiredError } from '@/services/apiService.js'
+import authService from '@/services/authService.js'
 import * as aiChatService from '../services/aiChatService.js'
 import { getNotebookItemTypeId } from '../types/notebook.js'
 import { createLogger } from '@/utils/logger'

@@ -143,7 +143,7 @@
  */
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import TraceFragmentItem from './TraceFragmentItem.vue'
-import { useConversationTrace } from '../../composables/useConversationTrace.js'
+import { useConversationTrace } from '../../composables/useConversationTrace'
 
 /**
  * Props
