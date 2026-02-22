@@ -202,11 +202,25 @@ const emit = defineEmits<{
   'copy-to-manual': [content: string]
 }>()
 
-// Initialize stores
+// Initialize stores (lazy to avoid Pinia initialization errors)
 // When running via BaseCell.show(), cellInstance is injected as prop
 // When running standalone in cockpit-vue, create stores directly
-const chatStore = props.cellInstance?.chatStore || useChatStore()
-const uiStore = props.cellInstance?.uiStore || useUIStore()
+let chatStore: any = null
+let uiStore: any = null
+
+// Try to get from cellInstance first (BaseCell context)
+if (props.cellInstance?.chatStore) {
+  chatStore = props.cellInstance.chatStore
+  uiStore = props.cellInstance.uiStore
+} else {
+  // Fallback: try to initialize Pinia stores (standalone mode)
+  try {
+    chatStore = useChatStore()
+    uiStore = useUIStore()
+  } catch (error) {
+    console.warn('[View] Failed to initialize Pinia stores - running in BaseCell context without stores?', error)
+  }
+}
 
 // ============ CONVERSATIONID: EPHEMERAL → PERSISTENT ============
 
