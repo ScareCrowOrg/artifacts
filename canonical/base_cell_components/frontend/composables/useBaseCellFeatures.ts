@@ -12,7 +12,7 @@
  * Part of Epic #1108 (Phase 2.1.2 Extension): Base Cell Architecture
  */
 
-import { ref, computed, type Ref } from 'vue'
+import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import type { BaseCellAPI, CellFragment, BaseCellFeaturesOptions } from '@/types/composables.d'
 import type { SubViewConfig, ParentCellContext } from '@/types/RenderableCell'
 import type { CompleteCell } from '@/types/cell'
@@ -76,8 +76,8 @@ function buildCellPayload(cell: CompleteCell): Record<string, unknown> {
  * ```
  */
 export function useBaseCellFeatures(
-  cellId: Ref<string>,
-  cellType: Ref<string>,
+  cellId: Ref<string> | ComputedRef<string>,
+  cellType: Ref<string> | ComputedRef<string>,
   options: BaseCellFeaturesOptions = {},
   cellInstance?: Ref<CompleteCell>
 ): BaseCellAPI {
@@ -86,14 +86,18 @@ export function useBaseCellFeatures(
   console.log('🏷️ Cell Type:', cellType.value)
   console.log('⚙️ Options:', options)
   console.log('📦 Cell Instance provided:', !!cellInstance?.value)
-  
+
   // ⚠️ ARCHITECTURE WARNING: Log if cell instance not provided
   if (!cellInstance || !cellInstance.value) {
     console.warn('⚠️ Cell instance not provided to useBaseCellFeatures')
     console.warn('This may cause instance injection issues and fallback to store lookups')
     console.warn('Please pass the cell instance as the 4th parameter')
   }
-  
+
+  // Ensure cellId and cellType are always ComputedRef (unified type)
+  const normalizedCellId: ComputedRef<string> = computed(() => cellId.value)
+  const normalizedCellType: ComputedRef<string> = computed(() => cellType.value)
+
   console.groupEnd()
 
   // ============================================================
@@ -694,8 +698,8 @@ export function useBaseCellFeatures(
   
   return {
     // Core Properties
-    cellId: computed(() => cellId.value),
-    cellType: computed(() => cellType.value),
+    cellId: normalizedCellId,
+    cellType: normalizedCellType,
     isLoading,
     isSaving,
     errorMessage,

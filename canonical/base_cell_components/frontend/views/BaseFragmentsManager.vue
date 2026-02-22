@@ -294,17 +294,17 @@ const cellType = computed(() => {
   // Prefer data from the cell instance
   if (cell.value?.type) return cell.value.type
   if (cell.value?.notebook_item_type_id) return cell.value.notebook_item_type_id
-  
+
   // Fallback to parent context if cell not yet in store
   if (parentCellType.value) return parentCellType.value
-  
+
   // Final fallback
   return 'unclassified-cell'
 })
 
 const baseCellApi = useBaseCellFeatures(
   cellId,
-  cellType as Ref<string>
+  cellType
 )
 
 // Extract needed properties and methods
