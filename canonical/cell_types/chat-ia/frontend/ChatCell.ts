@@ -178,6 +178,22 @@ export class ChatIACell extends BaseCell {
   }
 
   /**
+   * Override show() to provide context for View.vue
+   * View.vue will receive cellInstance as a prop and can access stores through it
+   */
+  async show(data: Record<string, any>, options: any): Promise<any> {
+    // Call parent implementation which checks for View.vue and returns component info
+    const result = await super.show(data, options)
+
+    // Add cell instance to result so View.vue can access it
+    if (result && result.cellType === 'chat-ia') {
+      result.cellInstance = this
+    }
+
+    return result
+  }
+
+  /**
    * Get or create conversation ID
    * Helper method for conversation management
    */
