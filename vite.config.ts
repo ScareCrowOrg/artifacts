@@ -90,8 +90,9 @@ export default defineConfig({
     strictPort: true,  // Fail if port 5052 is already in use
 
     // CORS configuration for cross-origin requests from frontend
+    // Can be overridden with VITE_CORS_ORIGINS environment variable
     cors: {
-      origin: (process.env.VITE_CORS_ORIGINS || 'http://localhost:5173,http://localhost:5050').split(','),
+      origin: (process.env.VITE_CORS_ORIGINS || 'http://localhost:8000,http://localhost:5173,http://localhost:5050').split(','),
       credentials: true,
     },
 
