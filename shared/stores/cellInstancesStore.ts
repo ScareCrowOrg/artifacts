@@ -20,8 +20,14 @@ import { ref } from 'vue'
  * Base interface for cell instances
  * Defines the minimal contract that all cell instances should follow
  * 
- * Note: This is a minimal interface. Specific cells may have additional methods.
- * Use TypeScript type guards or runtime checks for cell-specific functionality.
+ * Note: This is a minimal interface to support heterogeneous cell types.
+ * The addAttachment method is optional since not all cells support it.
+ * For cells that implement it (like chat-ia), they should follow their
+ * own interface (e.g., ChatComponentAPI from chat types).
+ * 
+ * This interface prioritizes flexibility over strict type safety to allow
+ * the registry to support diverse cell types without forcing them into
+ * a single rigid contract.
  */
 export interface BaseCellInstance {
   /** Cell ID (if available) */
@@ -30,7 +36,9 @@ export interface BaseCellInstance {
   /** Cell type identifier */
   notebook_item_type_id?: string
   
-  /** Optional: Add attachment method (for cells that support it) */
+  /** Optional: Add attachment method (for cells that support it)
+   * Parameters are flexible to accommodate different cell implementations
+   */
   addAttachment?: (filename: string, content: string, type?: string, path?: string) => boolean
   
   /** Allow additional properties for cell-specific functionality */
