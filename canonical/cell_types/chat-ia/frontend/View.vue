@@ -202,9 +202,20 @@ const emit = defineEmits<{
   'copy-to-manual': [content: string]
 }>()
 
+// Props
+const props = defineProps({
+  cellInstance: {
+    type: Object,
+    required: false,
+    default: null
+  }
+})
+
 // Initialize stores
-const chatStore = useChatStore()
-const uiStore = useUIStore()
+// When running via BaseCell.show(), cellInstance is injected as prop
+// When running standalone in cockpit-vue, create stores directly
+const chatStore = props.cellInstance?.chatStore || useChatStore()
+const uiStore = props.cellInstance?.uiStore || useUIStore()
 
 // ============ CONVERSATIONID: EPHEMERAL → PERSISTENT ============
 
