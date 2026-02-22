@@ -47,6 +47,11 @@ export function useCellInstances() {
    * Send content to chat-ia cell (as attachment)
    * Convenience method for the common use case of sending fragments to chat
    * 
+   * Note: Uses runtime check for addAttachment method since not all cells
+   * are guaranteed to implement it. This is by design to support heterogeneous
+   * cell types in the registry. For type-safe usage, consider creating
+   * cell-type-specific helpers.
+   * 
    * @param filename - Attachment filename
    * @param content - Attachment content
    * @param type - Content type (default: 'text')
@@ -60,7 +65,8 @@ export function useCellInstances() {
       return false
     }
 
-    // Try to call addAttachment method on the instance
+    // Runtime check for addAttachment method (TypeScript optional chaining)
+    // This is necessary because the registry supports heterogeneous cell types
     if (typeof chatCell.instance.addAttachment === 'function') {
       return chatCell.instance.addAttachment(filename, content, type)
     }

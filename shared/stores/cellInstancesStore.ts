@@ -17,6 +17,27 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 /**
+ * Base interface for cell instances
+ * Defines the minimal contract that all cell instances should follow
+ * 
+ * Note: This is a minimal interface. Specific cells may have additional methods.
+ * Use TypeScript type guards or runtime checks for cell-specific functionality.
+ */
+export interface BaseCellInstance {
+  /** Cell ID (if available) */
+  id?: string
+  
+  /** Cell type identifier */
+  notebook_item_type_id?: string
+  
+  /** Optional: Add attachment method (for cells that support it) */
+  addAttachment?: (filename: string, content: string, type?: string, path?: string) => boolean
+  
+  /** Allow additional properties for cell-specific functionality */
+  [key: string]: unknown
+}
+
+/**
  * Cell instance metadata stored in the registry
  */
 export interface CellInstanceMetadata {
@@ -29,8 +50,8 @@ export interface CellInstanceMetadata {
   /** Cell title/name */
   title?: string
   
-  /** The actual cell instance (BaseCell or component instance) */
-  instance: any
+  /** The actual cell instance (BaseCell class or component instance) */
+  instance: BaseCellInstance
   
   /** Registration timestamp */
   registeredAt: Date
@@ -61,7 +82,7 @@ export const useCellInstancesStore = defineStore('cellInstances', () => {
   function registerInstance(
     cellId: string,
     cellType: string,
-    instance: any,
+    instance: BaseCellInstance,
     metadata?: { title?: string; [key: string]: unknown }
   ): boolean {
     if (!cellId || !cellType || !instance) {
