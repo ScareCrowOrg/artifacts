@@ -99,7 +99,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/logger'
-import { executeAction, parseActionURL, hasAction, isProposalAction } from '../../composables/useActionRegistry'
+import { executeAction, parseActionURL, hasAction, isProposalAction } from '@/composables/useActionRegistry'
 import { safeParseJSON } from '../utils/actionLinksPlugin'
 import { useChatStore } from '../../stores/chat'
 import { usePermissionsStore } from '../../stores/permissions'
