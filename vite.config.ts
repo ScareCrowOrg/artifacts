@@ -92,7 +92,6 @@ export default defineConfig({
     // CORS configuration for cross-origin requests from frontend
     cors: {
       origin: [
-        'http://localhost:8000',   // nginx proxy
         'http://localhost:5173',   // Vite dev frontend
         'http://localhost:5050',   // ScareRunner
       ],
