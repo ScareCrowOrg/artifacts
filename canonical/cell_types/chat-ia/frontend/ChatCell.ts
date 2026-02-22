@@ -17,6 +17,11 @@ import type {
 export class ChatIACell extends BaseCell {
   private conversationId: string | null = null
 
+  // Stores will be set by View.vue when it initializes
+  // This allows cellInstance to be passed to View.vue with store access
+  public chatStore: any = null
+  public uiStore: any = null
+
   /**
    * Execute the chat cell
    * Pure business logic - no UI knowledge
