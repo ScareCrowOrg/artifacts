@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Manage GitHub issues and project tasks with RBAC protection",
   "category": "admin",
+  "can_render_dynamically": true, 
   "author": "ScareVerse",
   "icon": "📋",
   "requires_backend": true,
