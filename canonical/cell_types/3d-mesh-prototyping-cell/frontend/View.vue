@@ -241,17 +241,28 @@ const handleFileUpload = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
 
-  if (!file) return
+  console.log('[DEBUG] handleFileUpload called', { hasFile: !!file, event })
+
+  if (!file) {
+    console.log('[DEBUG] No file selected')
+    return
+  }
+
+  console.log('[DEBUG] File selected', { name: file.name, size: file.size, type: file.type })
 
   if (!file.type.startsWith('image/')) {
     localError.value = 'Please upload a valid image file (PNG, JPG, etc.)'
+    console.log('[DEBUG] Invalid file type:', file.type)
     return
   }
 
   logger.info(`File selected: ${file.name} (${file.size} bytes)`)
+  console.log('[DEBUG] Creating FileReader...')
 
   const reader = new FileReader()
+
   reader.onload = async (e) => {
+    console.log('[DEBUG] FileReader.onload triggered', { resultLength: e.target?.result?.length })
     try {
       const result = e.target?.result as string
 
@@ -259,6 +270,11 @@ const handleFileUpload = async (event: Event) => {
       // InstantMesh will handle any resolution
       uploadedImage.value = result
       localError.value = null
+      console.log('[DEBUG] uploadedImage.value assigned', {
+        uploadedImageLength: uploadedImage.value?.length || 0,
+        hasInputImage: inputImage.value !== null && inputImage.value !== '',
+        inputImageLength: inputImage.value?.length || 0
+      })
       logger.debug('Image loaded as base64 (no processing)', {
         uploadedImageLength: uploadedImage.value?.length || 0,
         hasInputImage: inputImage.value !== null && inputImage.value !== '',
@@ -266,14 +282,24 @@ const handleFileUpload = async (event: Event) => {
       })
     } catch (err: any) {
       localError.value = `Image load failed: ${err.message}`
+      console.error('[DEBUG] Image load error:', err)
       logger.error('Image load error', err)
     }
   }
+
   reader.onerror = () => {
+    console.error('[DEBUG] FileReader error triggered')
     localError.value = 'Failed to read image file'
     logger.error('FileReader error')
   }
+
+  reader.onprogress = (e) => {
+    console.log('[DEBUG] FileReader.onprogress', { loaded: e.loaded, total: e.total })
+  }
+
+  console.log('[DEBUG] Calling reader.readAsDataURL...')
   reader.readAsDataURL(file)
+  console.log('[DEBUG] readAsDataURL call completed')
 }
 
 /**
