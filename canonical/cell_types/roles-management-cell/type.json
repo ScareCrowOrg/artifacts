@@ -1,0 +1,75 @@
+{
+  "id": "roles-management-cell",
+  "name": "Roles Management",
+  "version": "1.0.0",
+  "category": "admin",
+  "description": "Administrative cell for managing roles and permissions (RBAC-protected)",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "basecell": ["frontend/RolesManagementCell.ts"]
+  },
+  "default_initial_data": {
+    "title": "Roles Management",
+    "description": "Manage roles and permissions for users",
+    "config": {
+      "defaultView": "list"
+    }
+  },
+  "properties_schema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["list", "get", "create", "update", "delete", "assign", "unassign"],
+        "description": "Action to perform"
+      },
+      "roleId": {
+        "type": "string",
+        "description": "Role ID for get/update/delete/assign/unassign actions"
+      },
+      "userId": {
+        "type": "string",
+        "description": "User ID for assign/unassign actions"
+      },
+      "data": {
+        "type": "object",
+        "description": "Role data for create/update actions",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Role name"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of permission strings"
+          },
+          "description": {
+            "type": "string",
+            "description": "Role description"
+          }
+        }
+      }
+    },
+    "required": ["action"]
+  },
+  "_discovery": {
+    "labels": [
+      "#admin",
+      "#roles",
+      "#permissions",
+      "#rbac",
+      "#user-management"
+    ],
+    "estimated_duration_seconds": 2,
+    "required_resources": [
+      "mongodb"
+    ],
+    "required_permissions": [
+      "roles:admin"
+    ]
+  }
+}
