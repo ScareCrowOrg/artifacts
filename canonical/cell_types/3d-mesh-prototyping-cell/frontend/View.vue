@@ -25,7 +25,7 @@
  * @component
  */
 
-import { ref, computed, watch, onMounted, onUnmounted, defineOptions } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, defineOptions, nextTick } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { MeshPrototypingCell } from './MeshPrototypingCell'
 import type { MeshPrototypingInput } from './MeshPrototypingCell'
@@ -271,12 +271,16 @@ const handleFileUpload = async (event: Event) => {
       uploadedImage.value = result
       localError.value = null
 
+      // Force Vue to re-render by waiting for next tick
+      // This ensures computed properties and template reactivity update
+      await nextTick()
+
       // Log computed properties state
       const computedInputImage = inputImage.value
       const computedHasInputImage = hasInputImage.value
       const computedGenerationMode = generationMode.value
 
-      console.log('[DEBUG] uploadedImage.value assigned', {
+      console.log('[DEBUG] uploadedImage.value assigned (after nextTick)', {
         uploadedImageLength: uploadedImage.value?.length || 0,
         uploadedImageFirstChars: uploadedImage.value?.substring(0, 50) || 'null',
         inputImageLength: computedInputImage?.length || 0,
