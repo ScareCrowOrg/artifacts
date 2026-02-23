@@ -270,10 +270,21 @@ const handleFileUpload = async (event: Event) => {
       // InstantMesh will handle any resolution
       uploadedImage.value = result
       localError.value = null
+
+      // Log computed properties state
+      const computedInputImage = inputImage.value
+      const computedHasInputImage = hasInputImage.value
+      const computedGenerationMode = generationMode.value
+
       console.log('[DEBUG] uploadedImage.value assigned', {
         uploadedImageLength: uploadedImage.value?.length || 0,
-        hasInputImage: inputImage.value !== null && inputImage.value !== '',
-        inputImageLength: inputImage.value?.length || 0
+        uploadedImageFirstChars: uploadedImage.value?.substring(0, 50) || 'null',
+        inputImageLength: computedInputImage?.length || 0,
+        inputImageFirstChars: computedInputImage?.substring(0, 50) || 'null',
+        hasInputImage: computedHasInputImage,
+        generationMode: computedGenerationMode,
+        generationModeCheck: computedGenerationMode !== 'manual-upload',
+        shouldRenderPreview: computedHasInputImage && computedGenerationMode !== 'manual-upload'
       })
       logger.debug('Image loaded as base64 (no processing)', {
         uploadedImageLength: uploadedImage.value?.length || 0,
