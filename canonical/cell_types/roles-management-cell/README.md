@@ -27,19 +27,19 @@ roles-management-cell/
 ├── type.json                          # Cell metadata + RBAC config
 ├── README.md                          # This file
 └── frontend/
-    ├── RolesManagementCell.ts         # BaseCell implementation (~100 lines)
-    ├── View.vue                       # Main UI container (~200 lines)
+    ├── RolesManagementCell.ts         # BaseCell implementation (387 lines)
+    ├── View.vue                       # Main UI container (371 lines)
     ├── components/                    # Modularized UI components
-    │   ├── RolesList.vue              # List view (~150 lines)
-    │   ├── RoleEditor.vue             # Create/Edit form (~150 lines)
-    │   ├── PermissionsPanel.vue       # Permission checkboxes (~100 lines)
-    │   ├── AssignRoleModal.vue        # Assign role modal (~80 lines)
-    │   └── RoleCard.vue               # Single role card (~50 lines)
+    │   ├── RolesList.vue              # List view (192 lines)
+    │   ├── RoleEditor.vue             # Create/Edit form (238 lines)
+    │   ├── PermissionsPanel.vue       # Permission checkboxes (276 lines)
+    │   ├── AssignRoleModal.vue        # Assign role modal (349 lines)
+    │   └── RoleCard.vue               # Single role card (199 lines)
     ├── composables/                   # Business logic
-    │   ├── useRolesManagement.ts      # CRUD operations (~150 lines)
-    │   └── usePermissionsData.ts      # Permission data (~100 lines)
+    │   ├── useRolesManagement.ts      # CRUD operations (277 lines)
+    │   └── usePermissionsData.ts      # Permission data (178 lines)
     └── tests/                         # Test files
-        ├── RolesManagementCell.test.ts
+        ├── RolesManagementCell.test.ts (391 lines)
         ├── View.spec.ts
         └── components/
             ├── RolesList.spec.ts

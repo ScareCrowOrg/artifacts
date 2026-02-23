@@ -156,10 +156,14 @@ const editingRole = ref<Role | null>(null)
 /**
  * Handle edit role
  */
-function handleEdit(role: Role): void {
-  editingRole.value = { ...role }
+function handleEdit(role: Role | null): void {
+  if (role) {
+    editingRole.value = { ...role }
+  } else {
+    editingRole.value = null
+  }
   activeTab.value = 'editor'
-  log.debug('Editing role', { roleId: role.id })
+  log.debug('Editing role', { roleId: role?.id })
 }
 
 /**

@@ -7,8 +7,8 @@
  */
 
 import { ref, computed } from 'vue'
-import { RolesManagementCell } from './RolesManagementCell'
-import type { RoleData } from './RolesManagementCell'
+import { RolesManagementCell } from '../RolesManagementCell'
+import type { RoleData } from '../RolesManagementCell'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('composables:useRolesManagement')
