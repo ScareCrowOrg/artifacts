@@ -259,7 +259,11 @@ const handleFileUpload = async (event: Event) => {
       // InstantMesh will handle any resolution
       uploadedImage.value = result
       localError.value = null
-      logger.debug('Image loaded as base64 (no processing)')
+      logger.debug('Image loaded as base64 (no processing)', {
+        uploadedImageLength: uploadedImage.value?.length || 0,
+        hasInputImage: inputImage.value !== null && inputImage.value !== '',
+        inputImageLength: inputImage.value?.length || 0
+      })
     } catch (err: any) {
       localError.value = `Image load failed: ${err.message}`
       logger.error('Image load error', err)
