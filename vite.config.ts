@@ -97,10 +97,11 @@ export default defineConfig({
     },
 
     // HMR (Hot Module Replacement) configuration
+    // Can be overridden with VITE_HMR_HOST environment variable
     hmr: {
-      host: 'localhost',
-      port: 5052,
-      protocol: 'ws',
+      host: process.env.VITE_HMR_HOST || 'localhost',
+      port: parseInt(process.env.VITE_HMR_PORT || '5052'),
+      protocol: process.env.VITE_HMR_PROTOCOL || 'ws',
     },
 
     // Serve files from artifacts root
