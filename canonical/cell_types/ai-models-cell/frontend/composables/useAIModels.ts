@@ -7,7 +7,7 @@
 
 import { ref, computed, type Ref } from 'vue'
 import { createLogger } from '@/utils/logger'
-import type { AIModelsCell, AIModelProvider, ProviderConfig } from './AIModelsCell'
+import type { AIModelsCell, AIModelProvider, ProviderConfig } from '../AIModelsCell'
 
 const log = createLogger('composables:useAIModels')
 

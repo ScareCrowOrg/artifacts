@@ -85,9 +85,18 @@ export const useAIModelsStore = defineStore('aiModels', () => {
       const stored = localStorage.getItem('ai-models-configs')
       if (stored) {
         const parsed = JSON.parse(stored)
-        configs.value = parsed.configs || configs.value
+        // Only restore non-sensitive configuration (endpoints, model names)
+        // API keys are NOT restored from localStorage for security
+        Object.entries(parsed.configs || {}).forEach(([provider, config]: [string, any]) => {
+          configs.value[provider as AIModelProvider] = {
+            endpoint: config.endpoint,
+            modelName: config.modelName,
+            organizationId: config.organizationId
+            // Explicitly exclude apiKey from restoration
+          }
+        })
         lastUpdated.value = parsed.lastUpdated || lastUpdated.value
-        log.debug('Configs loaded from storage')
+        log.debug('Non-sensitive configs loaded from storage (API keys excluded)')
       }
     } catch (error) {
       log.error('Error loading configs from storage', error)
@@ -96,12 +105,23 @@ export const useAIModelsStore = defineStore('aiModels', () => {
 
   const saveConfigsToStorage = () => {
     try {
+      // Create sanitized configs without API keys
+      const sanitizedConfigs: Record<string, any> = {}
+      Object.entries(configs.value).forEach(([provider, config]) => {
+        sanitizedConfigs[provider] = {
+          endpoint: config.endpoint,
+          modelName: config.modelName,
+          organizationId: config.organizationId
+          // Explicitly exclude apiKey from storage
+        }
+      })
+      
       const data = {
-        configs: configs.value,
+        configs: sanitizedConfigs,
         lastUpdated: lastUpdated.value
       }
       localStorage.setItem('ai-models-configs', JSON.stringify(data))
-      log.debug('Configs saved to storage')
+      log.debug('Non-sensitive configs saved to storage (API keys excluded)')
     } catch (error) {
       log.error('Error saving configs to storage', error)
     }
