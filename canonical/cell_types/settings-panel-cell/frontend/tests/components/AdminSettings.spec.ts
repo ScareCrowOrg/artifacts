@@ -131,6 +131,9 @@ describe('AdminSettings Component', () => {
   })
 
   it('should load OAuth status on mount', async () => {
+    const store = useSettingsPanelStore()
+    const loadSpy = vi.spyOn(store, 'loadOAuthStatus')
+
     const wrapper = mount(AdminSettings, {
       global: {
         mocks: {
@@ -138,9 +141,6 @@ describe('AdminSettings Component', () => {
         }
       }
     })
-
-    const store = useSettingsPanelStore()
-    const loadSpy = vi.spyOn(store, 'loadOAuthStatus')
 
     // Wait for onMounted hook
     await new Promise(resolve => setTimeout(resolve, 100))
