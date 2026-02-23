@@ -13,7 +13,7 @@
   "tags": ["admin", "issues", "dashboard", "rbac"],
   "default_refs": {
     "view": [
-      "artifacts/canonical/cell_types/issues-dashboard-cell/frontend/View.vue"
+      "frontend/View.vue"
     ]
   },
   "properties_schema": {
