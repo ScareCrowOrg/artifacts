@@ -1,0 +1,66 @@
+{
+  "id": "notebook-cells-admin-cell",
+  "name": "Notebook Cells Admin",
+  "description": "Administer notebook cells and cell types (RBAC protected). Provides CRUD operations for managing notebook cells with notebook:admin permission.",
+  "version": "1.0.0",
+  "category": "admin",
+  "author": "ScareVerse",
+  "icon": "📔",
+  "requires_backend": true,
+  "can_render_dynamically": true,
+  "requiredPermissions": ["notebook:admin"],
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "docs": ["docs/README.md"],
+    "basecell": ["frontend/NotebookCellsAdminCell.ts"]
+  },
+  "default_initial_data": {
+    "action": "list",
+    "filters": {
+      "assignee": null,
+      "cellType": null
+    },
+    "pagination": {
+      "page": 1,
+      "perPage": 20
+    }
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "action": {
+      "type": "enum",
+      "required": true,
+      "values": ["list", "get", "create", "update", "delete", "list-types"],
+      "description": "Action to perform on notebook cells"
+    },
+    "cellId": {
+      "type": "string",
+      "required": false,
+      "description": "Cell ID for get, update, or delete actions"
+    },
+    "data": {
+      "type": "object",
+      "required": false,
+      "description": "Cell data for create or update actions"
+    },
+    "filters": {
+      "type": "object",
+      "required": false,
+      "description": "Filters for list action (assignee, cellType)"
+    }
+  },
+  "_discovery": {
+    "labels": ["#admin", "#cells", "#management", "#rbac"],
+    "describe": "Admin cell for managing notebook cells with RBAC protection. Requires notebook:admin permission. Provides complete CRUD operations for cell management, including listing cells with filters, viewing cell details, creating new cells, updating existing cells, deleting cells, and listing available cell types. Replaces the hardcoded NotebookCellsAdmin overlay with a proper cell implementation.",
+    "estimated_duration_seconds": 1,
+    "required_resources": ["mongodb"],
+    "dependencies": ["auth", "permissions"],
+    "tags": ["admin", "cells", "notebook", "management", "rbac", "crud"],
+    "use_cases": [
+      "Manage notebook cells (CRUD operations)",
+      "View and filter cells by assignee or type",
+      "Administer cell types and metadata",
+      "Authorized admin operations only (notebook:admin required)"
+    ]
+  }
+}
