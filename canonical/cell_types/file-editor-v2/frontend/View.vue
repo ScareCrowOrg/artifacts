@@ -136,8 +136,8 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, toRef, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import MarkdownEditor from '@/components/MarkdownEditor.vue'
-import FileConfigDialog from '@/components/FileConfigDialog.vue'
+import MarkdownEditor from './components/MarkdownEditor.vue'
+import FileConfigDialog from './components/FileConfigDialog.vue'
 import { useFileEditor } from './composables/useFileEditor'
 import { useCellsStore } from '@/stores/cells'
 import type { FileEditorCell } from '@/types'
