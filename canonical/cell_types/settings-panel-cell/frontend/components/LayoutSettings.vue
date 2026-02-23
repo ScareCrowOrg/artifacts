@@ -5,15 +5,15 @@
 <template>
   <div class="layout-settings">
     <h3 class="mb-4 text-primary dark:text-primary text-lg font-semibold">
-      Layout Preferences
+      {{ $t('settings.layoutSettings.title') }}
     </h3>
     <p class="text-sm text-text-secondary dark:text-text-secondary-dark mb-4">
-      Layout preferences will be available in a future update.
+      {{ $t('settings.layoutSettings.description') }}
     </p>
     
     <!-- Placeholder for future layout settings -->
     <div class="p-4 rounded-md bg-info/10 dark:bg-info/20 text-info dark:text-info border border-info/20 dark:border-info/30 text-sm">
-      <strong>Coming Soon:</strong> Layout customization options including workspace layout, sidebar position, and more.
+      <strong>{{ $t('settings.layoutSettings.comingSoon') }}</strong> {{ $t('settings.layoutSettings.comingSoonDescription') }}
     </div>
   </div>
 </template>

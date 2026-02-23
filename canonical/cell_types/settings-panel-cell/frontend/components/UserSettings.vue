@@ -5,11 +5,11 @@
 <template>
   <div class="user-settings">
     <h2 class="text-xl font-bold text-text-primary dark:text-text-primary-dark mb-6">
-      User Settings
+      {{ $t('settings.userSettings.title') }}
     </h2>
     
     <p class="text-sm text-text-secondary dark:text-text-secondary-dark mb-6">
-      Configure your personal preferences. These settings apply only to your account.
+      {{ $t('settings.userSettings.description') }}
     </p>
     
     <!-- Theme Settings -->

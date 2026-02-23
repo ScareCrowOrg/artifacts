@@ -7,10 +7,10 @@
     <!-- Header -->
     <div class="mb-6 pb-4 border-b border-border dark:border-border-dark">
       <h1 class="text-2xl font-bold text-text-primary dark:text-text-primary-dark">
-        Settings
+        {{ $t('settings.title') }}
       </h1>
       <p class="text-sm text-text-secondary dark:text-text-secondary-dark mt-1">
-        Manage your preferences and application configuration
+        {{ $t('settings.description') }}
       </p>
     </div>
     
@@ -25,7 +25,7 @@
         ]"
         @click="activeTab = 'user'"
       >
-        User Settings
+        {{ $t('settings.userTab') }}
       </button>
       <button
         v-if="hasAdminPermission"
@@ -37,8 +37,8 @@
         ]"
         @click="activeTab = 'admin'"
       >
-        Admin Settings
-        <span class="ml-1 text-xs opacity-75">(requires permission)</span>
+        {{ $t('settings.adminTab') }}
+        <span class="ml-1 text-xs opacity-75">{{ $t('settings.requiresPermission') }}</span>
       </button>
     </div>
     

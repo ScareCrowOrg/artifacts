@@ -28,7 +28,7 @@ describe('UserSettings Component', () => {
     })
 
     expect(wrapper.find('.user-settings').exists()).toBe(true)
-    expect(wrapper.text()).toContain('User Settings')
+    expect(wrapper.text()).toContain('settings.userSettings.title')
   })
 
   it('should contain theme settings component', () => {
@@ -53,6 +53,6 @@ describe('UserSettings Component', () => {
       }
     })
 
-    expect(wrapper.text()).toContain('personal preferences')
+    expect(wrapper.text()).toContain('settings.userSettings.description')
   })
 })

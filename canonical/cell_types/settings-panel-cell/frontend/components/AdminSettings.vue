@@ -5,11 +5,11 @@
 <template>
   <div class="admin-settings">
     <h2 class="text-xl font-bold text-text-primary dark:text-text-primary-dark mb-6">
-      Admin Settings
+      {{ $t('settings.adminSettings.title') }}
     </h2>
     
     <p class="text-sm text-text-secondary dark:text-text-secondary-dark mb-6">
-      Configure global application settings. These settings affect all users.
+      {{ $t('settings.adminSettings.description') }}
     </p>
     
     <!-- OAuth Configuration -->

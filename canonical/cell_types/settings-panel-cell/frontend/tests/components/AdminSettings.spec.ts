@@ -51,7 +51,7 @@ describe('AdminSettings Component', () => {
     })
 
     expect(wrapper.find('.admin-settings').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Admin Settings')
+    expect(wrapper.text()).toContain('settings.adminSettings.title')
   })
 
   it('should display OAuth configuration form', () => {

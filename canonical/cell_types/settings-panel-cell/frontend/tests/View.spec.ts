@@ -70,8 +70,8 @@ describe('Settings Panel View', () => {
     await new Promise(resolve => setTimeout(resolve, 100))
 
     const tabs = wrapper.findAll('button')
-    const userTab = tabs.find(tab => tab.text().includes('User Settings'))
-    const adminTab = tabs.find(tab => tab.text().includes('Admin Settings'))
+    const userTab = tabs.find(tab => tab.text().includes('settings.userTab'))
+    const adminTab = tabs.find(tab => tab.text().includes('settings.adminTab'))
 
     expect(userTab).toBeDefined()
     expect(adminTab).toBeUndefined()
@@ -95,8 +95,8 @@ describe('Settings Panel View', () => {
     await new Promise(resolve => setTimeout(resolve, 100))
 
     const tabs = wrapper.findAll('button')
-    const userTab = tabs.find(tab => tab.text().includes('User Settings'))
-    const adminTab = tabs.find(tab => tab.text().includes('Admin Settings'))
+    const userTab = tabs.find(tab => tab.text().includes('settings.userTab'))
+    const adminTab = tabs.find(tab => tab.text().includes('settings.adminTab'))
 
     expect(userTab).toBeDefined()
     expect(adminTab).toBeDefined()
@@ -120,7 +120,7 @@ describe('Settings Panel View', () => {
     await new Promise(resolve => setTimeout(resolve, 100))
 
     const tabs = wrapper.findAll('button')
-    const adminTab = tabs.find(tab => tab.text().includes('Admin Settings'))
+    const adminTab = tabs.find(tab => tab.text().includes('settings.adminTab'))
 
     if (adminTab) {
       await adminTab.trigger('click')
