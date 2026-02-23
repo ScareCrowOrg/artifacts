@@ -7,6 +7,7 @@
   "can_render_dynamically": true,
   "default_refs": {
     "view": ["frontend/View.vue"],
+    "basecell": ["frontend/MeshPrototypingCell.ts"],
     "scripts": ["backend/scripts/main.py"],
     "docs": ["docs/README.md"]
   },
