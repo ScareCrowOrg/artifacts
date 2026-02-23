@@ -1,0 +1,58 @@
+{
+  "id": "ai-models-cell",
+  "name": "AI Models Configuration",
+  "version": "1.0.0",
+  "category": "admin",
+  "description": "Administrative cell for managing AI model configurations (RBAC-protected)",
+  "can_render_dynamically": true,
+  "required_permissions": ["ai-models:admin"],
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "basecell": ["frontend/AIModelsCell.ts"]
+  },
+  "default_initial_data": {
+    "title": "AI Models Configuration",
+    "description": "Configure AI model providers (Ollama, Gemini, OpenAI)",
+    "config": {
+      "defaultProvider": "ollama"
+    }
+  },
+  "properties_schema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["get", "update", "test-connection"],
+        "description": "Action to perform"
+      },
+      "provider": {
+        "type": "string",
+        "enum": ["ollama", "gemini", "openai"],
+        "description": "AI model provider"
+      },
+      "config": {
+        "type": "object",
+        "description": "Provider-specific configuration",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "description": "API endpoint URL (for Ollama)"
+          },
+          "apiKey": {
+            "type": "string",
+            "description": "API key (for Gemini, OpenAI)",
+            "sensitive": true
+          },
+          "modelName": {
+            "type": "string",
+            "description": "Default model name"
+          }
+        }
+      }
+    },
+    "required": ["action"]
+  },
+  "tags": ["admin", "ai", "models", "configuration", "rbac"],
+  "estimated_duration_seconds": 2,
+  "required_resources": ["internet"]
+}
