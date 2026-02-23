@@ -17,6 +17,9 @@
     "view": [
       "frontend/View.vue"
     ],
+    "basecell": [
+      "frontend/CalculatorCell.ts"
+    ],
     "handler": []
   },
   "capabilities": {

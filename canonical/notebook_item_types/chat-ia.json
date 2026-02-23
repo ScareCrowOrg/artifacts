@@ -9,6 +9,9 @@
     "view": [
       "frontend/View.vue"
     ],
+    "basecell": [
+      "frontend/ChatCell.ts"
+    ],
     "docs": [
       "docs/README.md"
     ],

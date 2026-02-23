@@ -7,6 +7,7 @@
   "can_render_dynamically": false,
   "default_refs": {
     "view": ["frontend/View.vue"],
+    "basecell": ["frontend/FragmentEditorCell.ts"],
     "docs": ["docs/README.md"]
   },
   "default_initial_data": {

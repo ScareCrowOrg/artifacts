@@ -9,6 +9,9 @@
     "view": [
       "frontend/View.vue"
     ],
+    "basecell": [
+      "frontend/AssetPrototypingCell.ts"
+    ],
     "scripts": [
       "backend/scripts/main.py"
     ],
