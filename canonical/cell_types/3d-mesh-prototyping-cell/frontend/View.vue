@@ -25,7 +25,7 @@
  * @component
  */
 
-import { ref, computed, watch, onMounted, onUnmounted, defineOptions, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, defineOptions, nextTick, flushSync } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { MeshPrototypingCell } from './MeshPrototypingCell'
 import type { MeshPrototypingInput } from './MeshPrototypingCell'
@@ -268,12 +268,16 @@ const handleFileUpload = async (event: Event) => {
 
       // Use image as-is (user responsible for size and quality)
       // InstantMesh will handle any resolution
-      uploadedImage.value = result
-      localError.value = null
+      // Use flushSync to force immediate Vue reactivity update
+      // FileReader.onload is outside Vue's tracking context, so we need explicit flush
+      flushSync(() => {
+        uploadedImage.value = result
+        localError.value = null
+      })
 
-      // Force Vue to re-render by waiting for next tick
-      // This ensures computed properties and template reactivity update
-      await nextTick()
+      console.log('[DEBUG] After flushSync - uploadedImage.value assigned', {
+        uploadedImageLength: uploadedImage.value?.length || 0
+      })
 
       // Log computed properties state
       const computedInputImage = inputImage.value
