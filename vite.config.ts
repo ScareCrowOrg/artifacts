@@ -97,11 +97,15 @@ export default defineConfig({
     },
 
     // HMR (Hot Module Replacement) configuration
-    // Can be overridden with VITE_HMR_HOST environment variable
+    // For local direct access: uses port 5052 directly
+    // For proxy scenarios (Nginx on 8000): can override clientPort
     hmr: {
       host: process.env.VITE_HMR_HOST || 'localhost',
       port: parseInt(process.env.VITE_HMR_PORT || '5052'),
       protocol: process.env.VITE_HMR_PROTOCOL || 'ws',
+      ...(process.env.VITE_HMR_CLIENT_PORT && {
+        clientPort: parseInt(process.env.VITE_HMR_CLIENT_PORT),
+      }),
     },
 
     // Serve files from artifacts root
