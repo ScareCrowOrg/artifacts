@@ -1,0 +1,467 @@
+{
+  "version": 1,
+  "description": "Canonical collection schemas - source of truth for ScareVerse canonical data. All 11 collections that can exist in Canonical, Sandbox, or Runtime tiers.",
+  "permissions": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "name": {
+      "type": "TEXT",
+      "constraints": "NOT NULL UNIQUE",
+      "indexed": true
+    },
+    "description": {
+      "type": "TEXT"
+    },
+    "resource": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "action": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "scope": {
+      "type": "TEXT",
+      "constraints": "NOT NULL"
+    }
+  },
+  "cells": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "assignee_id": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "tipoCelulaId": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "origemLivroId": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "data": {
+      "type": "JSON",
+      "description": "Cell data payload"
+    },
+    "fragmentos": {
+      "type": "JSON",
+      "description": "Array of fragment objects"
+    },
+    "estado": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "versao": {
+      "type": "TEXT"
+    },
+    "dataCriacao": {
+      "type": "DATETIME",
+      "indexed": true
+    },
+    "dataAtualizacao": {
+      "type": "DATETIME",
+      "indexed": true
+    }
+  },
+  "books": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "name": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "description": {
+      "type": "TEXT"
+    },
+    "assignee_id": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "type": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "source": {
+      "type": "TEXT"
+    },
+    "purpose": {
+      "type": "TEXT"
+    },
+    "children": {
+      "type": "JSON",
+      "description": "Array of child book IDs"
+    },
+    "cells": {
+      "type": "JSON",
+      "description": "Array of cell IDs"
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "updated_at": {
+      "type": "DATETIME",
+      "indexed": true
+    },
+    "is_canonical": {
+      "type": "INTEGER"
+    },
+    "notebook_item_type_id": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "is_canonical_system_book": {
+      "type": "INTEGER"
+    },
+    "dataAtualizacao": {
+      "type": "DATETIME",
+      "indexed": true
+    }
+  },
+  "ai_models": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "name": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "description": {
+      "type": "TEXT"
+    },
+    "type": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "provider": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "modelId": {
+      "type": "TEXT",
+      "constraints": "NOT NULL"
+    },
+    "apiKey": {
+      "type": "TEXT"
+    },
+    "version": {
+      "type": "TEXT"
+    },
+    "active": {
+      "type": "INTEGER",
+      "indexed": true
+    },
+    "configuration": {
+      "type": "JSON",
+      "description": "Model configuration (timeout, temperature, max_tokens, etc.)"
+    },
+    "metadata": {
+      "type": "JSON",
+      "description": "Model metadata (parameters, context, architecture, etc.)"
+    }
+  },
+  "content_types": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "name": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "description": {
+      "type": "TEXT"
+    },
+    "mime_type": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "version": {
+      "type": "TEXT"
+    },
+    "expected_fragments": {
+      "type": "JSON",
+      "description": "Expected fragment schema definition"
+    }
+  },
+  "notebook_items": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "assignee_id": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "kind": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "notebook_item_type_id": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "fragments": {
+      "type": "JSON",
+      "description": "Array of fragments"
+    },
+    "refs": {
+      "type": "JSON",
+      "description": "Reference object"
+    },
+    "initial_data": {
+      "type": "JSON",
+      "description": "Initial data payload"
+    },
+    "status": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "outputs": {
+      "type": "JSON",
+      "description": "Output data"
+    },
+    "cells": {
+      "type": "JSON",
+      "description": "Array of cell IDs"
+    },
+    "execution_mode": {
+      "type": "TEXT"
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "updated_at": {
+      "type": "DATETIME",
+      "indexed": true
+    },
+    "name": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "description": {
+      "type": "TEXT"
+    },
+    "type": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "source": {
+      "type": "TEXT"
+    },
+    "purpose": {
+      "type": "TEXT"
+    },
+    "children": {
+      "type": "JSON",
+      "description": "Array of child IDs"
+    },
+    "is_unclassified_master_template": {
+      "type": "INTEGER"
+    },
+    "is_canonical_system_book": {
+      "type": "INTEGER"
+    },
+    "is_canonical": {
+      "type": "INTEGER"
+    },
+    "dataAtualizacao": {
+      "type": "DATETIME",
+      "indexed": true
+    }
+  },
+  "templates": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "name": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "description": {
+      "type": "TEXT"
+    },
+    "tags": {
+      "type": "JSON",
+      "description": "Array of tag strings"
+    },
+    "metadata": {
+      "type": "JSON",
+      "description": "Custom metadata object"
+    },
+    "status": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "owner": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "visibility": {
+      "type": "TEXT",
+      "constraints": "NOT NULL"
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "updated_at": {
+      "type": "DATETIME",
+      "indexed": true
+    }
+  },
+  "roles": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "name": {
+      "type": "TEXT",
+      "constraints": "NOT NULL UNIQUE",
+      "indexed": true
+    },
+    "permissions": {
+      "type": "JSON",
+      "description": "Array of permission strings"
+    },
+    "description": {
+      "type": "TEXT"
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "constraints": "NOT NULL",
+      "indexed": true
+    }
+  },
+  "workflows": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "name": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "steps": {
+      "type": "JSON",
+      "description": "Array of workflow step objects"
+    },
+    "status": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "indexed": true
+    }
+  },
+  "notebook_item_types": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "kind": {
+      "type": "TEXT",
+      "constraints": "NOT NULL UNIQUE",
+      "indexed": true
+    },
+    "label": {
+      "type": "TEXT"
+    },
+    "icon": {
+      "type": "TEXT"
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "indexed": true
+    }
+  },
+  "contents": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY"
+    },
+    "content_type_id": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "assignee_id": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "data_ref": {
+      "type": "TEXT",
+      "constraints": "NOT NULL"
+    },
+    "version": {
+      "type": "INTEGER",
+      "constraints": "NOT NULL"
+    },
+    "is_latest": {
+      "type": "INTEGER",
+      "constraints": "NOT NULL",
+      "indexed": true
+    },
+    "previous_version_id": {
+      "type": "TEXT"
+    },
+    "origin_cell_id": {
+      "type": "TEXT",
+      "indexed": true
+    },
+    "fragments": {
+      "type": "JSON",
+      "description": "Content metadata conforming to ContentType.expected_fragments"
+    },
+    "filename": {
+      "type": "TEXT"
+    },
+    "size_bytes": {
+      "type": "INTEGER"
+    },
+    "checksum": {
+      "type": "TEXT"
+    },
+    "tags": {
+      "type": "JSON",
+      "description": "Array of tag strings"
+    },
+    "metadata": {
+      "type": "JSON",
+      "description": "Additional custom metadata"
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "constraints": "NOT NULL",
+      "indexed": true
+    }
+  }
+}
