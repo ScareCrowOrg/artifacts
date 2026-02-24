@@ -1,0 +1,21 @@
+{
+  "id": "574315d6-00da-4b83-9ea9-10cc677d3ec1",
+  "name": "editor",
+  "description": "Content editor with access to templates and workflows",
+  "permissions": [
+    "templates.read",
+    "templates.write",
+    "templates.create",
+    "templates.delete",
+    "workflows.read",
+    "workflows.write",
+    "workflows.create",
+    "workflows.delete",
+    "canonical.read",
+    "cells.read_own",
+    "cells.write_own",
+    "books.read_own",
+    "books.write_own"
+  ],
+  "priority": 50
+}

@@ -1,0 +1,9 @@
+{
+  "id": "4eeb2712-e8d1-407b-90a3-422f0e0c31cf",
+  "name": "admin",
+  "description": "Administrator with full system access",
+  "permissions": [
+    "*"
+  ],
+  "priority": 100
+}

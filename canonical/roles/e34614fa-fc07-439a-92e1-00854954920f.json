@@ -1,0 +1,15 @@
+{
+  "id": "e34614fa-fc07-439a-92e1-00854954920f",
+  "name": "viewer",
+  "description": "Viewer with read-only access to public content",
+  "permissions": [
+    "templates.read",
+    "workflows.read",
+    "ai_models.read",
+    "content_types.read",
+    "agent_types.read",
+    "book_types.read",
+    "notebook_item_types.read"
+  ],
+  "priority": 20
+}
