@@ -1,6 +1,7 @@
 {
   "version": 1,
   "description": "Canonical collection schemas - source of truth for ScareVerse canonical data. All 11 collections that can exist in Canonical, Sandbox, or Runtime tiers.",
+  "last_updated": "2026-02-24",
   "permissions": {
     "_id": {
       "type": "TEXT",
@@ -9,10 +10,16 @@
     "name": {
       "type": "TEXT",
       "constraints": "NOT NULL UNIQUE",
-      "indexed": true
+      "indexed": true,
+      "description": "Permission string (e.g., 'templates.read')"
     },
     "description": {
       "type": "TEXT"
+    },
+    "category": {
+      "type": "TEXT",
+      "indexed": true,
+      "description": "Permission category"
     },
     "resource": {
       "type": "TEXT",
@@ -27,6 +34,9 @@
     "scope": {
       "type": "TEXT",
       "constraints": "NOT NULL"
+    },
+    "created_at": {
+      "type": "DATETIME"
     }
   },
   "cells": {
@@ -293,46 +303,59 @@
   "templates": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
+      "constraints": "PRIMARY KEY",
+      "description": "Unique template identifier"
     },
     "name": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "indexed": true
+      "indexed": true,
+      "description": "Template display name"
     },
     "description": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "Template description"
+    },
+    "kind": {
+      "type": "TEXT",
+      "indexed": true,
+      "description": "Template type/category"
     },
     "tags": {
       "type": "JSON",
-      "description": "Array of tag strings"
+      "description": "Array of tag strings for categorization"
     },
     "metadata": {
       "type": "JSON",
-      "description": "Custom metadata object"
+      "description": "Custom metadata object (level, category, etc)"
     },
     "status": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "indexed": true
+      "indexed": true,
+      "description": "Status: draft, published, archived"
     },
     "owner": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "indexed": true
+      "indexed": true,
+      "description": "User ID of template owner"
     },
     "visibility": {
       "type": "TEXT",
-      "constraints": "NOT NULL"
+      "constraints": "NOT NULL",
+      "description": "Visibility: public, private, team"
     },
     "created_at": {
       "type": "DATETIME",
       "constraints": "NOT NULL",
-      "indexed": true
+      "indexed": true,
+      "description": "Creation timestamp"
     },
     "updated_at": {
       "type": "DATETIME",
-      "indexed": true
+      "indexed": true,
+      "description": "Last update timestamp"
     }
   },
   "roles": {
@@ -354,8 +377,10 @@
     },
     "created_at": {
       "type": "DATETIME",
-      "constraints": "NOT NULL",
-      "indexed": true
+      "constraints": "NOT NULL"
+    },
+    "updated_at": {
+      "type": "DATETIME"
     }
   },
   "workflows": {
@@ -368,17 +393,29 @@
       "constraints": "NOT NULL",
       "indexed": true
     },
+    "description": {
+      "type": "TEXT"
+    },
     "steps": {
       "type": "JSON",
       "description": "Array of workflow step objects"
     },
     "status": {
       "type": "TEXT",
+      "indexed": true,
+      "description": "Status: active, inactive, draft"
+    },
+    "owner": {
+      "type": "TEXT",
       "indexed": true
     },
     "created_at": {
       "type": "DATETIME",
+      "constraints": "NOT NULL",
       "indexed": true
+    },
+    "updated_at": {
+      "type": "DATETIME"
     }
   },
   "notebook_item_types": {
@@ -389,17 +426,23 @@
     "kind": {
       "type": "TEXT",
       "constraints": "NOT NULL UNIQUE",
-      "indexed": true
+      "indexed": true,
+      "description": "Type identifier (e.g., 'text', 'code', 'image')"
     },
     "label": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "Display label"
     },
     "icon": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "Icon identifier"
+    },
+    "config": {
+      "type": "JSON",
+      "description": "Type-specific configuration"
     },
     "created_at": {
-      "type": "DATETIME",
-      "indexed": true
+      "type": "DATETIME"
     }
   },
   "contents": {
