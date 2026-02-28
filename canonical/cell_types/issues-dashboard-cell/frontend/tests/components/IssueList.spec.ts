@@ -3,20 +3,11 @@
  * @description Unit tests for IssueList component
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import IssueList from '../../components/IssueList.vue'
 import { useIssuesStore } from '../../stores/issuesStore'
-
-// Mock IssueCard component
-vi.mock('../../components/IssueCard.vue', () => ({
-  default: {
-    name: 'IssueCard',
-    props: ['cell', 'isSelected'],
-    template: '<div data-testid="issue-card" :data-cell-id="cell.id"></div>'
-  }
-}))
 
 describe('IssueList', () => {
   let pinia: ReturnType<typeof createPinia>
@@ -38,6 +29,13 @@ describe('IssueList', () => {
         plugins: [pinia],
         mocks: {
           $t: (key: string) => key
+        },
+        stubs: {
+          IssueCard: {
+            name: 'IssueCard',
+            props: ['cell', 'isSelected'],
+            template: '<div data-testid="issue-card" :data-cell-id="cell?.id"></div>'
+          }
         }
       }
     })
@@ -55,6 +53,13 @@ describe('IssueList', () => {
         plugins: [pinia],
         mocks: {
           $t: (key: string) => key
+        },
+        stubs: {
+          IssueCard: {
+            name: 'IssueCard',
+            props: ['cell', 'isSelected'],
+            template: '<div data-testid="issue-card" :data-cell-id="cell?.id"></div>'
+          }
         }
       }
     })
@@ -76,6 +81,13 @@ describe('IssueList', () => {
         plugins: [pinia],
         mocks: {
           $t: (key: string) => key
+        },
+        stubs: {
+          IssueCard: {
+            name: 'IssueCard',
+            props: ['cell', 'isSelected'],
+            template: '<div data-testid="issue-card" :data-cell-id="cell?.id"></div>'
+          }
         }
       }
     })
@@ -99,6 +111,13 @@ describe('IssueList', () => {
         plugins: [pinia],
         mocks: {
           $t: (key: string) => key
+        },
+        stubs: {
+          IssueCard: {
+            name: 'IssueCard',
+            props: ['cell', 'isSelected'],
+            template: '<div data-testid="issue-card" :data-cell-id="cell?.id"></div>'
+          }
         }
       }
     })
@@ -118,6 +137,13 @@ describe('IssueList', () => {
         plugins: [pinia],
         mocks: {
           $t: (key: string) => key
+        },
+        stubs: {
+          IssueCard: {
+            name: 'IssueCard',
+            props: ['cell', 'isSelected'],
+            template: '<div data-testid="issue-card" :data-cell-id="cell?.id"></div>'
+          }
         }
       }
     })

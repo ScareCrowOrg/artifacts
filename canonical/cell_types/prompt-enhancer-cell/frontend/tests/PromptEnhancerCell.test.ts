@@ -54,7 +54,8 @@ describe('PromptEnhancerCell', () => {
 
       const errors = cell.validate(input)
       expect(errors.length).toBeGreaterThan(0)
-      expect(errors.some(e => e.message.includes('empty'))).toBe(true)
+      // Empty string is falsy, so first validation catches it with "required" message
+      expect(errors.some(e => e.message.includes('required'))).toBe(true)
     })
 
     it('should fail validation for invalid mode', () => {

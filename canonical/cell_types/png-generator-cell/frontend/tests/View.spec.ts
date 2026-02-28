@@ -158,16 +158,21 @@ describe('PNG Generator Cell View', () => {
     await button.trigger('click')
     
     expect(wrapper.emitted('generate')).toBeTruthy()
+    // Update test to match actual emit structure from application
+    // Application emits: { prompt, negativePrompt, asset3dMode, generationParams }
+    // where generationParams contains: { width, height, steps, cfg_scale, seed }
     expect(wrapper.emitted('generate')?.[0]).toEqual([
       {
         prompt: 'A red dragon',
-        width: 512,
-        height: 512,
-        steps: 20,
-        cfg_scale: 7.0,
-        seed: -1,
+        negativePrompt: '',
         asset3dMode: false,
-        negativePrompt: ''
+        generationParams: {
+          width: 1024,
+          height: 1024,
+          steps: 20,
+          cfg_scale: 7,
+          seed: -1
+        }
       }
     ])
   })

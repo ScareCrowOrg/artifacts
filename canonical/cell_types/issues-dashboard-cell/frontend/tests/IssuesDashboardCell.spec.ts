@@ -13,6 +13,9 @@ vi.mock('@/services/apiService', () => ({
   apiFetch: vi.fn()
 }))
 
+// Import the mocked module for use in tests
+import { apiFetch } from '@/services/apiService'
+
 // Mock the logger
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
@@ -151,8 +154,7 @@ describe('IssuesDashboardCell', () => {
 
   describe('execute() - RBAC', () => {
     beforeEach(() => {
-      const { apiFetch } = require('@/services/apiService')
-      apiFetch.mockResolvedValue({
+      vi.mocked(apiFetch).mockResolvedValue({
         json: async () => ({ success: true })
       })
     })
@@ -171,8 +173,7 @@ describe('IssuesDashboardCell', () => {
       // Mock user with read permission
       vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
       
-      const { apiFetch } = require('@/services/apiService')
-      apiFetch.mockResolvedValue({
+      vi.mocked(apiFetch).mockResolvedValue({
         json: async () => ({ issues: [] })
       })
 
@@ -201,8 +202,7 @@ describe('IssuesDashboardCell', () => {
       // Mock user with write permission
       vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
       
-      const { apiFetch } = require('@/services/apiService')
-      apiFetch.mockResolvedValue({
+      vi.mocked(apiFetch).mockResolvedValue({
         json: async () => ({ id: '123', title: 'Test' })
       })
 
@@ -254,10 +254,8 @@ describe('IssuesDashboardCell', () => {
     })
 
     it('should execute list action', async () => {
-      const { apiFetch } = require('@/services/apiService')
-      const mockIssues = [{ id: '1' }, { id: '2' }]
-      apiFetch.mockResolvedValue({
-        json: async () => mockIssues
+      vi.mocked(apiFetch).mockResolvedValue({
+        json: async () => [{ id: '1' }, { id: '2' }]
       })
 
       const result = await cell.execute({ action: 'list' })
@@ -269,9 +267,8 @@ describe('IssuesDashboardCell', () => {
     })
 
     it('should execute get action with issueId', async () => {
-      const { apiFetch } = require('@/services/apiService')
       const mockIssue = { id: '123', title: 'Test Issue' }
-      apiFetch.mockResolvedValue({
+      vi.mocked(apiFetch).mockResolvedValue({
         json: async () => mockIssue
       })
 
@@ -294,9 +291,8 @@ describe('IssuesDashboardCell', () => {
     })
 
     it('should execute create action with data', async () => {
-      const { apiFetch } = require('@/services/apiService')
       const newIssue = { title: 'New Issue', description: 'Test' }
-      apiFetch.mockResolvedValue({
+      vi.mocked(apiFetch).mockResolvedValue({
         json: async () => ({ id: '123', ...newIssue })
       })
 
@@ -314,8 +310,7 @@ describe('IssuesDashboardCell', () => {
     })
 
     it('should handle API errors gracefully', async () => {
-      const { apiFetch } = require('@/services/apiService')
-      apiFetch.mockRejectedValue(new Error('Network error'))
+      vi.mocked(apiFetch).mockRejectedValue(new Error('Network error'))
 
       const result = await cell.execute({ action: 'list' })
 
@@ -345,8 +340,7 @@ describe('IssuesDashboardCell', () => {
     it('should return healthy with issues:read permission', async () => {
       vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
       
-      const { apiFetch } = require('@/services/apiService')
-      apiFetch.mockResolvedValue({ ok: true })
+      vi.mocked(apiFetch).mockResolvedValue({ ok: true })
 
       const result = await cell.health_check()
 
@@ -357,8 +351,7 @@ describe('IssuesDashboardCell', () => {
     it('should return degraded if API is unavailable', async () => {
       vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
       
-      const { apiFetch } = require('@/services/apiService')
-      apiFetch.mockRejectedValue(new Error('API unavailable'))
+      vi.mocked(apiFetch).mockRejectedValue(new Error('API unavailable'))
 
       const result = await cell.health_check()
 
@@ -372,8 +365,7 @@ describe('IssuesDashboardCell', () => {
     it('should have execution_time in result', async () => {
       vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
       
-      const { apiFetch } = require('@/services/apiService')
-      apiFetch.mockResolvedValue({
+      vi.mocked(apiFetch).mockResolvedValue({
         json: async () => []
       })
 
@@ -387,8 +379,7 @@ describe('IssuesDashboardCell', () => {
     it('should handle filters in list action', async () => {
       vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
       
-      const { apiFetch } = require('@/services/apiService')
-      apiFetch.mockResolvedValue({
+      vi.mocked(apiFetch).mockResolvedValue({
         json: async () => []
       })
 
