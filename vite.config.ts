@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
@@ -123,28 +124,29 @@ export default defineConfig({
   // Module resolution
   resolve: {
     alias: {
-      // Use ABSOLUTE paths for container compatibility
-      // This prevents Vite's "cegueira de contexto" with relative paths in docker
-
+      // Use flexible paths for both container and local development
+      // In container: /app/artifacts
+      // In local/test: process.cwd()
+      
       // Map #artifacts to artifacts root (for all cell types and composition)
-      '#artifacts': '/app/artifacts',
+      '#artifacts': process.cwd(),
 
       // Map #shared to shared infrastructure mirror (isolated utilities)
-      '#shared': '/app/artifacts/shared',
+      '#shared': path.resolve(process.cwd(), 'shared'),
 
       // Map @/ to #shared for shared utilities (apiService, authService, etc)
       // This allows files that import @/utils/logger to resolve to #shared/utils/logger
       // In cockpit-vue context: @/ → cockpit-vue/src (normal)
       // In Vite context: @/ → #shared/ (this alias, preserving folder structure)
-      '@': '/app/artifacts/shared',
-      '@/utils': '/app/artifacts/shared/utils',
-      '@/services': '/app/artifacts/shared/services',
-      '@/config': '/app/artifacts/shared/config',
-      '@/components': '/app/artifacts/shared/components',
-      '@/types': '/app/artifacts/shared/types',
-      '@/stores': '/app/artifacts/shared/stores',
-      '@/composables': '/app/artifacts/shared/composables',
-      '@/i18n': '/app/artifacts/shared/i18n',
+      '@': path.resolve(process.cwd(), 'shared'),
+      '@/utils': path.resolve(process.cwd(), 'shared/utils'),
+      '@/services': path.resolve(process.cwd(), 'shared/services'),
+      '@/config': path.resolve(process.cwd(), 'shared/config'),
+      '@/components': path.resolve(process.cwd(), 'shared/components'),
+      '@/types': path.resolve(process.cwd(), 'shared/types'),
+      '@/stores': path.resolve(process.cwd(), 'shared/stores'),
+      '@/composables': path.resolve(process.cwd(), 'shared/composables'),
+      '@/i18n': path.resolve(process.cwd(), 'shared/i18n'),
     },
     extensions: ['.ts', '.tsx', '.vue', '.js', '.jsx', '.json'],
   },
@@ -171,4 +173,35 @@ export default defineConfig({
   // Logging
   logLevel: 'info',
   clearScreen: false,  // Don't clear terminal on startup
+  
+  // Test configuration
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
+    root: process.cwd(),  // Use current working directory for tests
+    include: ['**/tests/**/*.{test,spec}.{js,ts,jsx,tsx}', '**/*.{test,spec}.{js,ts,jsx,tsx}'],
+    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: [
+        'node_modules/',
+        'tests/',
+        '**/*.test.ts',
+        '**/*.test.js',
+        '**/*.spec.ts',
+        '**/*.spec.js',
+        '**/tests/**',
+        'vite.config.ts',
+        'vitest.config.ts',
+        'vitest.setup.ts'
+      ],
+      all: true,
+      lines: 90,
+      functions: 90,
+      branches: 90,
+      statements: 90
+    }
+  }
 })
