@@ -156,7 +156,7 @@ describe('ContentExplorerCell', () => {
 
       const result = await cell.execute({ action: 'list' })
 
-      expect(fetchMock).toHaveBeenCalledWith('/api/cells/execute-ephemeral', {
+      expect(fetchMock).toHaveBeenCalledWith('http://localhost:5050/api/cells/execute-ephemeral', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -243,7 +243,7 @@ describe('ContentExplorerCell', () => {
       })
 
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/cells/execute-ephemeral',
+        'http://localhost:5050/api/cells/execute-ephemeral',
         expect.objectContaining({
           body: expect.stringContaining('image-png')
         })

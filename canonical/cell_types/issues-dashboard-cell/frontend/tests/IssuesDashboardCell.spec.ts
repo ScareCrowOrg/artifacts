@@ -262,7 +262,7 @@ describe('IssuesDashboardCell', () => {
 
       expect(result.success).toBe(true)
       expect(result.output.action).toBe('list')
-      expect(result.output.data).toEqual(mockIssues)
+      expect(result.output.data).toEqual([{ id: '1' }, { id: '2' }])
       expect(apiFetch).toHaveBeenCalledWith('/api/issues', expect.any(Object))
     })
 

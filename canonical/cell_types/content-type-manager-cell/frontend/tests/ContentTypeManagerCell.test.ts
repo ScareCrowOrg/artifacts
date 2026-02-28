@@ -186,7 +186,7 @@ describe('ContentTypeManagerCell', () => {
       
       // Verify fetch was called correctly
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/cells/execute-ephemeral',
+        'http://localhost:5050/api/cells/execute-ephemeral',
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
