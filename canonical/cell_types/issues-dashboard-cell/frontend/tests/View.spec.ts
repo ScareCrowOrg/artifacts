@@ -288,8 +288,13 @@ describe('Issues Dashboard View', () => {
       }
     })
 
-    // Set showIngestForm to true
-    await wrapper.setData({ showIngestForm: true })
+    // Initially the form should not be visible
+    expect(wrapper.find('[data-testid="ingest-form"]').exists()).toBe(false)
+
+    // Find the IssueFilters component and emit toggle-ingest event
+    const filters = wrapper.findComponent({ name: 'IssueFilters' })
+    await filters.vm.$emit('toggle-ingest')
+    await wrapper.vm.$nextTick()
 
     // The form should now be visible
     expect(wrapper.find('[data-testid="ingest-form"]').exists()).toBe(true)
