@@ -8,8 +8,22 @@
 
 import { vi } from 'vitest'
 import { config } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 
-// Mock i18n plugin for Vue Test Utils
+// Create a simple i18n instance for tests
+const i18n = createI18n({
+  legacy: false,
+  locale: 'en',
+  messages: {
+    en: {},
+    pt: {}
+  }
+})
+
+// Install i18n plugin globally for all Vue component tests
+config.global.plugins = [i18n]
+
+// Mock i18n for Vue Test Utils (backward compatibility)
 config.global.mocks = {
   $t: (key: string) => key,
   $i18n: {
