@@ -14,53 +14,71 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { AssetPrototypingCell } from '../AssetPrototypingCell'
-import type { CellResult, HealthCheckResult } from '@/types/BaseCell'
 
-// Mock sub-cells
+// Mock sub-cells BEFORE importing AssetPrototypingCell
+// These mocks need to return factory functions that create mock cell instances
 vi.mock('../../png-generator-cell/frontend/PngGeneratorCell', () => ({
-  PngGeneratorCell: vi.fn().mockImplementation(() => ({
-    execute: vi.fn().mockResolvedValue({
-      success: true,
-      output: { generatedPng: 'mock-base64-png-data' },
-      execution_time: 100
-    }),
-    describe: vi.fn().mockResolvedValue({
-      id: 'png-generator-cell',
-      name: 'PNG Generator',
-      version: '1.0.0'
-    }),
-    validate: vi.fn().mockReturnValue([]),
-    setup: vi.fn().mockResolvedValue(undefined),
-    teardown: vi.fn().mockResolvedValue(undefined),
-    health_check: vi.fn().mockResolvedValue({
-      status: 'healthy',
-      can_execute: true
-    })
-  }))
+  PngGeneratorCell: class {
+    async execute() {
+      return {
+        success: true,
+        output: { generatedPng: 'mock-base64-png-data' },
+        execution_time: 100
+      }
+    }
+    async describe() {
+      return {
+        id: 'png-generator-cell',
+        name: 'PNG Generator',
+        version: '1.0.0'
+      }
+    }
+    validate() {
+      return []
+    }
+    async setup() {}
+    async teardown() {}
+    async health_check() {
+      return {
+        status: 'healthy',
+        can_execute: true
+      }
+    }
+  }
 }))
 
 vi.mock('../../3d-mesh-prototyping-cell/frontend/MeshPrototypingCell', () => ({
-  MeshPrototypingCell: vi.fn().mockImplementation(() => ({
-    execute: vi.fn().mockResolvedValue({
-      success: true,
-      output: { glb_url: 'https://example.com/asset.glb' },
-      execution_time: 200
-    }),
-    describe: vi.fn().mockResolvedValue({
-      id: '3d-mesh-prototyping-cell',
-      name: '3D Mesh Prototyping',
-      version: '1.0.0'
-    }),
-    validate: vi.fn().mockReturnValue([]),
-    setup: vi.fn().mockResolvedValue(undefined),
-    teardown: vi.fn().mockResolvedValue(undefined),
-    health_check: vi.fn().mockResolvedValue({
-      status: 'healthy',
-      can_execute: true
-    })
-  }))
+  MeshPrototypingCell: class {
+    async execute() {
+      return {
+        success: true,
+        output: { glb_url: 'https://example.com/asset.glb' },
+        execution_time: 200
+      }
+    }
+    async describe() {
+      return {
+        id: '3d-mesh-prototyping-cell',
+        name: '3D Mesh Prototyping',
+        version: '1.0.0'
+      }
+    }
+    validate() {
+      return []
+    }
+    async setup() {}
+    async teardown() {}
+    async health_check() {
+      return {
+        status: 'healthy',
+        can_execute: true
+      }
+    }
+  }
 }))
+
+import { AssetPrototypingCell } from '../AssetPrototypingCell'
+import type { CellResult, HealthCheckResult } from '@/types/BaseCell'
 
 describe('AssetPrototypingCell', () => {
   let cell: AssetPrototypingCell
