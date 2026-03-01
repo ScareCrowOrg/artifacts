@@ -63,14 +63,18 @@ export const ENDPOINTS = {
   serviceLogs: (serviceId) => `${API_BASE}/api/services/${serviceId}/logs`,
 
   // Authentication endpoints
-  authStatus: `${API_BASE}/api/auth/status`,
+  authStatus: `${CENTRALHUB_BASE}/api/auth/status`,
 
   // Google OAuth endpoints - NOTE: These are in CentralHub (port 5051), not ScareRunner (5050)
   googleLogin: `${CENTRALHUB_BASE}/api/auth/google`,
   googleCallback: `${CENTRALHUB_BASE}/api/auth/google/callback`,
 
-  // Token refresh endpoint - managed by CentralHub
+  // Password auth endpoints - MIGRATED TO CENTRALHUB (Complete Authentication Strangling)
+  passwordRegister: `${CENTRALHUB_BASE}/api/auth/password/register`,
+  passwordLogin: `${CENTRALHUB_BASE}/api/auth/password/login`,
   authRefresh: `${CENTRALHUB_BASE}/api/auth/refresh`,
+  logout: `${CENTRALHUB_BASE}/api/auth/logout`,
+  logoutAll: `${CENTRALHUB_BASE}/api/auth/logout-all`,
 
   // Google OAuth status/config endpoints - also in CentralHub
   authGoogleStatus: `${CENTRALHUB_BASE}/api/auth/status`,
