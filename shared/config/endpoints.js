@@ -69,10 +69,8 @@ export const ENDPOINTS = {
   googleLogin: `${CENTRALHUB_BASE}/api/auth/google`,
   googleCallback: `${CENTRALHUB_BASE}/api/auth/google/callback`,
 
-  // Password auth endpoints - these stay in ScareRunner
-  passwordRegister: `${API_BASE}/api/auth/password/register`,
-  passwordLogin: `${API_BASE}/api/auth/password/login`,
-  authRefresh: `${API_BASE}/api/auth/refresh`,
+  // Token refresh endpoint - managed by CentralHub
+  authRefresh: `${CENTRALHUB_BASE}/api/auth/refresh`,
 
   // Google OAuth status/config endpoints - also in CentralHub
   authGoogleStatus: `${CENTRALHUB_BASE}/api/auth/status`,
