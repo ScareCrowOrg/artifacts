@@ -32,8 +32,7 @@
       "indexed": true
     },
     "scope": {
-      "type": "TEXT",
-      "constraints": "NOT NULL"
+      "type": "TEXT"
     },
     "created_at": {
       "type": "DATETIME"
