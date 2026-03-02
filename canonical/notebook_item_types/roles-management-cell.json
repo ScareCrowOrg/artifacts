@@ -18,7 +18,9 @@
     "description": "Manage roles and permissions for users",
     "config": {
       "defaultView": "list"
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   },
   "properties_schema": {
     "type": "object",
@@ -62,9 +64,15 @@
           "description": {
             "type": "string",
             "description": "Role description"
-          }
-        }
-      }
+          ,
+  "created_at": "2026-02-24T00:00:00"
+}
+        ,
+  "created_at": "2026-02-24T00:00:00"
+}
+      ,
+  "created_at": "2026-02-24T00:00:00"
+}
     },
     "required": [
       "action"
@@ -87,4 +95,6 @@
     ]
   },
   "kind": "cell"
+,
+  "created_at": "2026-02-24T00:00:00"
 }

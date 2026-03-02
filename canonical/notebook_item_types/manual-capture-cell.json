@@ -37,7 +37,9 @@
       "type": "string",
       "default": "Enter content to capture or HTML to generate wireframe...",
       "description": "Placeholder text for the textarea"
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   },
   "_discovery": {
     "labels": [
@@ -64,4 +66,6 @@
     ]
   },
   "kind": "cell"
+,
+  "created_at": "2026-02-24T00:00:00"
 }

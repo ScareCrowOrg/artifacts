@@ -31,7 +31,9 @@
       "steps": 20,
       "cfg_scale": 7.0,
       "seed": -1
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   },
   "allow_instance_override_refs": true,
   "properties_schema": {
@@ -76,7 +78,9 @@
         "seed": -1
       },
       "description": "Stable Diffusion generation parameters"
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   },
   "_discovery": {
     "labels": [
@@ -110,4 +114,6 @@
     ]
   },
   "kind": "cell"
+,
+  "created_at": "2026-02-24T00:00:00"
 }

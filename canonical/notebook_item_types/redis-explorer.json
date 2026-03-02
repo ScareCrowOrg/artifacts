@@ -49,7 +49,9 @@
       "type": "integer",
       "default": 1,
       "description": "Maximum depth levels to display"
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   },
   "_discovery": {
     "labels": [
@@ -78,4 +80,6 @@
     ]
   },
   "kind": "cell"
+,
+  "created_at": "2026-02-24T00:00:00"
 }

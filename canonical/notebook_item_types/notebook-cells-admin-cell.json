@@ -31,7 +31,9 @@
     "pagination": {
       "page": 1,
       "perPage": 20
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   },
   "allow_instance_override_refs": true,
   "properties_schema": {
@@ -62,7 +64,9 @@
       "type": "object",
       "required": false,
       "description": "Filters for list action (assignee, cellType)"
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   },
   "_discovery": {
     "labels": [
@@ -96,4 +100,6 @@
     ]
   },
   "kind": "cell"
+,
+  "created_at": "2026-02-24T00:00:00"
 }

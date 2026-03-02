@@ -71,16 +71,24 @@
           "description": "Filter by labels",
           "items": {
             "type": "string"
-          }
-        }
-      }
+          ,
+  "created_at": "2026-02-24T00:00:00"
+}
+        ,
+  "created_at": "2026-02-24T00:00:00"
+}
+      ,
+  "created_at": "2026-02-24T00:00:00"
+}
     },
     "data": {
       "type": "object",
       "label": "Data",
       "description": "Data payload for create/update actions",
       "required": false
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   },
   "inputs": [
     {
@@ -109,7 +117,9 @@
       "name": "data",
       "type": "object",
       "required": false
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   ],
   "outputs": [
     {
@@ -123,7 +133,11 @@
     {
       "name": "data",
       "type": "object"
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   ],
   "kind": "cell"
+,
+  "created_at": "2026-02-24T00:00:00"
 }

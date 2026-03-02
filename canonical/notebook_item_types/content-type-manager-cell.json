@@ -26,7 +26,9 @@
       "type": "string",
       "default": "ephemeral",
       "description": "Cell category - 'ephemeral' marks this as ephemeral utility (not persisted)"
-    }
+    ,
+  "created_at": "2026-02-24T00:00:00"
+}
   },
   "_discovery": {
     "labels": [
@@ -55,4 +57,6 @@
     ]
   },
   "kind": "cell"
+,
+  "created_at": "2026-02-24T00:00:00"
 }
