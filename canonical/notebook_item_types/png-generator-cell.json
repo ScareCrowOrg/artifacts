@@ -32,6 +32,7 @@
       "cfg_scale": 7.0,
       "seed": -1
     ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
   },
@@ -79,6 +80,7 @@
       },
       "description": "Stable Diffusion generation parameters"
     ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
   },
@@ -115,5 +117,6 @@
   },
   "kind": "cell"
 ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }

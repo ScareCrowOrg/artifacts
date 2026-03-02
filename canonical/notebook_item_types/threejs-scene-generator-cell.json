@@ -62,6 +62,7 @@
       "default": "mistral",
       "description": "Selected AI model for code generation"
     ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
   },
@@ -97,5 +98,6 @@
   },
   "kind": "cell"
 ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }

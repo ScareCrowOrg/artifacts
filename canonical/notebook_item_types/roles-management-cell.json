@@ -19,6 +19,7 @@
     "config": {
       "defaultView": "list"
     ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
   },
@@ -65,12 +66,15 @@
             "type": "string",
             "description": "Role description"
           ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
         ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
       ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
     },
@@ -96,5 +100,6 @@
   },
   "kind": "cell"
 ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }

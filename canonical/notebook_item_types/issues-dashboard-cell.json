@@ -72,12 +72,15 @@
           "items": {
             "type": "string"
           ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
         ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
       ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
     },
@@ -87,6 +90,7 @@
       "description": "Data payload for create/update actions",
       "required": false
     ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
   },
@@ -118,6 +122,7 @@
       "type": "object",
       "required": false
     ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
   ],
@@ -134,10 +139,12 @@
       "name": "data",
       "type": "object"
     ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
   ],
   "kind": "cell"
 ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }

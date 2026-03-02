@@ -32,6 +32,7 @@
       "page": 1,
       "perPage": 20
     ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
   },
@@ -65,6 +66,7 @@
       "required": false,
       "description": "Filters for list action (assignee, cellType)"
     ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
   },
@@ -101,5 +103,6 @@
   },
   "kind": "cell"
 ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }

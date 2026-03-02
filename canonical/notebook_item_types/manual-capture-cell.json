@@ -38,6 +38,7 @@
       "default": "Enter content to capture or HTML to generate wireframe...",
       "description": "Placeholder text for the textarea"
     ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
   },
@@ -67,5 +68,6 @@
   },
   "kind": "cell"
 ,
+  "updated_at": "2026-02-24T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
