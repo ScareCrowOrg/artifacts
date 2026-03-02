@@ -1,0 +1,21 @@
+{
+  "id": "asset-prototyping-book",
+  "name": "Asset Prototyping Book",
+  "description": "Orchestrates complete 3D asset creation pipeline: AI image generation → SVG vectorization → 3D prototyping with validation checkpoints",
+  "version": "1.0.0",
+  "category": "prototyping",
+  "kind": "book",
+  "default_refs": {
+    "book": [
+      "frontend/AssetPrototypingBook.ts"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "default_initial_data": {
+    "category": "persistida",
+    "icon": "cube"
+  },
+  "can_render_dynamically": false
+}
