@@ -6,8 +6,12 @@
   "description": "Administrative cell for managing roles and permissions (RBAC-protected)",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "basecell": ["frontend/RolesManagementCell.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/RolesManagementCell.ts"
+    ]
   },
   "default_initial_data": {
     "title": "Roles Management",
@@ -21,7 +25,15 @@
     "properties": {
       "action": {
         "type": "string",
-        "enum": ["list", "get", "create", "update", "delete", "assign", "unassign"],
+        "enum": [
+          "list",
+          "get",
+          "create",
+          "update",
+          "delete",
+          "assign",
+          "unassign"
+        ],
         "description": "Action to perform"
       },
       "roleId": {
@@ -54,7 +66,9 @@
         }
       }
     },
-    "required": ["action"]
+    "required": [
+      "action"
+    ]
   },
   "_discovery": {
     "labels": [
@@ -71,5 +85,6 @@
     "required_permissions": [
       "roles:admin"
     ]
-  }
+  },
+  "kind": "cell"
 }

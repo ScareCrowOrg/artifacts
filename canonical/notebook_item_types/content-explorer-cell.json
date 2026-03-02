@@ -33,7 +33,7 @@
       "offset": 0
     },
     "category": "ephemeral",
-    "icon": "\ud83d\udd0d"
+    "icon": "🔍"
   },
   "allow_instance_override_refs": true,
   "properties_schema": {
@@ -84,5 +84,6 @@
       "Preview content before using in cells",
       "Discover reusable assets"
     ]
-  }
+  },
+  "kind": "cell"
 }

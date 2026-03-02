@@ -90,5 +90,6 @@
       "Track cell execution metrics",
       "Debug failed workflow steps"
     ]
-  }
+  },
+  "kind": "cell"
 }

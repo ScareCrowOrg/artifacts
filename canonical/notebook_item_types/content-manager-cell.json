@@ -6,12 +6,24 @@
   "category": "content-management",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "docs": ["docs/README.md"],
-    "backend": ["backend/scripts/main.py"],
-    "storage": ["backend/scripts/storage.py"],
-    "utils": ["backend/scripts/utils.py"],
-    "basecell": ["frontend/ContentManagerCell.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
+    "backend": [
+      "backend/scripts/main.py"
+    ],
+    "storage": [
+      "backend/scripts/storage.py"
+    ],
+    "utils": [
+      "backend/scripts/utils.py"
+    ],
+    "basecell": [
+      "frontend/ContentManagerCell.ts"
+    ]
   },
   "default_initial_data": {
     "show_persistence_form": false,
@@ -38,17 +50,35 @@
     }
   },
   "_discovery": {
-    "labels": ["#content-management", "#storage", "#utility", "#crud"],
+    "labels": [
+      "#content-management",
+      "#storage",
+      "#utility",
+      "#crud"
+    ],
     "describe": "Ephemeral utility cell for managing typed content assets (images, vectors, 3D models, etc.) with Cloudflare R2 cloud storage integration. Provides list, load, persist, and query operations for content items. Supports filtering by content type, assignee, tags, and version. Includes pagination for large datasets (default 20 items per page). Cell instances are ephemeral utilities (not persisted), but managed content is persistent in MongoDB + R2 storage. Implements zero-raw-in-DB architecture where MongoDB stores only metadata and R2 stores actual file bytes. Instant response for list/query operations, ~1-5 seconds for persist operations depending on file size.",
     "estimated_duration_seconds": 2,
-    "required_resources": ["cloudflare-r2", "mongodb"],
-    "dependencies": ["content-types", "r2-storage"],
-    "tags": ["content", "management", "storage", "crud", "utility"],
+    "required_resources": [
+      "cloudflare-r2",
+      "mongodb"
+    ],
+    "dependencies": [
+      "content-types",
+      "r2-storage"
+    ],
+    "tags": [
+      "content",
+      "management",
+      "storage",
+      "crud",
+      "utility"
+    ],
     "use_cases": [
       "Browse and manage content assets across the project",
       "Persist ephemeral cell outputs to permanent storage",
       "Query content by type, tags, or assignee",
       "Load existing content for use in other cells"
     ]
-  }
+  },
+  "kind": "cell"
 }

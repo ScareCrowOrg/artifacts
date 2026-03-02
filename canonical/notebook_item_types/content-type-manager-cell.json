@@ -18,7 +18,7 @@
   },
   "default_initial_data": {
     "category": "ephemeral",
-    "icon": "\ud83d\udccb"
+    "icon": "📋"
   },
   "allow_instance_override_refs": false,
   "properties_schema": {
@@ -53,5 +53,6 @@
       "Validate content type schemas",
       "Extend content system capabilities"
     ]
-  }
+  },
+  "kind": "cell"
 }

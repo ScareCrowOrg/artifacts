@@ -4,13 +4,22 @@
   "version": "1.0.0",
   "description": "Manage GitHub issues and project tasks with RBAC protection",
   "category": "admin",
-  "can_render_dynamically": true, 
+  "can_render_dynamically": true,
   "author": "ScareVerse",
   "icon": "📋",
   "requires_backend": true,
-  "requiredPermissions": ["issues:read"],
-  "optionalPermissions": ["issues:write"],
-  "tags": ["admin", "issues", "dashboard", "rbac"],
+  "requiredPermissions": [
+    "issues:read"
+  ],
+  "optionalPermissions": [
+    "issues:write"
+  ],
+  "tags": [
+    "admin",
+    "issues",
+    "dashboard",
+    "rbac"
+  ],
   "default_refs": {
     "view": [
       "frontend/View.vue"
@@ -25,7 +34,13 @@
       "label": "Action",
       "description": "Action to perform",
       "required": true,
-      "values": ["list", "get", "create", "update", "delete"],
+      "values": [
+        "list",
+        "get",
+        "create",
+        "update",
+        "delete"
+      ],
       "default": "list"
     },
     "issueId": {
@@ -72,7 +87,13 @@
       "name": "action",
       "type": "enum",
       "required": true,
-      "values": ["list", "get", "create", "update", "delete"]
+      "values": [
+        "list",
+        "get",
+        "create",
+        "update",
+        "delete"
+      ]
     },
     {
       "name": "issueId",
@@ -103,5 +124,6 @@
       "name": "data",
       "type": "object"
     }
-  ]
+  ],
+  "kind": "cell"
 }

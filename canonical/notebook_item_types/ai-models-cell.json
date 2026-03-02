@@ -5,10 +5,16 @@
   "category": "admin",
   "description": "Administrative cell for managing AI model configurations (RBAC-protected)",
   "can_render_dynamically": true,
-  "required_permissions": ["ai-models:admin"],
+  "required_permissions": [
+    "ai-models:admin"
+  ],
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "basecell": ["frontend/AIModelsCell.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/AIModelsCell.ts"
+    ]
   },
   "default_initial_data": {
     "title": "AI Models Configuration",
@@ -22,12 +28,20 @@
     "properties": {
       "action": {
         "type": "string",
-        "enum": ["get", "update", "test-connection"],
+        "enum": [
+          "get",
+          "update",
+          "test-connection"
+        ],
         "description": "Action to perform"
       },
       "provider": {
         "type": "string",
-        "enum": ["ollama", "gemini", "openai"],
+        "enum": [
+          "ollama",
+          "gemini",
+          "openai"
+        ],
         "description": "AI model provider"
       },
       "config": {
@@ -50,9 +64,20 @@
         }
       }
     },
-    "required": ["action"]
+    "required": [
+      "action"
+    ]
   },
-  "tags": ["admin", "ai", "models", "configuration", "rbac"],
+  "tags": [
+    "admin",
+    "ai",
+    "models",
+    "configuration",
+    "rbac"
+  ],
   "estimated_duration_seconds": 2,
-  "required_resources": ["internet"]
+  "required_resources": [
+    "internet"
+  ],
+  "kind": "cell"
 }

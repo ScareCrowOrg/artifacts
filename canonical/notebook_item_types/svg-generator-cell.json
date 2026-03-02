@@ -97,5 +97,6 @@
       "Produce diagrams and flowcharts",
       "Generate graphics for 3D extrusion"
     ]
-  }
+  },
+  "kind": "cell"
 }

@@ -25,10 +25,10 @@
     }
   },
   "default_initial_data": {
-    "title": "Nova C\u00e9lula Sem T\u00edtulo",
+    "title": "Nova Célula Sem Título",
     "content": "",
     "category": "persistida",
-    "icon": "\ud83d\udccb"
+    "icon": "📋"
   },
   "allow_instance_override_refs": true,
   "_discovery": {
@@ -53,5 +53,6 @@
       "Sandbox for rapid iteration",
       "POC validation before promotion"
     ]
-  }
+  },
+  "kind": "cell"
 }

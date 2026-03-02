@@ -7,5 +7,6 @@
     "books.read_any",
     "users.read_own"
   ],
-  "priority": 5
+  "priority": 5,
+  "created_at": "2026-02-24T00:00:00"
 }

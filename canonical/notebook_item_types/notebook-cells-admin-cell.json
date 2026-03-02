@@ -8,11 +8,19 @@
   "icon": "📔",
   "requires_backend": true,
   "can_render_dynamically": true,
-  "requiredPermissions": ["notebook:admin"],
+  "requiredPermissions": [
+    "notebook:admin"
+  ],
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "docs": ["docs/README.md"],
-    "basecell": ["frontend/NotebookCellsAdminCell.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
+    "basecell": [
+      "frontend/NotebookCellsAdminCell.ts"
+    ]
   },
   "default_initial_data": {
     "action": "list",
@@ -30,7 +38,14 @@
     "action": {
       "type": "enum",
       "required": true,
-      "values": ["list", "get", "create", "update", "delete", "list-types"],
+      "values": [
+        "list",
+        "get",
+        "create",
+        "update",
+        "delete",
+        "list-types"
+      ],
       "description": "Action to perform on notebook cells"
     },
     "cellId": {
@@ -50,17 +65,35 @@
     }
   },
   "_discovery": {
-    "labels": ["#admin", "#cells", "#management", "#rbac"],
+    "labels": [
+      "#admin",
+      "#cells",
+      "#management",
+      "#rbac"
+    ],
     "describe": "Admin cell for managing notebook cells with RBAC protection. Requires notebook:admin permission. Provides complete CRUD operations for cell management, including listing cells with filters, viewing cell details, creating new cells, updating existing cells, deleting cells, and listing available cell types. Replaces the hardcoded NotebookCellsAdmin overlay with a proper cell implementation.",
     "estimated_duration_seconds": 1,
-    "required_resources": ["mongodb"],
-    "dependencies": ["auth", "permissions"],
-    "tags": ["admin", "cells", "notebook", "management", "rbac", "crud"],
+    "required_resources": [
+      "mongodb"
+    ],
+    "dependencies": [
+      "auth",
+      "permissions"
+    ],
+    "tags": [
+      "admin",
+      "cells",
+      "notebook",
+      "management",
+      "rbac",
+      "crud"
+    ],
     "use_cases": [
       "Manage notebook cells (CRUD operations)",
       "View and filter cells by assignee or type",
       "Administer cell types and metadata",
       "Authorized admin operations only (notebook:admin required)"
     ]
-  }
+  },
+  "kind": "cell"
 }

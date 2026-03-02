@@ -67,5 +67,6 @@
       "Adjust logging verbosity dynamically",
       "Troubleshoot cell execution problems"
     ]
-  }
+  },
+  "kind": "cell"
 }

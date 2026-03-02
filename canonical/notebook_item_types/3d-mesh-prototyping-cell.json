@@ -6,10 +6,18 @@
   "category": "prototyping",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "basecell": ["frontend/MeshPrototypingCell.ts"],
-    "scripts": ["backend/scripts/main.py"],
-    "docs": ["docs/README.md"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/MeshPrototypingCell.ts"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
   },
   "default_initial_data": {
     "category": "ephemeral",
@@ -29,7 +37,11 @@
       "autoRotate": true,
       "wireframeMode": false,
       "showGrid": true,
-      "cameraPosition": [0, 1, 3]
+      "cameraPosition": [
+        0,
+        1,
+        3
+      ]
     }
   },
   "allow_instance_override_refs": true,
@@ -42,21 +54,34 @@
     "generationMode": {
       "type": "string",
       "default": "cloud-api",
-      "enum": ["cloud-api", "local-gpu", "manual-upload"],
+      "enum": [
+        "cloud-api",
+        "local-gpu",
+        "manual-upload"
+      ],
       "description": "Generation mode: cloud-api (default), local-gpu (experimental), or manual-upload (direct GLB)"
     },
     "inputImage": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Base64-encoded PNG input image for 3D reconstruction"
     },
     "generatedMesh": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Generated GLB mesh data (base64 or URL)"
     },
     "meshMetadata": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "default": null,
       "description": "Metadata about the generated mesh (vertices, faces, file size, etc.)"
     },
@@ -66,7 +91,10 @@
       "description": "Flag indicating if 3D reconstruction is in progress"
     },
     "error": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Error message if reconstruction fails"
     },
@@ -86,23 +114,46 @@
         "autoRotate": true,
         "wireframeMode": false,
         "showGrid": true,
-        "cameraPosition": [0, 1, 3]
+        "cameraPosition": [
+          0,
+          1,
+          3
+        ]
       },
       "description": "Three.js viewport display settings"
     }
   },
   "_discovery": {
-    "labels": ["#3d", "#generation", "#mesh", "#prototyping", "#ai-powered"],
+    "labels": [
+      "#3d",
+      "#generation",
+      "#mesh",
+      "#prototyping",
+      "#ai-powered"
+    ],
     "describe": "Generates real volumetric 3D meshes with 360-degree volume from single images using AI-powered reconstruction. Supports multiple generation modes: cloud API (default, requires API key), local GPU (experimental, requires powerful GPU), and manual upload. Produces optimized GLB meshes with configurable polygon count (default 50k faces), Draco compression, and target file size. Best for creating game-ready 3D assets from concept art or reference images. Processing time varies: ~30-60 seconds (cloud API), ~2-5 minutes (local GPU). Outputs include mesh geometry, textures, and metadata.",
     "estimated_duration_seconds": 45,
-    "required_resources": ["cloud-api", "gpu"],
-    "dependencies": ["sf3d-runtime", "three.js"],
-    "tags": ["3d", "mesh", "prototyping", "volumetric", "reconstruction"],
+    "required_resources": [
+      "cloud-api",
+      "gpu"
+    ],
+    "dependencies": [
+      "sf3d-runtime",
+      "three.js"
+    ],
+    "tags": [
+      "3d",
+      "mesh",
+      "prototyping",
+      "volumetric",
+      "reconstruction"
+    ],
     "use_cases": [
       "Convert 2D concept art to 3D game assets",
       "Generate 3D models for AR/VR applications",
       "Create volumetric prototypes from reference images",
       "Rapid 3D asset creation for game development"
     ]
-  }
+  },
+  "kind": "cell"
 }

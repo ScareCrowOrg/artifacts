@@ -76,5 +76,6 @@
       "Monitor pub/sub messages",
       "Manage Redis keys and values"
     ]
-  }
+  },
+  "kind": "cell"
 }

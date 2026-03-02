@@ -45,5 +45,6 @@
       "Configure secret access policies",
       "Audit secret access patterns"
     ]
-  }
+  },
+  "kind": "cell"
 }

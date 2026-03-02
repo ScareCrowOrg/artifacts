@@ -92,5 +92,6 @@
       "Learn Three.js patterns and techniques",
       "Create custom 3D visualizations"
     ]
-  }
+  },
+  "kind": "cell"
 }

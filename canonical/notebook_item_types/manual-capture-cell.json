@@ -18,7 +18,7 @@
   },
   "default_initial_data": {
     "category": "ephemeral",
-    "icon": "\u270d\ufe0f",
+    "icon": "✍️",
     "placeholder": "Enter content to capture or HTML to generate wireframe..."
   },
   "allow_instance_override_refs": true,
@@ -30,7 +30,7 @@
     },
     "icon": {
       "type": "string",
-      "default": "\u270d\ufe0f",
+      "default": "✍️",
       "description": "Icon displayed for the cell"
     },
     "placeholder": {
@@ -62,5 +62,6 @@
       "Collect structured information",
       "Create forms for data validation"
     ]
-  }
+  },
+  "kind": "cell"
 }

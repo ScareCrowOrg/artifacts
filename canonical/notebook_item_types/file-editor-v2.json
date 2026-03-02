@@ -22,7 +22,7 @@
     "language": "markdown",
     "readOnly": false,
     "category": "ephemeral",
-    "icon": "\ud83d\udcc4"
+    "icon": "📄"
   },
   "allow_instance_override_refs": true,
   "_discovery": {
@@ -50,5 +50,6 @@
       "Update documentation",
       "Quick file editing without external tools"
     ]
-  }
+  },
+  "kind": "cell"
 }

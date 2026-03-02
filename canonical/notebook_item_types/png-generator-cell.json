@@ -6,10 +6,18 @@
   "category": "visualization",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "basecell": ["frontend/PngGeneratorCell.ts"],
-    "scripts": ["backend/scripts/main.py"],
-    "docs": ["docs/README.md"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/PngGeneratorCell.ts"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
   },
   "default_initial_data": {
     "category": "ephemeral",
@@ -38,7 +46,10 @@
       "description": "Text description of the desired image"
     },
     "generatedPng": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Base64-encoded PNG image data"
     },
@@ -48,7 +59,10 @@
       "description": "Flag indicating if PNG generation is in progress"
     },
     "error": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Error message if generation fails"
     },
@@ -65,17 +79,35 @@
     }
   },
   "_discovery": {
-    "labels": ["#image", "#generation", "#ai", "#stable-diffusion", "#2d"],
+    "labels": [
+      "#image",
+      "#generation",
+      "#ai",
+      "#stable-diffusion",
+      "#2d"
+    ],
     "describe": "Generates high-quality PNG images from text prompts using Stable Diffusion AI. Interactive cell with real-time preview and customizable generation parameters (resolution, steps, CFG scale, seed). Supports various image sizes (default 512x512) and quality settings. Best for creating concept art, UI assets, textures, and reference images. Processing time ~10-30 seconds depending on image size and quality settings. Requires GPU with 4GB+ VRAM for optimal performance. Outputs base64-encoded PNG images ready for use in other cells.",
     "estimated_duration_seconds": 20,
-    "required_resources": ["gpu", "stable-diffusion-runtime"],
-    "dependencies": ["stable-diffusion"],
-    "tags": ["image", "generation", "ai", "png", "2d"],
+    "required_resources": [
+      "gpu",
+      "stable-diffusion-runtime"
+    ],
+    "dependencies": [
+      "stable-diffusion"
+    ],
+    "tags": [
+      "image",
+      "generation",
+      "ai",
+      "png",
+      "2d"
+    ],
     "use_cases": [
       "Generate concept art for game assets",
       "Create textures and UI elements",
       "Generate reference images for 3D modeling",
       "Rapid prototyping of visual ideas"
     ]
-  }
+  },
+  "kind": "cell"
 }

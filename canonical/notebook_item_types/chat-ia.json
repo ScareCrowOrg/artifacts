@@ -94,5 +94,6 @@
       "Testing AI model responses",
       "Building chatbot interfaces"
     ]
-  }
+  },
+  "kind": "cell"
 }

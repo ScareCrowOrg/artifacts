@@ -30,5 +30,6 @@
   "allow_instance_override_refs": true,
   "created_at": "2025-11-17T06:08:04.281032",
   "updated_at": "2025-11-17T06:08:04.281033",
-  "can_render_dynamically": false
+  "can_render_dynamically": false,
+  "kind": "cell"
 }

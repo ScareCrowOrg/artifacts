@@ -6,9 +6,15 @@
   "category": "content",
   "can_render_dynamically": false,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "basecell": ["frontend/FragmentEditorCell.ts"],
-    "docs": ["docs/README.md"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/FragmentEditorCell.ts"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
   },
   "default_initial_data": {
     "cellId": null,
@@ -36,8 +42,13 @@
     "action": {
       "type": "string",
       "default": "create",
-      "enum": ["create", "edit", "load"],
+      "enum": [
+        "create",
+        "edit",
+        "load"
+      ],
       "description": "Action to perform: create, edit, or load fragment"
     }
-  }
+  },
+  "kind": "cell"
 }
