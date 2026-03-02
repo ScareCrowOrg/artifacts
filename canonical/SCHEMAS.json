@@ -1,301 +1,405 @@
 {
   "version": 1,
-  "description": "Canonical collection schemas - source of truth for ScareVerse canonical data. All 11 collections that can exist in Canonical, Sandbox, or Runtime tiers.",
-  "last_updated": "2026-02-24",
+  "description": "AUTO-GENERATED from Pydantic models - DO NOT EDIT MANUALLY. Canonical collection schemas - source of truth for ScareVerse canonical data. To update schemas, modify Pydantic models and run: python scripts/generate_canonical_schemas.py",
+  "last_updated": "2026-03-02",
   "permissions": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
+      "constraints": "PRIMARY KEY",
+      "description": "Unique identifier for the permission"
     },
     "name": {
       "type": "TEXT",
-      "constraints": "NOT NULL UNIQUE",
-      "indexed": true,
-      "description": "Permission string (e.g., 'templates.read')"
+      "constraints": "NOT NULL",
+      "description": "Permission name (format: resource.action[_scope])",
+      "indexed": true
     },
     "description": {
-      "type": "TEXT"
-    },
-    "category": {
       "type": "TEXT",
-      "indexed": true,
-      "description": "Permission category"
+      "constraints": "NOT NULL",
+      "description": "Human-readable description of what this permission allows"
     },
     "resource": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "indexed": true
+      "description": "Resource type (cells, books, users, system, ai_models)"
     },
     "action": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "indexed": true
+      "description": "Action type (create, read, update, delete, use, configure, manage)"
     },
     "scope": {
-      "type": "TEXT"
-    },
-    "created_at": {
-      "type": "DATETIME"
+      "type": "TEXT",
+      "description": "Scope of permission (own, any, None for no scope restriction)"
     }
   },
   "cells": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
+      "constraints": "PRIMARY KEY",
+      "description": "UUID of the notebook item"
     },
     "assignee_id": {
       "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "UUID of the user/agent responsible for this item",
       "indexed": true
     },
-    "tipoCelulaId": {
+    "kind": {
       "type": "TEXT",
+      "description": "Discriminator field determining runtime behavior (cell or book)",
       "indexed": true
     },
-    "origemLivroId": {
+    "notebook_item_type_id": {
       "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "ID of the NotebookItemType this cell belongs to",
       "indexed": true
     },
-    "data": {
+    "fragments": {
       "type": "JSON",
-      "description": "Cell data payload"
+      "description": "Ordered list of flexible fragments for traceability and 'notebook' functionality. Supports both simple strings and structured dictionaries."
     },
-    "fragmentos": {
+    "refs": {
       "type": "JSON",
-      "description": "Array of fragment objects"
+      "description": "References to files organized by type (docs, python, js, yaml, attachments)"
     },
-    "estado": {
+    "initial_data": {
+      "type": "JSON",
+      "description": "Initial data or generic data for the notebook item"
+    },
+    "status": {
       "type": "TEXT",
+      "description": "Cell execution status",
       "indexed": true
     },
-    "versao": {
-      "type": "TEXT"
+    "outputs": {
+      "type": "JSON",
+      "description": "Results from execution (JSON-serializable)"
     },
-    "dataCriacao": {
+    "cells": {
+      "type": "JSON",
+      "description": "Array of child NotebookItem IDs (book-specific)"
+    },
+    "execution_mode": {
+      "type": "TEXT",
+      "description": "Execution strategy: dag (parallel), script (sequential), hybrid (mixed)"
+    },
+    "created_at": {
       "type": "DATETIME",
+      "description": "UTC timestamp when item was created",
       "indexed": true
     },
-    "dataAtualizacao": {
+    "updated_at": {
       "type": "DATETIME",
+      "description": "UTC timestamp of last update",
       "indexed": true
+    },
+    "source_book_id": {
+      "type": "TEXT",
+      "description": "UUID of the source book",
+      "indexed": true
+    },
+    "version": {
+      "type": "TEXT",
+      "description": "Cell version"
+    },
+    "category": {
+      "type": "TEXT",
+      "description": "Cell category (e.g., 'ephemeral' for non-persistent cells, 'persistent' for saved cells)"
+    },
+    "title": {
+      "type": "TEXT",
+      "description": "Human-readable title for the cell"
+    },
+    "content": {
+      "type": "TEXT",
+      "description": "Main content/description of the cell (text, markdown, code, etc.)"
     }
   },
   "books": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
-    },
-    "name": {
-      "type": "TEXT",
-      "constraints": "NOT NULL",
-      "indexed": true
-    },
-    "description": {
-      "type": "TEXT"
+      "constraints": "PRIMARY KEY",
+      "description": "UUID of the notebook item"
     },
     "assignee_id": {
       "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "UUID of the user/agent responsible for this item",
       "indexed": true
     },
-    "type": {
+    "kind": {
       "type": "TEXT",
+      "description": "Discriminator field determining runtime behavior (cell or book)",
       "indexed": true
     },
-    "source": {
-      "type": "TEXT"
+    "notebook_item_type_id": {
+      "type": "TEXT",
+      "description": "ID of the NotebookItemType this book belongs to (optional for books)",
+      "indexed": true
     },
-    "purpose": {
-      "type": "TEXT"
-    },
-    "children": {
+    "fragments": {
       "type": "JSON",
-      "description": "Array of child book IDs"
+      "description": "Ordered list of flexible fragments for traceability and 'notebook' functionality. Supports both simple strings and structured dictionaries."
+    },
+    "refs": {
+      "type": "JSON",
+      "description": "References to files organized by type (docs, python, js, yaml, attachments)"
+    },
+    "initial_data": {
+      "type": "JSON",
+      "description": "Initial data or generic data for the notebook item"
+    },
+    "status": {
+      "type": "TEXT",
+      "description": "Current execution status",
+      "indexed": true
+    },
+    "outputs": {
+      "type": "JSON",
+      "description": "Results from execution (JSON-serializable)"
     },
     "cells": {
       "type": "JSON",
-      "description": "Array of cell IDs"
+      "description": "UUIDs of cells in this book"
+    },
+    "execution_mode": {
+      "type": "TEXT",
+      "description": "Execution strategy: dag (parallel), script (sequential), hybrid (mixed)"
     },
     "created_at": {
       "type": "DATETIME",
-      "constraints": "NOT NULL",
+      "description": "UTC timestamp when item was created",
       "indexed": true
     },
     "updated_at": {
       "type": "DATETIME",
+      "description": "UTC timestamp of last update",
       "indexed": true
     },
-    "is_canonical": {
-      "type": "INTEGER"
-    },
-    "notebook_item_type_id": {
+    "name": {
       "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Human-readable name for the book (e.g., 'issues-queue')",
       "indexed": true
+    },
+    "description": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Detailed description of the book's purpose"
+    },
+    "type": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Book type (VOLATILE or MASTER)",
+      "indexed": true
+    },
+    "source": {
+      "type": "TEXT",
+      "description": "UUID of the source cell"
+    },
+    "purpose": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Purpose/objective of the book"
+    },
+    "children": {
+      "type": "JSON",
+      "description": "UUIDs of child books"
+    },
+    "is_unclassified_master_template": {
+      "type": "INTEGER",
+      "description": "If True, this book is the ad-hoc master blueprint for new user books."
     },
     "is_canonical_system_book": {
-      "type": "INTEGER"
-    },
-    "dataAtualizacao": {
-      "type": "DATETIME",
-      "indexed": true
+      "type": "INTEGER",
+      "description": "If True, this book is a canonical system book (e.g., issues-queue) and doesn't appear in user sidebar."
     }
   },
   "ai_models": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
+      "constraints": "PRIMARY KEY",
+      "description": "Model UUID"
     },
     "name": {
       "type": "TEXT",
       "constraints": "NOT NULL",
+      "description": "Model name (e.g., Mistral, Gemini)",
       "indexed": true
     },
     "description": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Model description"
     },
     "type": {
       "type": "TEXT",
       "constraints": "NOT NULL",
+      "description": "Model type (cloud, local, byok, etc)",
       "indexed": true
     },
     "provider": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "indexed": true
+      "description": "Model provider (openai, gemini, ollama, groq)"
     },
     "modelId": {
       "type": "TEXT",
-      "constraints": "NOT NULL"
+      "constraints": "NOT NULL",
+      "description": "Model ID in provider (e.g., mistral, gemini-pro)"
     },
     "apiKey": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "Model API Key (encrypted in storage, decrypted on read)"
     },
     "version": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "Model version"
     },
     "active": {
       "type": "INTEGER",
+      "description": "Whether the model is active/available",
       "indexed": true
     },
     "configuration": {
       "type": "JSON",
-      "description": "Model configuration (timeout, temperature, max_tokens, etc.)"
+      "description": "Model-specific configurations"
     },
     "metadata": {
       "type": "JSON",
-      "description": "Model metadata (parameters, context, architecture, etc.)"
+      "description": "Additional metadata"
+    },
+    "createdAt": {
+      "type": "DATETIME",
+      "description": "Creation date"
+    },
+    "updatedAt": {
+      "type": "DATETIME",
+      "description": "Update date"
     }
   },
   "content_types": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
+      "constraints": "PRIMARY KEY",
+      "description": "Unique identifier (e.g., 'image-png', '3d-glb', 'vector-svg')"
     },
     "name": {
       "type": "TEXT",
       "constraints": "NOT NULL",
+      "description": "Human-readable name (e.g., 'PNG Image Asset', '3D Model GLB')",
       "indexed": true
     },
     "description": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "Detailed description of this content type"
     },
     "mime_type": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "indexed": true
+      "description": "MIME type for the content (e.g., 'image/png', 'model/gltf-binary')"
     },
     "version": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "ContentType schema version"
     },
     "expected_fragments": {
       "type": "JSON",
-      "description": "Expected fragment schema definition"
+      "description": "Expected metadata keys in Content.fragments. Can be a list of required keys (simple) or a dict with JSON Schema (advanced)"
+    },
+    "render_hints": {
+      "type": "TEXT",
+      "description": "Hints for frontend rendering (component, viewport, interactions)"
+    },
+    "storage_policy": {
+      "type": "TEXT",
+      "description": "Where raw content data should be stored"
+    },
+    "storage_base_path": {
+      "type": "TEXT",
+      "description": "Base path/bucket for storage (e.g., '/data/content', 's3://bucket/content')"
+    },
+    "max_size_bytes": {
+      "type": "INTEGER",
+      "description": "Maximum allowed file size in bytes"
+    },
+    "allowed_extensions": {
+      "type": "JSON",
+      "description": "Allowed file extensions (e.g., ['.png', '.jpg'])"
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "description": "UTC timestamp when type was created",
+      "indexed": true
+    },
+    "updated_at": {
+      "type": "DATETIME",
+      "description": "UTC timestamp of last update",
+      "indexed": true
     }
   },
   "notebook_items": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
+      "constraints": "PRIMARY KEY",
+      "description": "UUID of the notebook item"
     },
     "assignee_id": {
       "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "UUID of the user/agent responsible for this item",
       "indexed": true
     },
     "kind": {
       "type": "TEXT",
-      "constraints": "NOT NULL",
+      "description": "Discriminator field determining runtime behavior (cell or book)",
       "indexed": true
     },
     "notebook_item_type_id": {
       "type": "TEXT",
+      "description": "References type.json (e.g., 'png-generator-cell', 'automation-book')",
       "indexed": true
     },
     "fragments": {
       "type": "JSON",
-      "description": "Array of fragments"
+      "description": "Ordered list of flexible fragments for traceability and 'notebook' functionality. Supports both simple strings and structured dictionaries."
     },
     "refs": {
       "type": "JSON",
-      "description": "Reference object"
+      "description": "References to files organized by type (docs, python, js, yaml, attachments)"
     },
     "initial_data": {
       "type": "JSON",
-      "description": "Initial data payload"
+      "description": "Initial data or generic data for the notebook item"
     },
     "status": {
       "type": "TEXT",
+      "description": "Current execution status",
       "indexed": true
     },
     "outputs": {
       "type": "JSON",
-      "description": "Output data"
+      "description": "Results from execution (JSON-serializable)"
     },
     "cells": {
       "type": "JSON",
-      "description": "Array of cell IDs"
+      "description": "Array of child NotebookItem IDs (book-specific)"
     },
     "execution_mode": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "Execution strategy: dag (parallel), script (sequential), hybrid (mixed)"
     },
     "created_at": {
       "type": "DATETIME",
-      "constraints": "NOT NULL",
+      "description": "UTC timestamp when item was created",
       "indexed": true
     },
     "updated_at": {
       "type": "DATETIME",
-      "indexed": true
-    },
-    "name": {
-      "type": "TEXT",
-      "indexed": true
-    },
-    "description": {
-      "type": "TEXT"
-    },
-    "type": {
-      "type": "TEXT",
-      "indexed": true
-    },
-    "source": {
-      "type": "TEXT"
-    },
-    "purpose": {
-      "type": "TEXT"
-    },
-    "children": {
-      "type": "JSON",
-      "description": "Array of child IDs"
-    },
-    "is_unclassified_master_template": {
-      "type": "INTEGER"
-    },
-    "is_canonical_system_book": {
-      "type": "INTEGER"
-    },
-    "is_canonical": {
-      "type": "INTEGER"
-    },
-    "dataAtualizacao": {
-      "type": "DATETIME",
+      "description": "UTC timestamp of last update",
       "indexed": true
     }
   },
@@ -308,222 +412,234 @@
     "name": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "indexed": true,
-      "description": "Template display name"
+      "description": "Template display name",
+      "indexed": true
     },
     "description": {
       "type": "TEXT",
-      "description": "Template description"
+      "description": "Template description explaining its purpose and usage"
     },
     "kind": {
       "type": "TEXT",
-      "indexed": true,
-      "description": "Template type/category"
+      "description": "Template type/category (e.g., 'cell', 'book', 'workflow', 'config')",
+      "indexed": true
     },
     "tags": {
       "type": "JSON",
-      "description": "Array of tag strings for categorization"
+      "description": "Array of tag strings for categorization and search"
     },
     "metadata": {
       "type": "JSON",
-      "description": "Custom metadata object (level, category, etc)"
+      "description": "Custom metadata object (level, category, difficulty, etc.)"
     },
     "status": {
       "type": "TEXT",
-      "constraints": "NOT NULL",
-      "indexed": true,
-      "description": "Status: draft, published, archived"
+      "description": "Template status (draft, published, archived)",
+      "indexed": true
     },
     "owner": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "indexed": true,
-      "description": "User ID of template owner"
+      "description": "User ID of template owner/creator",
+      "indexed": true
     },
     "visibility": {
       "type": "TEXT",
-      "constraints": "NOT NULL",
-      "description": "Visibility: public, private, team"
+      "description": "Template visibility (public, private, team)",
+      "indexed": true
     },
     "created_at": {
       "type": "DATETIME",
-      "constraints": "NOT NULL",
-      "indexed": true,
-      "description": "Creation timestamp"
+      "description": "UTC timestamp when template was created",
+      "indexed": true
     },
     "updated_at": {
       "type": "DATETIME",
-      "indexed": true,
-      "description": "Last update timestamp"
+      "description": "UTC timestamp of last template update",
+      "indexed": true
     }
   },
   "roles": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
+      "constraints": "PRIMARY KEY",
+      "description": "Unique identifier for the role"
     },
     "name": {
       "type": "TEXT",
-      "constraints": "NOT NULL UNIQUE",
+      "constraints": "NOT NULL",
+      "description": "Role name (must be one of RoleEnum values)",
       "indexed": true
+    },
+    "description": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Human-readable description of the role's purpose and permissions"
     },
     "permissions": {
       "type": "JSON",
-      "description": "Array of permission strings"
+      "description": "List of permission names granted by this role (use ['*'] for all permissions)"
     },
-    "description": {
-      "type": "TEXT"
-    },
-    "created_at": {
-      "type": "DATETIME",
-      "constraints": "NOT NULL"
-    },
-    "updated_at": {
-      "type": "DATETIME"
+    "priority": {
+      "type": "INTEGER",
+      "constraints": "NOT NULL",
+      "description": "Role priority (higher = more powerful). admin=100, user=10, viewer=5, guest=1"
     }
   },
   "workflows": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
+      "constraints": "PRIMARY KEY",
+      "description": "Unique workflow identifier"
     },
     "name": {
       "type": "TEXT",
       "constraints": "NOT NULL",
+      "description": "Workflow display name",
       "indexed": true
     },
     "description": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "Workflow description explaining its purpose and behavior"
     },
     "steps": {
       "type": "JSON",
-      "description": "Array of workflow step objects"
+      "description": "Array of workflow step objects. Each step defines an action, dependencies, inputs, and outputs. Steps are executed in order."
     },
     "status": {
       "type": "TEXT",
-      "indexed": true,
-      "description": "Status: active, inactive, draft"
+      "description": "Workflow operational status (active, inactive, draft)",
+      "indexed": true
     },
     "owner": {
       "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "User ID of workflow owner/creator",
       "indexed": true
     },
     "created_at": {
       "type": "DATETIME",
-      "constraints": "NOT NULL",
+      "description": "UTC timestamp when workflow was created",
       "indexed": true
     },
     "updated_at": {
-      "type": "DATETIME"
+      "type": "DATETIME",
+      "description": "UTC timestamp of last workflow update",
+      "indexed": true
     }
   },
   "notebook_item_types": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
+      "constraints": "PRIMARY KEY",
+      "description": "UUID of the notebook item type"
     },
     "name": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "indexed": true,
-      "description": "Name of the type"
+      "description": "Name of the type (e.g., 'Ingestion Cell', 'Issues Book')",
+      "indexed": true
     },
     "description": {
       "type": "TEXT",
-      "description": "Description of the type"
+      "description": "Description of the type and its purpose"
     },
     "kind": {
       "type": "TEXT",
-      "constraints": "NOT NULL",
-      "indexed": true,
-      "description": "Type identifier (e.g., 'cell', 'book')"
-    },
-    "label": {
-      "type": "TEXT",
-      "description": "Display label"
-    },
-    "icon": {
-      "type": "TEXT",
-      "description": "Icon identifier"
+      "description": "Type kind (e.g., 'cell', 'book')",
+      "indexed": true
     },
     "default_refs": {
       "type": "JSON",
-      "description": "Default references for this type"
+      "description": "Default references for this type (e.g., 'workflow_graph': ['path/to/default_workflow.py'])"
     },
     "default_initial_data": {
       "type": "JSON",
-      "description": "Default initial data for instances"
+      "description": "Default initial data for instances of this type"
     },
     "allow_instance_override_refs": {
       "type": "INTEGER",
-      "description": "Whether instances can override refs"
+      "description": "If True, instances can override default_refs"
     },
     "can_render_dynamically": {
       "type": "INTEGER",
-      "description": "Whether this type can render dynamically"
+      "description": "If True, this cell type can be rendered in DynamicWorkspace (has compatible Vue component)"
     },
-    "config": {
-      "type": "JSON",
-      "description": "Type-specific configuration"
+    "discovery": {
+      "type": "TEXT",
+      "description": "Discovery metadata for semantic search and intelligent cell selection. Optional field - cells without this metadata can still be loaded but won't be discoverable via the Discovery System."
     },
     "created_at": {
-      "type": "DATETIME"
+      "type": "DATETIME",
+      "description": "UTC timestamp when type was created",
+      "indexed": true
     },
     "updated_at": {
-      "type": "DATETIME"
+      "type": "DATETIME",
+      "description": "UTC timestamp of last update",
+      "indexed": true
     }
   },
   "contents": {
     "_id": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY"
+      "constraints": "PRIMARY KEY",
+      "description": "Unique identifier for this content instance"
     },
     "content_type_id": {
       "type": "TEXT",
       "constraints": "NOT NULL",
+      "description": "ID of the ContentType this content conforms to",
       "indexed": true
     },
     "assignee_id": {
       "type": "TEXT",
       "constraints": "NOT NULL",
+      "description": "UUID of the user/agent who owns this content",
       "indexed": true
     },
     "data_ref": {
       "type": "TEXT",
-      "constraints": "NOT NULL"
+      "constraints": "NOT NULL",
+      "description": "Reference to raw data. NEVER store raw bytes here. Examples: 'file:///data/content/abc123.png', 's3://bucket/content/abc123.glb'"
     },
     "version": {
       "type": "INTEGER",
-      "constraints": "NOT NULL"
+      "description": "Version number (1, 2, 3, ...). Immutable."
     },
     "is_latest": {
       "type": "INTEGER",
-      "constraints": "NOT NULL",
-      "indexed": true
+      "description": "Flag indicating if this is the latest version"
     },
     "previous_version_id": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "ID of the previous version (for version chain)",
+      "indexed": true
     },
     "origin_cell_id": {
       "type": "TEXT",
+      "description": "UUID of the cell that generated this content (optional)",
       "indexed": true
     },
     "fragments": {
       "type": "JSON",
-      "description": "Content metadata conforming to ContentType.expected_fragments"
+      "description": "Metadata for this content. Must include keys defined in ContentType.expected_fragments. Examples: resolution, poly_count, duration"
     },
     "filename": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "Original filename (if applicable)"
     },
     "size_bytes": {
-      "type": "INTEGER"
+      "type": "INTEGER",
+      "description": "File size in bytes"
     },
     "checksum": {
-      "type": "TEXT"
+      "type": "TEXT",
+      "description": "File checksum (SHA-256) for integrity verification"
     },
     "tags": {
       "type": "JSON",
-      "description": "Array of tag strings"
+      "description": "Tags for categorization and search"
     },
     "metadata": {
       "type": "JSON",
@@ -531,7 +647,7 @@
     },
     "created_at": {
       "type": "DATETIME",
-      "constraints": "NOT NULL",
+      "description": "UTC timestamp when content was created",
       "indexed": true
     }
   }
