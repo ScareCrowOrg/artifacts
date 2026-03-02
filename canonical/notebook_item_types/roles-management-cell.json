@@ -1,6 +1,6 @@
 {
   "id": "roles-management-cell",
-  "name": "Roles Management",
+  "name": "roles-management-cell",
   "version": "1.0.0",
   "category": "admin",
   "description": "Administrative cell for managing roles and permissions (RBAC-protected)",

@@ -1,6 +1,6 @@
 {
   "id": "asset-prototyping-cell",
-  "name": "Asset Prototyping Cell",
+  "name": "asset-prototyping-cell",
   "description": "Complete pipeline for creating 3D assets: AI image generation → SVG vectorization → 3D prototyping with human validation checkpoints",
   "version": "1.0.0",
   "category": "prototyping",

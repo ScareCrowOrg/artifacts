@@ -1,6 +1,6 @@
 {
   "id": "threejs-scene-generator-cell",
-  "name": "Three.js Scene Generator Cell",
+  "name": "threejs-scene-generator-cell",
   "description": "Interactive cell for generating and prototyping 3D scenes using Three.js from text prompts with AI",
   "version": "1.0.0",
   "category": "prototyping",

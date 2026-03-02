@@ -1,6 +1,6 @@
 {
   "id": "content-type-manager-cell",
-  "name": "Content Type Manager",
+  "name": "content-type-manager-cell",
   "description": "List available content types with metadata. Ephemeral utility cell that provides content type discovery for building type-aware asset browsers and filters.",
   "version": "1.0.0",
   "category": "content-management",

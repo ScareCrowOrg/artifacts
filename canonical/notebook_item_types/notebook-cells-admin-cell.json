@@ -1,6 +1,6 @@
 {
   "id": "notebook-cells-admin-cell",
-  "name": "Notebook Cells Admin",
+  "name": "notebook-cells-admin-cell",
   "description": "Administer notebook cells and cell types (RBAC protected). Provides CRUD operations for managing notebook cells with notebook:admin permission.",
   "version": "1.0.0",
   "category": "admin",

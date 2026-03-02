@@ -1,6 +1,6 @@
 {
   "id": "log-toggle-cell",
-  "name": "Log Toggle Cell",
+  "name": "log-toggle-cell",
   "description": "Temporarily enable/disable specific log namespaces during a session for debugging and analysis",
   "version": "1.0.0",
   "category": "debugging",

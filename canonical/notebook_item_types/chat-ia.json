@@ -1,6 +1,6 @@
 {
   "id": "chat-ia",
-  "name": "Chat IA",
+  "name": "chat-ia",
   "description": "AI-powered chat interface with multi-model support, file attachments, conversation history, and file proposal capabilities",
   "version": "1.0.0",
   "category": "ai-interaction",

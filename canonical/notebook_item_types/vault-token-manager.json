@@ -1,6 +1,6 @@
 {
   "id": "vault-token-manager",
-  "name": "Vault Token Manager",
+  "name": "vault-token-manager",
   "description": "Secure interface for managing encrypted tokens in the ScareVerse Browser Extension Vault",
   "default_refs": {
     "view": [

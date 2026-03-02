@@ -1,6 +1,6 @@
 {
   "id": "3d-mesh-prototyping-cell",
-  "name": "3D Mesh Prototyping Cell",
+  "name": "3d-mesh-prototyping-cell",
   "description": "Volumetric pipeline for generating real 3D meshes with 360º volume from single images using AI-powered reconstruction",
   "version": "1.0.0",
   "category": "prototyping",

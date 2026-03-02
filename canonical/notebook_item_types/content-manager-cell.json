@@ -1,6 +1,6 @@
 {
   "id": "content-manager-cell",
-  "name": "Content Manager",
+  "name": "content-manager-cell",
   "description": "Content management utility with Cloudflare R2 storage. Ephemeral utility cell that provides list, load, and persist operations for typed content assets (images, vectors, 3D models). Cell instances are ephemeral, but managed content is persistent.",
   "version": "1.0.0",
   "category": "content-management",

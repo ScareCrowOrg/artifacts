@@ -1,6 +1,6 @@
 {
   "id": "pipeline-monitoring-cell",
-  "name": "Pipeline Monitoring Cell",
+  "name": "pipeline-monitoring-cell",
   "description": "Real-time monitoring and validation of code generation pipeline prerequisites and health",
   "version": "1.0.0",
   "category": "observability",

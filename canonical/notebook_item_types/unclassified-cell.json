@@ -1,6 +1,6 @@
 {
   "id": "unclassified-cell",
-  "name": "Unclassified Cell",
+  "name": "unclassified-cell",
   "description": "A generic cell type for viewing unclassified content and memory fragments. Provides a simple interface for displaying title, content, and associated memory fragments.",
   "version": "2.0.0",
   "category": "viewer",

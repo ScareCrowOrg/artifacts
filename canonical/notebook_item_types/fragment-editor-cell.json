@@ -1,6 +1,6 @@
 {
   "id": "fragment-editor-cell",
-  "name": "Fragment Editor",
+  "name": "fragment-editor-cell",
   "description": "Create and edit cell fragments with markdown support",
   "version": "1.0.0",
   "category": "content",

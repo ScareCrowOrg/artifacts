@@ -1,6 +1,6 @@
 {
   "id": "settings-panel-cell",
-  "name": "Settings Panel",
+  "name": "settings-panel-cell",
   "version": "1.0.0",
   "description": "Manage user and global application settings with conditional RBAC protection",
   "category": "system",

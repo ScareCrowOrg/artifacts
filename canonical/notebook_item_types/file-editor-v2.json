@@ -1,6 +1,6 @@
 {
   "id": "file-editor-v2",
-  "name": "File Editor (TypeScript)",
+  "name": "file-editor-v2",
   "description": "Advanced file editor with TypeScript implementation, syntax highlighting, and full DynamicWorkspace compatibility",
   "version": "2.0.0",
   "category": "editor",

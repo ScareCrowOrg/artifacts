@@ -1,6 +1,6 @@
 {
   "id": "manual-capture-cell",
-  "name": "Manual Capture",
+  "name": "manual-capture-cell",
   "description": "Ephemeral cell for manual content capture and wireframe generation. Creates file-editor-v2 cells with captured content.",
   "version": "1.0.0",
   "category": "utility",

@@ -1,6 +1,6 @@
 {
   "id": "png-generator-cell",
-  "name": "PNG Generator Cell",
+  "name": "png-generator-cell",
   "description": "Interactive cell for generating PNG images from text prompts using Stable Diffusion AI",
   "version": "1.0.0",
   "category": "visualization",

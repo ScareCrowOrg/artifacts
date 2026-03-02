@@ -1,6 +1,6 @@
 {
   "id": "issues-dashboard-cell",
-  "name": "Issues Dashboard",
+  "name": "issues-dashboard-cell",
   "version": "1.0.0",
   "description": "Manage GitHub issues and project tasks with RBAC protection",
   "category": "admin",
@@ -96,7 +96,7 @@
   },
   "inputs": [
     {
-      "name": "action",
+      "name": "issues-dashboard-cell",
       "type": "enum",
       "required": true,
       "values": [
@@ -108,17 +108,17 @@
       ]
     },
     {
-      "name": "issueId",
+      "name": "issues-dashboard-cell",
       "type": "string",
       "required": false
     },
     {
-      "name": "filters",
+      "name": "issues-dashboard-cell",
       "type": "object",
       "required": false
     },
     {
-      "name": "data",
+      "name": "issues-dashboard-cell",
       "type": "object",
       "required": false
     ,
@@ -128,15 +128,15 @@
   ],
   "outputs": [
     {
-      "name": "success",
+      "name": "issues-dashboard-cell",
       "type": "boolean"
     },
     {
-      "name": "action",
+      "name": "issues-dashboard-cell",
       "type": "string"
     },
     {
-      "name": "data",
+      "name": "issues-dashboard-cell",
       "type": "object"
     ,
   "updated_at": "2026-02-24T00:00:00",

@@ -1,6 +1,6 @@
 {
   "id": "file-manager-cell",
-  "name": "File Manager",
+  "name": "file-manager-cell",
   "description": "Ephemeral file management interface with tree view, search, and file operations. Integrates with FileEditorCell for bidirectional editing.",
   "version": "1.0.0",
   "category": "file-management",

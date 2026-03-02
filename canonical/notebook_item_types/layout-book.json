@@ -1,6 +1,6 @@
 {
   "id": "layout-book",
-  "name": "Layout Book",
+  "name": "layout-book",
   "description": "Save and restore complete workspace layouts",
   "default_refs": {
     "docs": [

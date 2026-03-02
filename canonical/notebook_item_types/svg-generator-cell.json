@@ -1,6 +1,6 @@
 {
   "id": "svg-generator-cell",
-  "name": "SVG Generator Cell",
+  "name": "svg-generator-cell",
   "description": "BaseCell-compliant cell for generating SVG visualizations from text prompts using AI. Implements standardized execution interface with fallback mechanism.",
   "version": "2.0.0",
   "category": "visualization",

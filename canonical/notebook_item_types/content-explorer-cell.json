@@ -1,6 +1,6 @@
 {
   "id": "content-explorer-cell",
-  "name": "Content Explorer",
+  "name": "content-explorer-cell",
   "description": "Browse and manage assets by type. Composes ContentTypeManagerCell and ContentManagerCell to provide a unified asset browsing experience with type selection, asset listing, and management actions.",
   "version": "1.0.0",
   "category": "content-management",
