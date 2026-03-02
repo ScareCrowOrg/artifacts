@@ -59,14 +59,17 @@
     },
     "fragments": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(fragments))",
       "description": "Ordered list of flexible fragments for traceability and 'notebook' functionality. Supports both simple strings and structured dictionaries."
     },
     "refs": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(refs))",
       "description": "References to files organized by type (docs, python, js, yaml, attachments)"
     },
     "initial_data": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(initial_data))",
       "description": "Initial data or generic data for the notebook item"
     },
     "status": {
@@ -76,10 +79,12 @@
     },
     "outputs": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(outputs))",
       "description": "Results from execution (JSON-serializable)"
     },
     "cells": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(cells))",
       "description": "Array of child NotebookItem IDs (book-specific)"
     },
     "execution_mode": {
@@ -142,14 +147,17 @@
     },
     "fragments": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(fragments))",
       "description": "Ordered list of flexible fragments for traceability and 'notebook' functionality. Supports both simple strings and structured dictionaries."
     },
     "refs": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(refs))",
       "description": "References to files organized by type (docs, python, js, yaml, attachments)"
     },
     "initial_data": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(initial_data))",
       "description": "Initial data or generic data for the notebook item"
     },
     "status": {
@@ -159,10 +167,12 @@
     },
     "outputs": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(outputs))",
       "description": "Results from execution (JSON-serializable)"
     },
     "cells": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(cells))",
       "description": "UUIDs of cells in this book"
     },
     "execution_mode": {
@@ -207,6 +217,7 @@
     },
     "children": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(children))",
       "description": "UUIDs of child books"
     },
     "is_unclassified_master_template": {
@@ -266,10 +277,12 @@
     },
     "configuration": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(configuration))",
       "description": "Model-specific configurations"
     },
     "metadata": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(metadata))",
       "description": "Additional metadata"
     },
     "createdAt": {
@@ -308,10 +321,12 @@
     },
     "expected_fragments": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(expected_fragments))",
       "description": "Expected metadata keys in Content.fragments. Can be a list of required keys (simple) or a dict with JSON Schema (advanced)"
     },
     "render_hints": {
-      "type": "TEXT",
+      "type": "JSON",
+      "constraints": "CHECK (json_valid(render_hints))",
       "description": "Hints for frontend rendering (component, viewport, interactions)"
     },
     "storage_policy": {
@@ -328,6 +343,7 @@
     },
     "allowed_extensions": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(allowed_extensions))",
       "description": "Allowed file extensions (e.g., ['.png', '.jpg'])"
     },
     "created_at": {
@@ -365,14 +381,17 @@
     },
     "fragments": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(fragments))",
       "description": "Ordered list of flexible fragments for traceability and 'notebook' functionality. Supports both simple strings and structured dictionaries."
     },
     "refs": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(refs))",
       "description": "References to files organized by type (docs, python, js, yaml, attachments)"
     },
     "initial_data": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(initial_data))",
       "description": "Initial data or generic data for the notebook item"
     },
     "status": {
@@ -382,10 +401,12 @@
     },
     "outputs": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(outputs))",
       "description": "Results from execution (JSON-serializable)"
     },
     "cells": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(cells))",
       "description": "Array of child NotebookItem IDs (book-specific)"
     },
     "execution_mode": {
@@ -426,10 +447,12 @@
     },
     "tags": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(tags))",
       "description": "Array of tag strings for categorization and search"
     },
     "metadata": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(metadata))",
       "description": "Custom metadata object (level, category, difficulty, etc.)"
     },
     "status": {
@@ -478,6 +501,7 @@
     },
     "permissions": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(permissions))",
       "description": "List of permission names granted by this role (use ['*'] for all permissions)"
     },
     "priority": {
@@ -504,6 +528,7 @@
     },
     "steps": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(steps))",
       "description": "Array of workflow step objects. Each step defines an action, dependencies, inputs, and outputs. Steps are executed in order."
     },
     "status": {
@@ -551,10 +576,12 @@
     },
     "default_refs": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(default_refs))",
       "description": "Default references for this type (e.g., 'workflow_graph': ['path/to/default_workflow.py'])"
     },
     "default_initial_data": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(default_initial_data))",
       "description": "Default initial data for instances of this type"
     },
     "allow_instance_override_refs": {
@@ -566,7 +593,8 @@
       "description": "If True, this cell type can be rendered in DynamicWorkspace (has compatible Vue component)"
     },
     "discovery": {
-      "type": "TEXT",
+      "type": "JSON",
+      "constraints": "CHECK (json_valid(discovery))",
       "description": "Discovery metadata for semantic search and intelligent cell selection. Optional field - cells without this metadata can still be loaded but won't be discoverable via the Discovery System."
     },
     "created_at": {
@@ -623,6 +651,7 @@
     },
     "fragments": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(fragments))",
       "description": "Metadata for this content. Must include keys defined in ContentType.expected_fragments. Examples: resolution, poly_count, duration"
     },
     "filename": {
@@ -639,10 +668,12 @@
     },
     "tags": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(tags))",
       "description": "Tags for categorization and search"
     },
     "metadata": {
       "type": "JSON",
+      "constraints": "CHECK (json_valid(metadata))",
       "description": "Additional custom metadata"
     },
     "created_at": {
