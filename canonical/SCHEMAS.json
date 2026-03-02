@@ -422,11 +422,21 @@
       "type": "TEXT",
       "constraints": "PRIMARY KEY"
     },
+    "name": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "indexed": true,
+      "description": "Name of the type"
+    },
+    "description": {
+      "type": "TEXT",
+      "description": "Description of the type"
+    },
     "kind": {
       "type": "TEXT",
       "constraints": "NOT NULL",
       "indexed": true,
-      "description": "Type identifier (e.g., 'text', 'code', 'image')"
+      "description": "Type identifier (e.g., 'cell', 'book')"
     },
     "label": {
       "type": "TEXT",
@@ -436,11 +446,30 @@
       "type": "TEXT",
       "description": "Icon identifier"
     },
+    "default_refs": {
+      "type": "JSON",
+      "description": "Default references for this type"
+    },
+    "default_initial_data": {
+      "type": "JSON",
+      "description": "Default initial data for instances"
+    },
+    "allow_instance_override_refs": {
+      "type": "INTEGER",
+      "description": "Whether instances can override refs"
+    },
+    "can_render_dynamically": {
+      "type": "INTEGER",
+      "description": "Whether this type can render dynamically"
+    },
     "config": {
       "type": "JSON",
       "description": "Type-specific configuration"
     },
     "created_at": {
+      "type": "DATETIME"
+    },
+    "updated_at": {
       "type": "DATETIME"
     }
   },
