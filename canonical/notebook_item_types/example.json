@@ -1,0 +1,59 @@
+{
+  "id": "example",
+  "name": "example",
+  "description": "Reference implementation of a plug-and-play cell type",
+  "version": "1.0.0",
+  "category": "reference",
+  "default_refs": {
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "view": [
+      "frontend/View.vue"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "default_initial_data": {
+    "message": "Hello from Example Cell",
+    "counter": 0
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "message": {
+      "type": "string",
+      "default": "Hello from Example Cell",
+      "description": "Display message"
+    },
+    "counter": {
+      "type": "integer",
+      "default": 0,
+      "description": "Simple counter value"
+    }
+  },
+  "can_render_dynamically": false,
+  "_discovery": {
+    "labels": [
+      "#reference",
+      "#example",
+      "#template"
+    ],
+    "describe": "Reference implementation demonstrating the plug-and-play cell type architecture. Shows minimal required structure for a functional cell: type.json definition, backend scripts, frontend View.vue, and documentation. Includes example initial_data, refs, and properties_schema. Perfect starting point for creating new cell types. Instant execution, no external dependencies. Use as template when building new cells.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [],
+    "dependencies": [],
+    "tags": [
+      "reference",
+      "example",
+      "template",
+      "documentation"
+    ],
+    "use_cases": [
+      "Learn cell type architecture",
+      "Template for new cell development",
+      "Validate cell registry loading",
+      "Test cell instantiation"
+    ]
+  }
+}
