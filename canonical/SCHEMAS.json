@@ -425,7 +425,7 @@
     },
     "kind": {
       "type": "TEXT",
-      "constraints": "NOT NULL UNIQUE",
+      "constraints": "NOT NULL",
       "indexed": true,
       "description": "Type identifier (e.g., 'text', 'code', 'image')"
     },

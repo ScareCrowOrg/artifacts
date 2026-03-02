@@ -1,6 +1,6 @@
 {
   "id": "e3ee8eda-9a89-4401-ae56-fa56161548c4",
-  "name": "viewer",
+  "name": "viewer_extended",
   "description": "Read-only access to resources",
   "permissions": [
     "cells.read_any",

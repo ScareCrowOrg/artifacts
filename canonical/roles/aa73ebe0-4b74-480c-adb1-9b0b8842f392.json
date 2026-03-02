@@ -1,6 +1,6 @@
 {
   "id": "aa73ebe0-4b74-480c-adb1-9b0b8842f392",
-  "name": "admin",
+  "name": "admin_extended",
   "description": "Administrator with full system access",
   "permissions": [
     "*"
