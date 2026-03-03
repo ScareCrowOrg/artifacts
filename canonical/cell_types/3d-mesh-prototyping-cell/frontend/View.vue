@@ -262,7 +262,7 @@ watch(hasInputImage, (newVal, oldVal) => {
 /**
  * Handle image file upload
  */
-const handleFileUpload = async (event: Event) => {
+const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
 
