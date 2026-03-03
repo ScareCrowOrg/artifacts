@@ -634,25 +634,26 @@ onUnmounted(() => {
 
     <!-- Image Preview (only for generation modes) - REMOVED (moved to viewport) -->
 
-    <!-- Image Preview Container (Always visible for generation modes) -->
-    <div v-if="generationMode !== 'manual-upload'" class="mb-6">
+    <!-- Image Preview Container (Always visible - debug mode) -->
+    <div class="mb-6 p-4 bg-surface-light dark:bg-surface-dark-light rounded border-2 border-primary">
       <label class="block text-sm font-medium mb-4 text-text-primary dark:text-text-primary-dark">
-        📤 Input Image Preview
+        📤 Input Image Preview (Debug: generationMode={{ generationMode }}, hasInputImage={{ hasInputImage }})
       </label>
       <div
         class="image-preview-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
-        :style="{ width: '100%', height: '400px' }"
+        :style="{ width: '100%', height: '400px', overflow: 'auto' }"
       >
         <div v-if="hasInputImage" class="flex items-center justify-center h-full p-4">
           <img
             :src="inputImage"
             alt="Input for reconstruction"
-            class="max-h-full w-auto rounded border border-border dark:border-border-dark"
+            :style="{ maxHeight: '100%', width: 'auto' }"
+            class="rounded border border-border dark:border-border-dark"
           />
         </div>
         <div v-else class="flex items-center justify-center h-full">
           <p class="text-text-secondary dark:text-text-secondary-dark">
-            Image will appear here after upload
+            Image will appear here after upload ({{ inputImage ? 'has value but not showing' : 'empty' }})
           </p>
         </div>
       </div>
