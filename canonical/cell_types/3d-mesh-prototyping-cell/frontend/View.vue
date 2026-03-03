@@ -286,7 +286,7 @@ const handleFileUpload = async (event: Event) => {
 
   const reader = new FileReader()
 
-  reader.onload = async (e) => {
+  reader.onload = (e) => {
     console.log('[DEBUG] FileReader.onload triggered', { resultLength: e.target?.result?.length })
     try {
       const result = e.target?.result as string
