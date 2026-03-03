@@ -632,15 +632,7 @@ onUnmounted(() => {
       </label>
     </div>
 
-    <!-- Image Preview (only for generation modes) -->
-    <div v-if="hasInputImage && generationMode !== 'manual-upload'" class="mb-6">
-      <label class="block text-sm font-medium mb-2 text-text-primary dark:text-text-primary-dark">Input Image Preview</label>
-      <img
-        :src="inputImage"
-        alt="Input for reconstruction"
-        class="max-w-xs max-h-64 rounded border border-border dark:border-border-dark"
-      />
-    </div>
+    <!-- Image Preview (only for generation modes) - REMOVED (moved to viewport) -->
 
     <!-- Generate Button (only for generation modes) -->
     <button
@@ -669,10 +661,11 @@ onUnmounted(() => {
     />
 
     <!-- Babylon.js Viewport - Per-cell engine instance -->
-    <div 
+    <div
       class="viewport-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
       :style="{ width: '100%', height: '500px' }"
     >
+      <!-- Show mesh if generated -->
       <BabylonModelViewer
         v-if="hasMesh && meshBlobUrl"
         :url="meshBlobUrl"
@@ -682,6 +675,20 @@ onUnmounted(() => {
         background-color="#ffffff"
         :grid-visible="false"
       />
+
+      <!-- Show uploaded image if no mesh (for preview before generation) -->
+      <div v-else-if="hasInputImage && generationMode !== 'manual-upload'" class="flex flex-col items-center justify-center h-full p-4">
+        <label class="block text-sm font-medium mb-4 text-text-primary dark:text-text-primary-dark">
+          Input Image Preview
+        </label>
+        <img
+          :src="inputImage"
+          alt="Input for reconstruction"
+          class="max-h-96 w-auto rounded border border-border dark:border-border-dark"
+        />
+      </div>
+
+      <!-- Show empty state when nothing is loaded -->
       <div v-else class="flex items-center justify-center h-full">
         <p class="text-text-secondary dark:text-text-secondary-dark">
           Upload an image and generate a 3D mesh to view it here
