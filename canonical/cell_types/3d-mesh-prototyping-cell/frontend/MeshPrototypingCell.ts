@@ -451,3 +451,5 @@ export class MeshPrototypingCell extends BaseCell {
     }
   }
 }
+
+export default MeshPrototypingCell
