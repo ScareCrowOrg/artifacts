@@ -634,6 +634,30 @@ onUnmounted(() => {
 
     <!-- Image Preview (only for generation modes) - REMOVED (moved to viewport) -->
 
+    <!-- Image Preview Container (Always visible for generation modes) -->
+    <div v-if="generationMode !== 'manual-upload'" class="mb-6">
+      <label class="block text-sm font-medium mb-4 text-text-primary dark:text-text-primary-dark">
+        📤 Input Image Preview
+      </label>
+      <div
+        class="image-preview-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
+        :style="{ width: '100%', height: '400px' }"
+      >
+        <div v-if="hasInputImage" class="flex items-center justify-center h-full p-4">
+          <img
+            :src="inputImage"
+            alt="Input for reconstruction"
+            class="max-h-full w-auto rounded border border-border dark:border-border-dark"
+          />
+        </div>
+        <div v-else class="flex items-center justify-center h-full">
+          <p class="text-text-secondary dark:text-text-secondary-dark">
+            Image will appear here after upload
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- Generate Button (only for generation modes) -->
     <button
       v-if="generationMode !== 'manual-upload'"
@@ -648,7 +672,7 @@ onUnmounted(() => {
       </span>
     </button>
 
-    <!-- Viewport Controls -->
+    <!-- Babylon.js Viewer Controls -->
     <ViewportControls
       :auto-rotate="autoRotate"
       :wireframe-mode="wireframeMode"
@@ -660,12 +684,13 @@ onUnmounted(() => {
       @download-mesh="downloadMesh"
     />
 
-    <!-- Babylon.js Viewport - Per-cell engine instance -->
+    <!-- Babylon.js 3D Mesh Viewer (only shows generated mesh) -->
     <div
-      class="viewport-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
+      v-if="generationMode !== 'manual-upload' || hasMesh"
+      class="babylon-viewer-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
       :style="{ width: '100%', height: '500px' }"
     >
-      <!-- Show mesh if generated -->
+      <!-- Show 3D mesh if generated -->
       <BabylonModelViewer
         v-if="hasMesh && meshBlobUrl"
         :url="meshBlobUrl"
@@ -676,22 +701,10 @@ onUnmounted(() => {
         :grid-visible="false"
       />
 
-      <!-- Show uploaded image if no mesh (for preview before generation) -->
-      <div v-else-if="hasInputImage && generationMode !== 'manual-upload'" class="flex flex-col items-center justify-center h-full p-4">
-        <label class="block text-sm font-medium mb-4 text-text-primary dark:text-text-primary-dark">
-          Input Image Preview
-        </label>
-        <img
-          :src="inputImage"
-          alt="Input for reconstruction"
-          class="max-h-96 w-auto rounded border border-border dark:border-border-dark"
-        />
-      </div>
-
-      <!-- Show empty state when nothing is loaded -->
+      <!-- Show waiting message when generating -->
       <div v-else class="flex items-center justify-center h-full">
         <p class="text-text-secondary dark:text-text-secondary-dark">
-          Upload an image and generate a 3D mesh to view it here
+          {{ isGenerating ? 'Generating 3D mesh...' : 'Generate a 3D mesh to view it here' }}
         </p>
       </div>
     </div>
