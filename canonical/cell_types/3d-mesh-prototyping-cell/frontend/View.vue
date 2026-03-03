@@ -25,7 +25,8 @@
  * @component
  */
 
-import { ref, computed, watch, onMounted, onUnmounted, defineOptions, nextTick, flushSync } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, defineOptions, nextTick } from 'vue'
+import { flushSync } from '@vue/runtime-core'
 import { createLogger } from '@/utils/logger'
 import { MeshPrototypingCell } from './MeshPrototypingCell'
 import type { MeshPrototypingInput } from './MeshPrototypingCell'
