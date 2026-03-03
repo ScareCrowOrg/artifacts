@@ -229,6 +229,31 @@ watch(meshBlobUrl, (newUrl, oldUrl) => {
   previousBlobUrl = newUrl
 })
 
+// DEBUG: Watch uploadedImage changes
+watch(uploadedImage, (newVal, oldVal) => {
+  console.log('[WATCH] uploadedImage changed', {
+    newValLength: newVal?.length || 0,
+    oldValLength: oldVal?.length || 0,
+    newValStart: newVal?.substring(0, 50) || 'null',
+    changed: newVal !== oldVal
+  })
+})
+
+// DEBUG: Watch inputImage computed changes
+watch(inputImage, (newVal, oldVal) => {
+  console.log('[WATCH] inputImage (computed) changed', {
+    newValLength: newVal?.length || 0,
+    oldValLength: oldVal?.length || 0,
+    newValStart: newVal?.substring(0, 50) || 'null',
+    changed: newVal !== oldVal
+  })
+})
+
+// DEBUG: Watch hasInputImage changes
+watch(hasInputImage, (newVal, oldVal) => {
+  console.log('[WATCH] hasInputImage (computed) changed', { newVal, oldVal, changed: newVal !== oldVal })
+})
+
 /**
  * Compress image to reduce payload size for 3D mesh generation
  * Addresses "Request Entity Too Large" (HTTP 413) errors
