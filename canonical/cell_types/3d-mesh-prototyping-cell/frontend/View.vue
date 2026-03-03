@@ -178,7 +178,7 @@ const {
 const fileInput = ref<HTMLInputElement | null>(null)
 
 // Computed
-const hasInputImage = computed(() => inputImage.value !== null && inputImage.value !== '')
+const hasInputImage = computed(() => inputImage.value !== '')
 const hasMesh = computed(() => {
   // Has mesh if either generated or manually uploaded
   return (generatedMesh.value !== null && generatedMesh.value !== '') || uploadedGLBUrl.value !== null
@@ -253,11 +253,6 @@ watch(inputImage, (newVal, oldVal) => {
 watch(hasInputImage, (newVal, oldVal) => {
   console.log('[WATCH] hasInputImage (computed) changed', { newVal, oldVal, changed: newVal !== oldVal })
 })
-
-/**
- * Compress image to reduce payload size for 3D mesh generation
- * Addresses "Request Entity Too Large" (HTTP 413) errors
- */
 
 /**
  * Handle image file upload
@@ -657,12 +652,10 @@ onUnmounted(() => {
       </label>
     </div>
 
-    <!-- Image Preview (only for generation modes) - REMOVED (moved to viewport) -->
-
-    <!-- Image Preview Container (Always visible - debug mode) -->
-    <div class="mb-6 p-4 bg-surface-light dark:bg-surface-dark-light rounded border-2 border-primary">
+    <!-- Image Preview Container -->
+    <div class="mb-6 p-4 bg-surface-light dark:bg-surface-dark-light rounded border border-border dark:border-border-dark">
       <label class="block text-sm font-medium mb-4 text-text-primary dark:text-text-primary-dark">
-        📤 Input Image Preview (Debug: generationMode={{ generationMode }}, hasInputImage={{ hasInputImage }})
+        📤 Input Image Preview
       </label>
       <div
         class="image-preview-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
@@ -678,7 +671,7 @@ onUnmounted(() => {
         </div>
         <div v-else class="flex items-center justify-center h-full">
           <p class="text-text-secondary dark:text-text-secondary-dark">
-            Image will appear here after upload ({{ inputImage ? 'has value but not showing' : 'empty' }})
+            Image will appear here after upload
           </p>
         </div>
       </div>
@@ -743,10 +736,5 @@ onUnmounted(() => {
 <style scoped>
 .mesh-prototyping-container {
   font-family: 'Inter', sans-serif;
-}
-
-.viewport-container {
-  position: relative;
-  overflow: hidden;
 }
 </style>
