@@ -56,7 +56,10 @@ const emit = defineEmits<{
 }>()
 
 // Local component state (ITERATION #5 - writable refs for user interactions)
-const uploadedImage = ref<string | null>(null) // User-uploaded image (writable)
+// ARCHITECTURE: Separate UI State from Persistence State
+// localPreview: ephemeral UI state (shows immediately on upload)
+// localGeneratedMesh, etc: used to update persistent cell state
+const localPreview = ref<string | null>(null) // UI preview from file input (ephemeral, not persisted)
 const localError = ref<string | null>(null) // Local error state (writable)
 const localGeneratedMesh = ref<string | null>(null) // Generated mesh data (writable)
 const localIsGenerating = ref<boolean>(false) // Generation status (writable)
@@ -88,14 +91,14 @@ const selectedModel = ref<MeshGenerationModel>(
 const uploadedGLBFile = ref<File | null>(null)
 const uploadedGLBUrl = ref<string | null>(null)
 
-// Component state - Safe reactive access with defensive defaults (ITERATION #4)
-// CRITICAL: User-uploaded image has ABSOLUTE priority over props
-const inputImage = computed(() => {
-  // If user uploaded an image, use it. Period.
-  if (uploadedImage.value) {
-    return uploadedImage.value
+// Component state - Simple separation: UI state vs Persistence state
+// UI Display: Priority is local preview (what user just uploaded), then fallback to persisted data
+const displayImage = computed(() => {
+  // If user just uploaded something, show it immediately (UI state)
+  if (localPreview.value) {
+    return localPreview.value
   }
-  // Only fall back to cell data if no local upload
+  // Fallback to persisted cell data (no cascading logic, just pick one)
   return props.cell?.initial_data?.inputImage ||
          props.cell?.state?.inputImage ||
          props.cell?.inputImage || ''
@@ -181,7 +184,7 @@ const {
 const fileInput = ref<HTMLInputElement | null>(null)
 
 // Computed
-const hasInputImage = computed(() => inputImage.value !== '')
+const hasInputImage = computed(() => displayImage.value !== '')
 const hasMesh = computed(() => {
   // Has mesh if either generated or manually uploaded
   return (generatedMesh.value !== null && generatedMesh.value !== '') || uploadedGLBUrl.value !== null
@@ -232,115 +235,73 @@ watch(meshBlobUrl, (newUrl, oldUrl) => {
   previousBlobUrl = newUrl
 })
 
-// DEBUG: Watch uploadedImage changes
-watch(uploadedImage, (newVal, oldVal) => {
-  console.log('[WATCH] uploadedImage changed', {
+// DEBUG: Watch localPreview changes
+watch(localPreview, (newVal, oldVal) => {
+  console.log('[WATCH] localPreview changed', {
     newValLength: newVal?.length || 0,
     oldValLength: oldVal?.length || 0,
-    newValStart: newVal?.substring(0, 50) || 'null',
-    changed: newVal !== oldVal
+    newValStart: newVal?.substring(0, 50) || 'null'
   })
 })
 
-// DEBUG: Watch inputImage computed changes
-watch(inputImage, (newVal, oldVal) => {
-  console.log('[WATCH] inputImage (computed) changed', {
+// DEBUG: Watch displayImage changes
+watch(displayImage, (newVal, oldVal) => {
+  console.log('[WATCH] displayImage (computed) changed', {
     newValLength: newVal?.length || 0,
-    oldValLength: oldVal?.length || 0,
-    newValStart: newVal?.substring(0, 50) || 'null',
-    changed: newVal !== oldVal
+    oldValLength: oldVal?.length || 0
   })
 })
 
 // DEBUG: Watch hasInputImage changes
 watch(hasInputImage, (newVal, oldVal) => {
-  console.log('[WATCH] hasInputImage (computed) changed', { newVal, oldVal, changed: newVal !== oldVal })
+  console.log('[WATCH] hasInputImage (computed) changed', { newVal, oldVal })
 })
 
 /**
  * Handle image file upload
+ * ARCHITECTURE: Updates only localPreview (UI state), not persistent state
  */
 const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
 
-  console.log('[DEBUG] handleFileUpload called', { hasFile: !!file, event })
-
   if (!file) {
-    console.log('[DEBUG] No file selected')
     return
   }
 
-  console.log('[DEBUG] File selected', { name: file.name, size: file.size, type: file.type })
-
   if (!file.type.startsWith('image/')) {
     localError.value = 'Please upload a valid image file (PNG, JPG, etc.)'
-    console.log('[DEBUG] Invalid file type:', file.type)
     return
   }
 
   logger.info(`File selected: ${file.name} (${file.size} bytes)`)
-  console.log('[DEBUG] Creating FileReader...')
 
   const reader = new FileReader()
 
-  reader.onload = async (e) => {
-    console.log('[DEBUG] FileReader.onload triggered', { resultLength: e.target?.result?.length })
+  reader.onload = (e) => {
     try {
       const result = e.target?.result as string
 
-      // Use image as-is (user responsible for size and quality)
-      // InstantMesh will handle any resolution
-      uploadedImage.value = result
+      // IMMEDIATE UI UPDATE: localPreview updates synchronously
+      // No cascading computeds, no prop dependencies, just show what user picked
+      localPreview.value = result
       localError.value = null
 
-      // CRITICAL: Wait for Vue to process the reactive change
-      await nextTick()
-
-      console.log('[DEBUG] After flushSync - uploadedImage.value assigned', {
-        uploadedImageLength: uploadedImage.value?.length || 0
-      })
-
-      // Log computed properties state
-      const computedInputImage = inputImage.value
-      const computedHasInputImage = hasInputImage.value
-      const computedGenerationMode = generationMode.value
-
-      console.log('[DEBUG] uploadedImage.value assigned (after nextTick)', {
-        uploadedImageLength: uploadedImage.value?.length || 0,
-        uploadedImageFirstChars: uploadedImage.value?.substring(0, 50) || 'null',
-        inputImageLength: computedInputImage?.length || 0,
-        inputImageFirstChars: computedInputImage?.substring(0, 50) || 'null',
-        hasInputImage: computedHasInputImage,
-        generationMode: computedGenerationMode,
-        generationModeCheck: computedGenerationMode !== 'manual-upload',
-        shouldRenderPreview: computedHasInputImage && computedGenerationMode !== 'manual-upload'
-      })
-      logger.debug('Image loaded as base64 (no processing)', {
-        uploadedImageLength: uploadedImage.value?.length || 0,
-        hasInputImage: inputImage.value !== null && inputImage.value !== '',
-        inputImageLength: inputImage.value?.length || 0
+      logger.debug('Image loaded as base64', {
+        previewLength: localPreview.value?.length || 0
       })
     } catch (err: any) {
       localError.value = `Image load failed: ${err.message}`
-      console.error('[DEBUG] Image load error:', err)
       logger.error('Image load error', err)
     }
   }
 
   reader.onerror = () => {
-    console.error('[DEBUG] FileReader error triggered')
     localError.value = 'Failed to read image file'
     logger.error('FileReader error')
   }
 
-  reader.onprogress = (e) => {
-    console.log('[DEBUG] FileReader.onprogress', { loaded: e.loaded, total: e.total })
-  }
-
-  console.log('[DEBUG] Calling reader.readAsDataURL...')
   reader.readAsDataURL(file)
-  console.log('[DEBUG] readAsDataURL call completed')
 }
 
 /**
@@ -370,7 +331,7 @@ const handleGLBUploadError = (error: string) => {
  * Supports: cloud-api, local-gpu, manual-upload
  */
 const generate3DMesh = async () => {
-  if (!inputImage.value && generationMode.value !== 'manual-upload') {
+  if (!displayImage.value && generationMode.value !== 'manual-upload') {
     localError.value = 'Please upload an image first'
     return
   }
@@ -383,7 +344,7 @@ const generate3DMesh = async () => {
   }
 
   logger.info(`Starting 3D mesh generation with mode: ${generationMode.value}`)
-  
+
   localIsGenerating.value = true
   localError.value = null
 
@@ -397,9 +358,9 @@ const generate3DMesh = async () => {
                                   compressionLevel: 7,
                                   targetFileSizeMB: 10
                                 }
-    
+
     const input: MeshPrototypingInput = {
-      inputImage: inputImage.value || '',
+      inputImage: displayImage.value || '',
       generationMode: generationMode.value,
       modelType: selectedModel.value,
       reconstructionParams,
@@ -518,12 +479,12 @@ const toggleGrid = () => {
 // Lifecycle
 onMounted(async () => {
   logger.info('3D Mesh Prototyping Cell (Babylon.js) mounted')
-  
-  // Debug check for inputImage availability (ITERATION #4)
-  if (!inputImage.value) {
-    logger.warn('inputImage is empty on mount. Cell may not have initial data yet.')
+
+  // Debug check for displayImage availability
+  if (!displayImage.value) {
+    logger.warn('No image available on mount. Cell may not have initial data yet.')
   } else {
-    logger.info('inputImage available on mount')
+    logger.info('Image available on mount')
   }
   
   // Perform health check
@@ -663,24 +624,24 @@ onUnmounted(() => {
       <label class="block text-sm font-medium mb-4 text-text-primary dark:text-text-primary-dark">
         📤 Input Image Preview
       </label>
-      <!-- DEBUG: Test container with yellow border for visibility -->
-      <div class="debug-container border-4 border-dashed border-yellow-400 p-4 bg-yellow-50 dark:bg-yellow-950">
-        <p v-if="!inputImage" class="text-xs text-yellow-700 dark:text-yellow-300">
-          Aguardando imagem... (hasInputImage: {{ hasInputImage }}, inputImage.length: {{ inputImage.length }})
+      <!-- Clean, simple preview using displayImage -->
+      <div class="preview-container border-4 border-dashed border-blue-400 p-4 bg-blue-50 dark:bg-blue-950 rounded">
+        <p v-if="!displayImage" class="text-xs text-blue-700 dark:text-blue-300">
+          Aguardando imagem... (hasInputImage: {{ hasInputImage }})
         </p>
 
         <template v-else>
-          <p class="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
-            DEBUG: Imagem detectada ({{ inputImage.length }} chars)
+          <p class="text-xs text-blue-700 dark:text-blue-300 mb-2">
+            ✅ Imagem carregada ({{ displayImage.length }} chars)
           </p>
           <img
-            :src="inputImage"
-            :key="inputImage.substring(0, 100)"
+            :src="displayImage"
+            :key="displayImage.substring(0, 50)"
             alt="Input for reconstruction"
-            class="w-full h-auto block"
-            style="min-height: 200px; background: #333; border: 2px red solid;"
-            @load="console.log('[DOM] Imagem carregada com sucesso no <img>')"
-            @error="console.error('[DOM] ERRO ao renderizar src da imagem - pode ser muito grande')"
+            class="w-full h-auto block rounded"
+            style="min-height: 200px; background: #333;"
+            @load="console.log('[IMG] Imagem renderizada com sucesso')"
+            @error="console.error('[IMG] Erro ao renderizar imagem')"
           />
         </template>
       </div>
