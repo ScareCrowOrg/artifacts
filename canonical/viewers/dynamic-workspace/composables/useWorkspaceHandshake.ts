@@ -59,7 +59,7 @@ export interface WorkspaceErrorMessage {
 const RUNNER_VERSION = 'v2.0.0-phase1'
 const VALIDATE_SESSION_URL =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_CENTRALHUB_URL) ||
-  'http://localhost:5051'
+  'http://localhost:8000'
 
 /**
  * Allowed Cockpit origins. Messages from other origins are silently dropped.
