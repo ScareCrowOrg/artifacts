@@ -36,70 +36,29 @@ const artifactsRewritePlugin = {
   },
 }
 
-// Plugin to handle URL rewriting for /artifacts/* requests
-// This allows the dev server to serve /artifacts/canonical/... correctly
-// when running from /app with root=/app/artifacts
+// Plugin to handle URL rewriting for /artifacts/* and /viewers/* requests
+// - /artifacts/* URLs → /* for file serving
+// - /viewers/:viewerName → /canonical/viewers/:viewerName/ (SPA serving)
 const urlRewritePlugin = {
   name: 'url-rewrite',
   apply: 'serve',
   configureServer(server) {
-    // Add middleware to rewrite /artifacts/* URLs to /* for file serving
     server.middlewares.use((req, res, next) => {
       // Rewrite /artifacts/* URLs to /* for file serving
       if (req.url.startsWith('/artifacts/')) {
         req.url = req.url.replace('/artifacts', '')
+        return next()
       }
-      next()
-    })
-  },
-}
 
-// Plugin to serve DynamicWorkspace v2 viewer as a standalone SPA.
-// Intercepts GET /viewers/:viewerName and returns an HTML page that
-// bootstraps the corresponding canonical/viewers/<name>/App.vue.
-const viewerPlugin = {
-  name: 'viewer-handler',
-  apply: 'serve' as const,
-  configureServer(server: any) {
-    server.middlewares.use((req: any, res: any, next: () => void) => {
+      // Rewrite /viewers/:viewerName to /canonical/viewers/:viewerName/
+      // This allows Vite to serve the index.html from canonical structure
       const match = req.url?.match(/^\/viewers\/([^/?#]+)(\/)?(\?.*)?$/)
-      if (!match) {
-        next()
-        return
+      if (match) {
+        const viewerName = match[1]
+        req.url = `/canonical/viewers/${viewerName}/`
       }
-      const viewerName = match[1]
-      const centralhubUrl =
-        process.env.VITE_CENTRALHUB_URL || 'http://localhost:5050'
 
-      res.setHeader('Content-Type', 'text/html; charset=utf-8')
-      res.end(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DynamicWorkspace v2 – ${viewerName}</title>
-  <script type="importmap">
-    {
-      "imports": {
-        "vue": "https://unpkg.com/vue@3/dist/vue.esm-browser.js",
-        "pinia": "https://unpkg.com/pinia@latest/dist/pinia.esm-browser.mjs"
-      }
-    }
-  </script>
-</head>
-<body>
-  <div id="app"></div>
-  <script type="module">
-    import { createApp } from 'vue'
-    import { createPinia } from 'pinia'
-    import App from '/canonical/viewers/${viewerName}/App.vue'
-
-    const app = createApp(App)
-    app.use(createPinia())
-    app.mount('#app')
-  </script>
-</body>
-</html>`)
+      next()
     })
   },
 }
@@ -128,7 +87,6 @@ export default defineConfig({
   plugins: [
     migrationWarningPlugin,
     urlRewritePlugin,
-    viewerPlugin,
     artifactsRewritePlugin,
     vue({
       include: [/\.vue$/],
