@@ -87,8 +87,9 @@ export function useWorkspaceHandshake() {
 
   /**
    * Send RUNNER_READY back to Cockpit via the parent frame.
+   * Uses cockpitOrigin to restrict the message to the legitimate parent only.
    */
-  function sendReady(workspaceId: string, source: MessageEventSource | null) {
+  function sendReady(workspaceId: string, cockpitOrigin: string, source: MessageEventSource | null) {
     const message: WorkspaceReadyMessage = {
       type: 'RUNNER_READY',
       payload: {
@@ -102,19 +103,21 @@ export function useWorkspaceHandshake() {
     }
     console.info('[WORKSPACE] Sending RUNNER_READY', message)
     if (source) {
-      ;(source as Window).postMessage(message, '*')
+      ;(source as Window).postMessage(message, cockpitOrigin)
     } else {
-      window.parent.postMessage(message, '*')
+      window.parent.postMessage(message, cockpitOrigin)
     }
   }
 
   /**
    * Send RUNNER_ERROR back to Cockpit via the parent frame.
+   * Uses cockpitOrigin to restrict the message to the legitimate parent only.
    */
   function sendError(
     workspaceId: string,
     errorCode: string,
     message: string,
+    cockpitOrigin: string,
     source: MessageEventSource | null,
   ) {
     const msg: WorkspaceErrorMessage = {
@@ -124,9 +127,9 @@ export function useWorkspaceHandshake() {
     }
     console.error('[WORKSPACE] Sending RUNNER_ERROR', msg)
     if (source) {
-      ;(source as Window).postMessage(msg, '*')
+      ;(source as Window).postMessage(msg, cockpitOrigin)
     } else {
-      window.parent.postMessage(msg, '*')
+      window.parent.postMessage(msg, cockpitOrigin)
     }
   }
 
@@ -147,7 +150,8 @@ export function useWorkspaceHandshake() {
       const code = 'INVALID_PAYLOAD'
       const msg = 'Missing required fields in INIT_WORKSPACE payload'
       store.setError(code, msg)
-      sendError(workspaceId ?? '', code, msg, event.source)
+      // Use event.origin as fallback if cockpitOrigin is missing in the payload
+      sendError(workspaceId ?? '', code, msg, event.origin || '*', event.source)
       return
     }
 
@@ -157,14 +161,14 @@ export function useWorkspaceHandshake() {
       await validateSessionWithBackend(workspaceId, sessionToken)
       store.setReady()
       console.info('[WORKSPACE] RUNNER_READY – session validated for workspaceId=%s', workspaceId)
-      sendReady(workspaceId, event.source)
+      sendReady(workspaceId, cockpitOrigin, event.source)
     } catch (err) {
       const code = 'VALIDATION_FAILED'
       const message =
         err instanceof Error ? err.message : 'Failed to validate session: Backend unreachable'
       store.setError(code, message)
       console.error('[WORKSPACE] RUNNER_ERROR: %s – %s', code, message)
-      sendError(workspaceId, code, message, event.source)
+      sendError(workspaceId, code, message, cockpitOrigin, event.source)
     }
   }
 
