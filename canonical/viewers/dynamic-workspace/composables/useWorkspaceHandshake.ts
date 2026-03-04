@@ -68,7 +68,7 @@ const VALIDATE_SESSION_URL =
 const EXPECTED_COCKPIT_ORIGINS: string[] =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_COCKPIT_ORIGINS)
     ?.split(',').map((o: string) => o.trim()).filter(Boolean) ||
-  ['http://localhost:5173', 'http://localhost:8000', 'http://127.0.0.1:5173']
+  ['http://localhost:5173', 'http://localhost:8000', 'http://127.0.0.1:5173', 'http://localhost:5052']
 
 // ── Composable ──────────────────────────────────────────────────────────────
 
