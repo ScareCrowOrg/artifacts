@@ -89,12 +89,15 @@ const uploadedGLBFile = ref<File | null>(null)
 const uploadedGLBUrl = ref<string | null>(null)
 
 // Component state - Safe reactive access with defensive defaults (ITERATION #4)
-// Now prioritizes local state over cell data (ITERATION #5)
+// CRITICAL: User-uploaded image has ABSOLUTE priority over props
 const inputImage = computed(() => {
-  // Prioritize uploaded image, then fall back to cell data
-  return uploadedImage.value || 
-         props.cell?.initial_data?.inputImage || 
-         props.cell?.state?.inputImage || 
+  // If user uploaded an image, use it. Period.
+  if (uploadedImage.value) {
+    return uploadedImage.value
+  }
+  // Only fall back to cell data if no local upload
+  return props.cell?.initial_data?.inputImage ||
+         props.cell?.state?.inputImage ||
          props.cell?.inputImage || ''
 })
 
@@ -281,7 +284,7 @@ const handleFileUpload = (event: Event) => {
 
   const reader = new FileReader()
 
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     console.log('[DEBUG] FileReader.onload triggered', { resultLength: e.target?.result?.length })
     try {
       const result = e.target?.result as string
@@ -290,6 +293,9 @@ const handleFileUpload = (event: Event) => {
       // InstantMesh will handle any resolution
       uploadedImage.value = result
       localError.value = null
+
+      // CRITICAL: Wait for Vue to process the reactive change
+      await nextTick()
 
       console.log('[DEBUG] After flushSync - uploadedImage.value assigned', {
         uploadedImageLength: uploadedImage.value?.length || 0
@@ -661,16 +667,15 @@ onUnmounted(() => {
         class="image-preview-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
         :style="{ width: '100%', height: '400px', overflow: 'auto' }"
       >
-        <div v-if="hasInputImage" class="flex items-center justify-center h-full p-4">
+        <!-- TEMP: Removed v-if to test if img renders -->
+        <div class="flex items-center justify-center h-full p-4">
           <img
             :src="inputImage"
             alt="Input for reconstruction"
             :style="{ maxHeight: '100%', width: 'auto' }"
             class="rounded border border-border dark:border-border-dark"
           />
-        </div>
-        <div v-else class="flex items-center justify-center h-full">
-          <p class="text-text-secondary dark:text-text-secondary-dark">
+          <p v-if="!inputImage" class="text-text-secondary dark:text-text-secondary-dark">
             Image will appear here after upload
           </p>
         </div>
