@@ -5,15 +5,19 @@
  *
  * Responsibilities:
  * 1. Listen for INIT_WORKSPACE postMessage from Cockpit.
- * 2. Validate the session token with the CentralHub backend.
- * 3. Reply with RUNNER_READY (success) or RUNNER_ERROR (failure).
- * 4. Persist workspace state via workspaceStore.
+ * 2. Validate event.origin against EXPECTED_COCKPIT_ORIGINS before processing.
+ * 3. Validate the session token with the CentralHub backend.
+ * 4. Reply with RUNNER_READY (success) or RUNNER_ERROR (failure).
+ * 5. Persist workspace state via workspaceStore.
  *
  * Phase 1 – Hello World + Handshake only.
  */
 
 import { onMounted, onUnmounted } from 'vue'
 import { useWorkspaceStore } from '../stores/workspaceStore'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('workspace:handshake')
 
 // ── Message interfaces ──────────────────────────────────────────────────────
 
@@ -55,7 +59,16 @@ export interface WorkspaceErrorMessage {
 const RUNNER_VERSION = 'v2.0.0-phase1'
 const VALIDATE_SESSION_URL =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_CENTRALHUB_URL) ||
-  'http://localhost:5050'
+  'http://localhost:5051'
+
+/**
+ * Allowed Cockpit origins. Messages from other origins are silently dropped.
+ * Override via VITE_COCKPIT_ORIGINS env var (comma-separated list).
+ */
+const EXPECTED_COCKPIT_ORIGINS: string[] =
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_COCKPIT_ORIGINS)
+    ?.split(',').map((o: string) => o.trim()).filter(Boolean) ||
+  ['http://localhost:5173', 'http://localhost:8000', 'http://127.0.0.1:5173']
 
 // ── Composable ──────────────────────────────────────────────────────────────
 
@@ -101,7 +114,7 @@ export function useWorkspaceHandshake() {
       },
       timestamp: Date.now(),
     }
-    console.info('[WORKSPACE] Sending RUNNER_READY', message)
+    log.info('[WORKSPACE] Sending RUNNER_READY', message)
     if (source) {
       ;(source as Window).postMessage(message, cockpitOrigin)
     } else {
@@ -125,7 +138,7 @@ export function useWorkspaceHandshake() {
       payload: { workspaceId, errorCode, message },
       timestamp: Date.now(),
     }
-    console.error('[WORKSPACE] Sending RUNNER_ERROR', msg)
+    log.error('[WORKSPACE] Sending RUNNER_ERROR', msg)
     if (source) {
       ;(source as Window).postMessage(msg, cockpitOrigin)
     } else {
@@ -136,13 +149,19 @@ export function useWorkspaceHandshake() {
   // ── Message handler ────────────────────────────────────────────────────────
 
   async function handleMessage(event: MessageEvent) {
+    // Security: validate origin FIRST before processing any message content
+    if (!EXPECTED_COCKPIT_ORIGINS.includes(event.origin)) {
+      log.warn('[WORKSPACE] Rejected message from unexpected origin', { origin: event.origin })
+      return
+    }
+
     const data = event.data as Partial<InitWorkspaceMessage>
 
     if (!data || data.type !== 'INIT_WORKSPACE') {
       return
     }
 
-    console.info('[WORKSPACE] INIT_WORKSPACE received', data)
+    log.info('[WORKSPACE] INIT_WORKSPACE received', data)
 
     const { workspaceId, sessionToken, userId, cockpitOrigin } = data.payload ?? {}
 
@@ -151,7 +170,7 @@ export function useWorkspaceHandshake() {
       const msg = 'Missing required fields in INIT_WORKSPACE payload'
       store.setError(code, msg)
       // Use event.origin as fallback if cockpitOrigin is missing in the payload
-      sendError(workspaceId ?? '', code, msg, event.origin || '*', event.source)
+      sendError(workspaceId ?? '', code, msg, event.origin, event.source)
       return
     }
 
@@ -160,14 +179,14 @@ export function useWorkspaceHandshake() {
     try {
       await validateSessionWithBackend(workspaceId, sessionToken)
       store.setReady()
-      console.info('[WORKSPACE] RUNNER_READY – session validated for workspaceId=%s', workspaceId)
+      log.info('[WORKSPACE] RUNNER_READY – session validated', { workspaceId })
       sendReady(workspaceId, cockpitOrigin, event.source)
     } catch (err) {
       const code = 'VALIDATION_FAILED'
       const message =
         err instanceof Error ? err.message : 'Failed to validate session: Backend unreachable'
       store.setError(code, message)
-      console.error('[WORKSPACE] RUNNER_ERROR: %s – %s', code, message)
+      log.error('[WORKSPACE] RUNNER_ERROR', { code, message })
       sendError(workspaceId, code, message, cockpitOrigin, event.source)
     }
   }
@@ -176,7 +195,7 @@ export function useWorkspaceHandshake() {
 
   onMounted(() => {
     window.addEventListener('message', handleMessage)
-    console.info('[WORKSPACE] useWorkspaceHandshake mounted – listening for INIT_WORKSPACE')
+    log.info('[WORKSPACE] useWorkspaceHandshake mounted – listening for INIT_WORKSPACE')
   })
 
   onUnmounted(() => {
