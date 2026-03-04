@@ -78,6 +78,14 @@ const viewerPlugin = {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DynamicWorkspace v2 – ${viewerName}</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "vue": "https://unpkg.com/vue@3/dist/vue.esm-browser.js",
+        "pinia": "https://unpkg.com/pinia@latest/dist/pinia.esm-browser.mjs"
+      }
+    }
+  </script>
 </head>
 <body>
   <div id="app"></div>
