@@ -54,6 +54,48 @@ const urlRewritePlugin = {
   },
 }
 
+// Plugin to serve DynamicWorkspace v2 viewer as a standalone SPA.
+// Intercepts GET /viewers/:viewerName and returns an HTML page that
+// bootstraps the corresponding canonical/viewers/<name>/App.vue.
+const viewerPlugin = {
+  name: 'viewer-handler',
+  apply: 'serve' as const,
+  configureServer(server: any) {
+    server.middlewares.use((req: any, res: any, next: () => void) => {
+      const match = req.url?.match(/^\/viewers\/([^/?#]+)(\/)?(\?.*)?$/)
+      if (!match) {
+        next()
+        return
+      }
+      const viewerName = match[1]
+      const centralhubUrl =
+        process.env.VITE_CENTRALHUB_URL || 'http://localhost:5050'
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.end(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DynamicWorkspace v2 – ${viewerName}</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module">
+    import { createApp } from 'vue'
+    import { createPinia } from 'pinia'
+    import App from '/canonical/viewers/${viewerName}/App.vue'
+
+    const app = createApp(App)
+    app.use(createPinia())
+    app.mount('#app')
+  </script>
+</body>
+</html>`)
+    })
+  },
+}
+
 /**
  * Vite configuration for ScareVerse Artifacts Compilation Service
  * 
@@ -78,6 +120,7 @@ export default defineConfig({
   plugins: [
     migrationWarningPlugin,
     urlRewritePlugin,
+    viewerPlugin,
     artifactsRewritePlugin,
     vue({
       include: [/\.vue$/],
