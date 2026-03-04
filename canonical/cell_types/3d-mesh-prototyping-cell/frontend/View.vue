@@ -94,14 +94,11 @@ const uploadedGLBUrl = ref<string | null>(null)
 // Component state - Simple separation: UI state vs Persistence state
 // UI Display: Priority is local preview (what user just uploaded), then fallback to persisted data
 const displayImage = computed(() => {
-  // If user just uploaded something, show it immediately (UI state)
-  if (localPreview.value) {
-    return localPreview.value
-  }
-  // Fallback to persisted cell data (no cascading logic, just pick one)
-  return props.cell?.initial_data?.inputImage ||
-         props.cell?.state?.inputImage ||
-         props.cell?.inputImage || ''
+  // ONLY use localPreview - NO fallback to props
+  // Props fallback can cause re-renders when parent updates
+  const result = localPreview.value || ''
+  console.log('[COMPUTED] displayImage:', { length: result.length, hasData: result.length > 0 })
+  return result
 })
 
 const generatedMesh = computed(() => {
@@ -235,13 +232,24 @@ watch(meshBlobUrl, (newUrl, oldUrl) => {
   previousBlobUrl = newUrl
 })
 
-// DEBUG: Watch localPreview changes
+// DEBUG: Watch localPreview changes - DETAILED LOGGING TO DETECT RESETS
 watch(localPreview, (newVal, oldVal) => {
-  console.log('[WATCH] localPreview changed', {
-    newValLength: newVal?.length || 0,
-    oldValLength: oldVal?.length || 0,
-    newValStart: newVal?.substring(0, 50) || 'null'
+  const timestamp = new Date().toLocaleTimeString('pt-BR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 })
+  const newLength = newVal?.length || 0
+  const oldLength = oldVal?.length || 0
+
+  console.log(`%c[${timestamp}] [WATCH] localPreview CHANGED`, 'background: #ff6b6b; color: white; font-weight: bold;', {
+    'Old Length': oldLength > 0 ? `${oldLength} bytes` : 'EMPTY',
+    'New Length': newLength > 0 ? `${newLength} bytes` : 'EMPTY',
+    'Direction': oldLength === 0 && newLength > 0 ? '📤 UPLOAD (empty → data)' : oldLength > 0 && newLength === 0 ? '❌ RESET (data → empty)' : '🔄 UPDATED',
+    'New Start': newVal?.substring(0, 50) || 'null'
   })
+
+  // CRITICAL: If resetting to empty, log stack trace
+  if (oldLength > 0 && newLength === 0) {
+    console.error('%c🚨 CRITICAL: localPreview WAS RESET TO EMPTY!', 'background: #ff0000; color: white; font-weight: bold;')
+    console.trace('[STACK TRACE] Who reset localPreview?')
+  }
 })
 
 // DEBUG: Watch displayImage changes
@@ -261,16 +269,27 @@ watch(hasInputImage, (newVal, oldVal) => {
  * Handle image file upload
  * ARCHITECTURE: Updates only localPreview (UI state), not persistent state
  */
+let uploadCallCount = 0
 const handleFileUpload = (event: Event) => {
+  uploadCallCount++
+  const callNum = uploadCallCount
+  const timestamp = new Date().toLocaleTimeString('pt-BR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 })
+
+  console.log(`%c[${timestamp}] handleFileUpload CALLED (#${callNum})`, 'background: #4ecdc4; color: white; font-weight: bold;')
+
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
 
   if (!file) {
+    console.warn(`[${timestamp}] No file selected (call #${callNum})`)
     return
   }
 
+  console.log(`[${timestamp}] File selected: ${file.name} (${file.size} bytes) [call #${callNum}]`)
+
   if (!file.type.startsWith('image/')) {
     localError.value = 'Please upload a valid image file (PNG, JPG, etc.)'
+    console.warn(`[${timestamp}] Invalid file type: ${file.type} [call #${callNum}]`)
     return
   }
 
@@ -282,26 +301,34 @@ const handleFileUpload = (event: Event) => {
     try {
       const result = e.target?.result as string
 
+      console.log(`%c[${timestamp}] reader.onload TRIGGERED - setting localPreview to ${result.length} bytes [call #${callNum}]`, 'background: #95e1d3; color: #222;')
+
       // IMMEDIATE UI UPDATE: localPreview updates synchronously
       // No cascading computeds, no prop dependencies, just show what user picked
       localPreview.value = result
       localError.value = null
+
+      console.log(`%c[${timestamp}] ✅ localPreview.value SET SUCCESSFULLY [call #${callNum}]`, 'background: #38ada9; color: white; font-weight: bold;')
 
       logger.debug('Image loaded as base64', {
         previewLength: localPreview.value?.length || 0
       })
     } catch (err: any) {
       localError.value = `Image load failed: ${err.message}`
+      console.error(`[${timestamp}] Error in onload: ${err.message} [call #${callNum}]`)
       logger.error('Image load error', err)
     }
   }
 
   reader.onerror = () => {
     localError.value = 'Failed to read image file'
+    console.error(`[${timestamp}] FileReader error [call #${callNum}]`)
     logger.error('FileReader error')
   }
 
+  console.log(`[${timestamp}] Calling reader.readAsDataURL [call #${callNum}]`)
   reader.readAsDataURL(file)
+  console.log(`[${timestamp}] readAsDataURL call completed [call #${callNum}]`)
 }
 
 /**
@@ -476,13 +503,20 @@ const toggleGrid = () => {
   logger.debug(`Grid: ${localShowGrid.value}`)
 }
 
-// Lifecycle
+// Lifecycle - HYDRATION PHASE: Initialize from props ONLY on mount
 onMounted(async () => {
   logger.info('3D Mesh Prototyping Cell (Babylon.js) mounted')
 
-  // Debug check for displayImage availability
+  // HYDRATION: Read from props ONLY on mount, never again
+  // This follows Buffer Local Pattern from REACTIVITY_ISOLATION.md
+  if (!localPreview.value && props.cell?.initial_data?.inputImage) {
+    localPreview.value = props.cell.initial_data.inputImage
+    logger.info('Hydrated localPreview from props.cell.initial_data')
+  }
+
+  // Debug check
   if (!displayImage.value) {
-    logger.warn('No image available on mount. Cell may not have initial data yet.')
+    logger.warn('No image available on mount.')
   } else {
     logger.info('Image available on mount')
   }
@@ -626,24 +660,41 @@ onUnmounted(() => {
       </label>
       <!-- Clean, simple preview using displayImage -->
       <div class="preview-container border-4 border-dashed border-blue-400 p-4 bg-blue-50 dark:bg-blue-950 rounded">
-        <p v-if="!displayImage" class="text-xs text-blue-700 dark:text-blue-300">
-          Aguardando imagem... (hasInputImage: {{ hasInputImage }})
+        <!-- DEBUG: Show actual values - ALWAYS VISIBLE -->
+        <div class="text-xl font-bold text-red-600 bg-yellow-200 p-4 border-4 border-red-600 mb-4">
+          🔴 TEMPLATE RENDER TEST 🔴
+        </div>
+
+        <p class="text-xs text-gray-500 mb-4 p-2 bg-gray-100 rounded">
+          DEBUG: displayImage.length={{ displayImage.length }}, localPreview.length={{ localPreview?.length || 0 }}, hasInputImage={{ hasInputImage }}
         </p>
 
-        <template v-else>
-          <p class="text-xs text-blue-700 dark:text-blue-300 mb-2">
+        <!-- REMOVED V-IF: Always show status -->
+        <p v-if="displayImage.length === 0" class="text-xs text-blue-700 dark:text-blue-300 p-2 bg-blue-100 rounded mb-4">
+          ⏳ Aguardando imagem... (displayImage ainda está vazio)
+        </p>
+
+        <!-- ALWAYS SHOW - Image container -->
+        <div class="border-2 border-purple-500 p-4 bg-purple-50 rounded mb-4">
+          <p class="text-purple-700 font-bold mb-2">
+            📊 STATE: displayImage.length={{ displayImage.length }}
+          </p>
+
+          <p v-if="displayImage.length > 0" class="text-xs text-green-700 dark:text-green-300 mb-2">
             ✅ Imagem carregada ({{ displayImage.length }} chars)
           </p>
+
+          <!-- ALWAYS RENDER IMG - regardless of v-if -->
           <img
             :src="displayImage"
-            :key="displayImage.substring(0, 50)"
+            :key="`img-${displayImage.substring(0, 30)}`"
             alt="Input for reconstruction"
-            class="w-full h-auto block rounded"
-            style="min-height: 200px; background: #333;"
-            @load="console.log('[IMG] Imagem renderizada com sucesso')"
-            @error="console.error('[IMG] Erro ao renderizar imagem')"
+            class="w-full h-auto block rounded border-2 border-green-500"
+            style="min-height: 200px; background: #333; display: block;"
+            @load="console.log('[IMG] ✅ Imagem renderizada com sucesso!')"
+            @error="console.error('[IMG] ❌ Erro ao renderizar imagem')"
           />
-        </template>
+        </div>
       </div>
     </div>
 
