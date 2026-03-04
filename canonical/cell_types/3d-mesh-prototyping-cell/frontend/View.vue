@@ -663,22 +663,26 @@ onUnmounted(() => {
       <label class="block text-sm font-medium mb-4 text-text-primary dark:text-text-primary-dark">
         📤 Input Image Preview
       </label>
-      <div
-        class="image-preview-container bg-surface-dark dark:bg-black rounded border border-border dark:border-border-dark"
-        :style="{ width: '100%', height: '400px', overflow: 'auto' }"
-      >
-        <!-- TEMP: Removed v-if to test if img renders -->
-        <div class="flex items-center justify-center h-full p-4">
+      <!-- DEBUG: Test container with yellow border for visibility -->
+      <div class="debug-container border-4 border-dashed border-yellow-400 p-4 bg-yellow-50 dark:bg-yellow-950">
+        <p v-if="!inputImage" class="text-xs text-yellow-700 dark:text-yellow-300">
+          Aguardando imagem... (hasInputImage: {{ hasInputImage }}, inputImage.length: {{ inputImage.length }})
+        </p>
+
+        <template v-else>
+          <p class="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
+            DEBUG: Imagem detectada ({{ inputImage.length }} chars)
+          </p>
           <img
             :src="inputImage"
+            :key="inputImage.substring(0, 100)"
             alt="Input for reconstruction"
-            :style="{ maxHeight: '100%', width: 'auto' }"
-            class="rounded border border-border dark:border-border-dark"
+            class="w-full h-auto block"
+            style="min-height: 200px; background: #333; border: 2px red solid;"
+            @load="console.log('[DOM] Imagem carregada com sucesso no <img>')"
+            @error="console.error('[DOM] ERRO ao renderizar src da imagem - pode ser muito grande')"
           />
-          <p v-if="!inputImage" class="text-text-secondary dark:text-text-secondary-dark">
-            Image will appear here after upload
-          </p>
-        </div>
+        </template>
       </div>
     </div>
 
