@@ -43,13 +43,12 @@ If the ScareRunner backend (port 5050) is not available:
 | `vue` | `^3.5.22` | Vue 3 reactivity + components |
 | `pinia` | `^3.0.4` | Workspace state store |
 | `vue-i18n` | `^9.14.5` | Translation system (layout.* keys) |
-| `vue3-grid-layout-next` | `^1.0.7` | **ADDED** — drag/resize grid (Phase 2+; `GridContainer.vue` uses CSS grid as interim) |
+| `vue3-grid-layout-next` | `^1.0.7` | **ACTIVE** — interactive drag-drop & resize grid (`GridContainer.vue` fully upgraded) |
 
 ### `vue3-grid-layout-next` Note
-Added to `package.json` for future `GridContainer.vue` upgrade.
-Currently, `GridContainer.vue` uses CSS Grid (12-column, 50px row height).
-When `vue3-grid-layout-next` is available, `GridContainer.vue` can be upgraded to use it
-by replacing the `<div class="grid-layout">` with `<GridLayout>` + `<GridItem>`.
+`GridContainer.vue` uses `GridLayout` + `GridItem` from this library.
+Configuration: 12 columns, 50px row height, 8px margin, drag restricted to `.cell-drag-handle` (header only).
+Minimized cells are locked (`static: true`) to prevent accidental drag/resize.
 
 ---
 
@@ -57,7 +56,7 @@ by replacing the `<div class="grid-layout">` with `<GridLayout>` + `<GridItem>`.
 
 | Item | Current | Future (Phase 3) |
 |---|---|---|
-| Grid layout | CSS Grid (static) | vue3-grid-layout-next (drag/resize) |
+| Grid layout | vue3-grid-layout-next (drag/resize) | ✅ Implemented |
 | Cell types loading | fetch from backend + hardcoded fallback | HybridDatabase.listCellTypes() API |
 | Layout persistence | stub (emit-based) | HybridDatabase.saveLayoutBook() |
 | BaseCell in shared | Full copy from cockpit-vue | Extract to shared npm package |
