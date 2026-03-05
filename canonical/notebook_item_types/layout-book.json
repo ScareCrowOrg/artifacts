@@ -1,7 +1,8 @@
 {
   "id": "layout-book",
-  "name": "layout-book",
+  "name": "Layout Book",
   "description": "Save and restore complete workspace layouts",
+  "kind": null,
   "default_refs": {
     "docs": [
       "docs/README.md"
@@ -28,7 +29,7 @@
   },
   "allow_instance_override_refs": true,
   "can_render_dynamically": false,
-  "created_at": "2025-12-21T07:21:17.063627",
-  "updated_at": "2025-12-21T07:21:17.063628",
-  "kind": "cell"
+  "discovery": null,
+  "created_at": null,
+  "updated_at": null
 }

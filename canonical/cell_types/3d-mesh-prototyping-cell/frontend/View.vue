@@ -153,13 +153,8 @@ const showGrid = computed(() => {
 
 // Job polling using composable
 // Create authenticated fetch function for API calls
-// Token is read lazily via getter - always reflec current auth state
-const apiFetch = createApiFetch(() => {
-  if (!authService.token) {
-    throw new Error('[apiFetch] No authentication token available')
-  }
-  return authService.token
-})
+// authService.initialize() is called in App.vue onMounted, so token will be available
+const apiFetch = createApiFetch(() => authService.token)
 
 const {
   jobId,
@@ -532,24 +527,20 @@ onMounted(async () => {
     logger.info('Image available on mount')
   }
   
-  // Perform health check (only if authenticated)
+  // Perform health check
   try {
-    if (!authService.token) {
-      logger.debug('Skipping health check - user not authenticated')
-    } else {
-      const health = await cellInstance.health_check()
-      if (health.status !== 'healthy') {
-        logger.warn('Cell health check warning', {
-          status: health.status,
-          reason: health.reason
-        })
-        // Optionally show a UI warning if service is degraded
-        if (!health.can_execute) {
-          localError.value = `Service unavailable: ${health.reason}`
-        }
-      } else {
-        logger.debug('Cell health check passed')
+    const health = await cellInstance.health_check()
+    if (health.status !== 'healthy') {
+      logger.warn('Cell health check warning', {
+        status: health.status,
+        reason: health.reason
+      })
+      // Optionally show a UI warning if service is degraded
+      if (!health.can_execute) {
+        localError.value = `Service unavailable: ${health.reason}`
       }
+    } else {
+      logger.debug('Cell health check passed')
     }
   } catch (error: any) {
     logger.error('Cell health check failed', { error: error.message })
