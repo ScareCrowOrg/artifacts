@@ -80,7 +80,7 @@
  * Events: @remove-cell(cellId), @minimize-cell(cellId), @maximize-cell(cellId)
  */
 
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { GridLayout, GridItem } from 'vue3-grid-layout-next'
 import CellItem from './CellItem.vue'
 import { useGridLayout } from '../composables/useGridLayout'
@@ -124,19 +124,37 @@ const { syncLayoutPositions } = useGridLayout()
 // ── Layout Computation ────────────────────────────────────────────────────────
 
 /**
- * Maps GridCell[] to the vue3-grid-layout-next layout format.
- * Minimized cells are locked (static=true, h=MINIMIZED_HEIGHT) to prevent
- * accidental drag/resize while collapsed.
+ * Local layout state for vue3-grid-layout-next.
+ *
+ * CRITICAL: This must be a ref, not a computed property.
+ * When using computed, prop changes trigger recomputation during drag, causing
+ * the GridLayout to reset position changes back to props.cells values.
+ *
+ * Solution: Use a ref that syncs FROM props.cells when cells are added/removed,
+ * but persists dragged positions independently until drag completes and
+ * syncLayoutPositions is called.
  */
-const gridLayout = computed<GridLayoutItem[]>(() =>
-  props.cells.map(cell => ({
-    i: cell.cellId,
-    x: cell.position.x,
-    y: cell.position.y,
-    w: cell.position.w,
-    h: cell.isMinimized ? MINIMIZED_HEIGHT : cell.position.h,
-    static: cell.isMinimized,
-  })),
+const gridLayout = ref<GridLayoutItem[]>([])
+
+/**
+ * Synchronize gridLayout ref when cells change (add/remove).
+ * Watch tracks cell count + cell IDs to detect structural changes.
+ * Position mutations during drag/resize do NOT trigger this watch.
+ */
+watch(
+  () => props.cells.map(c => c.cellId),
+  (cellIds) => {
+    // Rebuild layout when cells are added/removed
+    gridLayout.value = props.cells.map(cell => ({
+      i: cell.cellId,
+      x: cell.position.x,
+      y: cell.position.y,
+      w: cell.position.w,
+      h: cell.isMinimized ? MINIMIZED_HEIGHT : cell.position.h,
+      static: cell.isMinimized,
+    }))
+  },
+  { immediate: true },
 )
 
 /**
@@ -175,6 +193,10 @@ function getCellById(cellId: string): GridCell | null {
  *   so that restoring the cell renders at the correct size.
  */
 function handleLayoutUpdated(layout: GridLayoutItem[]) {
+  // Update the local gridLayout ref to reflect the drag/resize visually
+  gridLayout.value = layout
+
+  // Sync positions into useGridLayout state for persistence
   const updates: Record<string, GridPosition> = {}
   for (const item of layout) {
     const cell = cellIndex.value.get(item.i)
