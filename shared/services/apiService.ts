@@ -91,3 +91,13 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     },
   })
 }
+
+// ── Default export (backward compatibility with legacy imports) ────────────────
+
+/**
+ * Default export for backward compatibility with `import apiService from '@/services/apiService'`
+ * Used by legacy cells and composables from cockpit-vue context.
+ */
+export default {
+  fetch: apiFetch,
+}
