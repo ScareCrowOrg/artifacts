@@ -30,11 +30,38 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 
 // ── URL resolution ────────────────────────────────────────────────────────────
 
+/**
+ * Resolve the API base URL from multiple sources (in order of priority):
+ * 1. window.API_BASE_URL (runtime config)
+ * 2. VITE_BACKEND_URL environment variable
+ * 3. window.location.origin (fallback to current host)
+ * 4. http://localhost:5050 (dev fallback for ScareRunner Backend)
+ *
+ * @returns The API base URL (without trailing slash)
+ */
+export function getApiBaseUrl(): string {
+  // Check for window configuration first (runtime config)
+  if (typeof window !== 'undefined' && (window as any).API_BASE_URL) {
+    return (window as any).API_BASE_URL
+  }
+
+  // Check for Vite environment variable
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BACKEND_URL) {
+    return (import.meta as any).env.VITE_BACKEND_URL
+  }
+
+  // Fallback to current window origin
+  if (typeof window !== 'undefined') {
+    return window.location.origin
+  }
+
+  // Last resort: dev fallback for local ScareRunner Backend
+  return 'http://localhost:5050'
+}
+
+// Internal alias for backward compatibility
 function getBaseUrl(): string {
-  return (
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BACKEND_URL) ||
-    'http://localhost:5050'
-  )
+  return getApiBaseUrl()
 }
 
 // ── Response parsing ──────────────────────────────────────────────────────────
