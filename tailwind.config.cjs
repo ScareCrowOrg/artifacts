@@ -13,7 +13,7 @@
 module.exports = {
   content: [
     './index.html',
-    './src/**/*.{vue,js,ts,jsx,tsx}',
+    './canonical/**/*.{vue,js,ts,jsx,tsx}',
     './shared/**/*.{vue,js,ts,jsx,tsx}',
     './cells/**/*.{vue,js,ts,jsx,tsx}',
   ],
