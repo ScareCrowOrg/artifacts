@@ -127,7 +127,6 @@ import '@/styles/index.css'
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import authService from '@/services/authService'
 import { useWorkspaceHandshake } from './composables/useWorkspaceHandshake'
 import { useGridLayout } from './composables/useGridLayout'
 import { useCellViewProvider } from './composables/useCellViewProvider'
@@ -393,10 +392,6 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  // Initialize authentication service from localStorage (must happen first)
-  // This ensures authService.token is populated before any cells need it
-  authService.initialize()
-
   loadCellTypes()
   // Defer persistence init until workspace is ready (session token available).
   // Use a reactive watch so we cleanly respond to the handshake completing.
