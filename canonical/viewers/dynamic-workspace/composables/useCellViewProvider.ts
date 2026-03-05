@@ -18,7 +18,7 @@
  * - Dynamic cell loading uses browser URL: await import('/canonical/cell_types/...')
  */
 
-import { defineAsyncComponent, shallowRef, ref } from 'vue'
+import { defineAsyncComponent, markRaw, shallowRef, ref } from 'vue'
 import type { Component } from 'vue'
 import type { CellTypeDefinition, ViewSpec } from '../types'
 import { createLogger } from '@/utils/logger'
@@ -198,7 +198,7 @@ export function useCellViewProvider() {
       )
 
       return {
-        component: ViewComponent,
+        component: markRaw(ViewComponent),
         props: {
           cellInstance,
           cell: { cellTypeName, cellType },
@@ -220,7 +220,7 @@ export function useCellViewProvider() {
       )
 
       return {
-        component: ViewComponent,
+        component: markRaw(ViewComponent),
         props: {
           cellInstance,
           cell: { cellTypeName, cellType },
@@ -233,7 +233,7 @@ export function useCellViewProvider() {
     const schema = cellType.properties_schema || {}
 
     return {
-      component: GeneratedFormView,
+      component: markRaw(GeneratedFormView),
       props: {
         cellInstance,
         schema,

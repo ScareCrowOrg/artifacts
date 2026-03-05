@@ -30,6 +30,7 @@ import { createLogger } from '@/utils/logger'
 import { MeshPrototypingCell } from './MeshPrototypingCell'
 import type { MeshPrototypingInput } from './MeshPrototypingCell'
 import authService from '@/services/authService'
+import { createApiFetch } from '@/services/apiService'
 import { useJobPolling } from './composables/useJobPolling'
 import BabylonModelViewer from '@/components/viewers/BabylonModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
@@ -151,6 +152,9 @@ const showGrid = computed(() => {
 })
 
 // Job polling using composable
+// Create authenticated fetch function for API calls
+const apiFetch = createApiFetch(() => authService.token || '')
+
 const {
   jobId,
   jobStatus,
@@ -162,6 +166,7 @@ const {
   startPolling,
   stopPolling
 } = useJobPolling(
+  apiFetch,
   // onComplete callback
   (meshData, metadata) => {
     localGeneratedMesh.value = meshData

@@ -8,7 +8,6 @@
  */
 
 import { ref, Ref } from 'vue'
-import { apiFetch } from '@/services/apiService'
 import { createLogger } from '@/utils/logger'
 
 const logger = createLogger('composable:use-job-polling')
@@ -29,13 +28,13 @@ export interface UseJobPollingReturn {
   jobId: Ref<string | null>
   jobStatus: Ref<string>
   isPolling: Ref<boolean>
-  
+
   // Optimization status
   blenderOptimized: Ref<boolean | null>
   blenderError: Ref<string | null>
   statusMessage: Ref<string | null>
   sf3dCompleted: Ref<boolean | null>
-  
+
   // Methods
   startPolling: (id: string, intervalMs?: number) => void
   stopPolling: () => void
@@ -44,12 +43,14 @@ export interface UseJobPollingReturn {
 
 /**
  * Composable for managing 3D mesh generation job polling
- * 
+ *
+ * @param apiFetch - Authenticated fetch function (created with createApiFetch in View.vue)
  * @param onComplete - Callback when job completes successfully
  * @param onError - Callback when job fails
  * @returns Job polling state and methods
  */
 export function useJobPolling(
+  apiFetch: (path: string, options?: RequestInit) => Promise<any>,
   onComplete?: (data: string, metadata?: Record<string, any>) => void,
   onError?: (error: string) => void
 ): UseJobPollingReturn {
@@ -79,17 +80,7 @@ export function useJobPolling(
     isPolling.value = true
     
     try {
-      const response = await apiFetch(`/api/cells/3d-job-status/${id}`, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
-      }
-
-      const status: JobStatus = await response.json()
+      const status: JobStatus = await apiFetch(`/cells/3d-job-status/${id}`)
       jobStatus.value = status.status
 
       logger.debug(`Job ${id} status: ${status.status}`)
