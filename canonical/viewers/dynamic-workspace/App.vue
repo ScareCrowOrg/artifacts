@@ -122,7 +122,7 @@
  *  - Asynchronous cell hydration when loading a layout
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkspaceHandshake } from './composables/useWorkspaceHandshake'
 import { useGridLayout } from './composables/useGridLayout'
@@ -390,21 +390,20 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
 
 onMounted(() => {
   loadCellTypes()
-  // Defer persistence init until workspace is ready (session token available)
-  // We watch store.status via a simple polling-free approach: re-check on next tick
-  // The store status changes reactively, so we just check on mount + when ready
+  // Defer persistence init until workspace is ready (session token available).
+  // Use a reactive watch so we cleanly respond to the handshake completing.
   if (store.status === 'ready') {
     initPersistence()
   } else {
-    // Watch via a one-time check; handshake resolves asynchronously
-    const checkInterval = setInterval(() => {
-      if (store.status === 'ready') {
-        clearInterval(checkInterval)
-        initPersistence()
-      }
-    }, 500)
-    // Clean up if component unmounts before ready
-    onUnmounted(() => clearInterval(checkInterval))
+    const stopWatch = watch(
+      () => store.status,
+      (status) => {
+        if (status === 'ready') {
+          stopWatch()
+          initPersistence()
+        }
+      },
+    )
   }
 })
 

@@ -16,9 +16,10 @@
       class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
       :disabled="isSaving"
       :title="$t('layout.toolbar.saveLayoutTooltip')"
+      :aria-label="$t('layout.toolbar.saveLayoutTooltip')"
       @click="$emit('save-layout')"
     >
-      <span>💾</span>
+      <span aria-hidden="true">💾</span>
       <span class="hidden sm:inline">{{ $t('layout.toolbar.saveLayout') }}</span>
     </button>
 

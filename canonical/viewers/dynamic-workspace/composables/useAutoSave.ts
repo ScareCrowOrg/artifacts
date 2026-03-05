@@ -90,10 +90,7 @@ export function useAutoSave() {
 
   function triggerDebounced(): void {
     // Mark as unsaved immediately so the UI can show the indicator
-    const snapshot = buildSnapshot()
-    if (snapshot !== lastSavedSnapshot) {
-      hasUnsavedChanges.value = true
-    }
+    hasUnsavedChanges.value = true
 
     if (debounceTimer !== null) {
       clearTimeout(debounceTimer)
