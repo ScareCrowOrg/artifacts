@@ -166,14 +166,26 @@ function getCellById(cellId: string): GridCell | null {
  * Called by GridLayout after any drag or resize completes.
  * Translates the layout array back to a cellId → GridPosition map and
  * syncs into useGridLayout reactive state (triggering auto-save watcher).
+ *
+ * Height preservation for minimized cells:
+ * - Minimized cells are rendered as h=MINIMIZED_HEIGHT in the layout.
+ * - We must NOT persist that visual-only height to cell.position.h —
+ *   the original height must survive the minimize/restore cycle.
+ * - For minimized cells, we always use cell.position.h (the original height)
+ *   so that restoring the cell renders at the correct size.
  */
 function handleLayoutUpdated(layout: GridLayoutItem[]) {
   const updates: Record<string, GridPosition> = {}
   for (const item of layout) {
     const cell = cellIndex.value.get(item.i)
-    // Only update position for non-minimized cells to preserve original height
-    if (cell && !cell.isMinimized) {
-      updates[item.i] = { x: item.x, y: item.y, w: item.w, h: item.h }
+    if (!cell) continue
+    updates[item.i] = {
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      // For minimized cells: preserve original height (layout reports h=1, but that
+      // is only a visual placeholder — the real height lives in cell.position.h)
+      h: cell.isMinimized ? cell.position.h : item.h,
     }
   }
   syncLayoutPositions(updates)
@@ -203,14 +215,31 @@ function handleLayoutUpdated(layout: GridLayoutItem[]) {
   opacity: 0.9;
 }
 
-/* Resize handle styling */
+/* Resize handle styling — visible by default, prominent on hover.
+   Note: .vue-resizable-handle is rendered by vue3-grid-layout-next.
+   The nwse-resize cursor from the library serves as the primary accessibility
+   affordance for resize capability. */
 :deep(.vue-resizable-handle) {
-  opacity: 0.4;
+  opacity: 0.6;
   border-radius: 2px;
+  background: rgba(var(--color-primary-rgb) / 0.25);
+  width: 16px !important;
+  height: 16px !important;
+}
+
+:deep(.vue-resizable-handle::after) {
+  content: "⋰";
+  font-size: 10px;
+  line-height: 16px;
+  display: block;
+  text-align: center;
+  color: rgba(var(--color-primary-rgb) / 0.8);
+  aria-hidden: true; /* decorative — resize affordance is provided by cursor:nwse-resize */
 }
 
 :deep(.vue-resizable-handle:hover) {
-  opacity: 0.8;
+  opacity: 1;
+  background: rgba(var(--color-primary-rgb) / 0.45);
 }
 
 /* Cell content area: allow normal text selection and interactions */

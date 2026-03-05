@@ -141,6 +141,10 @@ export function useGridLayout() {
 
   /**
    * Toggle minimized state for a cell.
+   * NOTE: position.h is intentionally NOT modified here.
+   * GridContainer renders minimized cells at h=1 (visual only), but the
+   * original height is preserved in cell.position.h so it is restored
+   * correctly when the cell is un-minimized.
    */
   function toggleMinimize(cellId: string): void {
     const cell = cells.value.find(c => c.cellId === cellId)
