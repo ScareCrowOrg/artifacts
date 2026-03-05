@@ -1,15 +1,13 @@
 /**
  * shared/services/apiService.ts
  *
- * Shared HTTP utility for dynamic-workspace viewers and cell types.
+ * Shared authenticated HTTP utility for all viewers and cell types.
  *
  * Exports:
  * - `apiFetch` — ready-to-use fetch wrapper that lazy-reads the session token
  *   from the shared `workspaceStore`. Zero boilerplate in callers.
- * - `createApiFetch` — factory for advanced use cases that need a custom
- *   token getter (e.g. composables that already hold a token reference).
  *
- * Usage (preferred — zero boilerplate):
+ * Usage:
  * ```typescript
  * import { apiFetch } from '@/services/apiService'
  * const response = await apiFetch('/layout-books', { method: 'POST', body: JSON.stringify(data) })
@@ -92,39 +90,4 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
       ...(options.headers ?? {}),
     },
   })
-}
-
-// ── Factory ───────────────────────────────────────────────────────────────────
-
-/**
- * Create an authenticated fetch function for a specific token source.
- *
- * Prefer `apiFetch` for most use cases. Use `createApiFetch` when you need
- * a custom token getter (e.g. a token from a different source).
- *
- * @param getToken  Lazy getter for the Bearer token (e.g. `() => store.sessionToken`).
- *                  Called on every request so token changes are reflected immediately.
- * @returns         A fetch wrapper that resolves paths relative to `VITE_BACKEND_URL`,
- *                  injects the Authorization header, and parses JSON responses.
- */
-export function createApiFetch(getToken: () => string) {
-  return async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
-    const token = getToken()
-    if (!token) {
-      throw new Error('[apiService] No auth token available')
-    }
-
-    const url = `${getBaseUrl()}/api${path}`
-
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...(options.headers ?? {}),
-      },
-    })
-
-    return parseResponse(response)
-  }
 }
