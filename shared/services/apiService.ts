@@ -28,6 +28,19 @@
 
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 
+// ── Error types ────────────────────────────────────────────────────────────────
+
+/**
+ * Custom error class for session expiration.
+ * Used by legacy cells and composables that handle auth failures.
+ */
+export class SessionExpiredError extends Error {
+  constructor(message = 'Session expired or invalid token') {
+    super(message)
+    this.name = 'SessionExpiredError'
+  }
+}
+
 // ── URL resolution ────────────────────────────────────────────────────────────
 
 /**
@@ -107,7 +120,11 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     throw new Error('[apiService] No session token available')
   }
 
-  const url = `${getBaseUrl()}/api${path}`
+  // Backward compatibility: normalize path to avoid double /api prefix
+  // Old format: /api/endpoint → /api/endpoint
+  // New format: /endpoint → /api/endpoint
+  const normalizedPath = path.startsWith('/api/') ? path : `/api${path}`
+  const url = `${getBaseUrl()}${normalizedPath}`
 
   return fetch(url, {
     ...options,
