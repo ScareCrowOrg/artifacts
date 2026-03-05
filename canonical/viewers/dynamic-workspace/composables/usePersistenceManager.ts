@@ -2,15 +2,14 @@
  * composables/usePersistenceManager.ts
  *
  * Layout persistence for DynamicWorkspace v2 — Phase 3.
- * Calls the /api/layout-books backend endpoints using the session token
- * from workspaceStore (obtained during the Cockpit ↔ Runner handshake).
- *
- * All requests go through the Nginx gateway (VITE_CENTRALHUB_URL).
- * No hardcoded localhost ports — portable across dev, Docker, and production.
+ * Calls the /api/layout-books backend endpoints via the shared apiFetch utility,
+ * which routes requests through the Nginx proxy (VITE_CENTRALHUB_URL) and injects
+ * the session token from workspaceStore.
  */
 
 import { useWorkspaceStore } from '../stores/workspaceStore'
 import { useGridLayout } from './useGridLayout'
+import { createApiFetch } from '@/services/apiService'
 import { createLogger } from '@/utils/logger'
 import type {
   Book,
@@ -25,10 +24,6 @@ const log = createLogger('persistence:layout-books')
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const CENTRALHUB_URL =
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_CENTRALHUB_URL) ||
-  'http://localhost:8000'
-
 const DEFAULT_GRID_CONFIG: GridConfig = {
   cols: 12,
   rowHeight: 50,
@@ -36,42 +31,6 @@ const DEFAULT_GRID_CONFIG: GridConfig = {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Build a fetch function that injects the Bearer token from workspaceStore.
- * Returns the parsed JSON body (or null for 204 No Content).
- * Throws a descriptive Error on non-2xx responses.
- */
-function buildAuthFetch(sessionToken: string) {
-  return async function authFetch(path: string, options: RequestInit = {}): Promise<any> {
-    const url = `${CENTRALHUB_URL}/api${path}`
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionToken}`,
-        ...(options.headers ?? {}),
-      },
-    })
-
-    if (response.status === 204) {
-      return null
-    }
-
-    if (!response.ok) {
-      let detail = 'Unknown error'
-      try {
-        const body = await response.json()
-        detail = body?.detail ?? JSON.stringify(body)
-      } catch {
-        detail = await response.text().catch(() => 'Unknown error')
-      }
-      throw new Error(`HTTP ${response.status}: ${detail}`)
-    }
-
-    return response.json()
-  }
-}
 
 /**
  * Convert a Book's CellReference array to a LayoutBook-compatible cells list
@@ -98,16 +57,18 @@ export function usePersistenceManager() {
   const { cells } = useGridLayout()
 
   /**
-   * Get an authenticated fetch function using the current session token.
-   * Throws if session token is unavailable (workspace not ready).
+   * Authenticated fetch bound to the current workspace session token.
+   * Token is read lazily on every call, so it stays current as the store
+   * hydrates from the Cockpit ↔ Runner handshake.
+   * Throws if no session token is present.
    */
-  function getAuthFetch() {
+  const apiFetch = createApiFetch(() => {
     const token = workspaceStore.sessionToken
     if (!token) {
       throw new Error('[PersistenceManager] No session token — workspace not ready')
     }
-    return buildAuthFetch(token)
-  }
+    return token
+  })
 
   /**
    * Serialize current grid cells into the CellReference format required by
@@ -133,10 +94,9 @@ export function usePersistenceManager() {
    * POST /api/layout-books
    */
   async function saveLayout(name: string, description = ''): Promise<Book> {
-    const authFetch = getAuthFetch()
     log.info('[PersistenceManager] Saving layout', { name, cellCount: cells.value.length })
 
-    const book: Book = await authFetch('/layout-books', {
+    const book: Book = await apiFetch('/layout-books', {
       method: 'POST',
       body: JSON.stringify({
         name,
@@ -156,10 +116,9 @@ export function usePersistenceManager() {
    * Returns the raw Book object; the caller is responsible for hydrating the grid.
    */
   async function fetchLayout(layoutId: string): Promise<Book> {
-    const authFetch = getAuthFetch()
     log.debug('[PersistenceManager] Fetching layout', { layoutId })
 
-    const book: Book = await authFetch(`/layout-books/${layoutId}`)
+    const book: Book = await apiFetch(`/layout-books/${layoutId}`)
     log.info('[PersistenceManager] Layout fetched', {
       layoutId,
       cellCount: book.initial_data?.cells?.length ?? 0,
@@ -172,15 +131,14 @@ export function usePersistenceManager() {
    * GET /api/layout-books?skip=0&limit=20
    */
   async function listLayouts(skip = 0, limit = 20): Promise<LayoutBook[]> {
-    const authFetch = getAuthFetch()
     log.debug('[PersistenceManager] Listing layouts', { skip, limit })
 
-    const response: LayoutBookListResponse = await authFetch(
+    const response: LayoutBookListResponse = await apiFetch(
       `/layout-books?skip=${skip}&limit=${limit}`,
     )
 
-    // The list endpoint may return LayoutBookListItem[] which has fewer fields.
-    // We convert them into LayoutBook for the component.
+    // The list endpoint returns LayoutBookListItem[] (fewer fields than a full Book).
+    // We convert them into LayoutBook for the LayoutBookSelector component.
     const items: LayoutBook[] = (response.items ?? []).map((item: LayoutBookListItem) => ({
       id: item.id,
       name: item.name,
@@ -202,10 +160,9 @@ export function usePersistenceManager() {
     layoutId: string,
     updates: { name?: string; description?: string; cells?: CellReference[]; grid_config?: GridConfig },
   ): Promise<Book> {
-    const authFetch = getAuthFetch()
     log.info('[PersistenceManager] Updating layout', { layoutId, updateKeys: Object.keys(updates) })
 
-    const book: Book = await authFetch(`/layout-books/${layoutId}`, {
+    const book: Book = await apiFetch(`/layout-books/${layoutId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     })
@@ -219,10 +176,9 @@ export function usePersistenceManager() {
    * DELETE /api/layout-books/{layoutId}
    */
   async function deleteLayout(layoutId: string): Promise<void> {
-    const authFetch = getAuthFetch()
     log.info('[PersistenceManager] Deleting layout', { layoutId })
 
-    await authFetch(`/layout-books/${layoutId}`, { method: 'DELETE' })
+    await apiFetch(`/layout-books/${layoutId}`, { method: 'DELETE' })
     log.info('[PersistenceManager] Layout deleted', { layoutId })
   }
 

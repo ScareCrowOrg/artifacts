@@ -53,15 +53,27 @@ export function useAutoSave() {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  /** Cheap JSON snapshot of cell ids + positions + states (no Vue components) */
+  /**
+   * Cheap JSON snapshot of cell ids + positions + states (no Vue components).
+   *
+   * IMPORTANT: This watcher depends on position being reassigned (not mutated
+   * in-place). If a cell's position is mutated directly (e.g. `cell.position.x = 10`),
+   * the watch will NOT trigger and auto-save will miss the change.
+   *
+   * Current design: `useGridLayout.syncLayoutPositions` reassigns position objects
+   * (`cell.position = updatedPositions[cell.cellId]`), so this is safe.
+   *
+   * Future: If position changes to in-place mutations elsewhere, switch to a
+   * deep watch or compute a diff-based snapshot that reads individual coordinates.
+   */
   function buildSnapshot(): string {
     return JSON.stringify(
       cells.value.map(c => ({
         id: c.cellId,
         type: c.cellTypeName,
-        pos: c.position,
-        min: c.isMinimized,
-        max: c.isMaximized,
+        pos: c.position ?? { x: 0, y: 0, w: 6, h: 8 },
+        min: c.isMinimized ?? false,
+        max: c.isMaximized ?? false,
       })),
     )
   }
