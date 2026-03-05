@@ -1,6 +1,5 @@
 import { ref } from 'vue'
 import authService from '../services/authService.js'
-import apiService from '../services/apiService.js'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('auth')
@@ -73,19 +72,6 @@ export function useAuth() {
   }
 
   /**
-   * Setup session expiration handler
-   */
-  function setupSessionExpirationHandler() {
-    apiService.onSessionExpired(() => {
-      log.info('Session expired detected, redirecting to login')
-      sessionExpiredMessage.value =
-        'Sessão expirada. Por favor, faça login novamente.'
-      isAuthenticated.value = false
-      currentUser.value = null
-    })
-  }
-
-  /**
    * Check if current route is OAuth callback
    */
   function checkIsAuthCallback() {
@@ -122,7 +108,6 @@ export function useAuth() {
     onLoginSuccess,
     handleLogout,
     onAuthComplete,
-    setupSessionExpirationHandler,
     checkIsAuthCallback,
     getUserId,
   }
