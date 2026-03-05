@@ -11,7 +11,15 @@
  * Do not change the order without careful consideration.
  */
 
+/* Variables must be loaded first (before Tailwind processes) */
 @import './variables.css';
+
+/* Tailwind directives - generates all Tailwind classes */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom design system on top of Tailwind */
 @import './base.css';
 @import './utilities.css';
 @import './theme-utilities.css';
