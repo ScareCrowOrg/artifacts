@@ -44,13 +44,13 @@ export interface UseJobPollingReturn {
 /**
  * Composable for managing 3D mesh generation job polling
  *
- * @param apiFetch - Authenticated fetch function (created with createApiFetch in View.vue)
+ * @param apiFetch - Authenticated fetch function returning a raw Response
  * @param onComplete - Callback when job completes successfully
  * @param onError - Callback when job fails
  * @returns Job polling state and methods
  */
 export function useJobPolling(
-  apiFetch: (path: string, options?: RequestInit) => Promise<any>,
+  apiFetch: (path: string, options?: RequestInit) => Promise<Response>,
   onComplete?: (data: string, metadata?: Record<string, any>) => void,
   onError?: (error: string) => void
 ): UseJobPollingReturn {
@@ -80,7 +80,14 @@ export function useJobPolling(
     isPolling.value = true
     
     try {
-      const status: JobStatus = await apiFetch(`/cells/3d-job-status/${id}`)
+      const response = await apiFetch(`/cells/3d-job-status/${id}`)
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => 'No error details available')
+        throw new Error(`HTTP ${response.status}: ${text}`)
+      }
+
+      const status: JobStatus = await response.json()
       jobStatus.value = status.status
 
       logger.debug(`Job ${id} status: ${status.status}`)

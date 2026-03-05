@@ -29,8 +29,7 @@ import { ref, computed, watch, onMounted, onUnmounted, defineOptions, nextTick }
 import { createLogger } from '@/utils/logger'
 import { MeshPrototypingCell } from './MeshPrototypingCell'
 import type { MeshPrototypingInput } from './MeshPrototypingCell'
-import { useWorkspaceStore } from '@/stores/workspaceStore'
-import { createApiFetch } from '@/services/apiService'
+import { apiFetch } from '@/services/apiService'
 import { useJobPolling } from './composables/useJobPolling'
 import BabylonModelViewer from '@/components/viewers/BabylonModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
@@ -153,15 +152,7 @@ const showGrid = computed(() => {
 
 // Job polling using composable
 // Create authenticated fetch function for API calls
-// Token comes from workspaceStore.sessionToken (populated by handshake), not authService
-const workspaceStore = useWorkspaceStore()
-const apiFetch = createApiFetch(() => {
-  const token = workspaceStore.sessionToken
-  if (!token) {
-    throw new Error('[MeshPrototyping] No session token — workspace not ready')
-  }
-  return token
-})
+// Token comes from workspaceStore.sessionToken (populated by handshake), handled centrally by apiFetch
 
 const {
   jobId,

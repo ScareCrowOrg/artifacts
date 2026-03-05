@@ -4,6 +4,9 @@
  * Pinia store for DynamicWorkspace v2 (Runner-side).
  * Holds handshake state received via postMessage from Cockpit.
  *
+ * Moved to artifacts/shared/stores so any viewer or cell type can access
+ * the session token without depending on dynamic-workspace internals.
+ *
  * Phase 1: stores workspaceId, sessionToken, userId and handshake status.
  */
 

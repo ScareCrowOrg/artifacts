@@ -3,13 +3,12 @@
  *
  * Layout persistence for DynamicWorkspace v2 — Phase 3.
  * Calls the /api/layout-books backend endpoints via the shared apiFetch utility,
- * which routes requests through the Nginx proxy (VITE_CENTRALHUB_URL) and injects
- * the session token from workspaceStore.
+ * which routes requests through the Nginx proxy (VITE_BACKEND_URL) and injects
+ * the session token from workspaceStore automatically.
  */
 
-import { useWorkspaceStore } from '../stores/workspaceStore'
 import { useGridLayout } from './useGridLayout'
-import { createApiFetch } from '@/services/apiService'
+import { apiFetch } from '@/services/apiService'
 import { createLogger } from '@/utils/logger'
 import type {
   Book,
@@ -33,6 +32,27 @@ const DEFAULT_GRID_CONFIG: GridConfig = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
+ * Parse a JSON response, throwing a descriptive error on non-2xx status.
+ * Returns `undefined` for 204 No Content responses.
+ */
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    let detail = 'Unknown error'
+    try {
+      const body = await response.json()
+      detail = body?.detail ?? JSON.stringify(body)
+    } catch {
+      detail = await response.text().catch(() => 'Unknown error')
+    }
+    throw new Error(`HTTP ${response.status}: ${detail}`)
+  }
+  if (response.status === 204) {
+    return undefined as unknown as T
+  }
+  return response.json()
+}
+
+/**
  * Convert a Book's CellReference array to a LayoutBook-compatible cells list
  * for the LayoutBookSelector component.
  */
@@ -53,22 +73,7 @@ function bookToLayoutBook(book: Book): LayoutBook {
 // ── Composable ────────────────────────────────────────────────────────────────
 
 export function usePersistenceManager() {
-  const workspaceStore = useWorkspaceStore()
   const { cells } = useGridLayout()
-
-  /**
-   * Authenticated fetch bound to the current workspace session token.
-   * Token is read lazily on every call, so it stays current as the store
-   * hydrates from the Cockpit ↔ Runner handshake.
-   * Throws if no session token is present.
-   */
-  const apiFetch = createApiFetch(() => {
-    const token = workspaceStore.sessionToken
-    if (!token) {
-      throw new Error('[PersistenceManager] No session token — workspace not ready')
-    }
-    return token
-  })
 
   /**
    * Serialize current grid cells into the CellReference format required by
@@ -96,7 +101,7 @@ export function usePersistenceManager() {
   async function saveLayout(name: string, description = ''): Promise<Book> {
     log.info('[PersistenceManager] Saving layout', { name, cellCount: cells.value.length })
 
-    const book: Book = await apiFetch('/layout-books', {
+    const response = await apiFetch('/layout-books', {
       method: 'POST',
       body: JSON.stringify({
         name,
@@ -105,6 +110,7 @@ export function usePersistenceManager() {
         grid_config: DEFAULT_GRID_CONFIG,
       }),
     })
+    const book = await parseJsonResponse<Book>(response)
 
     log.info('[PersistenceManager] Layout saved', { layoutId: book.id, name })
     return book
@@ -118,7 +124,9 @@ export function usePersistenceManager() {
   async function fetchLayout(layoutId: string): Promise<Book> {
     log.debug('[PersistenceManager] Fetching layout', { layoutId })
 
-    const book: Book = await apiFetch(`/layout-books/${layoutId}`)
+    const response = await apiFetch(`/layout-books/${layoutId}`)
+    const book = await parseJsonResponse<Book>(response)
+
     log.info('[PersistenceManager] Layout fetched', {
       layoutId,
       cellCount: book.initial_data?.cells?.length ?? 0,
@@ -133,13 +141,12 @@ export function usePersistenceManager() {
   async function listLayouts(skip = 0, limit = 20): Promise<LayoutBook[]> {
     log.debug('[PersistenceManager] Listing layouts', { skip, limit })
 
-    const response: LayoutBookListResponse = await apiFetch(
-      `/layout-books?skip=${skip}&limit=${limit}`,
-    )
+    const response = await apiFetch(`/layout-books?skip=${skip}&limit=${limit}`)
+    const data = await parseJsonResponse<LayoutBookListResponse>(response)
 
     // The list endpoint returns LayoutBookListItem[] (fewer fields than a full Book).
     // We convert them into LayoutBook for the LayoutBookSelector component.
-    const items: LayoutBook[] = (response.items ?? []).map((item: LayoutBookListItem) => ({
+    const items: LayoutBook[] = (data.items ?? []).map((item: LayoutBookListItem) => ({
       id: item.id,
       name: item.name,
       description: item.description || undefined,
@@ -162,10 +169,11 @@ export function usePersistenceManager() {
   ): Promise<Book> {
     log.info('[PersistenceManager] Updating layout', { layoutId, updateKeys: Object.keys(updates) })
 
-    const book: Book = await apiFetch(`/layout-books/${layoutId}`, {
+    const response = await apiFetch(`/layout-books/${layoutId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     })
+    const book = await parseJsonResponse<Book>(response)
 
     log.info('[PersistenceManager] Layout updated', { layoutId })
     return book
@@ -178,7 +186,8 @@ export function usePersistenceManager() {
   async function deleteLayout(layoutId: string): Promise<void> {
     log.info('[PersistenceManager] Deleting layout', { layoutId })
 
-    await apiFetch(`/layout-books/${layoutId}`, { method: 'DELETE' })
+    const response = await apiFetch(`/layout-books/${layoutId}`, { method: 'DELETE' })
+    await parseJsonResponse<void>(response)
     log.info('[PersistenceManager] Layout deleted', { layoutId })
   }
 

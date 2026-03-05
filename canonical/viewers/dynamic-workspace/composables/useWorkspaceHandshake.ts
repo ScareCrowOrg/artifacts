@@ -14,7 +14,7 @@
  */
 
 import { onMounted, onUnmounted } from 'vue'
-import { useWorkspaceStore } from '../stores/workspaceStore'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('workspace:handshake')
