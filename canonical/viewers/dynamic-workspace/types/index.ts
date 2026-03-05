@@ -1,0 +1,115 @@
+/**
+ * types/index.ts
+ *
+ * Shared type definitions for DynamicWorkspace v2 viewer.
+ * Used across composables, components, and App.vue.
+ */
+
+import type { Component } from 'vue'
+
+// ── CellTypeDefinition ──────────────────────────────────────────────────────
+
+/**
+ * A cell type as loaded from HybridDatabase (canonical type.json).
+ * Uses semantic `name` (e.g. "calculator-cell") as the primary identifier.
+ * The `id` field is kept for database references only — never used for loading.
+ */
+export interface CellTypeDefinition {
+  /** Semantic name (kebab-case) — used for dynamic imports and display */
+  name: string
+  /** UUID or opaque string — only for DB references, not for loading */
+  id: string
+  /** Human-readable description */
+  description: string
+  /** Semantic version */
+  version: string
+  /** Category for grouping in AddCellModal */
+  category?: string
+  /** Emoji or URL icon */
+  icon?: string
+  /** Whether this cell type can be loaded dynamically in a browser */
+  can_render_dynamically?: boolean
+  /** File refs from type.json (e.g. view, basecell) */
+  default_refs?: {
+    view?: string[]
+    basecell?: string[]
+    [key: string]: string[] | undefined
+  }
+  /** JSON Schema for cell inputs (used by GeneratedFormView) */
+  properties_schema?: Record<string, any>
+}
+
+// ── ViewSpec ────────────────────────────────────────────────────────────────
+
+/**
+ * The result of resolveViewSpec().
+ * Returned by useCellViewProvider after calling cellInstance.show().
+ * The parent grid is agnostic — it only needs component + props.
+ */
+export interface ViewSpec {
+  /** Vue component to render (custom View.vue or GeneratedFormView) */
+  component: Component
+  /** Props to pass to the component */
+  props: Record<string, any>
+}
+
+// ── GridCell ────────────────────────────────────────────────────────────────
+
+/**
+ * A cell instance tracked in the grid.
+ * useGridLayout manages a reactive list of GridCell objects.
+ */
+export interface GridCell {
+  /** UUID — unique per instance, used for keying in v-for */
+  cellId: string
+  /** Semantic type name — used for loading, never UUID */
+  cellTypeName: string
+  /** BaseCell instance (or null while loading) */
+  cellInstance: any | null
+  /** ViewSpec returned by resolveViewSpec — null while loading */
+  viewSpec: ViewSpec | null
+  /** Loading flag (true between add and viewSpec resolution) */
+  isLoading: boolean
+  /** Error message if loading failed */
+  error: string | null
+  /** Whether this cell is minimized */
+  isMinimized: boolean
+  /** Whether this cell is maximized */
+  isMaximized: boolean
+  /** Grid position for GridContainer */
+  position: GridPosition
+  /** Cell type definition (for title, icon, etc.) */
+  cellType: CellTypeDefinition | null
+}
+
+// ── GridPosition ────────────────────────────────────────────────────────────
+
+/** Grid position/size for a cell in the layout */
+export interface GridPosition {
+  /** Column (0-based) */
+  x: number
+  /** Row (0-based) */
+  y: number
+  /** Width in columns */
+  w: number
+  /** Height in rows */
+  h: number
+}
+
+// ── LayoutBook ──────────────────────────────────────────────────────────────
+
+/** A saved workspace layout */
+export interface LayoutBook {
+  id: string
+  name: string
+  description?: string
+  cells: SavedCell[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** Serialized cell data inside a LayoutBook */
+export interface SavedCell {
+  cellTypeName: string
+  position: GridPosition
+}
