@@ -122,6 +122,9 @@
  *  - Asynchronous cell hydration when loading a layout
  */
 
+// ── Tailwind CSS & Design System ──────────────────────────────────────────────
+import '../../src/styles/index.css'
+
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkspaceHandshake } from './composables/useWorkspaceHandshake'
