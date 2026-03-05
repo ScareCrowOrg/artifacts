@@ -153,7 +153,13 @@ const showGrid = computed(() => {
 
 // Job polling using composable
 // Create authenticated fetch function for API calls
-const apiFetch = createApiFetch(() => authService.token || '')
+// Token is read lazily via getter - always reflec current auth state
+const apiFetch = createApiFetch(() => {
+  if (!authService.token) {
+    throw new Error('[apiFetch] No authentication token available')
+  }
+  return authService.token
+})
 
 const {
   jobId,
@@ -526,20 +532,24 @@ onMounted(async () => {
     logger.info('Image available on mount')
   }
   
-  // Perform health check
+  // Perform health check (only if authenticated)
   try {
-    const health = await cellInstance.health_check()
-    if (health.status !== 'healthy') {
-      logger.warn('Cell health check warning', { 
-        status: health.status,
-        reason: health.reason 
-      })
-      // Optionally show a UI warning if service is degraded
-      if (!health.can_execute) {
-        localError.value = `Service unavailable: ${health.reason}`
-      }
+    if (!authService.token) {
+      logger.debug('Skipping health check - user not authenticated')
     } else {
-      logger.debug('Cell health check passed')
+      const health = await cellInstance.health_check()
+      if (health.status !== 'healthy') {
+        logger.warn('Cell health check warning', {
+          status: health.status,
+          reason: health.reason
+        })
+        // Optionally show a UI warning if service is degraded
+        if (!health.can_execute) {
+          localError.value = `Service unavailable: ${health.reason}`
+        }
+      } else {
+        logger.debug('Cell health check passed')
+      }
     }
   } catch (error: any) {
     logger.error('Cell health check failed', { error: error.message })
