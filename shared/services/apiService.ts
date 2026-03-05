@@ -4,8 +4,7 @@
  * Shared HTTP utility for dynamic-workspace viewers.
  *
  * Provides `apiFetch` — a thin fetch wrapper that:
- * 1. Resolves paths relative to `VITE_CENTRALHUB_URL` so requests go through
- *    the Nginx proxy (no hardcoded ports).
+ * 1. Resolves paths relative to `VITE_BACKEND_URL` (ScareRunner Backend on port 5050)
  * 2. Attaches `Authorization: Bearer <token>` from the provided token.
  * 3. Parses JSON responses and throws descriptive errors on non-2xx status.
  * 4. Returns `null` for 204 No Content.
@@ -20,8 +19,8 @@
  * Design notes:
  * - The token is read lazily (via a getter) so it always reflects the current
  *   session, even if the store hydrates after the composable is created.
- * - Base URL is read from `VITE_CENTRALHUB_URL` env var; falls back to
- *   `http://localhost:8000` for local development.
+ * - Base URL is read from `VITE_BACKEND_URL` env var; falls back to
+ *   `http://localhost:5050` for local development (ScareRunner Backend).
  * - This file lives in `artifacts/shared/` (alias `@/services`) so all viewers
  *   can import it without depending on cockpit-vue internals.
  */
@@ -30,8 +29,8 @@
 
 function getBaseUrl(): string {
   return (
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_CENTRALHUB_URL) ||
-    'http://localhost:8000'
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BACKEND_URL) ||
+    'http://localhost:5050'
   )
 }
 
