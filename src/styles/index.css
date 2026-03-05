@@ -1,0 +1,18 @@
+/**
+ * ScareVerse Design System - Main Entry
+ * 
+ * IMPORTANT: Import order matters!
+ * 
+ * 1. variables.css - Must be first (defines CSS custom properties)
+ * 2. base.css - Global styles, resets, and @keyframe animations
+ * 3. buttons.css, forms.css, components.css - Use variables and animations
+ * 4. utilities.css - Helper classes (can override component styles)
+ * 
+ * Do not change the order without careful consideration.
+ */
+
+@import './variables.css';
+@import './base.css';
+@import './utilities.css';
+@import './theme-utilities.css';
+@import './buttons.css';

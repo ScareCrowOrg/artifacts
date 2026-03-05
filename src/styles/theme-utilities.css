@@ -1,0 +1,181 @@
+/**
+ * ScareVerse Design System - Theme-Aware Utility Classes
+ * 
+ * Provides utility classes that automatically respond to [data-theme] attribute.
+ * These classes use CSS variables defined in variables.css to adapt to light/dark themes.
+ */
+
+/* === THEME-AWARE BACKGROUND COLORS === */
+.theme-bg-surface {
+  background-color: var(--color-surface);
+  transition: background-color var(--transition-base);
+}
+
+.theme-bg-background {
+  background-color: var(--color-background);
+  transition: background-color var(--transition-base);
+}
+
+.theme-bg-surface-hover:hover {
+  background-color: var(--color-surface-hover);
+}
+
+/* === THEME-AWARE TEXT COLORS === */
+.theme-text-primary {
+  color: var(--color-text-primary);
+  transition: color var(--transition-base);
+}
+
+.theme-text-secondary {
+  color: var(--color-text-secondary);
+  transition: color var(--transition-base);
+}
+
+.theme-text-tertiary {
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-base);
+}
+
+/* === THEME-AWARE BORDERS === */
+.theme-border {
+  border-color: var(--color-border);
+  transition: border-color var(--transition-base);
+}
+
+.theme-border-light {
+  border-color: var(--color-border-light);
+  transition: border-color var(--transition-base);
+}
+
+.theme-divider {
+  border-color: var(--color-divider);
+  transition: border-color var(--transition-base);
+}
+
+/* === THEME-AWARE SHADOWS === */
+.theme-shadow-sm {
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-base);
+}
+
+.theme-shadow-md {
+  box-shadow: var(--shadow-md);
+  transition: box-shadow var(--transition-base);
+}
+
+.theme-shadow-lg {
+  box-shadow: var(--shadow-lg);
+  transition: box-shadow var(--transition-base);
+}
+
+.theme-shadow-xl {
+  box-shadow: var(--shadow-xl);
+  transition: box-shadow var(--transition-base);
+}
+
+/* === COMBINED THEME-AWARE UTILITIES === */
+/* Card-like surface with theme support */
+.theme-card {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  transition: 
+    background-color var(--transition-base),
+    color var(--transition-base),
+    border-color var(--transition-base);
+}
+
+.theme-card:hover {
+  background-color: var(--color-surface-hover);
+  box-shadow: var(--shadow-md);
+}
+
+/* Modal/Panel background */
+.theme-modal {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  transition:
+    background-color var(--transition-base),
+    color var(--transition-base);
+}
+
+/* Input field */
+.theme-input {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  transition:
+    background-color var(--transition-base),
+    color var(--transition-base),
+    border-color var(--transition-base);
+}
+
+.theme-input:focus {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.theme-input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* === THEME-AWARE GRADIENTS === */
+.theme-gradient-surface {
+  background: var(--gradient-surface);
+  transition: background var(--transition-base);
+}
+
+.theme-gradient-hover:hover {
+  background: var(--gradient-hover);
+}
+
+/* === THEME-AWARE SCROLLBAR === */
+.theme-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.theme-scrollbar::-webkit-scrollbar-track {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-sm);
+}
+
+.theme-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-base);
+}
+
+.theme-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-tertiary);
+}
+
+/* === UTILITY COMBINATIONS FOR COMMON PATTERNS === */
+/* Panel with border */
+.theme-panel {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  transition:
+    background-color var(--transition-base),
+    color var(--transition-base),
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
+}
+
+/* Overlay/backdrop */
+.theme-overlay {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='dark'] .theme-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+/* Separator line */
+.theme-separator {
+  border-bottom: 1px solid var(--color-divider);
+  transition: border-color var(--transition-base);
+}
