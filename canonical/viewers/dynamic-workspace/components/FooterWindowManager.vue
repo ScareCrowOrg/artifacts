@@ -8,7 +8,7 @@
  *   "i18n_coverage": 100,
  *   "logger_namespace": "layout:footer-manager",
  *   "source": "Adapted from cockpit-vue/src/components/layout/dynamic/FooterWindowManager.vue",
- *   "changes": "Removed Pinia store injection; emits @show-add-modal; simplified to core Add Cell button"
+ *   "changes": "Removed Pinia store injection; emits @show-add-modal; simplified to core Add Cell button. Phase 3: added LayoutBookSelector integration."
  * }
  */
 <template>
@@ -60,9 +60,19 @@
           </div>
         </div>
 
-        <!-- Right: Workspace status -->
-        <div class="footer-right flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
-          <span class="hidden md:inline">DynamicWorkspace v2</span>
+        <!-- Right: Layout Book Selector + Workspace status -->
+        <div class="footer-right flex items-center gap-3">
+          <!-- Layout Book Selector (Phase 3) -->
+          <LayoutBookSelector
+            :layouts="savedLayouts"
+            :is-loading="isLoadingLayouts"
+            @load-layout="id => $emit('load-layout', id)"
+            @save-new="$emit('save-layout')"
+          />
+
+          <span class="hidden md:inline text-xs text-gray-400 dark:text-gray-500">
+            DynamicWorkspace v2
+          </span>
         </div>
       </div>
     </div>
@@ -72,17 +82,19 @@
 <script setup lang="ts">
 /**
  * @file FooterWindowManager.vue
- * @description Footer for DynamicWorkspace v2 — shows Add Cell button and open cell tabs.
+ * @description Footer for DynamicWorkspace v2 — shows Add Cell button, open cell tabs, and layout selector.
  *
  * Adapted from cockpit-vue v1 FooterWindowManager:
- * - Props: cellCount, maxCells, cellTabs[]
- * - Events: @show-add-modal, @close-cell(cellId)
- * - Removed: store injections, layout book selector (Phase 3), admin menu
+ * - Props: cellCount, maxCells, cellTabs[], savedLayouts[], isLoadingLayouts
+ * - Events: @show-add-modal, @close-cell(cellId), @load-layout(layoutId), @save-layout
  * - Preserved: dark mode, i18n, Add Cell button, cell tabs
+ * - Phase 3: Added LayoutBookSelector integration
  */
 
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/logger'
+import LayoutBookSelector from './LayoutBookSelector.vue'
+import type { LayoutBook } from '../types'
 
 const log = createLogger('layout:footer-manager')
 const { t } = useI18n()
@@ -92,12 +104,16 @@ const props = defineProps<{
   cellCount: number
   maxCells: number
   cellTabs: Array<{ cellId: string; name: string; icon: string }>
+  savedLayouts: LayoutBook[]
+  isLoadingLayouts: boolean
 }>()
 
 // ── Emits ─────────────────────────────────────────────────────────────────────
 const emit = defineEmits<{
   'show-add-modal': []
   'close-cell': [cellId: string]
+  'load-layout': [layoutId: string]
+  'save-layout': []
 }>()
 
 // ── Computed ──────────────────────────────────────────────────────────────────

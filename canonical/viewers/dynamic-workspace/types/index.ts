@@ -98,7 +98,7 @@ export interface GridPosition {
 
 // ── LayoutBook ──────────────────────────────────────────────────────────────
 
-/** A saved workspace layout */
+/** A saved workspace layout (used by LayoutBookSelector component) */
 export interface LayoutBook {
   id: string
   name: string
@@ -112,4 +112,70 @@ export interface LayoutBook {
 export interface SavedCell {
   cellTypeName: string
   position: GridPosition
+}
+
+// ── API Models for Layout Books endpoints ──────────────────────────────────
+
+/** Grid configuration stored with a layout book */
+export interface GridConfig {
+  cols: number
+  rowHeight: number
+  margin: [number, number]
+}
+
+/** Serialized cell reference stored inside a Book's initial_data */
+export interface CellReference {
+  cellId?: string
+  category: 'persistent' | 'ephemeral'
+  type: string
+  title: string
+  position: GridPosition
+  state: {
+    isMinimized: boolean
+    isMaximized: boolean
+  }
+  initialization_data?: Record<string, any>
+}
+
+/** Metadata tracked for a layout book */
+export interface LayoutBookMetadata {
+  layout_version: string
+  created_from_layout?: string
+  last_applied?: string
+}
+
+/** Full Book response object from the backend */
+export interface Book {
+  id: string
+  assignee_id: string
+  notebook_item_type_id: string
+  name: string
+  description: string
+  type: string
+  initial_data: {
+    layout_version: string
+    cells: CellReference[]
+    grid_config: GridConfig
+    metadata: LayoutBookMetadata
+  }
+  created_at: string
+  updated_at: string
+}
+
+/** A single item in the layout book list */
+export interface LayoutBookListItem {
+  id: string
+  name: string
+  description: string
+  cell_count: number
+  created_at: string
+  updated_at: string
+}
+
+/** Paginated response from GET /api/layout-books */
+export interface LayoutBookListResponse {
+  items: LayoutBookListItem[]
+  total: number
+  skip: number
+  limit: number
 }
