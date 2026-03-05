@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "AUTO-GENERATED from Pydantic models - DO NOT EDIT MANUALLY. Canonical collection schemas - source of truth for ScareVerse canonical data. To update schemas, modify Pydantic models and run: python scripts/generate_canonical_schemas.py",
-  "last_updated": "2026-03-04",
+  "last_updated": "2026-03-05",
   "permissions": {
     "_id": {
       "type": "TEXT",
