@@ -1,3 +1,17 @@
+---
+processed: true
+processed_date: 2026-03-06
+generated_docs:
+  - docs/official/frontend/architecture/dynamic-cell-loading-vite.md
+themes:
+  - cells
+  - frontend
+  - artifacts
+modules:
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # PromptEnhancerCell
 
 ## Overview

@@ -1,3 +1,18 @@
+---
+processed: true
+processed_date: 2026-03-06
+generated_docs:
+  - docs/official/backend/security/cell-types-security.md
+themes:
+  - cells
+  - frontend
+  - rbac
+  - roles
+modules:
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # Roles Management Cell
 
 RBAC-protected administrative cell for managing roles and permissions in the ScareVerse system.
