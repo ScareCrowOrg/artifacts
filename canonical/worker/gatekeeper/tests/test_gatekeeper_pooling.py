@@ -3,16 +3,11 @@ Tests for GateKeeper multi-source pooling (owner-first scheduling).
 """
 
 import json
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 
-# Make gatekeeper module importable without a package install
-sys.path.insert(0, str(Path(__file__).parent.parent / "gatekeeper"))
-
-from pooling import MultiSourcePooler  # noqa: E402
+from ..pooling import MultiSourcePooler
 
 
 @pytest.fixture

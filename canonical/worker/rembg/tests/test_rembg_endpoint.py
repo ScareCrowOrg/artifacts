@@ -3,27 +3,16 @@ Tests for the Rembg atomic worker FastAPI endpoint.
 """
 
 import base64
-import importlib.util
 import json
-import sys
 from io import BytesIO
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-# Load the rembg worker's main.py explicitly to avoid collision with the
-# gatekeeper's main module that may already be cached in sys.modules.
-_REMBG_DIR = Path(__file__).parent.parent / "rembg"
-_spec = importlib.util.spec_from_file_location(
-    "rembg_worker_main", _REMBG_DIR / "main.py",
-    submodule_search_locations=[str(_REMBG_DIR)],
-)
-sys.path.insert(0, str(_REMBG_DIR))
-rembg_main = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(rembg_main)
+import main as rembg_main
+from ..main import app
 
 
 # ---------------------------------------------------------------------------

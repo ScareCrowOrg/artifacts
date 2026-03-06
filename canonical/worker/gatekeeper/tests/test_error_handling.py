@@ -3,18 +3,14 @@ Tests for GateKeeper error handling and dead-letter logic.
 """
 
 import json
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "gatekeeper"))
-
-import config  # noqa: E402
-from main import GateKeeper  # noqa: E402
-from pooling import MultiSourcePooler  # noqa: E402
+from .. import config
+from ..main import GateKeeper
+from ..pooling import MultiSourcePooler
 
 
 @pytest.fixture
