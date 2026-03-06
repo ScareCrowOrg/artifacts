@@ -15,6 +15,46 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
+// Mock the logger to avoid debug/info/warn/error noise in tests
+vi.mock('@/utils/logger', () => ({
+  createLogger: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  }),
+  default: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  }
+}))
+
+// Mock apiService to prevent real HTTP calls from PngGeneratorCell and MeshPrototypingCell
+// The vi.mock for the sub-cells may not intercept properly due to module resolution;
+// mocking apiService ensures no real backend calls are made regardless.
+vi.mock('@/services/apiService.js', () => ({
+  default: {
+    fetch: vi.fn().mockResolvedValue({
+      ok: true,
+      // Return combined response that satisfies both PngGeneratorCell and MeshPrototypingCell
+      json: async () => ({
+        success: true,
+        generatedPng: 'mock-base64-png-data',
+        has_png: true,
+        glb_url: 'https://example.com/asset.glb',
+        job_id: 'mock-job-id'
+      }),
+      text: async () => ''
+    }),
+    onSessionExpired: vi.fn(),
+    SessionExpiredError: class SessionExpiredError extends Error {}
+  }
+}))
+
 // Mock sub-cells BEFORE importing AssetPrototypingCell
 // These mocks need to return factory functions that create mock cell instances
 vi.mock('../../png-generator-cell/frontend/PngGeneratorCell', () => ({
