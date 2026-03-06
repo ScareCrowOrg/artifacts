@@ -97,10 +97,41 @@ async function parseResponse(response: Response): Promise<any> {
 // ── Standalone apiFetch ───────────────────────────────────────────────────────
 
 /**
+ * Normalize path to complete URL based on pattern:
+ * - If path starts with `/` and contains `/api/` → baseUrl + path
+ * - If path starts with `/` and NO `/api/` → baseUrl/api + path
+ * - If path doesn't start with `/` → use as-is (already complete URL)
+ *
+ * @param path Request path or URL
+ * @returns Complete URL
+ */
+function normalizePath(path: string): string {
+  // If doesn't start with /, assume it's already a complete URL
+  if (!path.startsWith('/')) {
+    return path
+  }
+
+  const baseUrl = getApiBaseUrl()
+
+  // If path already contains /api/, concatenate as-is
+  if (path.includes('/api/')) {
+    return `${baseUrl}${path}`
+  }
+
+  // If path doesn't have /api/, add it
+  return `${baseUrl}/api${path}`
+}
+
+/**
  * Authenticated fetch that lazy-reads the session token from workspaceStore.
  *
  * The token is read at call time (not at import time), so it always reflects
  * the current session even when the store hydrates after module load.
+ *
+ * Path normalization:
+ * - `/layout-books` → http://localhost:5050/api/layout-books
+ * - `/api/ai-models/config` → http://localhost:5050/api/ai-models/config
+ * - `http://localhost:5050/api/...` → used as-is
  *
  * Returns the raw `Response` — callers handle `.json()` and error parsing.
  *
@@ -116,7 +147,9 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     throw new Error('[apiService] No session token available')
   }
 
-  return fetch(path, {
+  const url = normalizePath(path)
+
+  return fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -130,7 +163,12 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
 
 /**
  * Default export for backward compatibility with `import apiService from '@/services/apiService'`
- * Used by legacy cells and composables from cockpit-vue context.
+ * DEPRECATED: Use `import { apiFetch } from '@/services/apiService'` instead
+ *
+ * apiFetch automatically normalizes paths:
+ * - `/path` → ${baseUrl}/api/path
+ * - `/api/path` → ${baseUrl}/api/path
+ * - `http://...` → used as-is
  */
 export default {
   fetch: apiFetch,
