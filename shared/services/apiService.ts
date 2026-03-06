@@ -116,13 +116,7 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     throw new Error('[apiService] No session token available')
   }
 
-  // Backward compatibility: normalize path to avoid double /api prefix
-  // Old format: /api/endpoint → /api/endpoint
-  // New format: /endpoint → /api/endpoint
-  const normalizedPath = path.startsWith('/api/') ? path : `/api${path}`
-  const url = `${getBaseUrl()}${normalizedPath}`
-
-  return fetch(url, {
+  return fetch(path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
