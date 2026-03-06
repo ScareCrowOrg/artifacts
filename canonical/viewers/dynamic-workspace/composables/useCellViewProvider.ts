@@ -150,20 +150,31 @@ export function useCellViewProvider() {
     try {
       const module = await import(/* @vite-ignore */ importUrl)
 
-      log.info('[useCellViewProvider] instantiateCellByType: module loaded', {
-        importUrl,
-        moduleKeys: Object.keys(module),
-        hasDefault: !!module.default,
-        defaultType: typeof module.default,
-      })
+      // Try to get the cell class: prefer default export, fall back to named export (usually class name)
+      let CellClass = module.default
 
-      const CellClass = module.default
       if (!CellClass) {
-        log.error('[useCellViewProvider] instantiateCellByType: no default export', {
+        // No default export, look for a named export that's a class/function
+        const keys = Object.keys(module)
+        const classExport = keys.find((k) => typeof (module as any)[k] === 'function')
+
+        if (classExport) {
+          CellClass = (module as any)[classExport]
+          log.info('[useCellViewProvider] instantiateCellByType: using named export', {
+            importUrl,
+            namedExport: classExport,
+          })
+        }
+      }
+
+      if (!CellClass) {
+        const keys = Object.keys(module)
+        log.error('[useCellViewProvider] instantiateCellByType: no cell class found', {
           importUrl,
-          moduleKeys: Object.keys(module),
+          moduleKeys: keys,
+          exportTypes: keys.map((k) => `${k}: ${typeof (module as any)[k]}`),
         })
-        throw new Error(`[useCellViewProvider] No default export in ${importUrl}`)
+        throw new Error(`[useCellViewProvider] No default or named class export in ${importUrl}`)
       }
 
       const instance = new CellClass()
