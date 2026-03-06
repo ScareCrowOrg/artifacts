@@ -46,7 +46,7 @@ export class SessionExpiredError extends Error {
 /**
  * Resolve the API base URL from configured sources (in order of priority):
  * 1. window.API_BASE_URL (runtime config)
- * 2. VITE_BACKEND_URL environment variable (from .env)
+ * 2. VITE_API_BASE_URL environment variable (from .env)
  *
  * @returns The API base URL (without trailing slash)
  * @throws {Error} if no API base URL is configured
@@ -57,14 +57,14 @@ export function getApiBaseUrl(): string {
     return (window as any).API_BASE_URL
   }
 
-  // Check for Vite environment variable (VITE_BACKEND_URL from .env)
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BACKEND_URL) {
-    return (import.meta as any).env.VITE_BACKEND_URL
+  // Check for Vite environment variable (VITE_API_BASE_URL from .env)
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL) {
+    return (import.meta as any).env.VITE_API_BASE_URL
   }
 
   throw new Error(
     '[apiService] No API base URL configured. ' +
-    'Set window.API_BASE_URL at runtime or VITE_BACKEND_URL in .env'
+    'Set window.API_BASE_URL at runtime or VITE_API_BASE_URL in .env'
   )
 }
 
