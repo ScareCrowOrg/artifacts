@@ -20,7 +20,7 @@ services:
       REDIS_L2_DB: ${REDIS_L2_DB:-0}
 
       # Atomic worker endpoints
-      WORKER_REMBG_ENDPOINT: ${WORKER_REMBG_ENDPOINT:-http://scareverse-worker-rembg:8000}
+      WORKER_REMBG_ENDPOINT: ${WORKER_REMBG_ENDPOINT:-http://scareverse-worker-rembg:9000}
 
       # Pooling strategy
       BRPOP_L1_TIMEOUT: ${BRPOP_L1_TIMEOUT:-1}

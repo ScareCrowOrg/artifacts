@@ -71,7 +71,7 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
         "worker_name": "rembg",
         "endpoint": os.getenv(
             "WORKER_REMBG_ENDPOINT",
-            "http://scareverse-worker-rembg:8000"
+            "http://scareverse-worker-rembg:9000"
         ),
         "queue_l1": REMBG_QUEUE_L1,
         "queue_l2": REMBG_QUEUE_L2,
@@ -81,7 +81,7 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
         "worker_name": "rembg",
         "endpoint": os.getenv(
             "WORKER_REMBG_ENDPOINT",
-            "http://scareverse-worker-rembg:8000"
+            "http://scareverse-worker-rembg:9000"
         ),
         "queue_l1": REMBG_QUEUE_L1,
         "queue_l2": REMBG_QUEUE_L2,

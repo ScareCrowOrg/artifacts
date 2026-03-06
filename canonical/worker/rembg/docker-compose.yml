@@ -6,8 +6,6 @@ services:
     image: scareverse-worker-rembg:latest
     container_name: scareverse-worker-rembg
     restart: unless-stopped
-    ports:
-      - "${REMBG_PORT:-8000}:8000"
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       REMBG_MODEL_NAME: ${REMBG_MODEL_NAME:-u2net}
