@@ -22,6 +22,8 @@ import { defineAsyncComponent, markRaw, shallowRef, ref } from 'vue'
 import type { Component } from 'vue'
 import type { CellTypeDefinition, ViewSpec } from '../types'
 import { createLogger } from '@/utils/logger'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { apiFetch } from '@/services/apiService'
 import GeneratedFormView from '../components/GeneratedFormView.vue'
 
 const log = createLogger('workspace:cell-view-provider')
@@ -53,61 +55,34 @@ export function useCellViewProvider() {
   // ── getCellTypes ───────────────────────────────────────────────────────────
 
   /**
-   * Load available cell types from HybridDatabase.
+   * Load available cell types from backend API.
    *
-   * Strategy:
-   * 1. Try GET /api/cells/types/list (backend API — returns full list)
-   * 2. Fall back to loading individual type.json files for known cell types
-   *
+   * Endpoint: GET /api/cells/types/list
+   * Returns: List of all notebook item types (cell type definitions)
    * Returns only types with can_render_dynamically === true.
    */
   async function getCellTypes(): Promise<CellTypeDefinition[]> {
-    log.debug('[useCellViewProvider] getCellTypes: loading from HybridDatabase')
+    const store = useWorkspaceStore()
+    log.debug('[useCellViewProvider] getCellTypes: loading from backend API', {
+      hasToken: !!store.sessionToken,
+      tokenLength: store.sessionToken?.length,
+      storeStatus: store.status,
+    })
 
-    // 1. Try backend API
     try {
-      const res = await fetch(`${SCARERUNNER_URL}/api/cells/types/list`)
-      if (res.ok) {
-        const data = await res.json()
-        const types: CellTypeDefinition[] = Array.isArray(data) ? data : (data.types ?? [])
-        const renderableTypes = types.filter(t => t.can_render_dynamically !== false)
-        log.info('[useCellViewProvider] getCellTypes: loaded from API', { count: renderableTypes.length })
-        return renderableTypes
-      }
+      const data = await apiFetch('/api/cells/types/list', {
+        method: 'GET',
+      })
+
+      const types: CellTypeDefinition[] = Array.isArray(data) ? data : (data.types ?? [])
+      const renderableTypes = types.filter(t => t.can_render_dynamically !== false)
+
+      log.info('[useCellViewProvider] getCellTypes: loaded from API', { count: renderableTypes.length })
+      return renderableTypes
     } catch (err) {
-      log.warn('[useCellViewProvider] getCellTypes: API unavailable, using fallback', err)
+      log.error('[useCellViewProvider] getCellTypes: failed to load from API', err)
+      throw err
     }
-
-    // 2. Fallback: load type.json for known canonical cell types
-    const knownCellTypes = [
-      'calculator-cell',
-      '3d-mesh-prototyping-cell',
-      'content-manager-cell',
-      'file-manager-cell',
-      'fragment-editor-cell',
-      'issues-dashboard-cell',
-      'chat-ia',
-      'log-toggle-cell',
-      'manual-capture-cell',
-      'roles-management-cell',
-    ]
-
-    const results: CellTypeDefinition[] = []
-    await Promise.allSettled(
-      knownCellTypes.map(async name => {
-        try {
-          const typeJson = await fetchJson(`/local/canonical/cell_types/${name}/type.json`)
-          if (typeJson && typeJson.can_render_dynamically !== false) {
-            results.push(typeJson as CellTypeDefinition)
-          }
-        } catch (err) {
-          log.debug(`[useCellViewProvider] getCellTypes: could not load ${name}`, err)
-        }
-      }),
-    )
-
-    log.info('[useCellViewProvider] getCellTypes: loaded from canonical JSONs', { count: results.length })
-    return results
   }
 
   // ── instantiateCellByType ─────────────────────────────────────────────────

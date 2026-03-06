@@ -165,6 +165,15 @@ export function useWorkspaceHandshake() {
 
     const { workspaceId, sessionToken, userId, cockpitOrigin } = data.payload ?? {}
 
+    log.info('[WORKSPACE] INIT_WORKSPACE payload parsed', {
+      hasWorkspaceId: !!workspaceId,
+      hasSessionToken: !!sessionToken,
+      sessionTokenLength: sessionToken ? sessionToken.length : 0,
+      sessionTokenPreview: sessionToken ? sessionToken.substring(0, 20) + '...' : 'MISSING',
+      hasUserId: !!userId,
+      hasCockpitOrigin: !!cockpitOrigin,
+    })
+
     if (!workspaceId || !sessionToken || !cockpitOrigin) {
       const code = 'INVALID_PAYLOAD'
       const msg = 'Missing required fields in INIT_WORKSPACE payload'
@@ -175,6 +184,10 @@ export function useWorkspaceHandshake() {
     }
 
     store.initWorkspace({ workspaceId, sessionToken, userId: userId ?? '' })
+    log.info('[WORKSPACE] Token stored in workspaceStore', {
+      storedTokenLength: store.sessionToken.length,
+      storedTokenPreview: store.sessionToken.substring(0, 20) + '...',
+    })
 
     try {
       await validateSessionWithBackend(workspaceId, sessionToken)

@@ -392,10 +392,10 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  loadCellTypes()
-  // Defer persistence init until workspace is ready (session token available).
+  // Defer cell type loading and persistence init until workspace is ready (session token available).
   // Use a reactive watch so we cleanly respond to the handshake completing.
   if (store.status === 'ready') {
+    loadCellTypes()
     initPersistence()
   } else {
     const stopWatch = watch(
@@ -403,6 +403,7 @@ onMounted(() => {
       (status) => {
         if (status === 'ready') {
           stopWatch()
+          loadCellTypes()
           initPersistence()
         }
       },
