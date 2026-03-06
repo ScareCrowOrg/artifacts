@@ -116,19 +116,11 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     throw new Error('[apiService] No session token available')
   }
 
-  // Normalize path handling for different input formats:
-  // 1. Full URL (http*) → use as-is (for CENTRALHUB_BASE and other external services)
-  // 2. Path with /api/ prefix → use as-is, combine with base URL
-  // 3. Path without /api/ prefix → add /api prefix, combine with base URL
-  let url: string
-  if (path.startsWith('http')) {
-    // Already a full URL (e.g., from CENTRALHUB_BASE)
-    url = path
-  } else {
-    // Relative path - normalize and add base URL
-    const normalizedPath = path.startsWith('/api/') ? path : `/api${path}`
-    url = `${getBaseUrl()}${normalizedPath}`
-  }
+  // Backward compatibility: normalize path to avoid double /api prefix
+  // Old format: /api/endpoint → /api/endpoint
+  // New format: /endpoint → /api/endpoint
+  const normalizedPath = path.startsWith('/api/') ? path : `/api${path}`
+  const url = `${getBaseUrl()}${normalizedPath}`
 
   return fetch(url, {
     ...options,
