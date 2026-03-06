@@ -70,14 +70,43 @@ export function useCellViewProvider() {
     })
 
     try {
-      const data = await apiFetch('/api/cells/types/list', {
+      const response = await apiFetch('/api/cells/types/list', {
         method: 'GET',
       })
 
+      const data = await response.json()
+
+      log.info('[useCellViewProvider] getCellTypes: raw response from API', {
+        isArray: Array.isArray(data),
+        hasTypesProperty: !!data?.types,
+        rawDataKeys: Object.keys(data || {}),
+        rawDataPreview: JSON.stringify(data).substring(0, 200) + '...',
+      })
+
       const types: CellTypeDefinition[] = Array.isArray(data) ? data : (data.types ?? [])
+
+      log.info('[useCellViewProvider] getCellTypes: types extracted', {
+        totalCount: types.length,
+        typesPreview: types.slice(0, 3).map((t: any) => ({
+          name: t.name,
+          can_render_dynamically: t.can_render_dynamically,
+        })),
+      })
+
       const renderableTypes = types.filter(t => t.can_render_dynamically !== false)
 
-      log.info('[useCellViewProvider] getCellTypes: loaded from API', { count: renderableTypes.length })
+      log.info('[useCellViewProvider] getCellTypes: after filtering', {
+        beforeFilter: types.length,
+        afterFilter: renderableTypes.length,
+        filteredOut: types.length - renderableTypes.length,
+        filterDetails: types.map((t: any) => ({
+          name: t.name,
+          can_render_dynamically: t.can_render_dynamically,
+          isIncluded: t.can_render_dynamically !== false,
+        })),
+      })
+
+      log.info('[useCellViewProvider] getCellTypes: final result', { count: renderableTypes.length })
       return renderableTypes
     } catch (err) {
       log.error('[useCellViewProvider] getCellTypes: failed to load from API', err)
@@ -102,30 +131,58 @@ export function useCellViewProvider() {
     cellType: CellTypeDefinition,
   ): Promise<any> {
     const basecellPath = cellType.default_refs?.basecell?.[0]
+
+    log.info('[useCellViewProvider] instantiateCellByType: starting', {
+      cellTypeName,
+      hasBasecellPath: !!basecellPath,
+      basecellPath,
+      defaultRefs: cellType.default_refs,
+    })
+
     if (!basecellPath) {
       throw new Error(`[useCellViewProvider] Cell type "${cellTypeName}" has no basecell ref in type.json`)
     }
 
     // Dynamic import via browser URL (Vite resolves to canonical directory)
     const importUrl = `/canonical/cell_types/${cellTypeName}/${basecellPath}`
-    log.debug('[useCellViewProvider] instantiateCellByType: dynamic import', { importUrl })
+    log.info('[useCellViewProvider] instantiateCellByType: dynamic import', { importUrl })
 
-    const module = await import(/* @vite-ignore */ importUrl)
-    const CellClass = module.default
-    if (!CellClass) {
-      throw new Error(`[useCellViewProvider] No default export in ${importUrl}`)
+    try {
+      const module = await import(/* @vite-ignore */ importUrl)
+
+      log.info('[useCellViewProvider] instantiateCellByType: module loaded', {
+        importUrl,
+        moduleKeys: Object.keys(module),
+        hasDefault: !!module.default,
+        defaultType: typeof module.default,
+      })
+
+      const CellClass = module.default
+      if (!CellClass) {
+        log.error('[useCellViewProvider] instantiateCellByType: no default export', {
+          importUrl,
+          moduleKeys: Object.keys(module),
+        })
+        throw new Error(`[useCellViewProvider] No default export in ${importUrl}`)
+      }
+
+      const instance = new CellClass()
+
+      // Set semantic name so BaseCell.show() uses the correct folder for type.json loading
+      ;(instance as any).__cellTypeName = cellTypeName
+
+      log.info('[useCellViewProvider] instantiateCellByType: cell instantiated', {
+        cellTypeName,
+        className: CellClass.name,
+      })
+      return instance
+    } catch (err) {
+      log.error('[useCellViewProvider] instantiateCellByType: import failed', {
+        importUrl,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      throw err
     }
-
-    const instance = new CellClass()
-
-    // Set semantic name so BaseCell.show() uses the correct folder for type.json loading
-    ;(instance as any).__cellTypeName = cellTypeName
-
-    log.info('[useCellViewProvider] instantiateCellByType: cell instantiated', {
-      cellTypeName,
-      className: CellClass.name,
-    })
-    return instance
   }
 
   // ── resolveViewSpec ───────────────────────────────────────────────────────
