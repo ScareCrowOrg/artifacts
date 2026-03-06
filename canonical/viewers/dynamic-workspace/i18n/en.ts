@@ -3,6 +3,9 @@
  *
  * English translations for DynamicWorkspace v2 viewer.
  * Keys preserved from v1 cockpit-vue (layout.*) for component reuse compatibility.
+ *
+ * NOTE: Cell type translations are kept in each cell's own translations/en.json file.
+ * The workspace does NOT duplicate cell translations.
  */
 export default {
   layout: {

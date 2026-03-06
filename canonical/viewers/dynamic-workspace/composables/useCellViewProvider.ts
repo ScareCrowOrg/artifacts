@@ -224,9 +224,16 @@ export function useCellViewProvider() {
 
     try {
       showResult = await cellInstance.show({}, { mode: 'dynamicworkspace' })
+      log.info('[useCellViewProvider] resolveViewSpec: show() returned', {
+        hasResult: !!showResult,
+        resultKeys: showResult ? Object.keys(showResult) : [],
+        componentPath: showResult?.componentPath,
+      })
     } catch (err) {
       // show() failed (e.g. backend unreachable). Fall back to type.json direct check.
-      log.warn('[useCellViewProvider] resolveViewSpec: show() threw, using type.json fallback', err)
+      log.warn('[useCellViewProvider] resolveViewSpec: show() threw, using type.json fallback', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       showResult = undefined
     }
 
@@ -234,45 +241,95 @@ export function useCellViewProvider() {
     if (showResult && showResult.componentPath) {
       const viewPath = showResult.componentPath
       const importUrl = `/canonical/cell_types/${cellTypeName}/${viewPath}`
-      log.debug('[useCellViewProvider] resolveViewSpec: loading custom View.vue', { importUrl })
+      log.info('[useCellViewProvider] resolveViewSpec: loading custom View.vue from show()', {
+        importUrl,
+      })
 
-      const ViewComponent = defineAsyncComponent(() =>
-        import(/* @vite-ignore */ importUrl),
-      )
+      try {
+        const ViewComponent = defineAsyncComponent(() =>
+          import(/* @vite-ignore */ importUrl),
+        )
 
-      return {
-        component: markRaw(ViewComponent),
-        props: {
-          cellInstance,
-          cell: { cellTypeName, cellType },
-        },
+        log.info('[useCellViewProvider] resolveViewSpec: custom View component created', {
+          importUrl,
+        })
+
+        return {
+          component: markRaw(ViewComponent),
+          props: {
+            cellInstance,
+            cell: { cellTypeName, cellType },
+          },
+        }
+      } catch (err) {
+        log.error('[useCellViewProvider] resolveViewSpec: failed to import custom View', {
+          importUrl,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        throw err
       }
     }
 
     // Case 2: show() returned undefined (no custom view) or failed
     // Check type.json directly as a reliable fallback within the viewer context
     const viewRef = cellType.default_refs?.view?.[0]
+
+    log.info('[useCellViewProvider] resolveViewSpec: checking type.json for view ref', {
+      hasViewRef: !!viewRef,
+      viewRef,
+      defaultRefs: cellType.default_refs,
+    })
+
     if (viewRef) {
       const importUrl = `/canonical/cell_types/${cellTypeName}/${viewRef}`
-      log.debug('[useCellViewProvider] resolveViewSpec: loading View.vue from type.json ref', {
+      log.info('[useCellViewProvider] resolveViewSpec: loading View.vue from type.json ref', {
         importUrl,
+        viewRef,
       })
 
-      const ViewComponent = defineAsyncComponent(() =>
-        import(/* @vite-ignore */ importUrl),
-      )
+      try {
+        const ViewComponent = defineAsyncComponent(() => {
+          log.debug('[useCellViewProvider] resolveViewSpec: async import starting', { importUrl })
+          return import(/* @vite-ignore */ importUrl)
+            .then((module) => {
+              log.info('[useCellViewProvider] resolveViewSpec: async import completed', {
+                importUrl,
+                moduleKeys: Object.keys(module),
+              })
+              return module
+            })
+            .catch((err) => {
+              log.error('[useCellViewProvider] resolveViewSpec: async import failed', {
+                importUrl,
+                error: err instanceof Error ? err.message : String(err),
+                errorStack: err instanceof Error ? err.stack : undefined,
+              })
+              throw err
+            })
+        })
 
-      return {
-        component: markRaw(ViewComponent),
-        props: {
-          cellInstance,
-          cell: { cellTypeName, cellType },
-        },
+        log.info('[useCellViewProvider] resolveViewSpec: View component created', { importUrl })
+
+        return {
+          component: markRaw(ViewComponent),
+          props: {
+            cellInstance,
+            cell: { cellTypeName, cellType },
+          },
+        }
+      } catch (err) {
+        log.error('[useCellViewProvider] resolveViewSpec: failed to create View component', {
+          importUrl,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        throw err
       }
     }
 
     // Case 3: Truly no custom view — use GeneratedFormView
-    log.info('[useCellViewProvider] resolveViewSpec: using GeneratedFormView', { cellTypeName })
+    log.info('[useCellViewProvider] resolveViewSpec: no view ref found, using GeneratedFormView', {
+      cellTypeName,
+    })
     const schema = cellType.properties_schema || {}
 
     return {
