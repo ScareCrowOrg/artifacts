@@ -1,0 +1,16 @@
+{
+  "manualCapture": {
+    "title": "Manual Capture",
+    "placeholder": "Paste or type content here...",
+    "captureButton": "Capture Content",
+    "wireframeButton": "Generate Wireframe",
+    "wireframeAlert": "Please enter some HTML content before generating the wireframe.",
+    "captureAlert": "Please enter some content before capturing.",
+    "ephemeralLabel": "ephemeral",
+    "processing": "Processing...",
+    "captureSuccess": "Content captured successfully! File editor created.",
+    "wireframeSuccess": "Wireframe generated successfully! File editor created.",
+    "captureError": "Failed to capture content. Please try again.",
+    "wireframeError": "Failed to generate wireframe. Please try again."
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "vault": {
+    "title": "Gerenciador de Tokens do Vault",
+    "status": {
+      "locked": "Bloqueado",
+      "unlocked": "Desbloqueado"
+    },
+    "actions": {
+      "lock": "Bloquear Vault",
+      "unlock": "Desbloquear Vault",
+      "refresh": "Atualizar Tokens",
+      "addToken": "Adicionar Token"
+    },
+    "errors": {
+      "notAvailable": "Vault Não Disponível",
+      "notAvailableDescription": "A Extensão do Navegador ScareVerse não está instalada ou não está disponível. Por favor, instale a extensão para gerenciar credenciais de forma segura.",
+      "loadFailed": "Falha ao carregar tokens",
+      "unlockFailed": "Falha ao desbloquear vault",
+      "saveFailed": "Falha ao salvar token",
+      "viewFailed": "Falha ao recuperar token",
+      "deleteFailed": "Falha ao deletar token"
+    },
+    "locked": {
+      "title": "Vault está Bloqueado",
+      "description": "Digite sua senha mestra para acessar os tokens armazenados."
+    },
+    "deleteConfirm": "Tem certeza que deseja deletar o token '{ref}'? Esta ação não pode ser desfeita.",
+    "filters": {
+      "showExpired": "Mostrar tokens expirados",
+      "sortBy": "Ordenar por",
+      "toggleOrder": "Alternar ordem",
+      "sortOptions": {
+        "createdAt": "Data de Criação",
+        "provider": "Provedor",
+        "vaultRef": "Nome do Token"
+      }
+    },
+    "unlockModal": {
+      "title": "Desbloquear Vault",
+      "description": "Digite sua senha mestra para desbloquear o vault e acessar suas credenciais armazenadas.",
+      "masterPassword": "Senha Mestra",
+      "passwordPlaceholder": "Digite a senha mestra",
+      "securityNotice": "🔒 Sua senha nunca é armazenada. Ela é usada apenas para descriptografar suas credenciais localmente.",
+      "cancel": "Cancelar",
+      "unlock": "Desbloquear",
+      "unlocking": "Desbloqueando...",
+      "errors": {
+        "passwordRequired": "Senha é obrigatória",
+        "unlockFailed": "Falha ao desbloquear vault. Por favor, verifique sua senha."
+      }
+    },
+    "tokenList": {
+      "loading": "Carregando tokens...",
+      "retry": "Tentar Novamente",
+      "expired": "Expirado",
+      "provider": "Provedor",
+      "type": "Tipo",
+      "created": "Criado",
+      "expires": "Expira",
+      "empty": {
+        "title": "Nenhum Token Armazenado",
+        "description": "Você ainda não adicionou nenhum token ao vault.",
+        "addFirst": "Adicionar Seu Primeiro Token"
+      },
+      "actions": {
+        "view": "Ver Token",
+        "viewToken": "Ver token {ref}",
+        "delete": "Deletar Token",
+        "deleteToken": "Deletar token {ref}"
+      }
+    },
+    "tokenForm": {
+      "title": "Adicionar Novo Token",
+      "vaultRef": "Nome do Token",
+      "vaultRefPlaceholder": "ex: openai-api-key-prod",
+      "vaultRefHelp": "Identificador único para este token",
+      "provider": "Provedor",
+      "selectProvider": "Selecione um provedor",
+      "otherProvider": "Outro",
+      "customProvider": "Nome do Provedor Personalizado",
+      "customProviderPlaceholder": "ex: servico-customizado",
+      "credentialType": "Tipo de Credencial",
+      "tokenValue": "Valor do Token",
+      "tokenValuePlaceholder": "Cole seu token ou segredo aqui",
+      "tokenValueHelp": "⚠️ Isto será criptografado antes do armazenamento",
+      "expiresAt": "Data de Expiração",
+      "optional": "opcional",
+      "cancel": "Cancelar",
+      "save": "Salvar Token",
+      "saving": "Salvando...",
+      "errors": {
+        "invalidForm": "Por favor, preencha todos os campos obrigatórios",
+        "saveFailed": "Falha ao salvar token"
+      }
+    }
+  }
+}

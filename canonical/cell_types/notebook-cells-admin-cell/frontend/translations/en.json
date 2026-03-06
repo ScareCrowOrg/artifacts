@@ -1,0 +1,11 @@
+{
+  "notebookCellsAdmin": {
+    "title": "📓 Notebook Cells Admin",
+    "closeAriaLabel": "Close admin panel",
+    "emptyDetailsTitle": "Select a cell",
+    "emptyDetailsDescription": "Choose a cell from the list to view details",
+    "accessDeniedTitle": "Access Denied",
+    "accessDeniedMessage": "You don't have permission to access this admin panel.",
+    "backButton": "Back"
+  }
+}

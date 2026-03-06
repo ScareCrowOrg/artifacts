@@ -1,0 +1,177 @@
+{
+  "agentMode": {
+    "creatingSession": "Creating agent session..."
+  },
+  "chatHistory": {
+    "title": "📚 Conversation History",
+    "closeTooltip": "Close history",
+    "closeAriaLabel": "Close conversation history",
+    "searchPlaceholder": "🔍 Search conversations...",
+    "searchAriaLabel": "Search conversations",
+    "newConversationAriaLabel": "Start new conversation",
+    "newConversationButton": "➕ New Conversation",
+    "noConversationsFound": "No conversations found",
+    "noConversationsYet": "No conversations yet. Start a new one!",
+    "conversationAriaLabel": "Conversation: {title}",
+    "deleteTooltip": "Delete conversation",
+    "deleteAriaLabel": "Delete this conversation",
+    "messagesCount": "{count} messages",
+    "clearAllAriaLabel": "Clear all history",
+    "clearAllButton": "🗑️ Clear All History",
+    "confirmDelete": "Are you sure you want to delete this conversation?",
+    "confirmClearAll": "Are you sure you want to delete ALL conversations? This action cannot be undone.",
+    "timeNow": "Now",
+    "timeMinutesAgo": "{minutes}m ago",
+    "timeHoursAgo": "{hours}h ago",
+    "timeDaysAgo": "{days}d ago",
+    "renameTooltip": "Rename conversation",
+    "renameAriaLabel": "Rename this conversation",
+    "renamePlaceholder": "Conversation name...",
+    "saveRenameTooltip": "Save new name",
+    "saveRenameAriaLabel": "Save new conversation name",
+    "cancelRenameTooltip": "Cancel rename",
+    "cancelRenameAriaLabel": "Cancel conversation rename"
+  },
+  "chatInput": {
+    "placeholder": "Type your intention here... (Shift+Enter or Ctrl+Enter for new line, Enter to send)",
+    "sendButton": "Send",
+    "limitExceeded": "⚠️ Limit exceeded",
+    "nearLimit": "⚠️ Near limit",
+    "attachedFiles": "Attached Files",
+    "openInEditor": "Open file in editor",
+    "removeAttachment": "Remove attachment"
+  },
+  "chatHeader": {
+    "title": "💬 AI Chat - ScareVerse Assistant",
+    "hideSettings": "Hide settings",
+    "showSettings": "Show settings",
+    "hideSettingsLabel": "Hide chat settings",
+    "showSettingsLabel": "Show chat settings",
+    "settingsButton": "⚙️ Settings",
+    "historyTooltip": "View conversation history",
+    "historyLabel": "Open conversation history",
+    "historyButton": "📚 History",
+    "clearTooltip": "Clear current messages",
+    "clearLabel": "Clear current conversation messages",
+    "clearButton": "🗑️ Clear",
+    "agentModeLabel": "Agent Mode",
+    "agentModeTooltip": "Enable Agent Mode for code editing with Aider",
+    "agentModeToggle": "Toggle Agent Mode",
+    "liveWire": "Live-Wire"
+  },
+  "chat": {
+    "loadingIndicator": {
+      "aiLabel": "AI"
+    },
+    "welcome": {
+      "greeting": "👋 Hello! I'm your ScareVerse AI assistant.",
+      "instructions": "Type your intention and I'll help create cells and artifacts for you."
+    },
+    "traceTimeline": {
+      "buttonLabel": "🕐 Timeline",
+      "viewTimelineTitle": "View execution timeline",
+      "noTraceTitle": "No trace available for this message"
+    },
+    "collectionSelector": {
+      "title": "🔍 RAG Collections",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all (disable RAG)",
+      "ragDisabled": "🚫 RAG disabled - no collection selected",
+      "allCollectionsEnabled": "✨ All collections will be used for contextualization",
+      "searchingInOne": "🎯 Searching only in: {collection}",
+      "searchingInMultiple": "🎯 Searching in {count} selected collections"
+    },
+    "traceFragment": {
+      "userMessage": "User Message:",
+      "originalQuery": "Original Query:",
+      "expandedQuery": "Expanded Query:",
+      "ragChunks": "RAG Chunks: {count} retrieved",
+      "score": "Score: {score}",
+      "llmResponse": "LLM Response:",
+      "fullData": "Full Data:",
+      "notAvailable": "N/A"
+    }
+  },
+  "chatMessage": {
+    "userLabel": "You",
+    "aiLabel": "AI",
+    "aiResponseAriaLabel": "AI Response: {model}",
+    "cellCreatedBadge": "✅ Cell created:",
+    "copyTooltip": "Copy to clipboard",
+    "copyButton": "📋 Copy code",
+    "notebookTooltip": "Create cell in notebook",
+    "notebookButton": "➕ Notebook",
+    "copyError": "Error copying to clipboard:"
+  },
+  "chatSettingsPanel": {
+    "modelLabel": "AI Model:",
+    "loadingModels": "⏳ Loading models...",
+    "localModelsGroup": "Local Models (Ollama)",
+    "externalModelsGroup": "External Models",
+    "noModelsAvailable": "⚠️ No models available",
+    "intentionToggleLabel": "🎯 Classify intention and execute actions (create cells, etc.)",
+    "agentModeLabel": "Agent Mode (Live-Wire)",
+    "warmupLabel": "🤖 AgenteLab Warm-up:",
+    "warmupDefault": "-- Select warm-up configuration --",
+    "warmupLoading": "⏳ Loading configurations...",
+    "warmupError": "⚠️ Error loading configurations",
+    "warmupPersona": "Persona: {name}",
+    "warmupPersonasGroup": "📋 Personas",
+    "warmupFilesGroup": "📄 Individual Files",
+    "warmupCustom": "Custom Selection",
+    "warmupFilesAttached": "{count} file(s) will be attached",
+    "actionsLabel": "⚡ Action Links:",
+    "actionsDefault": "-- Select action reference --",
+    "actionsLoading": "⏳ Loading actions...",
+    "actionsError": "⚠️ Error loading actions",
+    "actionsGet": "GET: {name}",
+    "actionsPost": "POST: {name}",
+    "actionsAttached": "Action reference attached",
+    "attachmentsTitle": "📎 Attachments",
+    "clearAttachmentsTooltip": "Remove all attachments",
+    "noAttachmentsYet": "No attachments yet.",
+    "removeAttachmentTooltip": "Remove attachment",
+    "attachmentsSizeExceeded": "⚠️ Total attachment size exceeds the limit. Remove some attachments to send.",
+    "viewContentTooltip": "View attachment content",
+    "contentPreviewTitle": "Attachment Content",
+    "closePreview": "Close"
+  },
+  "chatSettingsModal": {
+    "title": "⚙️ Chat Settings",
+    "subtitle": "Configure AI model, warm-up, collections and attachments",
+    "closeTooltip": "Close settings",
+    "closeButton": "Close"
+  },
+  "modals": {
+    "traceTimeline": {
+      "title": "Execution Timeline",
+      "conversation": "Conversation:",
+      "closeTooltip": "Close",
+      "loading": "Loading trace...",
+      "errorTitle": "❌ Error loading trace",
+      "noFragments": "No trace fragments available",
+      "metadataTitle": "Trace Metadata",
+      "idLabel": "ID:",
+      "llmLabel": "LLM:",
+      "sessionLabel": "Session:",
+      "fragmentsLabel": "Fragments:",
+      "messageLabel": "Message:",
+      "stagesTitle": "Execution Stages",
+      "close": "Close"
+    }
+  },
+  "contextBar": {
+    "filesInContext": "Files in Context",
+    "removeFile": "Remove file from context"
+  },
+  "agentTerminal": {
+    "title": "Agent Terminal",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "clear": "Clear terminal",
+    "copy": "Copy logs to clipboard",
+    "expand": "Expand terminal",
+    "collapse": "Collapse terminal",
+    "close": "Close terminal"
+  }
+}

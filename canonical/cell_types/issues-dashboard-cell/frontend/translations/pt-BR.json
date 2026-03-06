@@ -1,0 +1,122 @@
+{
+  "issues": {
+    "dashboard": {
+      "title": "📚 Acompanhar Livro de Issues",
+      "closeAriaLabel": "Fechar dashboard",
+      "monitoringActive": "Monitoramento Ativo (intervalo: {interval}s, max: {maxCells} células)",
+      "processingPaused": "Processamento Pausado - A fila está desabilitada"
+    },
+    "createCellForm": {
+      "title": "➕ Criar Nova Célula",
+      "cellTypeLabel": "Tipo de Célula:",
+      "selectTypePlaceholder": "Selecione um tipo...",
+      "initialDataLabel": "Dados Iniciais (JSON):",
+      "optional": "(opcional)",
+      "initialDataPlaceholder": "{\"title\": \"My Cell\", \"content\": \"Initial content\"}",
+      "referencesLabel": "Referências (JSON):",
+      "referencesPlaceholder": "{\"docs\": [\"path/to/doc.md\"], \"python\": [\"path/to/script.py\"]}",
+      "creatingButton": "Criando...",
+      "createButton": "✓ Criar Célula",
+      "cancelButton": "Cancelar",
+      "invalidInitialData": "Dados iniciais devem ser JSON válido",
+      "invalidRefs": "Referências devem ser JSON válido"
+    },
+    "ingestForm": {
+      "title": "Executar Ingestion",
+      "sourceDirLabel": "Diretório de Origem (opcional):",
+      "sourceDirPlaceholder": "/path/to/docs",
+      "dryRunLabel": "Dry Run (apenas simular)",
+      "runningButton": "Executando...",
+      "runButton": "Executar",
+      "cancelButton": "Cancelar"
+    },
+    "pagination": {
+      "showing": "Mostrando",
+      "to": "a",
+      "of": "de",
+      "items": "itens",
+      "previous": "Anterior",
+      "next": "Próxima",
+      "previousPage": "Página anterior",
+      "nextPage": "Próxima página",
+      "goToPage": "Ir para página {page}"
+    },
+    "stats": {
+      "pending": "Pendentes",
+      "running": "Executando",
+      "completed": "Finalizados",
+      "errors": "Erros"
+    },
+    "card": {
+      "noName": "Sem nome",
+      "id": "ID",
+      "statusLabels": {
+        "pending": "⏳ Pendente",
+        "running": "▶️ Executando",
+        "completed": "✅ Finalizado",
+        "error": "❌ Erro",
+        "obsolete": "🗑️ Obsoleto"
+      }
+    },
+    "filters": {
+      "all": "Todos",
+      "refresh": "🔄 Atualizar",
+      "startMonitoring": "▶️ Iniciar Monitoramento",
+      "stopMonitoring": "⏸️ Parar Monitoramento",
+      "startingMonitoring": "⏳ Iniciando...",
+      "stoppingMonitoring": "⏳ Parando...",
+      "startMonitoringTitle": "Iniciar loop de monitoramento automático",
+      "stopMonitoringTitle": "Parar loop de monitoramento automático",
+      "processNow": "⚡ Processar Agora",
+      "processing": "⏳ Processando...",
+      "processNowTitle": "Processar células pendentes imediatamente (trigger manual)",
+      "pauseQueue": "⏸️ Pausar Fila",
+      "resumeQueue": "▶️ Retomar Fila",
+      "pausing": "⏳ Pausando...",
+      "resuming": "⏳ Retomando...",
+      "pauseQueueTitle": "Pausar processamento de células (desabilita a fila)",
+      "resumeQueueTitle": "Retomar processamento de células (habilita a fila)",
+      "ingestDocs": "📥 Ingerir Documentos",
+      "newCell": "➕ Nova Célula"
+    },
+    "list": {
+      "loading": "⏳ Carregando células...",
+      "noCellsFound": "Nenhuma célula encontrada"
+    },
+    "details": {
+      "title": "Detalhes da Célula",
+      "closeAriaLabel": "Fechar detalhes",
+      "basicInfo": "Informações Básicas",
+      "id": "ID:",
+      "state": "Estado:",
+      "type": "Tipo:",
+      "assignee": "Responsável:",
+      "created": "Criado:",
+      "updated": "Atualizado:",
+      "cellData": "Dados da Célula",
+      "fragments": "Fragmentos (Log de Execução)",
+      "noFragments": "Nenhum fragmento registrado",
+      "pipelineHistory": "🔄 Histórico de Execuções da Pipeline",
+      "loadingHistory": "⏳ Carregando histórico...",
+      "execution": "Execução",
+      "status": "Status:",
+      "error": "Erro:",
+      "result": "Resultado:",
+      "executionFragments": "Fragmentos de Execução:",
+      "noExecutionFragments": "Nenhum fragmento de execução",
+      "noExecutions": "Nenhuma execução registrada para esta célula",
+      "expand": "▶ Expandir",
+      "collapse": "▼ Recolher",
+      "now": "agora",
+      "secondsAgo": "{n}s atrás",
+      "minutesAgo": "{n}m atrás",
+      "hoursAgo": "{n}h atrás",
+      "stateLabels": {
+        "pending": "⏳ Pendente",
+        "running": "▶️ Executando",
+        "completed": "✅ Finalizado",
+        "error": "❌ Erro"
+      }
+    }
+  }
+}

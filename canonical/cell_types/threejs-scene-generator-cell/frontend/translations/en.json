@@ -1,0 +1,28 @@
+{
+  "threejsSceneGeneratorCell": {
+    "title": "Three.js Scene Generator",
+    "description": "Generate and prototype interactive 3D scenes using Three.js from text descriptions with AI",
+    "modelLabel": "AI Model",
+    "loadingModels": "Loading models...",
+    "localModelsGroup": "Local Models",
+    "externalModelsGroup": "External Models",
+    "noModelsAvailable": "No models available",
+    "promptLabel": "Describe your 3D scene",
+    "promptPlaceholder": "Example: A rotating cube with metallic material and dynamic lighting",
+    "generateButton": "Generate 3D Scene",
+    "generating": "Generating...",
+    "previewLabel": "Generated 3D Scene Preview",
+    "copyScript": "Copy Script",
+    "copied": "Copied!",
+    "downloadScript": "Download Script",
+    "showCode": "Show Three.js Code",
+    "hideCode": "Hide Three.js Code",
+    "initializingScene": "Initializing 3D scene...",
+    "sceneError": "Failed to render 3D scene",
+    "errorGeneration": "Error generating Three.js scene: {error}",
+    "tipsTitle": "💡 Tips for better 3D scenes:",
+    "tip1": "Be specific about objects, materials, and animations",
+    "tip2": "Mention lighting, camera angles, and scene composition",
+    "tip3": "Press Ctrl+Enter (or Cmd+Enter) to generate quickly"
+  }
+}

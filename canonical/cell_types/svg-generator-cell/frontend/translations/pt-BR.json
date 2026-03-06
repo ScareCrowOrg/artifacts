@@ -1,0 +1,21 @@
+{
+  "svgGeneratorCell": {
+    "title": "Gerador de SVG",
+    "description": "Gere visualizações SVG a partir de descrições de texto usando IA",
+    "promptLabel": "Descreva seu SVG",
+    "promptPlaceholder": "Exemplo: Um círculo azul com borda vermelha, centralizado em um viewBox 200x200",
+    "generateButton": "Gerar SVG",
+    "generating": "Gerando...",
+    "previewLabel": "Visualização SVG Gerado",
+    "copySvg": "Copiar SVG",
+    "copied": "Copiado!",
+    "downloadSvg": "Baixar SVG",
+    "showCode": "Mostrar Código SVG",
+    "hideCode": "Ocultar Código SVG",
+    "errorGeneration": "Erro ao gerar SVG: {error}",
+    "tipsTitle": "💡 Dicas para melhores resultados:",
+    "tip1": "Seja específico sobre formas, cores e tamanhos",
+    "tip2": "Mencione dimensões de viewBox se necessário",
+    "tip3": "Pressione Ctrl+Enter (ou Cmd+Enter) para gerar rapidamente"
+  }
+}

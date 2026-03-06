@@ -1,0 +1,12 @@
+{
+  "fragmentEditor": {
+    "title": "📝 Adicionar Fragmento de Memória",
+    "closeAriaLabel": "Fechar modal",
+    "closeTooltip": "Fechar",
+    "description": "Digite o conteúdo em Markdown para criar um novo fragmento de memória para esta célula.",
+    "placeholder": "Digite o conteúdo do fragmento em Markdown...",
+    "cancelButton": "Cancelar",
+    "savingButton": "💾 Salvando...",
+    "saveButton": "💾 Salvar Fragmento"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "unclassifiedCell": {
+    "newTitle": "📝 New Unclassified Cell",
+    "editTitle": "📝 Editing Unclassified Cell",
+    "closeTooltip": "Close",
+    "saveButton": "💾 Save Cell",
+    "saving": "⏳ Saving...",
+    "sendToChat": "💬 Send to Chat",
+    "sendToChatTooltip": "Send cell title and content to chat",
+    "manageFragments": "📚 Manage Fragments",
+    "addFragment": "➕ Add Fragment",
+    "titleLabel": "Cell Title",
+    "titlePlaceholder": "Enter cell title",
+    "contentLabel": "Content",
+    "contentPlaceholder": "Enter cell content in Markdown...",
+    "fragmentSummary": "📚 This cell has <strong>{count}</strong> {fragmentText}",
+    "fragmentSingular": "fragment",
+    "fragmentPlural": "fragments",
+    "viewFragments": "View Fragments",
+    "createdLabel": "Created:",
+    "updatedLabel": "Updated:",
+    "generateButton": "Generate Code",
+    "generating": "Generating...",
+    "cancelButton": "Cancel",
+    "generationProgress": "Generation Progress",
+    "previewLabel": "AI Preview",
+    "codeGenerated": "Code Generated"
+  }
+}

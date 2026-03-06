@@ -1,0 +1,128 @@
+{
+  "layout": {
+    "addCellModal": {
+      "title": "Add Cell",
+      "close": "Close",
+      "closeModal": "Close modal",
+      "loadingCellTypes": "Loading cell types…",
+      "failedToLoad": "Failed to load cell types",
+      "retry": "Retry",
+      "searchPlaceholder": "Search cell types…",
+      "searchAriaLabel": "Search cell types",
+      "noResults": "No results for \"{query}\"",
+      "noDescription": "No description",
+      "selected": "Selected: {name}",
+      "selectCellType": "Select a cell type to add",
+      "cancel": "Cancel",
+      "adding": "Adding…",
+      "addCell": "Add Cell"
+    },
+    "cellWrapper": {
+      "minimize": "Minimize",
+      "minimizeCell": "Minimize cell",
+      "maximize": "Maximize",
+      "maximizeCell": "Maximize cell",
+      "restore": "Restore",
+      "restoreCell": "Restore cell",
+      "close": "Close",
+      "closeCell": "Close cell",
+      "loading": "Loading {title}…",
+      "errorLoading": "Error loading cell",
+      "unsavedChanges": "Unsaved changes",
+      "confirmClose": "Close {title}? You have unsaved changes.",
+      "minimizedClickToRestore": "(click to restore)",
+      "healthHealthy": "Healthy",
+      "healthDegraded": "Degraded",
+      "healthUnhealthy": "Unhealthy",
+      "healthUnknown": "Unknown"
+    },
+    "footerWindowManager": {
+      "addCell": "Add Cell",
+      "addNewCell": "Add a new cell to workspace",
+      "autoOrganize": "Auto-organize",
+      "cellsCount": "{count}/{max} cells",
+      "noCellsOpen": "No cells open",
+      "unsavedChanges": "Unsaved changes",
+      "closeCell": "Close {title}",
+      "confirmClose": "Close {title}? You have unsaved changes.",
+      "menu": "Menu",
+      "maxCellsReached": "Maximum cells reached ({max})",
+      "noPermission": "You do not have permission to perform this action."
+    },
+    "saveLayoutBookModal": {
+      "title": "Save Layout",
+      "close": "Close",
+      "nameLabel": "Layout Name",
+      "namePlaceholder": "Enter a name for this layout…",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Describe this layout (optional)…",
+      "cellPreviewTitle": "Current Cells",
+      "totalCells": "Total Cells",
+      "save": "Save Layout",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "errorNameRequired": "Name is required",
+      "errorNameTooLong": "Name must be 100 characters or less",
+      "errorSaveFailed": "Failed to save layout"
+    },
+    "layoutBookSelector": {
+      "tooltip": "Saved Layouts",
+      "selectBook": "Layouts",
+      "saveCurrentLayout": "💾 Save Current Layout",
+      "loading": "Loading layouts…",
+      "retry": "Retry",
+      "noBooksYet": "No saved layouts yet",
+      "deleteBook": "Delete layout",
+      "confirmDelete": "Delete layout \"{name}\"?",
+      "totalBooks": "{count} layout(s)",
+      "active": "Active",
+      "cells": "cells"
+    },
+    "toolbar": {
+      "saveLayout": "Save Layout",
+      "saveLayoutTooltip": "Save current workspace layout",
+      "unsavedChanges": "Unsaved changes",
+      "unsavedChangesTooltip": "You have unsaved workspace changes",
+      "saving": "Saving…"
+    },
+    "persistence": {
+      "saveSuccess": "Layout saved successfully",
+      "saveError": "Failed to save layout",
+      "loadSuccess": "Layout loaded successfully",
+      "loadError": "Failed to load layout",
+      "listError": "Failed to load saved layouts",
+      "deleteSuccess": "Layout deleted",
+      "deleteError": "Failed to delete layout",
+      "autoSaveEnabled": "Auto-save enabled",
+      "autoSaveDisabled": "Auto-save disabled",
+      "hydratingCells": "Restoring cells…",
+      "hydrationError": "Failed to restore cell: {type}",
+      "noLayouts": "No saved layouts"
+    },
+    "dynamicWorkspace": {
+      "title": "Dynamic Workspace v2",
+      "welcomeMessage": "Add cells to build your workspace",
+      "clickAddCell": "Click the {button} button below to add your first cell",
+      "emptyWorkspace": "Your workspace is empty"
+    }
+  },
+  "generatedForm": {
+    "title": "Cell Inputs",
+    "executeButton": "Execute",
+    "executing": "Executing…",
+    "resetButton": "Reset",
+    "resultTitle": "Result",
+    "errorTitle": "Error",
+    "noInputs": "This cell has no configurable inputs.",
+    "required": "Required",
+    "validationFailed": "Please fix validation errors before executing."
+  },
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save",
+    "loading": "Loading…",
+    "error": "Error",
+    "retry": "Retry"
+  }
+}

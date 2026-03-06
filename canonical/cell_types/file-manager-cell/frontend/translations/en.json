@@ -1,0 +1,26 @@
+{
+  "fileManager": {
+    "title": "📁 File Manager",
+    "ephemeralCell": "Ephemeral Cell",
+    "notPersisted": "⚡ Not Persisted",
+    "searchPlaceholder": "🔍 Search files by name...",
+    "searchAriaLabel": "Search files by name",
+    "refreshButton": "🔄 Refresh",
+    "refreshing": "Refreshing...",
+    "refreshTooltip": "Refresh file tree and invalidate cache",
+    "collapseAll": "📁 Collapse All",
+    "collapseAllTooltip": "Collapse all directories",
+    "newButton": "+ New",
+    "openButton": "📄 Open",
+    "openTooltip": "Open file(s) as cell(s) for editing",
+    "sendToChat": "💬 Send to Chat",
+    "sendToChatTooltip": "Send selected file(s) to chat",
+    "clearButton": "🗑️ Clear",
+    "clearTooltip": "Clear file selection",
+    "loadingTree": "⏳ Loading file tree...",
+    "noMatchesFound": "🔍 No files found for \"{query}\"",
+    "selectedCount": "{count}",
+    "newFilePrompt": "File name (with extension):",
+    "folderPrompt": "Folder (leave empty for \"docs\"):"
+  }
+}

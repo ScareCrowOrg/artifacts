@@ -1,0 +1,10 @@
+{
+  "exampleCell": {
+    "defaultTitle": "Célula de Exemplo",
+    "counter": "Contador",
+    "increment": "Incrementar",
+    "message": "Mensagem",
+    "cellId": "ID da Célula:",
+    "type": "Tipo:"
+  }
+}

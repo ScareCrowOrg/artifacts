@@ -1,0 +1,97 @@
+{
+  "vault": {
+    "title": "Vault Token Manager",
+    "status": {
+      "locked": "Locked",
+      "unlocked": "Unlocked"
+    },
+    "actions": {
+      "lock": "Lock Vault",
+      "unlock": "Unlock Vault",
+      "refresh": "Refresh Tokens",
+      "addToken": "Add Token"
+    },
+    "errors": {
+      "notAvailable": "Vault Not Available",
+      "notAvailableDescription": "The ScareVerse Browser Extension is not installed or not available. Please install the extension to manage credentials securely.",
+      "loadFailed": "Failed to load tokens",
+      "unlockFailed": "Failed to unlock vault",
+      "saveFailed": "Failed to save token",
+      "viewFailed": "Failed to retrieve token",
+      "deleteFailed": "Failed to delete token"
+    },
+    "locked": {
+      "title": "Vault is Locked",
+      "description": "Enter your master password to access stored tokens."
+    },
+    "deleteConfirm": "Are you sure you want to delete the token '{ref}'? This action cannot be undone.",
+    "filters": {
+      "showExpired": "Show expired tokens",
+      "sortBy": "Sort by",
+      "toggleOrder": "Toggle sort order",
+      "sortOptions": {
+        "createdAt": "Created Date",
+        "provider": "Provider",
+        "vaultRef": "Token Name"
+      }
+    },
+    "unlockModal": {
+      "title": "Unlock Vault",
+      "description": "Enter your master password to unlock the vault and access your stored credentials.",
+      "masterPassword": "Master Password",
+      "passwordPlaceholder": "Enter master password",
+      "securityNotice": "🔒 Your password is never stored. It's used only to decrypt your credentials locally.",
+      "cancel": "Cancel",
+      "unlock": "Unlock",
+      "unlocking": "Unlocking...",
+      "errors": {
+        "passwordRequired": "Password is required",
+        "unlockFailed": "Failed to unlock vault. Please check your password."
+      }
+    },
+    "tokenList": {
+      "loading": "Loading tokens...",
+      "retry": "Retry",
+      "expired": "Expired",
+      "provider": "Provider",
+      "type": "Type",
+      "created": "Created",
+      "expires": "Expires",
+      "empty": {
+        "title": "No Tokens Stored",
+        "description": "You haven't added any tokens to the vault yet.",
+        "addFirst": "Add Your First Token"
+      },
+      "actions": {
+        "view": "View Token",
+        "viewToken": "View token {ref}",
+        "delete": "Delete Token",
+        "deleteToken": "Delete token {ref}"
+      }
+    },
+    "tokenForm": {
+      "title": "Add New Token",
+      "vaultRef": "Token Name",
+      "vaultRefPlaceholder": "e.g., openai-api-key-prod",
+      "vaultRefHelp": "Unique identifier for this token",
+      "provider": "Provider",
+      "selectProvider": "Select a provider",
+      "otherProvider": "Other",
+      "customProvider": "Custom Provider Name",
+      "customProviderPlaceholder": "e.g., custom-service",
+      "credentialType": "Credential Type",
+      "tokenValue": "Token Value",
+      "tokenValuePlaceholder": "Paste your token or secret here",
+      "tokenValueHelp": "⚠️ This will be encrypted before storage",
+      "expiresAt": "Expiration Date",
+      "optional": "optional",
+      "cancel": "Cancel",
+      "save": "Save Token",
+      "saving": "Saving...",
+      "errors": {
+        "invalidForm": "Please fill in all required fields",
+        "saveFailed": "Failed to save token"
+      }
+    }
+  }
+}

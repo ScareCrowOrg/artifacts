@@ -1,0 +1,28 @@
+{
+  "pngGeneratorCell": {
+    "title": "Gerador de PNG",
+    "description": "Gere imagens PNG a partir de descrições de texto usando IA Stable Diffusion",
+    "asset3dModeLabel": "Modo Asset 3D",
+    "asset3dModeDescription": "Otimize a geração para pipeline 3D (SF3D → Blender → Three.js) com iluminação plana e visualização ortográfica",
+    "promptLabel": "Descrição da Imagem",
+    "promptPlaceholder": "Exemplo: Um dragão vermelho majestoso voando sobre montanhas ao pôr do sol",
+    "negativePromptLabel": "Prompt Negativo",
+    "negativePromptPlaceholder": "Exemplo: desfocado, baixa qualidade, distorcido",
+    "optional": "opcional",
+    "widthLabel": "Largura (px)",
+    "heightLabel": "Altura (px)",
+    "stepsLabel": "Passos",
+    "cfgScaleLabel": "Escala CFG",
+    "generateButton": "Gerar PNG",
+    "generating": "Gerando...",
+    "preview": "Visualização",
+    "copy": "Copiar",
+    "download": "Baixar",
+    "copyToClipboard": "Copiar imagem para área de transferência",
+    "downloadPng": "Baixar imagem PNG",
+    "cleanBackground": "Limpar Fundo",
+    "processing": "Processando...",
+    "persistAsset": "💾 Persistir Asset",
+    "persisting": "Persistindo..."
+  }
+}

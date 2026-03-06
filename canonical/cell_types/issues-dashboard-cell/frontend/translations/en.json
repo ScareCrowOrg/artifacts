@@ -1,0 +1,122 @@
+{
+  "issues": {
+    "dashboard": {
+      "title": "📚 Follow Issues Book",
+      "closeAriaLabel": "Close dashboard",
+      "monitoringActive": "Monitoring Active (interval: {interval}s, max: {maxCells} cells)",
+      "processingPaused": "Processing Paused - Queue is disabled"
+    },
+    "createCellForm": {
+      "title": "➕ Create New Cell",
+      "cellTypeLabel": "Cell Type:",
+      "selectTypePlaceholder": "Select a type...",
+      "initialDataLabel": "Initial Data (JSON):",
+      "optional": "(optional)",
+      "initialDataPlaceholder": "{\"title\": \"My Cell\", \"content\": \"Initial content\"}",
+      "referencesLabel": "References (JSON):",
+      "referencesPlaceholder": "{\"docs\": [\"path/to/doc.md\"], \"python\": [\"path/to/script.py\"]}",
+      "creatingButton": "Creating...",
+      "createButton": "✓ Create Cell",
+      "cancelButton": "Cancel",
+      "invalidInitialData": "Initial data must be valid JSON",
+      "invalidRefs": "Refs must be valid JSON"
+    },
+    "ingestForm": {
+      "title": "Run Ingestion",
+      "sourceDirLabel": "Source Directory (optional):",
+      "sourceDirPlaceholder": "/path/to/docs",
+      "dryRunLabel": "Dry Run (simulate only)",
+      "runningButton": "Running...",
+      "runButton": "Run",
+      "cancelButton": "Cancel"
+    },
+    "pagination": {
+      "showing": "Showing",
+      "to": "to",
+      "of": "of",
+      "items": "items",
+      "previous": "Previous",
+      "next": "Next",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "goToPage": "Go to page {page}"
+    },
+    "stats": {
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "errors": "Errors"
+    },
+    "card": {
+      "noName": "No name",
+      "id": "ID",
+      "statusLabels": {
+        "pending": "⏳ Pending",
+        "running": "▶️ Running",
+        "completed": "✅ Completed",
+        "error": "❌ Error",
+        "obsolete": "🗑️ Obsolete"
+      }
+    },
+    "filters": {
+      "all": "All",
+      "refresh": "🔄 Refresh",
+      "startMonitoring": "▶️ Start Monitoring",
+      "stopMonitoring": "⏸️ Stop Monitoring",
+      "startingMonitoring": "⏳ Starting...",
+      "stoppingMonitoring": "⏳ Stopping...",
+      "startMonitoringTitle": "Start automatic monitoring loop",
+      "stopMonitoringTitle": "Stop automatic monitoring loop",
+      "processNow": "⚡ Process Now",
+      "processing": "⏳ Processing...",
+      "processNowTitle": "Process pending cells immediately (manual trigger)",
+      "pauseQueue": "⏸️ Pause Queue",
+      "resumeQueue": "▶️ Resume Queue",
+      "pausing": "⏳ Pausing...",
+      "resuming": "⏳ Resuming...",
+      "pauseQueueTitle": "Pause cell processing (disable queue)",
+      "resumeQueueTitle": "Resume cell processing (enable queue)",
+      "ingestDocs": "📥 Ingest Documents",
+      "newCell": "➕ New Cell"
+    },
+    "list": {
+      "loading": "⏳ Loading cells...",
+      "noCellsFound": "No cells found"
+    },
+    "details": {
+      "title": "Cell Details",
+      "closeAriaLabel": "Close details",
+      "basicInfo": "Basic Information",
+      "id": "ID:",
+      "state": "State:",
+      "type": "Type:",
+      "assignee": "Assignee:",
+      "created": "Created:",
+      "updated": "Updated:",
+      "cellData": "Cell Data",
+      "fragments": "Fragments (Execution Log)",
+      "noFragments": "No fragments recorded",
+      "pipelineHistory": "🔄 Pipeline Execution History",
+      "loadingHistory": "⏳ Loading history...",
+      "execution": "Execution",
+      "status": "Status:",
+      "error": "Error:",
+      "result": "Result:",
+      "executionFragments": "Execution Fragments:",
+      "noExecutionFragments": "No execution fragments",
+      "noExecutions": "No executions recorded for this cell",
+      "expand": "▶ Expand",
+      "collapse": "▼ Collapse",
+      "now": "now",
+      "secondsAgo": "{n}s ago",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "stateLabels": {
+        "pending": "⏳ Pending",
+        "running": "▶️ Running",
+        "completed": "✅ Completed",
+        "error": "❌ Error"
+      }
+    }
+  }
+}

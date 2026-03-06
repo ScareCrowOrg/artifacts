@@ -1,0 +1,177 @@
+{
+  "agentMode": {
+    "creatingSession": "Criando sessão de agente..."
+  },
+  "chatHistory": {
+    "title": "📚 Histórico de Conversas",
+    "closeTooltip": "Fechar histórico",
+    "closeAriaLabel": "Fechar histórico de conversas",
+    "searchPlaceholder": "🔍 Pesquisar conversas...",
+    "searchAriaLabel": "Pesquisar conversas",
+    "newConversationAriaLabel": "Iniciar nova conversa",
+    "newConversationButton": "➕ Nova Conversa",
+    "noConversationsFound": "Nenhuma conversa encontrada",
+    "noConversationsYet": "Nenhuma conversa ainda. Inicie uma nova!",
+    "conversationAriaLabel": "Conversa: {title}",
+    "deleteTooltip": "Deletar conversa",
+    "deleteAriaLabel": "Deletar esta conversa",
+    "messagesCount": "{count} mensagens",
+    "clearAllAriaLabel": "Limpar todo histórico",
+    "clearAllButton": "🗑️ Limpar Todo Histórico",
+    "confirmDelete": "Tem certeza de que deseja deletar esta conversa?",
+    "confirmClearAll": "Tem certeza de que deseja deletar TODAS as conversas? Esta ação não pode ser desfeita.",
+    "timeNow": "Agora",
+    "timeMinutesAgo": "{minutes}m atrás",
+    "timeHoursAgo": "{hours}h atrás",
+    "timeDaysAgo": "{days}d atrás",
+    "renameTooltip": "Renomear conversa",
+    "renameAriaLabel": "Renomear esta conversa",
+    "renamePlaceholder": "Nome da conversa...",
+    "saveRenameTooltip": "Salvar novo nome",
+    "saveRenameAriaLabel": "Salvar novo nome da conversa",
+    "cancelRenameTooltip": "Cancelar renomeação",
+    "cancelRenameAriaLabel": "Cancelar renomeação da conversa"
+  },
+  "chatInput": {
+    "placeholder": "Digite sua intenção aqui... (Shift+Enter ou Ctrl+Enter para nova linha, Enter para enviar)",
+    "sendButton": "Enviar",
+    "limitExceeded": "⚠️ Limite excedido",
+    "nearLimit": "⚠️ Próximo ao limite",
+    "attachedFiles": "Arquivos Anexados",
+    "openInEditor": "Abrir arquivo no editor",
+    "removeAttachment": "Remover anexo"
+  },
+  "chatHeader": {
+    "title": "💬 Chat IA - Assistente ScareVerse",
+    "hideSettings": "Ocultar configurações",
+    "showSettings": "Mostrar configurações",
+    "hideSettingsLabel": "Ocultar configurações de chat",
+    "showSettingsLabel": "Mostrar configurações de chat",
+    "settingsButton": "⚙️ Configurações",
+    "historyTooltip": "Ver histórico de conversas",
+    "historyLabel": "Abrir histórico de conversas",
+    "historyButton": "📚 Histórico",
+    "clearTooltip": "Limpar mensagens atuais",
+    "clearLabel": "Limpar mensagens da conversa atual",
+    "clearButton": "🗑️ Limpar",
+    "agentModeLabel": "Modo Agente",
+    "agentModeTooltip": "Ativar Modo Agente para edição de código com Aider",
+    "agentModeToggle": "Alternar Modo Agente",
+    "liveWire": "Live-Wire"
+  },
+  "chat": {
+    "loadingIndicator": {
+      "aiLabel": "IA"
+    },
+    "welcome": {
+      "greeting": "👋 Olá! Sou seu assistente IA ScareVerse.",
+      "instructions": "Digite sua intenção e ajudarei a criar células e artefatos para você."
+    },
+    "traceTimeline": {
+      "buttonLabel": "🕐 Cronograma",
+      "viewTimelineTitle": "Ver cronograma de execução",
+      "noTraceTitle": "Nenhum rastreamento disponível para esta mensagem"
+    },
+    "collectionSelector": {
+      "title": "🔍 Coleções RAG",
+      "selectAll": "Selecionar tudo",
+      "deselectAll": "Desselecionar tudo (desabilitar RAG)",
+      "ragDisabled": "🚫 RAG desabilitado - nenhuma coleção selecionada",
+      "allCollectionsEnabled": "✨ Todas as coleções serão usadas para contextualização",
+      "searchingInOne": "🎯 Pesquisando apenas em: {collection}",
+      "searchingInMultiple": "🎯 Pesquisando em {count} coleções selecionadas"
+    },
+    "traceFragment": {
+      "userMessage": "Mensagem do Usuário:",
+      "originalQuery": "Consulta Original:",
+      "expandedQuery": "Consulta Expandida:",
+      "ragChunks": "Chunks RAG: {count} recuperados",
+      "score": "Pontuação: {score}",
+      "llmResponse": "Resposta LLM:",
+      "fullData": "Dados Completos:",
+      "notAvailable": "N/A"
+    }
+  },
+  "chatMessage": {
+    "userLabel": "Você",
+    "aiLabel": "IA",
+    "aiResponseAriaLabel": "Resposta IA: {model}",
+    "cellCreatedBadge": "✅ Célula criada:",
+    "copyTooltip": "Copiar para área de transferência",
+    "copyButton": "📋 Copiar código",
+    "notebookTooltip": "Criar célula no notebook",
+    "notebookButton": "➕ Notebook",
+    "copyError": "Erro ao copiar para área de transferência:"
+  },
+  "chatSettingsPanel": {
+    "modelLabel": "Modelo IA:",
+    "loadingModels": "⏳ Carregando modelos...",
+    "localModelsGroup": "Modelos Locais (Ollama)",
+    "externalModelsGroup": "Modelos Externos",
+    "noModelsAvailable": "⚠️ Nenhum modelo disponível",
+    "intentionToggleLabel": "🎯 Classificar intenção e executar ações (criar células, etc.)",
+    "agentModeLabel": "Modo Agente (Live-Wire)",
+    "warmupLabel": "🤖 Warm-up AgenteLab:",
+    "warmupDefault": "-- Selecione configuração de warm-up --",
+    "warmupLoading": "⏳ Carregando configurações...",
+    "warmupError": "⚠️ Erro ao carregar configurações",
+    "warmupPersona": "Persona: {name}",
+    "warmupPersonasGroup": "📋 Personas",
+    "warmupFilesGroup": "📄 Arquivos Individuais",
+    "warmupCustom": "Seleção Personalizada",
+    "warmupFilesAttached": "{count} arquivo(s) será(ão) anexado(s)",
+    "actionsLabel": "⚡ Links de Ação:",
+    "actionsDefault": "-- Selecione referência de ação --",
+    "actionsLoading": "⏳ Carregando ações...",
+    "actionsError": "⚠️ Erro ao carregar ações",
+    "actionsGet": "GET: {name}",
+    "actionsPost": "POST: {name}",
+    "actionsAttached": "Referência de ação anexada",
+    "attachmentsTitle": "📎 Anexos",
+    "clearAttachmentsTooltip": "Remover todos os anexos",
+    "noAttachmentsYet": "Nenhum anexo ainda.",
+    "removeAttachmentTooltip": "Remover anexo",
+    "attachmentsSizeExceeded": "⚠️ O tamanho total dos anexos excede o limite. Remova alguns anexos para enviar.",
+    "viewContentTooltip": "Ver conteúdo do anexo",
+    "contentPreviewTitle": "Conteúdo do Anexo",
+    "closePreview": "Fechar"
+  },
+  "chatSettingsModal": {
+    "title": "⚙️ Configurações de Chat",
+    "subtitle": "Configure modelo IA, warm-up, coleções e anexos",
+    "closeTooltip": "Fechar configurações",
+    "closeButton": "Fechar"
+  },
+  "modals": {
+    "traceTimeline": {
+      "title": "Cronograma de Execução",
+      "conversation": "Conversa:",
+      "closeTooltip": "Fechar",
+      "loading": "Carregando rastreamento...",
+      "errorTitle": "❌ Erro ao carregar rastreamento",
+      "noFragments": "Nenhum fragmento de rastreamento disponível",
+      "metadataTitle": "Metadados de Rastreamento",
+      "idLabel": "ID:",
+      "llmLabel": "LLM:",
+      "sessionLabel": "Sessão:",
+      "fragmentsLabel": "Fragmentos:",
+      "messageLabel": "Mensagem:",
+      "stagesTitle": "Estágios de Execução",
+      "close": "Fechar"
+    }
+  },
+  "contextBar": {
+    "filesInContext": "Arquivos no Contexto",
+    "removeFile": "Remover arquivo do contexto"
+  },
+  "agentTerminal": {
+    "title": "Terminal do Agente",
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "clear": "Limpar terminal",
+    "copy": "Copiar logs para área de transferência",
+    "expand": "Expandir terminal",
+    "collapse": "Recolher terminal",
+    "close": "Fechar terminal"
+  }
+}

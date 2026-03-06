@@ -1,0 +1,26 @@
+{
+  "fileManager": {
+    "title": "📁 Gerenciador de Arquivos",
+    "ephemeralCell": "Célula Efêmera",
+    "notPersisted": "⚡ Não Persistida",
+    "searchPlaceholder": "🔍 Buscar arquivos por nome...",
+    "searchAriaLabel": "Buscar arquivos por nome",
+    "refreshButton": "🔄 Atualizar",
+    "refreshing": "Atualizando...",
+    "refreshTooltip": "Atualizar árvore de arquivos e invalidar cache",
+    "collapseAll": "📁 Recolher Tudo",
+    "collapseAllTooltip": "Recolher todos os diretórios",
+    "newButton": "+ Novo",
+    "openButton": "📄 Abrir",
+    "openTooltip": "Abrir arquivo(s) como célula(s) de edição",
+    "sendToChat": "💬 Enviar para Chat",
+    "sendToChatTooltip": "Enviar arquivo(s) selecionado(s) para o chat",
+    "clearButton": "🗑️ Limpar",
+    "clearTooltip": "Limpar seleção de arquivos",
+    "loadingTree": "⏳ Carregando árvore de arquivos...",
+    "noMatchesFound": "🔍 Nenhum arquivo encontrado para \"{query}\"",
+    "selectedCount": "{count}",
+    "newFilePrompt": "Nome do arquivo (com extensão):",
+    "folderPrompt": "Pasta (deixe vazio para \"docs\"):"
+  }
+}

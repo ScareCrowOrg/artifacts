@@ -1,0 +1,32 @@
+{
+  "fileEditor": {
+    "title": "📄 Editing File",
+    "pathLabel": "Path:",
+    "directoryLabel": "📁 Directory:",
+    "filenameLabel": "📄 Filename:",
+    "fullPathLabel": "Full path:",
+    "newFileBadge": "🆕 New File",
+    "configurePathButton": "Configure",
+    "configurePathTooltip": "Configure file name and directory",
+    "closeEditorTooltip": "Close editor (does not affect the file)",
+    "closeEditorButton": "❌ Close Editor",
+    "closeEditorAriaLabel": "Close editor for file {fileName}",
+    "loadingFile": "⏳ Loading file...",
+    "editingPlaceholder": "Editing {fileName}...",
+    "ephemeralCellBadge": "⚡ Ephemeral Cell",
+    "fileLabel": "File:",
+    "loadFileFailed": "Failed to load file",
+    "loadFileError": "Error loading file: {error}",
+    "saveFileFailed": "Failed to save file",
+    "saveFileSuccess": "File saved successfully!",
+    "saveFileError": "Error saving file: {error}",
+    "closeConfirm": "Close the editor for file \"{fileName}\"? (The file will not be deleted)",
+    "saveButton": "💾 Save",
+    "saving": "💾 Saving...",
+    "sendToChat": "💬 Send to Chat",
+    "sendToChatTooltip": "Send file to chat",
+    "sendToChatAriaLabel": "Send file {fileName} to chat",
+    "copyPath": "Copy file path",
+    "pathCopied": "Path copied!"
+  }
+}

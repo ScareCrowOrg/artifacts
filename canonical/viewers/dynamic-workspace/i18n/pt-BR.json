@@ -1,0 +1,128 @@
+{
+  "layout": {
+    "addCellModal": {
+      "title": "Adicionar Célula",
+      "close": "Fechar",
+      "closeModal": "Fechar modal",
+      "loadingCellTypes": "Carregando tipos de célula…",
+      "failedToLoad": "Falha ao carregar tipos de célula",
+      "retry": "Tentar Novamente",
+      "searchPlaceholder": "Pesquisar tipos de célula…",
+      "searchAriaLabel": "Pesquisar tipos de célula",
+      "noResults": "Nenhum resultado para \"{query}\"",
+      "noDescription": "Sem descrição",
+      "selected": "Selecionado: {name}",
+      "selectCellType": "Selecione um tipo de célula para adicionar",
+      "cancel": "Cancelar",
+      "adding": "Adicionando…",
+      "addCell": "Adicionar Célula"
+    },
+    "cellWrapper": {
+      "minimize": "Minimizar",
+      "minimizeCell": "Minimizar célula",
+      "maximize": "Maximizar",
+      "maximizeCell": "Maximizar célula",
+      "restore": "Restaurar",
+      "restoreCell": "Restaurar célula",
+      "close": "Fechar",
+      "closeCell": "Fechar célula",
+      "loading": "Carregando {title}…",
+      "errorLoading": "Erro ao carregar célula",
+      "unsavedChanges": "Alterações não salvas",
+      "confirmClose": "Fechar {title}? Você tem alterações não salvas.",
+      "minimizedClickToRestore": "(clique para restaurar)",
+      "healthHealthy": "Saudável",
+      "healthDegraded": "Degradado",
+      "healthUnhealthy": "Não Saudável",
+      "healthUnknown": "Desconhecido"
+    },
+    "footerWindowManager": {
+      "addCell": "Adicionar Célula",
+      "addNewCell": "Adicione uma nova célula ao workspace",
+      "autoOrganize": "Auto-organizar",
+      "cellsCount": "{count}/{max} células",
+      "noCellsOpen": "Nenhuma célula aberta",
+      "unsavedChanges": "Alterações não salvas",
+      "closeCell": "Fechar {title}",
+      "confirmClose": "Fechar {title}? Você tem alterações não salvas.",
+      "menu": "Menu",
+      "maxCellsReached": "Número máximo de células atingido ({max})",
+      "noPermission": "Você não tem permissão para executar esta ação."
+    },
+    "saveLayoutBookModal": {
+      "title": "Salvar Layout",
+      "close": "Fechar",
+      "nameLabel": "Nome do Layout",
+      "namePlaceholder": "Digite um nome para este layout…",
+      "descriptionLabel": "Descrição",
+      "descriptionPlaceholder": "Descreva este layout (opcional)…",
+      "cellPreviewTitle": "Células Atuais",
+      "totalCells": "Total de Células",
+      "save": "Salvar Layout",
+      "saving": "Salvando…",
+      "cancel": "Cancelar",
+      "errorNameRequired": "Nome é obrigatório",
+      "errorNameTooLong": "Nome deve ter no máximo 100 caracteres",
+      "errorSaveFailed": "Falha ao salvar layout"
+    },
+    "layoutBookSelector": {
+      "tooltip": "Layouts Salvos",
+      "selectBook": "Layouts",
+      "saveCurrentLayout": "💾 Salvar Layout Atual",
+      "loading": "Carregando layouts…",
+      "retry": "Tentar Novamente",
+      "noBooksYet": "Nenhum layout salvo ainda",
+      "deleteBook": "Deletar layout",
+      "confirmDelete": "Deletar layout \"{name}\"?",
+      "totalBooks": "{count} layout(s)",
+      "active": "Ativo",
+      "cells": "células"
+    },
+    "toolbar": {
+      "saveLayout": "Salvar Layout",
+      "saveLayoutTooltip": "Salvar layout do workspace atual",
+      "unsavedChanges": "Alterações não salvas",
+      "unsavedChangesTooltip": "Você tem alterações não salvas no workspace",
+      "saving": "Salvando…"
+    },
+    "persistence": {
+      "saveSuccess": "Layout salvo com sucesso",
+      "saveError": "Falha ao salvar layout",
+      "loadSuccess": "Layout carregado com sucesso",
+      "loadError": "Falha ao carregar layout",
+      "listError": "Falha ao carregar layouts salvos",
+      "deleteSuccess": "Layout deletado",
+      "deleteError": "Falha ao deletar layout",
+      "autoSaveEnabled": "Auto-save ativado",
+      "autoSaveDisabled": "Auto-save desativado",
+      "hydratingCells": "Restaurando células…",
+      "hydrationError": "Falha ao restaurar célula: {type}",
+      "noLayouts": "Nenhum layout salvo"
+    },
+    "dynamicWorkspace": {
+      "title": "Dynamic Workspace v2",
+      "welcomeMessage": "Adicione células para construir seu workspace",
+      "clickAddCell": "Clique no botão {button} abaixo para adicionar sua primeira célula",
+      "emptyWorkspace": "Seu workspace está vazio"
+    }
+  },
+  "generatedForm": {
+    "title": "Entradas da Célula",
+    "executeButton": "Executar",
+    "executing": "Executando…",
+    "resetButton": "Redefinir",
+    "resultTitle": "Resultado",
+    "errorTitle": "Erro",
+    "noInputs": "Esta célula não tem entradas configuráveis.",
+    "required": "Obrigatório",
+    "validationFailed": "Por favor, corrija os erros de validação antes de executar."
+  },
+  "common": {
+    "close": "Fechar",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "loading": "Carregando…",
+    "error": "Erro",
+    "retry": "Tentar Novamente"
+  }
+}

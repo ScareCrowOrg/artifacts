@@ -1,0 +1,21 @@
+{
+  "svgGeneratorCell": {
+    "title": "SVG Generator",
+    "description": "Generate SVG visualizations from text descriptions using AI",
+    "promptLabel": "Describe your SVG",
+    "promptPlaceholder": "Example: A blue circle with a red border, centered in a 200x200 viewBox",
+    "generateButton": "Generate SVG",
+    "generating": "Generating...",
+    "previewLabel": "Generated SVG Preview",
+    "copySvg": "Copy SVG",
+    "copied": "Copied!",
+    "downloadSvg": "Download SVG",
+    "showCode": "Show SVG Code",
+    "hideCode": "Hide SVG Code",
+    "errorGeneration": "Error generating SVG: {error}",
+    "tipsTitle": "💡 Tips for better results:",
+    "tip1": "Be specific about shapes, colors, and sizes",
+    "tip2": "Mention viewBox dimensions if needed",
+    "tip3": "Press Ctrl+Enter (or Cmd+Enter) to generate quickly"
+  }
+}

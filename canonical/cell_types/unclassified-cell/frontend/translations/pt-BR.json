@@ -1,0 +1,29 @@
+{
+  "unclassifiedCell": {
+    "newTitle": "📝 Nova Célula Não Classificada",
+    "editTitle": "📝 Editando Célula Não Classificada",
+    "closeTooltip": "Fechar",
+    "saveButton": "💾 Salvar Célula",
+    "saving": "⏳ Salvando...",
+    "sendToChat": "💬 Enviar para Chat",
+    "sendToChatTooltip": "Enviar título e conteúdo da célula para chat",
+    "manageFragments": "📚 Gerenciar Fragmentos",
+    "addFragment": "➕ Adicionar Fragmento",
+    "titleLabel": "Título da Célula",
+    "titlePlaceholder": "Digite o título da célula",
+    "contentLabel": "Conteúdo",
+    "contentPlaceholder": "Digite o conteúdo da célula em Markdown...",
+    "fragmentSummary": "📚 Esta célula tem <strong>{count}</strong> {fragmentText}",
+    "fragmentSingular": "fragmento",
+    "fragmentPlural": "fragmentos",
+    "viewFragments": "Ver Fragmentos",
+    "createdLabel": "Criado em:",
+    "updatedLabel": "Atualizado em:",
+    "generateButton": "Gerar Código",
+    "generating": "Gerando...",
+    "cancelButton": "Cancelar",
+    "generationProgress": "Progresso da Geração",
+    "previewLabel": "Visualização IA",
+    "codeGenerated": "Código Gerado"
+  }
+}

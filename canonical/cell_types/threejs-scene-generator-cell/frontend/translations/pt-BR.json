@@ -1,0 +1,28 @@
+{
+  "threejsSceneGeneratorCell": {
+    "title": "Gerador de Cenas Three.js",
+    "description": "Gere e prototipe cenas 3D interativas usando Three.js a partir de descrições de texto com IA",
+    "modelLabel": "Modelo IA",
+    "loadingModels": "Carregando modelos...",
+    "localModelsGroup": "Modelos Locais",
+    "externalModelsGroup": "Modelos Externos",
+    "noModelsAvailable": "Nenhum modelo disponível",
+    "promptLabel": "Descreva sua cena 3D",
+    "promptPlaceholder": "Exemplo: Um cubo girando com material metálico e iluminação dinâmica",
+    "generateButton": "Gerar Cena 3D",
+    "generating": "Gerando...",
+    "previewLabel": "Visualização da Cena 3D Gerada",
+    "copyScript": "Copiar Script",
+    "copied": "Copiado!",
+    "downloadScript": "Baixar Script",
+    "showCode": "Mostrar Código Three.js",
+    "hideCode": "Ocultar Código Three.js",
+    "initializingScene": "Inicializando cena 3D...",
+    "sceneError": "Falha ao renderizar cena 3D",
+    "errorGeneration": "Erro ao gerar cena Three.js: {error}",
+    "tipsTitle": "💡 Dicas para melhores cenas 3D:",
+    "tip1": "Seja específico sobre objetos, materiais e animações",
+    "tip2": "Mencione iluminação, ângulos de câmera e composição da cena",
+    "tip3": "Pressione Ctrl+Enter (ou Cmd+Enter) para gerar rapidamente"
+  }
+}
