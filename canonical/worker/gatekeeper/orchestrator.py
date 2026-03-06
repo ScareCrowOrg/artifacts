@@ -195,7 +195,15 @@ class ResourceOrchestrator:
                 state = json.loads(raw)
                 ts = state.get("last_activity")
                 if ts:
-                    dt = datetime.fromisoformat(ts)
+                    try:
+                        dt = datetime.fromisoformat(ts)
+                    except ValueError:
+                        logger.warning(
+                            "Malformed last_activity timestamp for %s: %r",
+                            worker_name,
+                            ts,
+                        )
+                        return _utcnow()
                     # Ensure timezone-aware
                     if dt.tzinfo is None:
                         dt = dt.replace(tzinfo=timezone.utc)

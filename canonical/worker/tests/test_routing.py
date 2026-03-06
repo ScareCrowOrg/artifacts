@@ -134,6 +134,8 @@ class TestResultPersistence:
             gatekeeper.http.post.return_value = _mock_response(500, {"detail": "boom"})
             await gatekeeper._dispatch("q", json.dumps(rembg_job), rembg_job, "owner")
 
+        # With 0 retries: 1 initial attempt only
+        assert gatekeeper.http.post.call_count == 1
         mock_redis_l2.hset.assert_called()
         mapping = mock_redis_l2.hset.call_args[1]["mapping"]
         assert mapping["status"] == "failed"

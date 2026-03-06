@@ -100,6 +100,10 @@ class MultiSourcePooler:
             await asyncio.sleep(delay)
 
         target = self.redis_l1 if source == "owner" else self.redis_l2
+        if source not in ("owner", "global"):
+            logger.warning(
+                "Unexpected source=%r for requeue – defaulting to L2", source
+            )
         try:
             await target.lpush(queue_name, raw_job)
             logger.debug("Job requeued to %s queue: %s", source, queue_name)

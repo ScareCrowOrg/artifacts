@@ -101,8 +101,16 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
 }
 
 # All queues monitored by this GateKeeper
-ALL_QUEUES_L1 = list({cfg["queue_l1"] for cfg in JOB_TYPES_CONFIG.values()})
-ALL_QUEUES_L2 = list({cfg["queue_l2"] for cfg in JOB_TYPES_CONFIG.values()})
+ALL_QUEUES_L1 = list({
+    cfg.get("queue_l1", REMBG_QUEUE_L1)
+    for cfg in JOB_TYPES_CONFIG.values()
+    if cfg.get("queue_l1")
+})
+ALL_QUEUES_L2 = list({
+    cfg.get("queue_l2", REMBG_QUEUE_L2)
+    for cfg in JOB_TYPES_CONFIG.values()
+    if cfg.get("queue_l2")
+})
 
 # ============================================================================
 # Worker Configuration

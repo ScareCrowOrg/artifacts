@@ -225,7 +225,10 @@ class GateKeeper:
 
             retries += 1
             if retries <= config.WORKER_MAX_RETRIES:
-                delay = config.WORKER_RETRY_DELAY * (2 ** (retries - 1))
+                delay = min(
+                    config.WORKER_RETRY_DELAY * (2 ** (retries - 1)),
+                    60.0,  # cap at 60 s
+                )
                 await asyncio.sleep(delay)
 
         # Max retries exceeded

@@ -61,7 +61,6 @@ class ProcessRequest(BaseModel):
 
     job_id: str
     image_data: str  # Base64-encoded image (with or without data-URI prefix)
-    model: str = "u2net"
     alpha_matting: bool = True
 
 
