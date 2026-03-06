@@ -1,3 +1,17 @@
+---
+processed: true
+processed_date: 2026-03-06
+generated_docs:
+  - docs/official/backend/testing/test-remediation-2026-q1.md
+themes:
+  - cells
+  - frontend
+  - testing
+modules:
+  - frontend
+code_verified: true
+dead_docs_found: false
+---
 # AssetPrototypingCell Tests
 
 ## Overview
