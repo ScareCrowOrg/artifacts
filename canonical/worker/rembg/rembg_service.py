@@ -1,8 +1,11 @@
 """
 Rembg Background Removal Service
 
-GPU-accelerated background removal using Rembg with ONNX Runtime.
-Implements singleton pattern to avoid reloading model in VRAM.
+CPU-based background removal using Rembg with ONNX Runtime.
+Implements singleton pattern to maintain model in memory across requests.
+
+Phase 1: CPU-only (stable, ~40-50ms per image)
+Phase 2: GPU support planned when CUDA ABI issues are resolved
 """
 
 import logging
@@ -23,12 +26,10 @@ class RembgServiceError(Exception):
 class RembgService:
     """
     Rembg Background Removal Service.
-    
-    Provides GPU-accelerated background removal using Rembg with
-    ONNX Runtime CUDAExecutionProvider.
-    
-    Implements singleton pattern to maintain a single Rembg session
-    in VRAM, avoiding repeated model loading.
+
+    Provides CPU-based background removal using Rembg with ONNX Runtime.
+    Implements singleton pattern to maintain a single Rembg session in memory,
+    avoiding repeated model loading.
     """
     
     _instance: Optional['RembgService'] = None
@@ -50,12 +51,10 @@ class RembgService:
     
     def _initialize_session(self):
         """
-        Initialize Rembg session with GPU acceleration (lazy loading).
+        Initialize Rembg session (lazy loading).
 
-        Configures ONNX Runtime to use CUDAExecutionProvider for
-        GPU-accelerated inference on RTX 4070.
-
-        Called only on first use to avoid consuming VRAM if Rembg is not used.
+        Loads the u2net model with CPU execution provider.
+        Called only on first use to avoid consuming memory if Rembg is not used.
         """
         try:
             import rembg
@@ -84,8 +83,7 @@ class RembgService:
                 providers=['CPUExecutionProvider']
             )
 
-            logger.info("✅ Rembg model loaded successfully")
-            logger.info(f"   GPU acceleration: {execution_provider in self._session.providers if hasattr(self._session, 'providers') else 'unknown'}")
+            logger.info("✅ Rembg model loaded successfully (CPU provider)")
 
         except ImportError as e:
             logger.error(f"Failed to import rembg: {e}")
