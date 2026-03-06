@@ -3,7 +3,7 @@
  *
  * Layout persistence for DynamicWorkspace v2 — Phase 3.
  * Calls the /api/layout-books backend endpoints via the shared apiFetch utility,
- * which routes requests through the Nginx proxy (VITE_BACKEND_URL) and injects
+ * which uses VITE_API_BASE_URL from environment and injects
  * the session token from workspaceStore automatically.
  */
 

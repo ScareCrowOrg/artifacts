@@ -20,8 +20,8 @@
  *   reflects the current session, even when the store hydrates after module load.
  * - `useWorkspaceStore()` is called inside the function body to avoid circular
  *   dependency issues and to ensure Pinia is already installed at call time.
- * - Base URL is read from `VITE_BACKEND_URL` env var; falls back to
- *   `http://localhost:5050` for local development (ScareRunner Backend).
+ * - Base URL is read from `VITE_API_BASE_URL` env var (required, no fallback).
+ *   Must be configured in .env or passed via docker-compose.
  * - This file lives in `artifacts/shared/` (alias `@/services`) so all viewers
  *   and cell types can import it without depending on viewer internals.
  */
