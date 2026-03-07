@@ -190,9 +190,20 @@ export function useWorkspaceHandshake() {
     // ── Handle SWITCH_THEME message ────────────────────────────────────────
     if (data.type === 'SWITCH_THEME') {
       const { theme } = (data as Partial<SwitchThemeMessage>).payload ?? {}
+      log.info('[WORKSPACE] SWITCH_THEME received', {
+        theme,
+        hasTheme: !!theme,
+        timestamp: new Date().toISOString(),
+      })
       if (theme) {
         store.setTheme(theme)
-        log.debug('[WORKSPACE] Theme switched', { theme })
+        log.info('[WORKSPACE] Theme switched in store', {
+          newTheme: theme,
+          storedTheme: store.theme,
+          match: theme === store.theme,
+        })
+      } else {
+        log.warn('[WORKSPACE] SWITCH_THEME received but theme is empty', { payload: data.payload })
       }
       return
     }
