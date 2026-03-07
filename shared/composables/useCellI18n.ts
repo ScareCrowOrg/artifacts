@@ -62,6 +62,17 @@ export async function useCellI18n(cellTypeName: string): Promise<void> {
       })
 
       // ⚡ ATOMIC MERGE: All at once, not key-by-key
+      // BUT FIRST: Check if i18n.global is available (might be undefined in isolated contexts)
+      if (!i18n.global) {
+        console.error('[useCellI18n] ⚠️ i18n.global is undefined - cannot merge translations', {
+          cellTypeName,
+          locale: i18n.locale.value,
+          hasI18n: !!i18n,
+          i18nKeys: i18n ? Object.keys(i18n) : [],
+        })
+        throw new Error('i18n.global is undefined - i18n not properly initialized in component context')
+      }
+
       const currentMessages = i18n.global.getLocaleMessage(i18n.locale.value) || {}
       const mergedMessages = {
         ...currentMessages,
@@ -91,17 +102,26 @@ export async function useCellI18n(cellTypeName: string): Promise<void> {
       })
     }
   } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+
     console.error('[useCellI18n] ❌ FAILED to load translations', {
       cellTypeName,
       locale: i18n.locale.value,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMsg,
       stack: err instanceof Error ? err.stack : undefined,
       timestamp: new Date().toISOString(),
+      debugInfo: {
+        hasI18nGlobal: !!i18n?.global,
+        i18nContextReady: !errorMsg.includes('i18n.global'),
+        errorType: errorMsg.includes('Cannot read') ? 'context_issue' : 'other',
+      },
     })
+
     log.error('[useCellI18n] Failed to load cell translations', {
       cellTypeName,
       locale: i18n.locale.value,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMsg,
+      hint: errorMsg.includes('i18n.global') ? 'i18n context may not be available - check if component has access to i18n plugin' : 'unknown error',
     })
     throw err
   }
