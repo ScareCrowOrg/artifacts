@@ -204,11 +204,17 @@ async def get_redis_client():
             return await get_core_redis()
         except (ImportError, ModuleNotFoundError):
             # Fallback: create Redis client directly (standalone execution)
+            # Use Redis L1 (local cache), not L2
             import redis.asyncio as redis
             import os
-            
-            redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-            logger.info(f"Creating standalone Redis client: {redis_url}")
+
+            redis_host = os.getenv('REDIS_L1_HOST', 'redis-local')
+            redis_port = int(os.getenv('REDIS_L1_PORT', '6380'))
+            redis_password = os.getenv('REDIS_L1_PASSWORD', 'scarerunner')
+            redis_db = int(os.getenv('REDIS_L1_DB', '0'))
+
+            redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}"
+            logger.info(f"Creating standalone Redis L1 client: {redis_host}:{redis_port}")
             return redis.from_url(redis_url, decode_responses=True)
     except Exception as e:
         logger.error(f"Failed to get Redis client: {e}")
