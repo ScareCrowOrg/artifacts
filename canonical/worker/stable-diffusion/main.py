@@ -1,30 +1,22 @@
 """
-Stable Diffusion Queue Consumer Worker – Main Entry Point.
+Stable Diffusion Worker – Stateless HTTP Job Processor.
 
-Consumes jobs from Redis queue and forwards them to the ScareNode-SD API service.
+Stateless FastAPI service called by GateKeeper to process SD image generation jobs.
+GateKeeper handles all queue consumption (BRPOP), retry logic, dead-letter,
+and result persistence. This worker is only responsible for calling the SD API.
 
-Responsibilities:
-- BRPOP from Redis queue (scareverse:sd-jobs:queue)
-- Parse job payload (type: sd_generate)
-- Forward to SD API (http://scarenode-sd:9090/generate)
-- Store result in Redis LIST for BRPOP retrieval by backend router
-- Track processing time (processing_time_ms)
-- Handle errors gracefully with structured error results
-- Provide /health FastAPI endpoint for Docker health checks
-- Graceful shutdown on SIGTERM
+Endpoints:
+- POST /process  – Receive job from GateKeeper, call SD API, return result
+- GET  /health   – Liveness probe for Docker health check
 """
 
-import asyncio
-import json
 import logging
-import signal
 import time
 from typing import Any, Dict, Optional
 
 import httpx
-import redis.asyncio as aioredis
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 import config
 
@@ -36,89 +28,111 @@ logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Shutdown event (shared across tasks)
-# ---------------------------------------------------------------------------
-
-_shutdown_event = asyncio.Event()
-
-
-def _handle_signal(sig: int, _frame: Any) -> None:
-    logger.info("Signal %d received – initiating graceful shutdown", sig)
-    _shutdown_event.set()
-
-
-# ---------------------------------------------------------------------------
-# FastAPI app (health endpoint only)
+# FastAPI app
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="Stable Diffusion Queue Consumer",
-    description="Redis queue consumer for Stable Diffusion image generation.",
+    title="Stable Diffusion Worker",
+    description="Stateless HTTP worker for SD image generation. Called by GateKeeper.",
     version="1.0.0",
 )
+
+# Shared HTTP client (created at startup, reused across requests)
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    global _http_client
+    _http_client = httpx.AsyncClient()
+    logger.info(
+        "SD worker %s ready – sd_host=%s port=%d",
+        config.WORKER_ID,
+        config.SD_HOST,
+        config.WORKER_PORT,
+    )
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    global _http_client
+    if _http_client:
+        await _http_client.aclose()
+    logger.info("SD worker stopped")
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 
 @app.get("/health")
 async def health() -> Dict[str, str]:
     """Liveness probe for Docker health check."""
-    return {"status": "ok", "service": "sd-consumer"}
+    return {"status": "ok", "service": "sd-worker"}
 
 
-# ---------------------------------------------------------------------------
-# Redis helpers
-# ---------------------------------------------------------------------------
+@app.post("/process")
+async def process(job: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Process a single SD image generation job dispatched by GateKeeper.
 
+    Accepts the raw job dict (same format as backend pushes to queue),
+    calls the ScareNode-SD service, and returns the result dict that
+    GateKeeper will persist for the backend BRPOP to retrieve.
+    """
+    job_id = job.get("job_id", "unknown")
+    # Support both "job_type" (GateKeeper-native) and "type" (backend router format)
+    job_type = job.get("job_type") or job.get("type", "")
+    payload = job.get("payload", {})
 
-def _build_redis() -> aioredis.Redis:
-    """Construct an async Redis client from config."""
-    kwargs: Dict[str, Any] = {
-        "host": config.REDIS_L1_HOST,
-        "port": config.REDIS_L1_PORT,
-        "db": config.REDIS_L1_DB,
-        "decode_responses": True,
-        "socket_connect_timeout": 10,
-        "socket_keepalive": True,
-    }
-    if config.REDIS_L1_PASSWORD:
-        kwargs["password"] = config.REDIS_L1_PASSWORD
-    return aioredis.Redis(**kwargs)
+    logger.info("[%s] Processing job: type=%s", job_id, job_type)
 
-
-async def _store_result(
-    redis_client: aioredis.Redis,
-    job_id: str,
-    result: Dict[str, Any],
-) -> None:
-    """Store job result in Redis LIST for backend BRPOP retrieval."""
-    result_key = f"{config.RESULTS_KEY_PREFIX}:{job_id}"
     try:
-        await redis_client.rpush(result_key, json.dumps(result))
-        await redis_client.expire(result_key, config.RESULT_KEY_TTL)
-        logger.debug(
-            "[%s] Result stored at %s (TTL: %ds)",
+        if job_type == "sd_generate":
+            result = await _process_sd_generate(job_id, payload)
+        else:
+            logger.error("[%s] Unknown job type: %s", job_id, job_type)
+            raise HTTPException(status_code=400, detail=f"Unknown job type: {job_type}")
+
+        logger.info("[%s] Job completed: status=%s", job_id, result.get("status"))
+        return result
+
+    except HTTPException:
+        raise
+    except httpx.HTTPStatusError as exc:
+        logger.error(
+            "[%s] SD API HTTP error: %d - %s",
             job_id,
-            result_key,
-            config.RESULT_KEY_TTL,
+            exc.response.status_code,
+            exc.response.text[:200],
         )
+        raise HTTPException(
+            status_code=502,
+            detail=f"SD API HTTP {exc.response.status_code}: {exc.response.text[:200]}",
+        )
+    except httpx.TimeoutException:
+        logger.error("[%s] SD request timed out after %ds", job_id, config.SD_REQUEST_TIMEOUT)
+        raise HTTPException(status_code=504, detail="SD generation request timed out")
     except Exception as exc:
-        logger.error("[%s] Failed to store result in Redis: %s", job_id, exc)
+        logger.error("[%s] Unexpected error: %s", job_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # ---------------------------------------------------------------------------
-# Job processor
+# SD API caller
 # ---------------------------------------------------------------------------
 
 
 async def _process_sd_generate(
-    http: httpx.AsyncClient,
     job_id: str,
     payload: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
-    Process an sd_generate job.
+    Call POST /generate on the ScareNode-SD service.
 
-    Calls POST /generate on the ScareNode-SD service and returns a result
-    dict matching the format expected by the backend router:
+    Returns result dict that matches what the backend router expects to
+    receive after BRPOP:
         {
             "status": "success",
             "image_base64": "...",
@@ -147,7 +161,8 @@ async def _process_sd_generate(
     )
 
     start_time = time.monotonic()
-    response = await http.post(
+    assert _http_client is not None
+    response = await _http_client.post(
         endpoint,
         json=sd_request,
         timeout=httpx.Timeout(config.SD_REQUEST_TIMEOUT),
@@ -177,149 +192,8 @@ async def _process_sd_generate(
 
 
 # ---------------------------------------------------------------------------
-# Job loop
-# ---------------------------------------------------------------------------
-
-
-async def _job_loop(redis_client: aioredis.Redis, http: httpx.AsyncClient) -> None:
-    """Continuously dequeue jobs from Redis and dispatch to SD service."""
-    logger.info("Job loop started – consuming from %s", config.JOB_QUEUE)
-
-    while not _shutdown_event.is_set():
-        try:
-            brpop_result = await redis_client.brpop(
-                config.JOB_QUEUE,
-                timeout=config.BRPOP_TIMEOUT,
-            )
-            if brpop_result is None:
-                logger.debug("BRPOP timeout – no job available, waiting")
-                continue
-
-            _, raw_job = brpop_result
-            try:
-                job = json.loads(raw_job)
-            except json.JSONDecodeError as exc:
-                logger.error(
-                    "Invalid JSON payload – skipping: %s | raw=%s",
-                    exc,
-                    raw_job[:200],
-                )
-                continue
-
-            job_id = job.get("job_id", "unknown")
-            job_type = job.get("type", "")
-            payload = job.get("payload", {})
-
-            logger.info("[%s] Job received: type=%s", job_id, job_type)
-
-            try:
-                if job_type == "sd_generate":
-                    result_data = await _process_sd_generate(http, job_id, payload)
-                else:
-                    logger.error("[%s] Unknown job type: %s", job_id, job_type)
-                    result_data = {
-                        "status": "error",
-                        "image_base64": None,
-                        "model": None,
-                        "error": f"Unknown job type: {job_type}",
-                    }
-
-                logger.info(
-                    "[%s] Job processed: status=%s",
-                    job_id,
-                    result_data.get("status"),
-                )
-
-            except httpx.HTTPStatusError as exc:
-                logger.error(
-                    "[%s] SD API HTTP error: %d – %s",
-                    job_id,
-                    exc.response.status_code,
-                    exc.response.text[:200],
-                )
-                result_data = {
-                    "status": "error",
-                    "image_base64": None,
-                    "model": None,
-                    "error": f"SD API HTTP {exc.response.status_code}: {exc.response.text[:200]}",
-                }
-            except httpx.TimeoutException:
-                logger.error(
-                    "[%s] SD API request timed out after %ds",
-                    job_id,
-                    config.SD_REQUEST_TIMEOUT,
-                )
-                result_data = {
-                    "status": "error",
-                    "image_base64": None,
-                    "model": None,
-                    "error": "SD generation request timed out",
-                }
-            except Exception as exc:
-                logger.error(
-                    "[%s] Unexpected error processing job: %s",
-                    job_id,
-                    exc,
-                    exc_info=True,
-                )
-                result_data = {
-                    "status": "error",
-                    "image_base64": None,
-                    "model": None,
-                    "error": str(exc),
-                }
-
-            await _store_result(redis_client, job_id, result_data)
-
-        except asyncio.CancelledError:
-            logger.info("Job loop cancelled – exiting")
-            break
-        except Exception as exc:
-            logger.error("Job loop top-level error: %s", exc, exc_info=True)
-            await asyncio.sleep(1)
-
-
-# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
-
-async def main() -> None:
-    signal.signal(signal.SIGTERM, _handle_signal)
-    signal.signal(signal.SIGINT, _handle_signal)
-
-    logger.info(
-        "SD consumer %s starting – queue=%s, sd_host=%s",
-        config.WORKER_ID,
-        config.JOB_QUEUE,
-        config.SD_HOST,
-    )
-
-    redis_client = _build_redis()
-
-    uvicorn_config = uvicorn.Config(
-        app,
-        host="0.0.0.0",
-        port=config.HEALTH_PORT,
-        log_level="warning",
-    )
-    server = uvicorn.Server(uvicorn_config)
-
-    async with httpx.AsyncClient() as http:
-        job_task = asyncio.create_task(_job_loop(redis_client, http), name="job_loop")
-        server_task = asyncio.create_task(server.serve(), name="health_server")
-
-        await _shutdown_event.wait()
-        logger.info("Shutdown requested – stopping tasks")
-
-        job_task.cancel()
-        server.should_exit = True
-
-        await asyncio.gather(job_task, server_task, return_exceptions=True)
-
-    await redis_client.aclose()
-    logger.info("SD consumer stopped")
-
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvicorn.run(app, host="0.0.0.0", port=config.WORKER_PORT, log_level="warning")

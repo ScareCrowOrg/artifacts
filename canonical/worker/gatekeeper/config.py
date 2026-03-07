@@ -56,6 +56,10 @@ REMBG_QUEUE_L2 = os.getenv("REMBG_QUEUE_L2", "scareverse:rembg-jobs:queue")
 INSTANTMESH_QUEUE_L1 = os.getenv("INSTANTMESH_QUEUE_L1", "scareverse:3d-jobs:queue")
 INSTANTMESH_QUEUE_L2 = os.getenv("INSTANTMESH_QUEUE_L2", "scareverse:3d-jobs:queue")
 
+# Ollama/SD queues – single queue (same L1 for owner and global jobs)
+OLLAMA_QUEUE = os.getenv("OLLAMA_QUEUE", "scareverse:ollama-jobs:queue")
+SD_QUEUE = os.getenv("SD_QUEUE", "scareverse:sd-jobs:queue")
+
 # Dead-letter queue for permanently failed jobs
 DEAD_LETTER_QUEUE = os.getenv("DEAD_LETTER_QUEUE", "scareverse:dead-letter:queue")
 
@@ -97,6 +101,49 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
         "queue_l1": INSTANTMESH_QUEUE_L1,
         "queue_l2": INSTANTMESH_QUEUE_L2,
         "timeout": int(os.getenv("INSTANTMESH_JOB_TIMEOUT", "120")),
+    },
+    # Ollama LLM workers – result_storage "rpush_l1" ensures results are stored
+    # via RPUSH on Redis L1 so the backend router can BRPOP them directly.
+    "ollama_generate": {
+        "worker_name": "ollama",
+        "endpoint": os.getenv(
+            "WORKER_OLLAMA_ENDPOINT",
+            "http://scareverse-ollama-worker:9000"
+        ),
+        "queue_l1": OLLAMA_QUEUE,
+        "queue_l2": OLLAMA_QUEUE,
+        "timeout": int(os.getenv("OLLAMA_JOB_TIMEOUT", "120")),
+        "result_storage": "rpush_l1",
+        "result_key_prefix": os.getenv("OLLAMA_RESULT_KEY_PREFIX", "scareverse:ollama-results"),
+        "result_key_ttl": int(os.getenv("OLLAMA_RESULT_TTL", "60")),
+    },
+    "ollama_chat": {
+        "worker_name": "ollama",
+        "endpoint": os.getenv(
+            "WORKER_OLLAMA_ENDPOINT",
+            "http://scareverse-ollama-worker:9000"
+        ),
+        "queue_l1": OLLAMA_QUEUE,
+        "queue_l2": OLLAMA_QUEUE,
+        "timeout": int(os.getenv("OLLAMA_JOB_TIMEOUT", "120")),
+        "result_storage": "rpush_l1",
+        "result_key_prefix": os.getenv("OLLAMA_RESULT_KEY_PREFIX", "scareverse:ollama-results"),
+        "result_key_ttl": int(os.getenv("OLLAMA_RESULT_TTL", "60")),
+    },
+    # Stable Diffusion worker – result_storage "rpush_l1" ensures results are
+    # stored via RPUSH on Redis L1 so the backend router can BRPOP them.
+    "sd_generate": {
+        "worker_name": "stable-diffusion",
+        "endpoint": os.getenv(
+            "WORKER_SD_ENDPOINT",
+            "http://scareverse-sd-worker:9000"
+        ),
+        "queue_l1": SD_QUEUE,
+        "queue_l2": SD_QUEUE,
+        "timeout": int(os.getenv("SD_JOB_TIMEOUT", "300")),
+        "result_storage": "rpush_l1",
+        "result_key_prefix": os.getenv("SD_RESULT_KEY_PREFIX", "scareverse:sd-results"),
+        "result_key_ttl": int(os.getenv("SD_RESULT_TTL", "120")),
     },
 }
 

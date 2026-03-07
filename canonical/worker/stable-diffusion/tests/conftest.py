@@ -1,9 +1,8 @@
 """
-Shared fixtures for Stable Diffusion queue consumer worker tests.
+Shared fixtures for Stable Diffusion HTTP worker tests.
 """
 
 import asyncio
-import json
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock
 
@@ -24,7 +23,7 @@ def event_loop():
 
 
 # ---------------------------------------------------------------------------
-# Sample job payloads
+# Sample job payloads (same format backend router pushes to queue)
 # ---------------------------------------------------------------------------
 
 
@@ -49,31 +48,35 @@ def sd_generate_job() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def unknown_type_job() -> Dict[str, Any]:
+def sd_generate_job_gk_format() -> Dict[str, Any]:
+    """Same job but with GateKeeper-native job_type field."""
     return {
         "job_id": "job-sd-002",
-        "type": "unsupported_type",
-        "payload": {},
+        "job_type": "sd_generate",
+        "payload": {
+            "prompt": "A spooky castle at night",
+            "model": "stabilityai/stable-diffusion-xl-base-1.0",
+            "negative_prompt": "",
+            "height": 512,
+            "width": 512,
+            "num_inference_steps": 20,
+            "guidance_scale": 7.5,
+            "seed": -1,
+        },
         "created_at": 1234567890.0,
         "attempts": 0,
     }
 
 
-# ---------------------------------------------------------------------------
-# Mock Redis client
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture
-def mock_redis() -> AsyncMock:
-    """Async mock for Redis client."""
-    client = AsyncMock()
-    client.brpop = AsyncMock(return_value=None)
-    client.rpush = AsyncMock(return_value=1)
-    client.expire = AsyncMock(return_value=True)
-    client.ping = AsyncMock(return_value=True)
-    client.aclose = AsyncMock()
-    return client
+def unknown_type_job() -> Dict[str, Any]:
+    return {
+        "job_id": "job-sd-003",
+        "type": "unsupported_type",
+        "payload": {},
+        "created_at": 1234567890.0,
+        "attempts": 0,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -3,7 +3,9 @@ Tests for GateKeeper job routing.
 
 Validates that:
 - Known job types are dispatched to the correct worker endpoint.
-- Successful HTTP 200 responses persist results to Redis L2.
+- Successful HTTP 200 responses persist results to Redis L2 (Rembg/default).
+- Ollama/SD jobs persist results via RPUSH to Redis L1 (rpush_l1 storage).
+- Ollama/SD jobs using backend "type" field (not "job_type") are routed correctly.
 - HTTP 4xx responses send jobs to dead-letter.
 - HTTP 5xx responses are retried with back-off.
 - Unknown job types are sent directly to dead-letter.
@@ -185,3 +187,181 @@ class TestErrorHandling:
             await gatekeeper._dispatch("q", json.dumps(rembg_job), rembg_job, "owner")
 
         assert gatekeeper.http.post.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Ollama / SD: "type" field support (backend router format)
+# ---------------------------------------------------------------------------
+
+
+class TestOllamaSdRouting:
+    @pytest.mark.asyncio
+    async def test_ollama_generate_dispatched_to_ollama_endpoint(
+        self, gatekeeper, mock_http_client, ollama_generate_job
+    ):
+        """ollama_generate jobs (using backend 'type' field) route to ollama worker."""
+        mock_http_client.post.return_value = _mock_response(
+            200,
+            {
+                "status": "success",
+                "data": {"response": "Hello!", "model": "mistral"},
+                "error": None,
+            },
+        )
+        ollama_generate_job["_source"] = "owner"
+        await gatekeeper._dispatch(
+            "q", json.dumps(ollama_generate_job), ollama_generate_job, "owner"
+        )
+
+        call_url = mock_http_client.post.call_args[0][0]
+        assert "ollama" in call_url
+        assert call_url.endswith("/process")
+
+    @pytest.mark.asyncio
+    async def test_sd_generate_dispatched_to_sd_endpoint(
+        self, gatekeeper, mock_http_client, sd_generate_job
+    ):
+        """sd_generate jobs (using backend 'type' field) route to sd worker."""
+        mock_http_client.post.return_value = _mock_response(
+            200,
+            {
+                "status": "success",
+                "image_base64": "abc123",
+                "model": "sdxl",
+                "processing_time_ms": 1500.0,
+            },
+        )
+        sd_generate_job["_source"] = "owner"
+        await gatekeeper._dispatch(
+            "q", json.dumps(sd_generate_job), sd_generate_job, "owner"
+        )
+
+        call_url = mock_http_client.post.call_args[0][0]
+        assert "sd-worker" in call_url
+        assert call_url.endswith("/process")
+
+
+# ---------------------------------------------------------------------------
+# Ollama / SD: rpush_l1 result persistence
+# ---------------------------------------------------------------------------
+
+
+class TestRpushL1Persistence:
+    @pytest.mark.asyncio
+    async def test_ollama_success_rpush_to_l1_not_l2_hset(
+        self, gatekeeper, mock_redis_l1, mock_redis_l2, ollama_generate_job
+    ):
+        """Ollama results are RPUSH'd to L1 – NOT HSET'd to L2."""
+        ollama_result = {
+            "status": "success",
+            "data": {"response": "hello", "model": "mistral"},
+            "error": None,
+        }
+        gatekeeper.http.post.return_value = _mock_response(200, ollama_result)
+        await gatekeeper._dispatch(
+            "q", json.dumps(ollama_generate_job), ollama_generate_job, "owner"
+        )
+
+        mock_redis_l1.rpush.assert_called_once()
+        mock_redis_l2.hset.assert_not_called()
+
+        # Verify the correct result key prefix
+        key_arg = mock_redis_l1.rpush.call_args[0][0]
+        assert "scareverse:ollama-results" in key_arg
+        assert ollama_generate_job["job_id"] in key_arg
+
+    @pytest.mark.asyncio
+    async def test_ollama_success_result_value_is_json(
+        self, gatekeeper, mock_redis_l1, ollama_generate_job
+    ):
+        """Value pushed to Redis L1 is valid JSON matching worker response."""
+        ollama_result = {
+            "status": "success",
+            "data": {"response": "hello", "model": "mistral"},
+            "error": None,
+        }
+        gatekeeper.http.post.return_value = _mock_response(200, ollama_result)
+        await gatekeeper._dispatch(
+            "q", json.dumps(ollama_generate_job), ollama_generate_job, "owner"
+        )
+
+        pushed_json = mock_redis_l1.rpush.call_args[0][1]
+        pushed_data = json.loads(pushed_json)
+        assert pushed_data["status"] == "success"
+        assert pushed_data["data"]["response"] == "hello"
+
+    @pytest.mark.asyncio
+    async def test_sd_success_rpush_to_l1_not_l2_hset(
+        self, gatekeeper, mock_redis_l1, mock_redis_l2, sd_generate_job
+    ):
+        """SD results are RPUSH'd to L1 – NOT HSET'd to L2."""
+        sd_result = {
+            "status": "success",
+            "image_base64": "abc123",
+            "model": "sdxl",
+            "processing_time_ms": 1500.0,
+        }
+        gatekeeper.http.post.return_value = _mock_response(200, sd_result)
+        await gatekeeper._dispatch(
+            "q", json.dumps(sd_generate_job), sd_generate_job, "owner"
+        )
+
+        mock_redis_l1.rpush.assert_called_once()
+        mock_redis_l2.hset.assert_not_called()
+
+        key_arg = mock_redis_l1.rpush.call_args[0][0]
+        assert "scareverse:sd-results" in key_arg
+        assert sd_generate_job["job_id"] in key_arg
+
+    @pytest.mark.asyncio
+    async def test_ollama_error_rpush_structured_error_to_l1(
+        self, gatekeeper, mock_redis_l1, mock_redis_l2, ollama_generate_job
+    ):
+        """On permanent failure, error result is RPUSH'd to L1 so backend BRPOP gets it."""
+        gatekeeper.http.post.return_value = _mock_response(400, {"detail": "bad request"})
+        await gatekeeper._dispatch(
+            "q", json.dumps(ollama_generate_job), ollama_generate_job, "owner"
+        )
+
+        mock_redis_l1.rpush.assert_called()
+        pushed_json = mock_redis_l1.rpush.call_args[0][1]
+        pushed_data = json.loads(pushed_json)
+        assert pushed_data["status"] == "error"
+        assert "error" in pushed_data
+
+    @pytest.mark.asyncio
+    async def test_ollama_ttl_is_set_on_l1_result_key(
+        self, gatekeeper, mock_redis_l1, ollama_generate_job
+    ):
+        """TTL must be set on the L1 result key after RPUSH."""
+        gatekeeper.http.post.return_value = _mock_response(
+            200,
+            {"status": "success", "data": {"response": "hi", "model": "mistral"}, "error": None},
+        )
+        await gatekeeper._dispatch(
+            "q", json.dumps(ollama_generate_job), ollama_generate_job, "owner"
+        )
+
+        mock_redis_l1.expire.assert_called_once()
+        key_arg, ttl_arg = mock_redis_l1.expire.call_args[0]
+        assert "scareverse:ollama-results" in key_arg
+        assert ttl_arg > 0
+
+
+# ---------------------------------------------------------------------------
+# Rembg still uses L2 HSET (unchanged behaviour)
+# ---------------------------------------------------------------------------
+
+
+class TestRembgStillUsesL2Hset:
+    @pytest.mark.asyncio
+    async def test_rembg_success_still_hset_to_l2(
+        self, gatekeeper, mock_redis_l2, mock_redis_l1, rembg_job
+    ):
+        """Rembg results still go to Redis L2 via HSET (no regression)."""
+        mock_result = {"job_id": rembg_job["job_id"], "result": "xyz", "status": "ok"}
+        gatekeeper.http.post.return_value = _mock_response(200, mock_result)
+        await gatekeeper._dispatch("q", json.dumps(rembg_job), rembg_job, "owner")
+
+        mock_redis_l2.hset.assert_called_once()
+        mock_redis_l1.rpush.assert_not_called()

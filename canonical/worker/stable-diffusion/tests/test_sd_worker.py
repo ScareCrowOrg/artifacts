@@ -1,8 +1,10 @@
 """
-Tests for the Stable Diffusion queue consumer worker.
+Tests for the Stable Diffusion HTTP worker.
+
+Validates the stateless HTTP pattern: GateKeeper calls POST /process,
+worker calls SD API, returns structured result.
 """
 
-import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -34,110 +36,50 @@ class TestHealthEndpoint:
         resp = client.get("/health")
         body = resp.json()
         assert body["status"] == "ok"
-        assert body["service"] == "sd-consumer"
+        assert body["service"] == "sd-worker"
 
 
 # ---------------------------------------------------------------------------
-# _store_result
-# ---------------------------------------------------------------------------
-
-
-class TestStoreResult:
-    @pytest.mark.asyncio
-    async def test_stores_result_as_rpush(self, mock_redis):
-        result = {
-            "status": "success",
-            "image_base64": "abc123",
-            "model": "stabilityai/sdxl",
-            "processing_time_ms": 5000.0,
-        }
-        await sd_main._store_result(mock_redis, "job-001", result)
-
-        mock_redis.rpush.assert_called_once()
-        call_args = mock_redis.rpush.call_args
-        key = call_args[0][0]
-        value = call_args[0][1]
-        assert key == f"{config.RESULTS_KEY_PREFIX}:job-001"
-        stored = json.loads(value)
-        assert stored["status"] == "success"
-
-    @pytest.mark.asyncio
-    async def test_sets_ttl_after_rpush(self, mock_redis):
-        result = {"status": "success", "image_base64": "abc", "model": "sdxl"}
-        await sd_main._store_result(mock_redis, "job-002", result)
-
-        mock_redis.expire.assert_called_once_with(
-            f"{config.RESULTS_KEY_PREFIX}:job-002",
-            config.RESULT_KEY_TTL,
-        )
-
-    @pytest.mark.asyncio
-    async def test_handles_redis_error_gracefully(self, mock_redis):
-        mock_redis.rpush.side_effect = Exception("Redis connection refused")
-        result = {"status": "success", "image_base64": "abc", "model": "sdxl"}
-        # Should not raise
-        await sd_main._store_result(mock_redis, "job-err", result)
-
-
-# ---------------------------------------------------------------------------
-# _process_sd_generate
+# POST /process – sd_generate jobs
 # ---------------------------------------------------------------------------
 
 
 class TestProcessSdGenerate:
-    @pytest.mark.asyncio
-    async def test_returns_success_result(self, sd_generate_job, sd_api_success_response):
+    def _patch_client(self, response_data: dict) -> MagicMock:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = response_data
+        mock_resp.raise_for_status = MagicMock()
         mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = sd_api_success_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
+        mock_http.post.return_value = mock_resp
+        return mock_http
 
-        result = await sd_main._process_sd_generate(
-            mock_http,
-            sd_generate_job["job_id"],
-            sd_generate_job["payload"],
-        )
+    def test_returns_success_result(self, sd_generate_job, sd_api_success_response):
+        mock_http = self._patch_client(sd_api_success_response)
+        with patch.object(sd_main, "_http_client", mock_http):
+            resp = TestClient(sd_main.app).post("/process", json=sd_generate_job)
 
-        assert result["status"] == "success"
-        assert result["image_base64"] == sd_api_success_response["image_base64"]
-        assert result["model"] == sd_api_success_response["model"]
-        assert "processing_time_ms" in result
-        assert isinstance(result["processing_time_ms"], float)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+        assert body["image_base64"] == sd_api_success_response["image_base64"]
+        assert body["model"] == sd_api_success_response["model"]
+        assert "processing_time_ms" in body
+        assert isinstance(body["processing_time_ms"], float)
 
-    @pytest.mark.asyncio
-    async def test_calls_correct_endpoint(self, sd_generate_job, sd_api_success_response):
-        mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = sd_api_success_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
+    def test_calls_sd_generate_endpoint(self, sd_generate_job, sd_api_success_response):
+        mock_http = self._patch_client(sd_api_success_response)
+        with patch.object(sd_main, "_http_client", mock_http):
+            TestClient(sd_main.app).post("/process", json=sd_generate_job)
 
-        await sd_main._process_sd_generate(
-            mock_http,
-            sd_generate_job["job_id"],
-            sd_generate_job["payload"],
-        )
+        url = mock_http.post.call_args[0][0]
+        assert url == f"{config.SD_HOST}/generate"
 
-        call_args = mock_http.post.call_args
-        assert call_args[0][0] == f"{config.SD_HOST}/generate"
+    def test_forwards_all_generation_params(self, sd_generate_job, sd_api_success_response):
+        mock_http = self._patch_client(sd_api_success_response)
+        with patch.object(sd_main, "_http_client", mock_http):
+            TestClient(sd_main.app).post("/process", json=sd_generate_job)
 
-    @pytest.mark.asyncio
-    async def test_passes_all_generation_params(self, sd_generate_job, sd_api_success_response):
-        mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = sd_api_success_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
-
-        await sd_main._process_sd_generate(
-            mock_http,
-            sd_generate_job["job_id"],
-            sd_generate_job["payload"],
-        )
-
-        call_kwargs = mock_http.post.call_args[1]
-        body = call_kwargs["json"]
+        body = mock_http.post.call_args[1]["json"]
         payload = sd_generate_job["payload"]
         assert body["prompt"] == payload["prompt"]
         assert body["model"] == payload["model"]
@@ -148,166 +90,87 @@ class TestProcessSdGenerate:
         assert body["guidance_scale"] == payload["guidance_scale"]
         assert body["seed"] == payload["seed"]
 
-    @pytest.mark.asyncio
-    async def test_handles_sd_api_error_response(self, sd_generate_job, sd_api_error_response):
-        mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = sd_api_error_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
+    def test_accepts_job_type_field(self, sd_generate_job_gk_format, sd_api_success_response):
+        """Worker must accept jobs using GateKeeper-native 'job_type' field too."""
+        mock_http = self._patch_client(sd_api_success_response)
+        with patch.object(sd_main, "_http_client", mock_http):
+            resp = TestClient(sd_main.app).post("/process", json=sd_generate_job_gk_format)
 
-        result = await sd_main._process_sd_generate(
-            mock_http,
-            sd_generate_job["job_id"],
-            sd_generate_job["payload"],
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "success"
+
+    def test_handles_sd_api_error_response(self, sd_generate_job, sd_api_error_response):
+        """SD API non-success status should surface as an error result (not HTTP 5xx)."""
+        mock_http = self._patch_client(sd_api_error_response)
+        with patch.object(sd_main, "_http_client", mock_http):
+            resp = TestClient(sd_main.app).post("/process", json=sd_generate_job)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["image_base64"] is None
+        assert "GPU out of memory" in body["error"]
+
+
+# ---------------------------------------------------------------------------
+# POST /process – error handling
+# ---------------------------------------------------------------------------
+
+
+class TestProcessErrors:
+    def test_unknown_job_type_returns_400(self, unknown_type_job):
+        resp = TestClient(sd_main.app).post("/process", json=unknown_type_job)
+        assert resp.status_code == 400
+        assert "Unknown job type" in resp.json()["detail"]
+
+    def test_sd_http_error_returns_502(self, sd_generate_job):
+        mock_http = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 507
+        mock_resp.text = "Insufficient Storage"
+        mock_http.post.side_effect = httpx.HTTPStatusError(
+            "507", request=MagicMock(), response=mock_resp
         )
+        with patch.object(sd_main, "_http_client", mock_http):
+            resp = TestClient(sd_main.app).post("/process", json=sd_generate_job)
 
-        assert result["status"] == "error"
-        assert result["image_base64"] is None
-        assert "GPU out of memory" in result["error"]
+        assert resp.status_code == 502
 
-
-# ---------------------------------------------------------------------------
-# Job loop error handling
-# ---------------------------------------------------------------------------
-
-
-class TestJobLoopErrorHandling:
-    @pytest.mark.asyncio
-    async def test_stores_error_on_http_failure(self, mock_redis, sd_generate_job):
-        """HTTP error from SD API should store error result in Redis."""
-        mock_response = MagicMock()
-        mock_response.status_code = 507
-        mock_response.text = "Insufficient Storage – GPU OOM"
-        http_error = httpx.HTTPStatusError(
-            "507 error",
-            request=MagicMock(),
-            response=mock_response,
-        )
-
+    def test_sd_timeout_returns_504(self, sd_generate_job):
         mock_http = AsyncMock()
-        mock_http.post.side_effect = http_error
+        mock_http.post.side_effect = httpx.TimeoutException("timed out")
+        with patch.object(sd_main, "_http_client", mock_http):
+            resp = TestClient(sd_main.app).post("/process", json=sd_generate_job)
 
-        try:
-            await sd_main._process_sd_generate(
-                mock_http,
-                sd_generate_job["job_id"],
-                sd_generate_job["payload"],
-            )
-            result = None
-        except httpx.HTTPStatusError:
-            result = {
-                "status": "error",
-                "image_base64": None,
-                "model": None,
-                "error": "SD API HTTP 507",
-            }
-
-        await sd_main._store_result(mock_redis, sd_generate_job["job_id"], result)
-
-        stored_json = mock_redis.rpush.call_args[0][1]
-        stored = json.loads(stored_json)
-        assert stored["status"] == "error"
-        assert stored["image_base64"] is None
-
-    @pytest.mark.asyncio
-    async def test_stores_error_on_timeout(self, mock_redis, sd_generate_job):
-        """Timeout from SD API should store error result in Redis."""
-        mock_http = AsyncMock()
-        mock_http.post.side_effect = httpx.TimeoutException("Request timed out")
-
-        try:
-            await sd_main._process_sd_generate(
-                mock_http,
-                sd_generate_job["job_id"],
-                sd_generate_job["payload"],
-            )
-            result = None
-        except httpx.TimeoutException:
-            result = {
-                "status": "error",
-                "image_base64": None,
-                "model": None,
-                "error": "SD generation request timed out",
-            }
-
-        await sd_main._store_result(mock_redis, sd_generate_job["job_id"], result)
-
-        stored_json = mock_redis.rpush.call_args[0][1]
-        stored = json.loads(stored_json)
-        assert stored["status"] == "error"
-        assert "timed out" in stored["error"]
-
-    @pytest.mark.asyncio
-    async def test_unknown_job_type_stores_error(self, mock_redis, unknown_type_job):
-        """Unknown job type should store an error result."""
-        result = {
-            "status": "error",
-            "image_base64": None,
-            "model": None,
-            "error": f"Unknown job type: {unknown_type_job['type']}",
-        }
-        await sd_main._store_result(mock_redis, unknown_type_job["job_id"], result)
-
-        stored_json = mock_redis.rpush.call_args[0][1]
-        stored = json.loads(stored_json)
-        assert stored["status"] == "error"
-        assert "Unknown job type" in stored["error"]
+        assert resp.status_code == 504
 
 
 # ---------------------------------------------------------------------------
-# Result format matches backend router expectations
+# Result format contract
 # ---------------------------------------------------------------------------
 
 
 class TestResultFormat:
-    @pytest.mark.asyncio
-    async def test_success_result_has_flat_structure(self, sd_generate_job, sd_api_success_response):
-        """
-        Backend router reads:
-            result_data.get("image_base64")
-            result_data.get("model")
-            result_data.get("processing_time_ms")
-        Result must be flat (not nested in 'data').
-        """
+    """Validate result format matches what backend router expects after BRPOP."""
+
+    def _patch_client(self, response_data: dict) -> MagicMock:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = response_data
+        mock_resp.raise_for_status = MagicMock()
         mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = sd_api_success_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
+        mock_http.post.return_value = mock_resp
+        return mock_http
 
-        result = await sd_main._process_sd_generate(
-            mock_http,
-            sd_generate_job["job_id"],
-            sd_generate_job["payload"],
-        )
+    def test_success_result_has_flat_structure(self, sd_generate_job, sd_api_success_response):
+        """Backend reads result_data.get("image_base64"), get("model"), get("processing_time_ms")."""
+        mock_http = self._patch_client(sd_api_success_response)
+        with patch.object(sd_main, "_http_client", mock_http):
+            resp = TestClient(sd_main.app).post("/process", json=sd_generate_job)
 
-        # Backend reads these fields at top level
-        assert "image_base64" in result
-        assert "model" in result
-        assert "processing_time_ms" in result
-        assert "status" in result
-        # Should NOT be nested in 'data'
-        assert "data" not in result
-
-    @pytest.mark.asyncio
-    async def test_result_stored_as_json_list_item(self, mock_redis, sd_generate_job, sd_api_success_response):
-        """Result stored via RPUSH must be JSON-serializable (for BRPOP retrieval)."""
-        mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = sd_api_success_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
-
-        result = await sd_main._process_sd_generate(
-            mock_http,
-            sd_generate_job["job_id"],
-            sd_generate_job["payload"],
-        )
-        await sd_main._store_result(mock_redis, sd_generate_job["job_id"], result)
-
-        # Verify RPUSH was called with a valid JSON string
-        stored_json = mock_redis.rpush.call_args[0][1]
-        stored = json.loads(stored_json)
-        assert stored["status"] == "success"
-        assert stored["image_base64"] is not None
+        body = resp.json()
+        # Backend reads these at top level (flat, not nested in 'data')
+        assert "image_base64" in body
+        assert "model" in body
+        assert "processing_time_ms" in body
+        assert "status" in body
+        assert "data" not in body

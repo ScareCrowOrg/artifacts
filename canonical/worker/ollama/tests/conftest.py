@@ -1,9 +1,8 @@
 """
-Shared fixtures for Ollama queue consumer worker tests.
+Shared fixtures for Ollama HTTP worker tests.
 """
 
 import asyncio
-import json
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock
 
@@ -24,7 +23,7 @@ def event_loop():
 
 
 # ---------------------------------------------------------------------------
-# Sample job payloads
+# Sample job payloads (same format backend router pushes to queue)
 # ---------------------------------------------------------------------------
 
 
@@ -61,31 +60,31 @@ def chat_job() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def unknown_type_job() -> Dict[str, Any]:
+def generate_job_gk_format() -> Dict[str, Any]:
+    """Same job but with GateKeeper-native job_type field."""
     return {
         "job_id": "job-ollama-003",
-        "type": "unsupported_type",
-        "payload": {},
+        "job_type": "ollama_generate",
+        "payload": {
+            "prompt": "Hello from GateKeeper",
+            "model": "mistral",
+            "stream": False,
+            "options": {},
+        },
         "created_at": 1234567890.0,
         "attempts": 0,
     }
 
 
-# ---------------------------------------------------------------------------
-# Mock Redis client
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture
-def mock_redis() -> AsyncMock:
-    """Async mock for Redis client."""
-    client = AsyncMock()
-    client.brpop = AsyncMock(return_value=None)
-    client.rpush = AsyncMock(return_value=1)
-    client.expire = AsyncMock(return_value=True)
-    client.ping = AsyncMock(return_value=True)
-    client.aclose = AsyncMock()
-    return client
+def unknown_type_job() -> Dict[str, Any]:
+    return {
+        "job_id": "job-ollama-004",
+        "type": "unsupported_type",
+        "payload": {},
+        "created_at": 1234567890.0,
+        "attempts": 0,
+    }
 
 
 # ---------------------------------------------------------------------------

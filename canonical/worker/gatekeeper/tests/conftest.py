@@ -57,6 +57,39 @@ def unknown_type_job() -> Dict[str, Any]:
     }
 
 
+# Ollama job using backend router format ("type" field, not "job_type")
+@pytest.fixture
+def ollama_generate_job() -> Dict[str, Any]:
+    return {
+        "job_id": "job-ollama-001",
+        "type": "ollama_generate",
+        "payload": {
+            "prompt": "Tell me about ScareVerse",
+            "model": "mistral",
+            "stream": False,
+            "options": {},
+        },
+        "created_at": 1234567890.0,
+        "attempts": 0,
+    }
+
+
+@pytest.fixture
+def sd_generate_job() -> Dict[str, Any]:
+    return {
+        "job_id": "job-sd-001",
+        "type": "sd_generate",
+        "payload": {
+            "prompt": "A cute ghost holding a lantern",
+            "model": "stabilityai/stable-diffusion-xl-base-1.0",
+            "height": 512,
+            "width": 512,
+        },
+        "created_at": 1234567890.0,
+        "attempts": 0,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Mock Redis clients
 # ---------------------------------------------------------------------------
@@ -68,6 +101,7 @@ def mock_redis_l1() -> AsyncMock:
     client = AsyncMock()
     client.brpop = AsyncMock(return_value=None)
     client.lpush = AsyncMock(return_value=1)
+    client.rpush = AsyncMock(return_value=1)
     client.llen = AsyncMock(return_value=0)
     client.get = AsyncMock(return_value=None)
     client.set = AsyncMock(return_value=True)
@@ -83,6 +117,7 @@ def mock_redis_l2() -> AsyncMock:
     client = AsyncMock()
     client.brpop = AsyncMock(return_value=None)
     client.lpush = AsyncMock(return_value=1)
+    client.rpush = AsyncMock(return_value=1)
     client.llen = AsyncMock(return_value=0)
     client.get = AsyncMock(return_value=None)
     client.set = AsyncMock(return_value=True)

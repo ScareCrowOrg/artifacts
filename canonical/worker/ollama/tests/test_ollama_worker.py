@@ -1,8 +1,10 @@
 """
-Tests for the Ollama queue consumer worker.
+Tests for the Ollama HTTP worker.
+
+Validates the stateless HTTP pattern: GateKeeper calls POST /process,
+worker calls Ollama API, returns structured result.
 """
 
-import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -34,283 +36,168 @@ class TestHealthEndpoint:
         resp = client.get("/health")
         body = resp.json()
         assert body["status"] == "ok"
-        assert body["service"] == "ollama-consumer"
+        assert body["service"] == "ollama-worker"
 
 
 # ---------------------------------------------------------------------------
-# _store_result
-# ---------------------------------------------------------------------------
-
-
-class TestStoreResult:
-    @pytest.mark.asyncio
-    async def test_stores_result_as_rpush(self, mock_redis):
-        result = {"status": "success", "data": {"response": "hello"}, "error": None}
-        await ollama_main._store_result(mock_redis, "job-001", result)
-
-        mock_redis.rpush.assert_called_once()
-        call_args = mock_redis.rpush.call_args
-        key = call_args[0][0]
-        value = call_args[0][1]
-        assert key == f"{config.RESULTS_KEY_PREFIX}:job-001"
-        stored = json.loads(value)
-        assert stored["status"] == "success"
-
-    @pytest.mark.asyncio
-    async def test_sets_ttl_after_rpush(self, mock_redis):
-        result = {"status": "success", "data": {}, "error": None}
-        await ollama_main._store_result(mock_redis, "job-002", result)
-
-        mock_redis.expire.assert_called_once_with(
-            f"{config.RESULTS_KEY_PREFIX}:job-002",
-            config.RESULT_KEY_TTL,
-        )
-
-    @pytest.mark.asyncio
-    async def test_handles_redis_error_gracefully(self, mock_redis):
-        mock_redis.rpush.side_effect = Exception("Redis connection refused")
-        # Should not raise
-        result = {"status": "success", "data": {}, "error": None}
-        await ollama_main._store_result(mock_redis, "job-err", result)
-
-
-# ---------------------------------------------------------------------------
-# _process_generate
+# POST /process – generate jobs
 # ---------------------------------------------------------------------------
 
 
 class TestProcessGenerate:
-    @pytest.mark.asyncio
-    async def test_returns_success_result(self, generate_job, ollama_generate_response):
+    def _patch_client(self, response_data: dict) -> MagicMock:
+        """Return a patched _http_client that returns response_data on POST."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = response_data
+        mock_resp.raise_for_status = MagicMock()
         mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = ollama_generate_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
+        mock_http.post.return_value = mock_resp
+        return mock_http
 
-        result = await ollama_main._process_generate(
-            mock_http,
-            generate_job["job_id"],
-            generate_job["payload"],
-        )
+    def test_returns_success_result(self, generate_job, ollama_generate_response):
+        mock_http = self._patch_client(ollama_generate_response)
+        with patch.object(ollama_main, "_http_client", mock_http):
+            client = TestClient(ollama_main.app)
+            resp = client.post("/process", json=generate_job)
 
-        assert result["status"] == "success"
-        assert result["data"]["response"] == ollama_generate_response["response"]
-        assert result["data"]["model"] == ollama_generate_response["model"]
-        assert result["error"] is None
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+        assert body["data"]["response"] == ollama_generate_response["response"]
+        assert body["data"]["model"] == ollama_generate_response["model"]
+        assert body["error"] is None
 
-    @pytest.mark.asyncio
-    async def test_calls_correct_endpoint(self, generate_job, ollama_generate_response):
-        mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = ollama_generate_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
+    def test_calls_ollama_generate_endpoint(self, generate_job, ollama_generate_response):
+        mock_http = self._patch_client(ollama_generate_response)
+        with patch.object(ollama_main, "_http_client", mock_http):
+            TestClient(ollama_main.app).post("/process", json=generate_job)
 
-        await ollama_main._process_generate(
-            mock_http,
-            generate_job["job_id"],
-            generate_job["payload"],
-        )
+        url = mock_http.post.call_args[0][0]
+        assert url == f"{config.OLLAMA_HOST}/api/generate"
 
-        call_args = mock_http.post.call_args
-        assert call_args[0][0] == f"{config.OLLAMA_HOST}/api/generate"
+    def test_forwards_model_and_prompt(self, generate_job, ollama_generate_response):
+        mock_http = self._patch_client(ollama_generate_response)
+        with patch.object(ollama_main, "_http_client", mock_http):
+            TestClient(ollama_main.app).post("/process", json=generate_job)
 
-    @pytest.mark.asyncio
-    async def test_passes_model_and_prompt(self, generate_job, ollama_generate_response):
-        mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = ollama_generate_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
-
-        await ollama_main._process_generate(
-            mock_http,
-            generate_job["job_id"],
-            generate_job["payload"],
-        )
-
-        call_kwargs = mock_http.post.call_args[1]
-        body = call_kwargs["json"]
+        body = mock_http.post.call_args[1]["json"]
         assert body["model"] == generate_job["payload"]["model"]
         assert body["prompt"] == generate_job["payload"]["prompt"]
         assert body["stream"] is False
 
+    def test_accepts_job_type_field(self, generate_job_gk_format, ollama_generate_response):
+        """Worker must accept jobs using GateKeeper-native 'job_type' field too."""
+        mock_http = self._patch_client(ollama_generate_response)
+        with patch.object(ollama_main, "_http_client", mock_http):
+            resp = TestClient(ollama_main.app).post("/process", json=generate_job_gk_format)
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "success"
+
 
 # ---------------------------------------------------------------------------
-# _process_chat
+# POST /process – chat jobs
 # ---------------------------------------------------------------------------
 
 
 class TestProcessChat:
-    @pytest.mark.asyncio
-    async def test_returns_success_result(self, chat_job, ollama_chat_response):
+    def _patch_client(self, response_data: dict) -> MagicMock:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = response_data
+        mock_resp.raise_for_status = MagicMock()
         mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = ollama_chat_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
+        mock_http.post.return_value = mock_resp
+        return mock_http
 
-        result = await ollama_main._process_chat(
-            mock_http,
-            chat_job["job_id"],
-            chat_job["payload"],
-        )
+    def test_returns_success_result(self, chat_job, ollama_chat_response):
+        mock_http = self._patch_client(ollama_chat_response)
+        with patch.object(ollama_main, "_http_client", mock_http):
+            resp = TestClient(ollama_main.app).post("/process", json=chat_job)
 
-        assert result["status"] == "success"
-        assert result["data"]["message"] == ollama_chat_response["message"]
-        assert result["data"]["model"] == ollama_chat_response["model"]
-        assert result["error"] is None
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+        assert body["data"]["message"] == ollama_chat_response["message"]
+        assert body["data"]["model"] == ollama_chat_response["model"]
 
-    @pytest.mark.asyncio
-    async def test_calls_chat_endpoint(self, chat_job, ollama_chat_response):
-        mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = ollama_chat_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
+    def test_calls_ollama_chat_endpoint(self, chat_job, ollama_chat_response):
+        mock_http = self._patch_client(ollama_chat_response)
+        with patch.object(ollama_main, "_http_client", mock_http):
+            TestClient(ollama_main.app).post("/process", json=chat_job)
 
-        await ollama_main._process_chat(
-            mock_http,
-            chat_job["job_id"],
-            chat_job["payload"],
-        )
-
-        call_args = mock_http.post.call_args
-        assert call_args[0][0] == f"{config.OLLAMA_HOST}/api/chat"
+        url = mock_http.post.call_args[0][0]
+        assert url == f"{config.OLLAMA_HOST}/api/chat"
 
 
 # ---------------------------------------------------------------------------
-# Job loop error handling
+# POST /process – error handling
 # ---------------------------------------------------------------------------
 
 
-class TestJobLoopErrorHandling:
-    @pytest.mark.asyncio
-    async def test_stores_error_on_http_failure(self, mock_redis, generate_job):
-        """HTTP error from Ollama should store error result in Redis."""
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
-        http_error = httpx.HTTPStatusError(
-            "500 error",
-            request=MagicMock(),
-            response=mock_response,
+class TestProcessErrors:
+    def test_unknown_job_type_returns_400(self, unknown_type_job):
+        client = TestClient(ollama_main.app)
+        resp = client.post("/process", json=unknown_type_job)
+        assert resp.status_code == 400
+        assert "Unknown job type" in resp.json()["detail"]
+
+    def test_ollama_http_error_returns_502(self, generate_job):
+        mock_http = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.text = "Internal Server Error"
+        mock_http.post.side_effect = httpx.HTTPStatusError(
+            "500", request=MagicMock(), response=mock_resp
         )
+        with patch.object(ollama_main, "_http_client", mock_http):
+            resp = TestClient(ollama_main.app).post("/process", json=generate_job)
 
+        assert resp.status_code == 502
+
+    def test_ollama_timeout_returns_504(self, generate_job):
         mock_http = AsyncMock()
-        mock_http.post.side_effect = http_error
+        mock_http.post.side_effect = httpx.TimeoutException("timed out")
+        with patch.object(ollama_main, "_http_client", mock_http):
+            resp = TestClient(ollama_main.app).post("/process", json=generate_job)
 
-        # Test the error path directly (no job loop needed)
-        result = None
-        try:
-            result = await ollama_main._process_generate(
-                mock_http,
-                generate_job["job_id"],
-                generate_job["payload"],
-            )
-        except httpx.HTTPStatusError:
-            result = {
-                "status": "error",
-                "data": None,
-                "error": "Ollama HTTP 500",
-            }
-        await ollama_main._store_result(mock_redis, generate_job["job_id"], result)
-
-        assert mock_redis.rpush.called
-        stored_json = mock_redis.rpush.call_args[0][1]
-        stored = json.loads(stored_json)
-        assert stored["status"] == "error"
-        assert stored["data"] is None
-
-    @pytest.mark.asyncio
-    async def test_stores_error_on_timeout(self, mock_redis, generate_job):
-        """Timeout from Ollama should store error result in Redis."""
-        mock_http = AsyncMock()
-        mock_http.post.side_effect = httpx.TimeoutException("Request timed out")
-
-        # Test the error path directly
-        try:
-            await ollama_main._process_generate(
-                mock_http,
-                generate_job["job_id"],
-                generate_job["payload"],
-            )
-            result = None
-        except httpx.TimeoutException:
-            result = {
-                "status": "error",
-                "data": None,
-                "error": "Ollama request timed out",
-            }
-
-        await ollama_main._store_result(mock_redis, generate_job["job_id"], result)
-
-        stored_json = mock_redis.rpush.call_args[0][1]
-        stored = json.loads(stored_json)
-        assert stored["status"] == "error"
-        assert "timed out" in stored["error"]
-
-    @pytest.mark.asyncio
-    async def test_unknown_job_type_stores_error(self, mock_redis, unknown_type_job):
-        """Unknown job type should store an error result."""
-        mock_http = AsyncMock()
-
-        result = {
-            "status": "error",
-            "data": None,
-            "error": f"Unknown job type: {unknown_type_job['type']}",
-        }
-        await ollama_main._store_result(mock_redis, unknown_type_job["job_id"], result)
-
-        stored_json = mock_redis.rpush.call_args[0][1]
-        stored = json.loads(stored_json)
-        assert stored["status"] == "error"
-        assert "Unknown job type" in stored["error"]
+        assert resp.status_code == 504
 
 
 # ---------------------------------------------------------------------------
-# Result format matches backend router expectations
+# Result format contract
 # ---------------------------------------------------------------------------
 
 
 class TestResultFormat:
-    @pytest.mark.asyncio
-    async def test_generate_result_has_data_wrapper(self, generate_job, ollama_generate_response):
-        """Backend router reads result_data.get('data', {}).get('response')."""
+    """Validate result format matches what backend router expects after BRPOP."""
+
+    def _patch_client(self, response_data: dict) -> MagicMock:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = response_data
+        mock_resp.raise_for_status = MagicMock()
         mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = ollama_generate_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
+        mock_http.post.return_value = mock_resp
+        return mock_http
 
-        result = await ollama_main._process_generate(
-            mock_http,
-            generate_job["job_id"],
-            generate_job["payload"],
-        )
+    def test_generate_result_has_nested_data(self, generate_job, ollama_generate_response):
+        """Backend reads result_data.get("data", {}).get("response")."""
+        mock_http = self._patch_client(ollama_generate_response)
+        with patch.object(ollama_main, "_http_client", mock_http):
+            resp = TestClient(ollama_main.app).post("/process", json=generate_job)
 
-        # Backend router does: result_data.get("data", {}).get("response")
-        assert "data" in result
-        assert "response" in result["data"]
-        assert "model" in result["data"]
+        body = resp.json()
+        assert "data" in body
+        assert "response" in body["data"]
+        assert "model" in body["data"]
+        assert "status" in body
 
-    @pytest.mark.asyncio
-    async def test_chat_result_has_data_wrapper(self, chat_job, ollama_chat_response):
-        """Backend router reads result_data.get('data', {}).get('message', {}).get('content')."""
-        mock_http = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = ollama_chat_response
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post.return_value = mock_response
+    def test_chat_result_has_nested_data(self, chat_job, ollama_chat_response):
+        """Backend reads result_data.get("data", {}).get("message", {}).get("content")."""
+        mock_http = self._patch_client(ollama_chat_response)
+        with patch.object(ollama_main, "_http_client", mock_http):
+            resp = TestClient(ollama_main.app).post("/process", json=chat_job)
 
-        result = await ollama_main._process_chat(
-            mock_http,
-            chat_job["job_id"],
-            chat_job["payload"],
-        )
-
-        # Backend router does: result_data.get("data", {}).get("message", {}).get("content")
-        assert "data" in result
-        assert "message" in result["data"]
-        assert "model" in result["data"]
+        body = resp.json()
+        assert "data" in body
+        assert "message" in body["data"]
+        assert "model" in body["data"]

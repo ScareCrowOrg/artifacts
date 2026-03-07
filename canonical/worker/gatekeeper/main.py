@@ -134,10 +134,12 @@ class GateKeeper:
             try:
                 job = json.loads(raw_job)
                 job["_source"] = source
+                # Support both "job_type" (GateKeeper-native) and "type" (backend router format)
+                job_type = job.get("job_type") or job.get("type", "?")
                 logger.info(
                     "Dispatching job_id=%s type=%s source=%s",
                     job.get("job_id", "?"),
-                    job.get("job_type", "?"),
+                    job_type,
                     source,
                 )
                 await self._dispatch(queue_name, raw_job, job, source)
@@ -156,9 +158,14 @@ class GateKeeper:
     ) -> None:
         """
         Route job to the appropriate atomic worker, handle response,
-        and persist result to Redis L2.
+        and persist result to Redis.
+
+        For standard job types: persists to Redis L2 via HSET (GateKeeper-native).
+        For job types with result_storage="rpush_l1": persists to Redis L1 via RPUSH
+        so that backend routers can retrieve results via BRPOP.
         """
-        job_type = job.get("job_type", "")
+        # Support both "job_type" (GateKeeper-native) and "type" (backend router format)
+        job_type = job.get("job_type") or job.get("type", "")
         job_id = job.get("job_id", "unknown")
         route = config.JOB_TYPES_CONFIG.get(job_type)
 
@@ -180,7 +187,7 @@ class GateKeeper:
                 )
 
                 if response.status_code == 200:
-                    await self._persist_success(job_id, response.json(), source)
+                    await self._persist_success(job_id, response.json(), source, job_type)
                     return
 
                 # 4xx → permanent failure
@@ -192,7 +199,7 @@ class GateKeeper:
                         response.text[:500],
                     )
                     await self._persist_error(
-                        job_id, f"HTTP {response.status_code}", source
+                        job_id, f"HTTP {response.status_code}", source, job_type
                     )
                     await self.pooler.push_to_dead_letter(raw_job)
                     return
@@ -233,11 +240,11 @@ class GateKeeper:
 
         # Max retries exceeded
         logger.error("Job %s exceeded max retries – dead-letter", job_id)
-        await self._persist_error(job_id, "max_retries_exceeded", source)
+        await self._persist_error(job_id, "max_retries_exceeded", source, job_type)
         await self.pooler.push_to_dead_letter(raw_job)
 
     # ------------------------------------------------------------------
-    # Result Persistence (Redis L2)
+    # Result Persistence
     # ------------------------------------------------------------------
 
     async def _persist_success(
@@ -245,45 +252,97 @@ class GateKeeper:
         job_id: str,
         result: Dict[str, Any],
         source: str,
+        job_type: str = "",
     ) -> None:
-        key = f"{config.JOB_STATE_KEY_PREFIX}:{job_id}"
-        try:
-            await self.redis_l2.hset(
-                key,
-                mapping={
-                    "status": "completed",
-                    "result": json.dumps(result),
-                    "timestamp": _utcnow_iso(),
-                    "source": source,
-                    "worker_id": self.worker_id,
-                },
-            )
-            await self.redis_l2.expire(key, config.JOB_STATE_TTL_SECONDS)
-            logger.info("Job %s completed – result persisted to L2", job_id)
-        except Exception as exc:
-            logger.error("Failed to persist success for job %s: %s", job_id, exc)
+        """
+        Persist a successful job result.
+
+        For job types with result_storage="rpush_l1" (e.g. ollama_generate,
+        sd_generate): RPUSH the result JSON to Redis L1 so the backend router
+        can BRPOP it directly from the same result key it expects.
+
+        For all other job types: HSET the result to Redis L2 (GateKeeper-native).
+        """
+        route = config.JOB_TYPES_CONFIG.get(job_type, {})
+        result_storage = route.get("result_storage", "hset_l2")
+
+        if result_storage == "rpush_l1":
+            prefix = route.get("result_key_prefix", config.JOB_STATE_KEY_PREFIX)
+            ttl = route.get("result_key_ttl", config.JOB_STATE_TTL_SECONDS)
+            key = f"{prefix}:{job_id}"
+            try:
+                await self.redis_l1.rpush(key, json.dumps(result))
+                await self.redis_l1.expire(key, ttl)
+                logger.info(
+                    "Job %s completed – result RPUSH to L1 key=%s (TTL %ds)",
+                    job_id,
+                    key,
+                    ttl,
+                )
+            except Exception as exc:
+                logger.error("Failed to RPUSH result for job %s: %s", job_id, exc)
+        else:
+            key = f"{config.JOB_STATE_KEY_PREFIX}:{job_id}"
+            try:
+                await self.redis_l2.hset(
+                    key,
+                    mapping={
+                        "status": "completed",
+                        "result": json.dumps(result),
+                        "timestamp": _utcnow_iso(),
+                        "source": source,
+                        "worker_id": self.worker_id,
+                    },
+                )
+                await self.redis_l2.expire(key, config.JOB_STATE_TTL_SECONDS)
+                logger.info("Job %s completed – result persisted to L2", job_id)
+            except Exception as exc:
+                logger.error("Failed to persist success for job %s: %s", job_id, exc)
 
     async def _persist_error(
         self,
         job_id: str,
         error_msg: str,
         source: str,
+        job_type: str = "",
     ) -> None:
-        key = f"{config.JOB_STATE_KEY_PREFIX}:{job_id}"
-        try:
-            await self.redis_l2.hset(
-                key,
-                mapping={
-                    "status": "failed",
-                    "error": error_msg,
-                    "timestamp": _utcnow_iso(),
-                    "source": source,
-                    "worker_id": self.worker_id,
-                },
-            )
-            await self.redis_l2.expire(key, config.JOB_STATE_TTL_SECONDS)
-        except Exception as exc:
-            logger.error("Failed to persist error for job %s: %s", job_id, exc)
+        """
+        Persist a failed job result.
+
+        For job types with result_storage="rpush_l1": RPUSH a structured error
+        JSON to Redis L1 so the backend router receives a parseable error response.
+
+        For all other job types: HSET the error to Redis L2.
+        """
+        route = config.JOB_TYPES_CONFIG.get(job_type, {})
+        result_storage = route.get("result_storage", "hset_l2")
+
+        if result_storage == "rpush_l1":
+            prefix = route.get("result_key_prefix", config.JOB_STATE_KEY_PREFIX)
+            ttl = route.get("result_key_ttl", config.JOB_STATE_TTL_SECONDS)
+            key = f"{prefix}:{job_id}"
+            error_result = {"status": "error", "error": error_msg}
+            try:
+                await self.redis_l1.rpush(key, json.dumps(error_result))
+                await self.redis_l1.expire(key, ttl)
+            except Exception as exc:
+                logger.error("Failed to RPUSH error for job %s: %s", job_id, exc)
+        else:
+            key = f"{config.JOB_STATE_KEY_PREFIX}:{job_id}"
+            try:
+                await self.redis_l2.hset(
+                    key,
+                    mapping={
+                        "status": "failed",
+                        "error": error_msg,
+                        "timestamp": _utcnow_iso(),
+                        "source": source,
+                        "worker_id": self.worker_id,
+                    },
+                )
+                await self.redis_l2.expire(key, config.JOB_STATE_TTL_SECONDS)
+            except Exception as exc:
+                logger.error("Failed to persist error for job %s: %s", job_id, exc)
 
     # ------------------------------------------------------------------
     # Heartbeat
