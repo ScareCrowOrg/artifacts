@@ -200,9 +200,20 @@ export function useWorkspaceHandshake() {
     // ── Handle SWITCH_LOCALE message ───────────────────────────────────────
     if (data.type === 'SWITCH_LOCALE') {
       const { locale } = (data as Partial<SwitchLocaleMessage>).payload ?? {}
+      log.info('[WORKSPACE] SWITCH_LOCALE received', {
+        locale,
+        hasLocale: !!locale,
+        timestamp: new Date().toISOString(),
+      })
       if (locale) {
         store.setLocale(locale)
-        log.debug('[WORKSPACE] Locale switched', { locale })
+        log.info('[WORKSPACE] Locale switched in store', {
+          newLocale: locale,
+          storedLocale: store.locale,
+          match: locale === store.locale,
+        })
+      } else {
+        log.warn('[WORKSPACE] SWITCH_LOCALE received but locale is empty', { payload: data.payload })
       }
       return
     }
@@ -210,8 +221,21 @@ export function useWorkspaceHandshake() {
     // ── Handle SYNC_CONFIG message (cockpit sends current config) ──────────
     if (data.type === 'SYNC_CONFIG') {
       const { theme, locale } = (data as Partial<SyncConfigMessage>).payload ?? {}
+      log.info('[WORKSPACE] SYNC_CONFIG received', {
+        hasTheme: !!theme,
+        hasLocale: !!locale,
+        locale,
+        theme,
+        timestamp: new Date().toISOString(),
+      })
       if (theme) store.setTheme(theme)
-      if (locale) store.setLocale(locale)
+      if (locale) {
+        store.setLocale(locale)
+        log.info('[WORKSPACE] Locale synced from config', {
+          newLocale: locale,
+          storedLocale: store.locale,
+        })
+      }
       log.debug('[WORKSPACE] Config synchronized', { theme, locale })
       return
     }
