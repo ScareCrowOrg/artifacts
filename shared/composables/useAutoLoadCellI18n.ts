@@ -45,15 +45,27 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   const loadedKeys = new Set<string>()
 
   /**
-   * Configure missing handler for graceful fallback during async loading.
-   * When a translation key is not yet loaded (async fetch in progress),
-   * return the key itself instead of showing [intlify] Not found errors.
-   * This enables "silent background loading" - grid renders immediately
-   * with raw keys, then translations appear as they load.
+   * Get i18n.global with fallback for isolated component contexts.
+   * In some setups, useI18n() might not return the expected structure.
    */
-  i18n.global.missingHandler = (locale, key) => {
-    // Return the key itself for missing translations during async load
-    return key
+  let i18nGlobal = i18n?.global
+  if (!i18nGlobal && typeof window !== 'undefined') {
+    i18nGlobal = (window as any).__i18n?.global
+  }
+
+  // Only configure missing handler if i18n.global is available
+  if (i18nGlobal) {
+    /**
+     * Configure missing handler for graceful fallback during async loading.
+     * When a translation key is not yet loaded (async fetch in progress),
+     * return the key itself instead of showing [intlify] Not found errors.
+     * This enables "silent background loading" - grid renders immediately
+     * with raw keys, then translations appear as they load.
+     */
+    i18nGlobal.missingHandler = (locale: string, key: string) => {
+      // Return the key itself for missing translations during async load
+      return key
+    }
   }
 
   /**
@@ -95,9 +107,11 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
 
       // Inject with namespace to prevent key collisions between cells
       // Result: t('cells.png-generator-cell.title')
-      i18n.global.mergeLocaleMessage(locale, {
-        cells: { [cellTypeName]: messages },
-      })
+      if (i18nGlobal) {
+        i18nGlobal.mergeLocaleMessage(locale, {
+          cells: { [cellTypeName]: messages },
+        })
+      }
 
       loadedKeys.add(key)
 
