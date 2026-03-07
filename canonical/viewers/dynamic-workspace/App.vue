@@ -132,8 +132,6 @@ import { useGridLayout } from './composables/useGridLayout'
 import { useCellViewProvider } from './composables/useCellViewProvider'
 import { usePersistenceManager } from './composables/usePersistenceManager'
 import { useAutoSave } from './composables/useAutoSave'
-import { useWorkspaceTheme } from '@/composables/useWorkspaceTheme'
-import { useWorkspaceLocale } from '@/composables/useWorkspaceLocale'
 import GridContainer from './components/GridContainer.vue'
 import FooterWindowManager from './components/FooterWindowManager.vue'
 import AddCellModal from './components/AddCellModal.vue'
@@ -144,10 +142,6 @@ import type { CellTypeDefinition, LayoutBook } from './types'
 
 const log = createLogger('workspace:app')
 const { t } = useI18n()
-
-// ⚡ Sync theme and locale from Cockpit (via postMessage + workspaceStore)
-useWorkspaceTheme()
-useWorkspaceLocale()
 
 // ── Handshake (Phase 1) ───────────────────────────────────────────────────────
 const { store } = useWorkspaceHandshake()
