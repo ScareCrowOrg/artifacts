@@ -1,0 +1,110 @@
+version: "3.9"
+
+# ==============================================================================
+# Ollama Standalone Worker Stack
+# ==============================================================================
+# Contains two services:
+#   1. ollama        – Official Ollama LLM inference service (GPU)
+#   2. ollama-consumer – Python queue consumer (reads Redis, calls Ollama)
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose down
+#
+# Prerequisites:
+#   - NVIDIA Container Toolkit installed
+#   - External network scareverse-net created:
+#       docker network create scareverse-net
+#   - .env file with REDIS_L1_HOST, REDIS_L1_PASSWORD, etc.
+#
+# Windows model cache path (customize for your username):
+#   OLLAMA_MODELS_PATH=C:\Users\{USERNAME}\.ollama
+# ==============================================================================
+
+services:
+
+  # ----------------------------------------------------------------------------
+  # Ollama LLM Service (GPU)
+  # Official image – no ports exposed to host (internal network only)
+  # ----------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: scareverse-ollama
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      OLLAMA_HOST: "0.0.0.0:11434"
+      OLLAMA_MODELS: /root/.ollama
+    volumes:
+      # Persistent model storage – bind mount to Windows Ollama cache directory
+      # Windows path: C:\Users\{USERNAME}\.ollama
+      # Container path: /root/.ollama
+      # ⚠️ REQUIRED on Windows: Set OLLAMA_MODELS_PATH in your .env file
+      # ⚠️ Default /root/.ollama only works on Linux hosts
+      - type: bind
+        source: ${OLLAMA_MODELS_PATH:-/root/.ollama}
+        target: /root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - scareverse-net
+
+  # ----------------------------------------------------------------------------
+  # Ollama Queue Consumer (Python)
+  # Reads jobs from Redis queue and forwards to Ollama LLM service
+  # ----------------------------------------------------------------------------
+  ollama-consumer:
+    build: .
+    image: scareverse-worker-ollama-consumer:latest
+    container_name: scareverse-ollama-consumer
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      # Redis L1 (local queue)
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
+      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
+      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
+      REDIS_L1_DB: ${REDIS_L1_DB:-0}
+
+      # Job queue config
+      JOB_QUEUE: ${OLLAMA_JOB_QUEUE:-scareverse:ollama-jobs:queue}
+      RESULTS_KEY_PREFIX: ${OLLAMA_RESULTS_PREFIX:-scareverse:ollama-results}
+      BRPOP_TIMEOUT: ${BRPOP_TIMEOUT:-300}
+      RESULT_KEY_TTL: ${OLLAMA_RESULT_TTL:-60}
+
+      # Ollama service endpoint (internal Docker network DNS)
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_REQUEST_TIMEOUT: ${OLLAMA_REQUEST_TIMEOUT:-120}
+
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - scareverse-net
+
+networks:
+  scareverse-net:
+    external: true
