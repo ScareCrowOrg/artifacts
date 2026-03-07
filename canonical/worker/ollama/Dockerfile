@@ -1,19 +1,32 @@
-FROM python:3.11-slim
+# Ollama Worker – Combined Service + HTTP API
+# Extends official Ollama image with Python worker for GateKeeper integration
+
+FROM ollama/ollama:latest
 
 WORKDIR /app
 
-# Install curl for health checks
+# Install Python + dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3-pip \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY *.py .
+# Copy worker files
+COPY config.py main.py ./
 
-# Health check via /health endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+# Expose both ports
+# 11434: Ollama API
+# 8080: Worker HTTP API
+EXPOSE 11434 8080
+
+# Health check for worker endpoint
+HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=5 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-CMD ["python", "main.py"]
+# Run both services: Ollama in background, worker in foreground
+CMD ollama serve & sleep 10 && python main.py

@@ -1,11 +1,11 @@
 version: "3.9"
 
 # ==============================================================================
-# Stable Diffusion Standalone Worker Stack
+# Stable Diffusion Standalone Worker
 # ==============================================================================
-# Contains two services:
-#   1. scarenode-sd  – GPU-accelerated SD API (FastAPI + diffusers + SDXL)
-#   2. sd-worker     – Stateless HTTP service (POST /process called by GateKeeper)
+# Single self-contained service running:
+#   - Stable Diffusion GPU API (port 9090, internal)
+#   - Worker HTTP API (port 8080, called by GateKeeper)
 #
 # Usage:
 #   docker-compose up -d
@@ -19,41 +19,49 @@ version: "3.9"
 #
 # Windows HuggingFace cache path (customize for your setup):
 #   HF_HUB_CACHE_PATH=C:\Users\{USERNAME}\.cache\huggingface
-#
-# GateKeeper integration:
-#   GateKeeper routes sd_generate jobs to:
-#     http://scareverse-sd-worker:9000/process
 # ==============================================================================
 
 services:
 
-  # ----------------------------------------------------------------------------
-  # ScareNode-SD: Stable Diffusion GPU API Service
-  # Self-contained – includes Dockerfile + sd_api.py in ./sd-service/
-  # FastAPI + diffusers + SDXL on port 9090 (internal only)
-  # ----------------------------------------------------------------------------
-  scarenode-sd:
-    build:
-      context: ./sd-service
-      dockerfile: Dockerfile
-    image: scareverse/scarenode-sd:latest
-    container_name: scarenode-sd
+  # --------------------------------------------------------------------------
+  # Stable Diffusion Worker – Combined SD API + HTTP Worker
+  # Runs both services in single container for unified orchestration
+  # --------------------------------------------------------------------------
+  stable-diffusion:
+    build: .
+    image: scareverse-sd-worker:latest
+    container_name: scareverse-stable-diffusion
     runtime: nvidia
     environment:
+      # GPU Configuration
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
+
+      # HuggingFace model cache
       HF_HUB_CACHE: /root/.cache/huggingface
       HF_HUB_OFFLINE: "0"
       PYTHONUNBUFFERED: "1"
+
+      # Redis L1 (local queue) – Worker consumes jobs
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
+      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
+      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
+      REDIS_L1_DB: ${REDIS_L1_DB:-0}
+
+      # Worker HTTP config
+      WORKER_ID: ${WORKER_ID:-sd-worker-01}
+      WORKER_PORT: ${SD_WORKER_PORT:-8080}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
     volumes:
-      # HuggingFace model cache – bind mount to Windows path for model persistence
+      # HuggingFace model cache – bind mount for Windows
       # Windows path: C:\Users\{USERNAME}\.cache\huggingface
       # Container path: /root/.cache/huggingface
-      # ⚠️ REQUIRED on Windows: Set HF_HUB_CACHE_PATH in your .env file
-      # ⚠️ Default /root/.cache/huggingface only works on Linux hosts
+      # ⚠️ REQUIRED on Windows: Set HF_HUB_CACHE_PATH in .env
       - type: bind
         source: ${HF_HUB_CACHE_PATH:-/root/.cache/huggingface}
         target: /root/.cache/huggingface
+
     deploy:
       resources:
         reservations:
@@ -61,50 +69,24 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+    # Shared memory for PyTorch tensor operations (required for SDXL)
     shm_size: "2gb"
+
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
-      timeout: 10s
-      start_period: 60s
-      retries: 3
+      timeout: 15s
+      start_period: 90s
+      retries: 5
+
     restart: unless-stopped
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - scareverse-net
 
-  # ----------------------------------------------------------------------------
-  # SD Worker (Stateless HTTP)
-  # Receives POST /process from GateKeeper, calls ScareNode-SD, returns result.
-  # GateKeeper handles all queue management and result persistence.
-  # ----------------------------------------------------------------------------
-  sd-worker:
-    build: .
-    image: scareverse-worker-sd:latest
-    container_name: scareverse-sd-worker
-    depends_on:
-      scarenode-sd:
-        condition: service_healthy
-    environment:
-      # SD service endpoint (internal Docker network DNS)
-      SD_HOST: http://scarenode-sd:9090
-      SD_REQUEST_TIMEOUT: ${SD_REQUEST_TIMEOUT:-300}
-      SD_MODEL: ${SD_MODEL:-stabilityai/stable-diffusion-xl-base-1.0}
-
-      WORKER_ID: ${WORKER_ID:-sd-worker-01}
-      WORKER_PORT: "9000"
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    # No ports: exposed to host – GateKeeper reaches via Docker network
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     networks:
       - scareverse-net
 
