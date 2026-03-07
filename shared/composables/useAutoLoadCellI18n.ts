@@ -1,19 +1,20 @@
 /**
  * useAutoLoadCellI18n.ts
  *
- * Discovery-based auto-loading composable for cell translations.
+ * Discovery-based auto-loading composable for cell translations (Opção C).
  *
- * Implements Opção C (Discovery-Based Auto-Loading):
+ * Implements transparent, plug-and-play i18n for dynamic cells:
  * - Monitors cells array for new cells
- * - Automatically fetches translations for each cell type
- * - Injects with namespacing (cells.{cellTypeName}.{key})
- * - Reacts to locale changes from workspaceStore
- * - Silent failures: missing translation files don't break the system
+ * - Automatically fetches translations from frontend/translations/{locale}.json
+ * - Injects with namespacing (cells.{cellTypeName}.{key}) to prevent collisions
+ * - Reacts to locale changes from workspaceStore (Cockpit-Vue integration)
+ * - Silent background loading: no rendering delays
+ * - Graceful failures: cells without translations don't break the system
  *
- * **Constraint:** Cell developers write ZERO i18n code.
+ * **Cell Developer Constraint:** ZERO i18n code required
  * **Only requirement:** translation files in frontend/translations/{locale}.json
  *
- * Usage in App.vue:
+ * Usage in App.vue setup():
  * ```typescript
  * useAutoLoadCellI18n(cells)
  * ```
@@ -32,12 +33,6 @@ const SCARERUNNER_URL =
   'http://localhost:5050'
 
 /**
- * Tracks loaded cells to avoid duplicate requests.
- * Key format: "cellTypeName-locale"
- */
-const loadedCells = new Set<string>()
-
-/**
  * Auto-discover and load cell translations based on active cells in grid.
  *
  * @param cells - Reactive ref to grid cells array (from useGridLayout)
@@ -46,6 +41,9 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   const i18n = useI18n()
   const store = useWorkspaceStore()
 
+  // Track loaded cells to avoid duplicate requests: "cellTypeName-locale"
+  const loadedKeys = new Set<string>()
+
   /**
    * Configure missing handler for graceful fallback during async loading.
    * When a translation key is not yet loaded (async fetch in progress),
@@ -53,85 +51,70 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
    * This enables "silent background loading" - grid renders immediately
    * with raw keys, then translations appear as they load.
    */
-  if (i18n.global.missingWarn !== false) {
-    i18n.global.missingHandler = (locale, key, vm, messages) => {
-      // Return the key itself so templates don't error
-      // Useful during async translation loads
-      return key
-    }
+  i18n.global.missingHandler = (locale, key) => {
+    // Return the key itself for missing translations during async load
+    return key
   }
 
   /**
-   * Load a single cell's translations for a given locale.
-   * Translations are injected under namespace: cells.{cellTypeName}
+   * Load translations for a cell type and locale.
+   * Merges under namespace: cells.{cellTypeName}
+   * Tracks loaded state to avoid HTTP request storms.
    */
-  async function loadCellTranslations(cellTypeName: string, locale: string): Promise<void> {
-    const cacheKey = `${cellTypeName}-${locale}`
+  const load = async (cellTypeName: string, locale: string): Promise<void> => {
+    const key = `${cellTypeName}-${locale}`
 
-    // Skip if already loaded
-    if (loadedCells.has(cacheKey)) {
-      log.debug('[useAutoLoadCellI18n] Already loaded', { cellTypeName, locale })
-      return
-    }
+    // Skip if already loaded (deduplication)
+    if (loadedKeys.has(key)) return
 
     try {
       const url = `${SCARERUNNER_URL}/local/canonical/cell_types/${cellTypeName}/frontend/translations/${locale}.json`
 
-      log.debug('[useAutoLoadCellI18n] Fetching', { cellTypeName, locale, url })
+      log.debug('[useAutoLoadCellI18n] Loading translations', { cellTypeName, locale })
 
       const response = await fetch(url)
 
       if (!response.ok) {
-        // 404 or other error: cell doesn't have translations for this locale
+        // 404 or error: cell doesn't have translations for this locale
         log.debug('[useAutoLoadCellI18n] No translations found', {
           cellTypeName,
           locale,
           status: response.status,
         })
-        loadedCells.add(cacheKey) // Mark as attempted to avoid retry storm
+        loadedKeys.add(key) // Mark as attempted to avoid retries
         return
       }
 
-      const translations = await response.json()
+      const messages = await response.json()
 
-      if (!translations || Object.keys(translations).length === 0) {
-        log.debug('[useAutoLoadCellI18n] Empty translations', { cellTypeName, locale })
-        loadedCells.add(cacheKey)
+      if (!messages || Object.keys(messages).length === 0) {
+        log.debug('[useAutoLoadCellI18n] Empty translation file', { cellTypeName, locale })
+        loadedKeys.add(key)
         return
       }
 
-      // Inject under namespace to prevent key collisions
+      // Inject with namespace to prevent key collisions between cells
       // Result: t('cells.png-generator-cell.title')
-      const namespaced = {
-        cells: {
-          [cellTypeName]: translations,
-        },
-      }
+      i18n.global.mergeLocaleMessage(locale, {
+        cells: { [cellTypeName]: messages },
+      })
 
-      i18n.global.mergeLocaleMessage(locale, namespaced)
-      loadedCells.add(cacheKey)
+      loadedKeys.add(key)
 
-      log.info('[useAutoLoadCellI18n] Translations loaded', {
+      log.info('[useAutoLoadCellI18n] Translations merged', {
         cellTypeName,
         locale,
-        keyCount: Object.keys(translations).length,
+        keyCount: Object.keys(messages).length,
       })
     } catch (err) {
-      // Network error, parse error, etc. — silent failure
+      // Graceful failure: network error, parse error, etc.
       log.warn('[useAutoLoadCellI18n] Failed to load translations', {
         cellTypeName,
         locale,
         error: err instanceof Error ? err.message : String(err),
       })
-      loadedCells.add(cacheKey) // Mark as attempted
+      loadedKeys.add(key) // Mark as attempted to avoid retries
     }
-  }
-
-  /**
-   * Extract unique cell type names from grid.
-   */
-  function getCellTypeNames(): string[] {
-    return [...new Set(cells.value.map(cell => cell.cellTypeName))]
   }
 
   /**
@@ -139,14 +122,12 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
    * When user adds a cell, load its translations for current locale.
    */
   watch(
-    () => getCellTypeNames(),
-    (cellTypeNames) => {
-      log.debug('[useAutoLoadCellI18n] Cells changed', { cellTypeNames })
-      cellTypeNames.forEach(name => {
-        loadCellTranslations(name, store.locale)
-      })
+    () => cells.value.map(c => c.cellTypeName),
+    (names) => {
+      log.debug('[useAutoLoadCellI18n] Cells changed', { count: names.length })
+      names.forEach(name => load(name, store.locale))
     },
-    { deep: true }, // Watch array mutations (add/remove cells)
+    { deep: true },
   )
 
   /**
@@ -157,16 +138,10 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
     () => store.locale,
     (newLocale) => {
       log.info('[useAutoLoadCellI18n] Locale changed', { newLocale })
-      const cellTypeNames = getCellTypeNames()
-      cellTypeNames.forEach(name => {
-        loadCellTranslations(name, newLocale)
-      })
+      cells.value.forEach(cell => load(cell.cellTypeName, newLocale))
     },
   )
 
   // Load initial translations for currently visible cells
-  const initialCellNames = getCellTypeNames()
-  initialCellNames.forEach(name => {
-    loadCellTranslations(name, store.locale)
-  })
+  cells.value.forEach(cell => load(cell.cellTypeName, store.locale))
 }
