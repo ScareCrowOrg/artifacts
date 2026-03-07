@@ -132,6 +132,7 @@ import { useGridLayout } from './composables/useGridLayout'
 import { useCellViewProvider } from './composables/useCellViewProvider'
 import { usePersistenceManager } from './composables/usePersistenceManager'
 import { useAutoSave } from './composables/useAutoSave'
+import { useCellI18nRegistry } from '@/composables/useCellI18nRegistry'
 import GridContainer from './components/GridContainer.vue'
 import FooterWindowManager from './components/FooterWindowManager.vue'
 import AddCellModal from './components/AddCellModal.vue'
@@ -148,6 +149,9 @@ const { store } = useWorkspaceHandshake()
 
 // ── Grid Layout ───────────────────────────────────────────────────────────────
 const { cells, addCell, removeCell, updateCell, toggleMinimize, toggleMaximize, clearCells } = useGridLayout()
+
+// ⚡ CENTRALIZED i18n: Auto-discover and load cell translations
+useCellI18nRegistry(cells)
 
 // ── Cell View Provider ────────────────────────────────────────────────────────
 const { getCellTypes, instantiateCellByType, resolveViewSpec } = useCellViewProvider()
