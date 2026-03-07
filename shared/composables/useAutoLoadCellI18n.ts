@@ -44,6 +44,14 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   // Track loaded cells to avoid duplicate requests: "cellTypeName-locale"
   const loadedKeys = new Set<string>()
 
+  // DEBUG: Understand the actual structure returned by useI18n()
+  console.log('[useAutoLoadCellI18n] DEBUG useI18n() returned:', {
+    type: typeof i18n,
+    hasGlobal: 'global' in i18n,
+    keys: Object.keys(i18n),
+    i18n,
+  })
+
   /**
    * Get i18n.global with fallback for isolated component contexts.
    * In some setups, useI18n() might not return the expected structure.
@@ -52,6 +60,11 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   if (!i18nGlobal && typeof window !== 'undefined') {
     i18nGlobal = (window as any).__i18n?.global
   }
+
+  console.log('[useAutoLoadCellI18n] DEBUG i18nGlobal:', {
+    hasI18nGlobal: !!i18nGlobal,
+    i18nGlobal,
+  })
 
   // Only configure missing handler if i18n.global is available
   if (i18nGlobal) {
