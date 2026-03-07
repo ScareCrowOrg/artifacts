@@ -48,21 +48,8 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   // Track loaded cells to avoid duplicate requests: "cellTypeName-locale"
   const loadedKeys = new Set<string>()
 
-  // DEBUG: Check what i18nInstance actually is
-  console.log('[useAutoLoadCellI18n] DEBUG i18nInstance:', {
-    type: typeof i18nInstance,
-    keys: Object.keys(i18nInstance),
-    hasGlobal: 'global' in i18nInstance,
-    i18nInstance,
-  })
-
   // Get the root i18n instance (has .global for mergeLocaleMessage)
   const i18nGlobal = i18nInstance.global
-
-  console.log('[useAutoLoadCellI18n] DEBUG i18nGlobal:', {
-    type: typeof i18nGlobal,
-    i18nGlobal,
-  })
 
   /**
    * Configure missing handler for graceful fallback during async loading.
