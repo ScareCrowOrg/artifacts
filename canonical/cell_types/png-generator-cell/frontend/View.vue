@@ -14,8 +14,7 @@
  * }
  */
 <template>
-  <!-- ⚡ CRITICAL: Don't render until i18n is loaded -->
-  <div v-if="i18nLoaded" class="png-generator-cell bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-lg p-4 shadow-sm">
+  <div class="png-generator-cell bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-lg p-4 shadow-sm">
     <div class="cell-header mb-4">
       <h3 class="text-lg font-semibold text-primary dark:text-primary-light">
         {{ $t('pngGeneratorCell.title') }}
@@ -256,32 +255,12 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue'
 import { createLogger } from '@/utils/logger'
-import { useCellI18n } from '@/composables/useCellI18n'
 import { PngGeneratorCell } from './PngGeneratorCell'
 import type { PngGeneratorInput } from './PngGeneratorCell'
 import PersistModal from '#artifacts/canonical/cell_types/content-manager-cell/frontend/components/PersistModal.vue'
 import type { CellResult } from '@/types/BaseCell'
 
 const logger = createLogger('component:png-generator-cell')
-
-// ⚡ CRITICAL: Load cell-specific translations and BLOCK until complete
-// This must happen during setup/mount to ensure $t() works in template
-console.log('[PNG_GENERATOR_CELL] Script setup starting - about to load i18n')
-try {
-  console.log('[PNG_GENERATOR_CELL] Calling useCellI18n...')
-  // Note: This is synchronous setup, so we load translations here
-  // The actual async loading happens in background but we'll initialize the empty state
-  const i18nPromise = useCellI18n('png-generator-cell')
-  console.log('[PNG_GENERATOR_CELL] useCellI18n returned:', {
-    isPromise: i18nPromise instanceof Promise,
-  })
-
-  // Store promise for onMounted to await
-  ;(window as any).__pngGeneratorI18nPromise = i18nPromise
-} catch (err) {
-  console.error('[PNG_GENERATOR_CELL] FAILED to initialize i18n', err)
-  ;(window as any).__pngGeneratorI18nError = err
-}
 
 // Initialize PngGeneratorCell instance
 const cellInstance = new PngGeneratorCell()
@@ -393,9 +372,6 @@ const localParams = ref({
 
 // Background removal state
 const isProcessingBackground = ref(false)
-
-// i18n loading state - prevents template rendering before translations load
-const i18nLoaded = ref(false)
 
 // Persistence state
 const showPersistModal = ref(false)
@@ -692,28 +668,6 @@ const handlePersistCancel = () => {
 // Check cell health on mount
 onMounted(async () => {
   console.log('[PNG_GENERATOR_CELL] onMounted - component mounted to DOM')
-
-  // ⚡ AWAIT i18n translations before anything else
-  try {
-    const i18nPromise = (window as any).__pngGeneratorI18nPromise
-    if (i18nPromise instanceof Promise) {
-      console.log('[PNG_GENERATOR_CELL] onMounted - awaiting i18n promise...')
-      await i18nPromise
-      console.log('[PNG_GENERATOR_CELL] onMounted - ✅ i18n loaded successfully')
-      // ⚡ CRITICAL: Signal that i18n is ready so template can render
-      i18nLoaded.value = true
-    } else {
-      console.warn('[PNG_GENERATOR_CELL] onMounted - no i18n promise found')
-      // Fallback: still allow rendering even if i18n loading was skipped
-      i18nLoaded.value = true
-    }
-  } catch (i18nErr: any) {
-    console.error('[PNG_GENERATOR_CELL] onMounted - ❌ i18n failed', {
-      error: i18nErr?.message || String(i18nErr),
-    })
-    // Fallback: allow rendering with fallback i18n keys
-    i18nLoaded.value = true
-  }
 
   logger.debug('PNG Generator Cell mounted', {
     cellId: effectiveCellId.value,
