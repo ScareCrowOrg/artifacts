@@ -24,6 +24,10 @@ import { watch, Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { createLogger } from '@/utils/logger'
+// Import the i18n instance directly to access .global
+// In vue-i18n with legacy: false, useI18n() returns Composer (local instance)
+// To access .global (root instance), we need the exported i18n instance
+import i18nInstance from '../i18n'
 import type { GridCell } from '../types'
 
 const log = createLogger('composable:cell-i18n-auto')
@@ -38,47 +42,25 @@ const SCARERUNNER_URL =
  * @param cells - Reactive ref to grid cells array (from useGridLayout)
  */
 export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
-  const i18n = useI18n()
+  const i18nComposer = useI18n() // Local Composer instance (has .locale, .t, etc)
   const store = useWorkspaceStore()
 
   // Track loaded cells to avoid duplicate requests: "cellTypeName-locale"
   const loadedKeys = new Set<string>()
 
-  // DEBUG: Understand the actual structure returned by useI18n()
-  console.log('[useAutoLoadCellI18n] DEBUG useI18n() returned:', {
-    type: typeof i18n,
-    hasGlobal: 'global' in i18n,
-    keys: Object.keys(i18n),
-    i18n,
-  })
+  // Get the root i18n instance (has .global for mergeLocaleMessage)
+  const i18nGlobal = i18nInstance.global
 
   /**
-   * Get i18n.global with fallback for isolated component contexts.
-   * In some setups, useI18n() might not return the expected structure.
+   * Configure missing handler for graceful fallback during async loading.
+   * When a translation key is not yet loaded (async fetch in progress),
+   * return the key itself instead of showing [intlify] Not found errors.
+   * This enables "silent background loading" - grid renders immediately
+   * with raw keys, then translations appear as they load.
    */
-  let i18nGlobal = i18n?.global
-  if (!i18nGlobal && typeof window !== 'undefined') {
-    i18nGlobal = (window as any).__i18n?.global
-  }
-
-  console.log('[useAutoLoadCellI18n] DEBUG i18nGlobal:', {
-    hasI18nGlobal: !!i18nGlobal,
-    i18nGlobal,
-  })
-
-  // Only configure missing handler if i18n.global is available
-  if (i18nGlobal) {
-    /**
-     * Configure missing handler for graceful fallback during async loading.
-     * When a translation key is not yet loaded (async fetch in progress),
-     * return the key itself instead of showing [intlify] Not found errors.
-     * This enables "silent background loading" - grid renders immediately
-     * with raw keys, then translations appear as they load.
-     */
-    i18nGlobal.missingHandler = (locale: string, key: string) => {
-      // Return the key itself for missing translations during async load
-      return key
-    }
+  i18nGlobal.missingHandler = (locale: string, key: string) => {
+    // Return the key itself for missing translations during async load
+    return key
   }
 
   /**
@@ -120,11 +102,9 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
 
       // Inject with namespace to prevent key collisions between cells
       // Result: t('cells.png-generator-cell.title')
-      if (i18nGlobal) {
-        i18nGlobal.mergeLocaleMessage(locale, {
-          cells: { [cellTypeName]: messages },
-        })
-      }
+      i18nGlobal.mergeLocaleMessage(locale, {
+        cells: { [cellTypeName]: messages },
+      })
 
       loadedKeys.add(key)
 
