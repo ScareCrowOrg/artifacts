@@ -103,7 +103,7 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
     try {
       const url = `${SCARERUNNER_URL}/local/canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json`
 
-      log.debug('[useAutoLoadCellI18n] Loading translations', { cellTypeName, locale })
+      log.debug('[useAutoLoadCellI18n] Loading translations', { cellTypeName, locale, normalizedLocale, url })
 
       const response = await fetch(url)
 
@@ -162,11 +162,21 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
     () => cells.value.map(c => c.cellTypeName),
     (names) => {
       try {
-        const currentLocale = store.locale || 'en' // Default to English if empty
-        log.debug('[useAutoLoadCellI18n] Cells changed', { count: names.length, names, locale: currentLocale })
-        log.debug('[useAutoLoadCellI18n] About to forEach', { namesLength: names.length, namesArray: names })
+        const rawLocale = store.locale
+        const currentLocale = rawLocale || 'en' // Default to English if empty
+        log.debug('[useAutoLoadCellI18n] Cells changed', {
+          count: names.length,
+          names,
+          rawLocale: `"${rawLocale}"`,
+          currentLocale,
+          isEmptyRaw: !rawLocale,
+        })
         names.forEach(name => {
-          log.debug('[useAutoLoadCellI18n] Watch calling load()', { cellTypeName: name, locale: currentLocale })
+          log.debug('[useAutoLoadCellI18n] Watch calling load()', {
+            cellTypeName: name,
+            rawLocale: `"${rawLocale}"`,
+            currentLocale,
+          })
           load(name, currentLocale)
         })
       } catch (err) {
@@ -184,12 +194,24 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
     () => store.locale,
     (newLocale) => {
       const currentLocale = newLocale || 'en' // Default to English if empty
-      log.info('[useAutoLoadCellI18n] Locale changed', { newLocale: currentLocale })
+      log.info('[useAutoLoadCellI18n] Locale changed', {
+        newLocale: `"${newLocale}"`,
+        currentLocale,
+        isEmptyNew: !newLocale,
+        cellCount: cells.value.length,
+      })
       cells.value.forEach(cell => load(cell.cellTypeName, currentLocale))
     },
   )
 
   // Load initial translations for currently visible cells at setup time
-  const initialLocale = store.locale || 'en' // Default to English if not set
+  const initialRawLocale = store.locale
+  const initialLocale = initialRawLocale || 'en' // Default to English if not set
+  log.debug('[useAutoLoadCellI18n] SETUP - Initial load', {
+    initialRawLocale: `"${initialRawLocale}"`,
+    initialLocale,
+    cellCount: cells.value.length,
+    isEmptyRaw: !initialRawLocale,
+  })
   cells.value.forEach(cell => load(cell.cellTypeName, initialLocale))
 }
