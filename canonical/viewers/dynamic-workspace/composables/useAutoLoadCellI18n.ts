@@ -162,11 +162,12 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
     () => cells.value.map(c => c.cellTypeName),
     (names) => {
       try {
-        log.debug('[useAutoLoadCellI18n] Cells changed', { count: names.length, names, locale: store.locale })
+        const currentLocale = store.locale || 'en' // Default to English if empty
+        log.debug('[useAutoLoadCellI18n] Cells changed', { count: names.length, names, locale: currentLocale })
         log.debug('[useAutoLoadCellI18n] About to forEach', { namesLength: names.length, namesArray: names })
         names.forEach(name => {
-          log.debug('[useAutoLoadCellI18n] Watch calling load()', { cellTypeName: name, locale: store.locale })
-          load(name, store.locale)
+          log.debug('[useAutoLoadCellI18n] Watch calling load()', { cellTypeName: name, locale: currentLocale })
+          load(name, currentLocale)
         })
       } catch (err) {
         log.error('[useAutoLoadCellI18n] Watch callback error', { error: err })
@@ -182,11 +183,13 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   watch(
     () => store.locale,
     (newLocale) => {
-      log.info('[useAutoLoadCellI18n] Locale changed', { newLocale })
-      cells.value.forEach(cell => load(cell.cellTypeName, newLocale))
+      const currentLocale = newLocale || 'en' // Default to English if empty
+      log.info('[useAutoLoadCellI18n] Locale changed', { newLocale: currentLocale })
+      cells.value.forEach(cell => load(cell.cellTypeName, currentLocale))
     },
   )
 
-  // Load initial translations for currently visible cells
-  cells.value.forEach(cell => load(cell.cellTypeName, store.locale))
+  // Load initial translations for currently visible cells at setup time
+  const initialLocale = store.locale || 'en' // Default to English if not set
+  cells.value.forEach(cell => load(cell.cellTypeName, initialLocale))
 }
