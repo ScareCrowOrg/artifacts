@@ -47,6 +47,21 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   const store = useWorkspaceStore()
 
   /**
+   * Configure missing handler for graceful fallback during async loading.
+   * When a translation key is not yet loaded (async fetch in progress),
+   * return the key itself instead of showing [intlify] Not found errors.
+   * This enables "silent background loading" - grid renders immediately
+   * with raw keys, then translations appear as they load.
+   */
+  if (i18n.global.missingWarn !== false) {
+    i18n.global.missingHandler = (locale, key, vm, messages) => {
+      // Return the key itself so templates don't error
+      // Useful during async translation loads
+      return key
+    }
+  }
+
+  /**
    * Load a single cell's translations for a given locale.
    * Translations are injected under namespace: cells.{cellTypeName}
    */
