@@ -136,8 +136,11 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   watch(
     () => cells.value.map(c => c.cellTypeName),
     (names) => {
-      log.debug('[useAutoLoadCellI18n] Cells changed', { count: names.length })
-      names.forEach(name => load(name, store.locale))
+      log.debug('[useAutoLoadCellI18n] Cells changed', { count: names.length, names, locale: store.locale })
+      names.forEach(name => {
+        log.debug('[useAutoLoadCellI18n] Watch calling load()', { cellTypeName: name, locale: store.locale })
+        load(name, store.locale)
+      })
     },
     { deep: true },
   )
