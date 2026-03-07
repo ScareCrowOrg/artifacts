@@ -105,18 +105,22 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
         return
       }
 
-      // Inject with namespace to prevent key collisions between cells
-      // Result: t('cells.png-generator-cell.title')
-      i18nGlobal.mergeLocaleMessage(locale, {
-        cells: { [cellTypeName]: messages },
-      })
+      // Merge translations directly at root level.
+      // File structure: { pngGeneratorCell: { title, description, ... } }
+      // View.vue access: t('pngGeneratorCell.title')
+      i18nGlobal.mergeLocaleMessage(locale, messages)
 
       loadedKeys.add(key)
+
+      // Count all keys in loaded messages
+      const totalKeys = Object.values(messages).reduce((sum, obj: any) => {
+        return sum + (typeof obj === 'object' ? Object.keys(obj).length : 1)
+      }, 0)
 
       log.info('[useAutoLoadCellI18n] Translations merged', {
         cellTypeName,
         locale,
-        keyCount: Object.keys(messages).length,
+        keyCount: totalKeys,
       })
     } catch (err) {
       // Graceful failure: network error, parse error, etc.
