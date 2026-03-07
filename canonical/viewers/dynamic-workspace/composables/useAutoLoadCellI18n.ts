@@ -37,6 +37,25 @@ const SCARERUNNER_URL =
   'http://localhost:5050'
 
 /**
+ * Normalize locale codes to match translation file naming.
+ * Cockpit-Vue may send full locale codes (e.g., en-US, pt-BR)
+ * but translation files use simplified codes (en, pt-BR, etc).
+ */
+function normalizeLocale(locale: string): string {
+  // Map full locale codes to translation file names
+  const localeMap: Record<string, string> = {
+    'en-US': 'en',
+    'en-GB': 'en',
+    'en-AU': 'en',
+    'en': 'en',
+    'pt-BR': 'pt-BR',
+    'pt-PT': 'pt-BR', // Fallback to Brazilian Portuguese
+    'pt': 'pt-BR',
+  }
+  return localeMap[locale] || locale
+}
+
+/**
  * Auto-discover and load cell translations based on active cells in grid.
  *
  * @param cells - Reactive ref to grid cells array (from useGridLayout)
@@ -69,9 +88,11 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
    * Tracks loaded state to avoid HTTP request storms.
    */
   const load = async (cellTypeName: string, locale: string): Promise<void> => {
-    const key = `${cellTypeName}-${locale}`
+    // Normalize locale to match translation file naming convention
+    const normalizedLocale = normalizeLocale(locale)
+    const key = `${cellTypeName}-${normalizedLocale}`
 
-    log.debug('[useAutoLoadCellI18n] load() called', { cellTypeName, locale, key })
+    log.debug('[useAutoLoadCellI18n] load() called', { cellTypeName, locale, normalizedLocale, key })
 
     // Skip if already loaded (deduplication)
     if (loadedKeys.has(key)) {
@@ -80,7 +101,7 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
     }
 
     try {
-      const url = `${SCARERUNNER_URL}/local/canonical/cell_types/${cellTypeName}/frontend/translations/${locale}.json`
+      const url = `${SCARERUNNER_URL}/local/canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json`
 
       log.debug('[useAutoLoadCellI18n] Loading translations', { cellTypeName, locale })
 
@@ -90,7 +111,7 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
         // 404 or error: cell doesn't have translations for this locale
         log.debug('[useAutoLoadCellI18n] No translations found', {
           cellTypeName,
-          locale,
+          normalizedLocale,
           status: response.status,
         })
         loadedKeys.add(key) // Mark as attempted to avoid retries
@@ -100,7 +121,7 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
       const messages = await response.json()
 
       if (!messages || Object.keys(messages).length === 0) {
-        log.debug('[useAutoLoadCellI18n] Empty translation file', { cellTypeName, locale })
+        log.debug('[useAutoLoadCellI18n] Empty translation file', { cellTypeName, normalizedLocale })
         loadedKeys.add(key)
         return
       }
@@ -108,7 +129,7 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
       // Merge translations directly at root level.
       // File structure: { pngGeneratorCell: { title, description, ... } }
       // View.vue access: t('pngGeneratorCell.title')
-      i18nGlobal.mergeLocaleMessage(locale, messages)
+      i18nGlobal.mergeLocaleMessage(normalizedLocale, messages)
 
       loadedKeys.add(key)
 
@@ -119,14 +140,14 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
 
       log.info('[useAutoLoadCellI18n] Translations merged', {
         cellTypeName,
-        locale,
+        normalizedLocale,
         keyCount: totalKeys,
       })
     } catch (err) {
       // Graceful failure: network error, parse error, etc.
       log.warn('[useAutoLoadCellI18n] Failed to load translations', {
         cellTypeName,
-        locale,
+        normalizedLocale,
         error: err instanceof Error ? err.message : String(err),
       })
       loadedKeys.add(key) // Mark as attempted to avoid retries
