@@ -71,8 +71,13 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   const load = async (cellTypeName: string, locale: string): Promise<void> => {
     const key = `${cellTypeName}-${locale}`
 
+    log.debug('[useAutoLoadCellI18n] load() called', { cellTypeName, locale, key })
+
     // Skip if already loaded (deduplication)
-    if (loadedKeys.has(key)) return
+    if (loadedKeys.has(key)) {
+      log.debug('[useAutoLoadCellI18n] Already loaded, skipping', { key })
+      return
+    }
 
     try {
       const url = `${SCARERUNNER_URL}/local/canonical/cell_types/${cellTypeName}/frontend/translations/${locale}.json`
