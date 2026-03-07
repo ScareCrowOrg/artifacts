@@ -29,12 +29,12 @@ services:
 
   # ----------------------------------------------------------------------------
   # ScareNode-SD: Stable Diffusion GPU API Service
-  # Built from infrastructure/stable-diffusion/ – FastAPI + diffusers + SDXL
-  # Port 9090 is internal only (no host exposure)
+  # Self-contained – includes Dockerfile + sd_api.py in ./sd-service/
+  # FastAPI + diffusers + SDXL on port 9090 (internal only)
   # ----------------------------------------------------------------------------
   scarenode-sd:
     build:
-      context: ../../infrastructure/stable-diffusion
+      context: ./sd-service
       dockerfile: Dockerfile
     image: scareverse/scarenode-sd:latest
     container_name: scarenode-sd
