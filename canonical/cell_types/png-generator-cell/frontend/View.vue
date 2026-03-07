@@ -263,8 +263,24 @@ import type { CellResult } from '@/types/BaseCell'
 
 const logger = createLogger('component:png-generator-cell')
 
-// Load cell-specific translations
-useCellI18n('png-generator-cell')
+// ⚡ CRITICAL: Load cell-specific translations and BLOCK until complete
+// This must happen during setup/mount to ensure $t() works in template
+console.log('[PNG_GENERATOR_CELL] Script setup starting - about to load i18n')
+try {
+  console.log('[PNG_GENERATOR_CELL] Calling useCellI18n...')
+  // Note: This is synchronous setup, so we load translations here
+  // The actual async loading happens in background but we'll initialize the empty state
+  const i18nPromise = useCellI18n('png-generator-cell')
+  console.log('[PNG_GENERATOR_CELL] useCellI18n returned:', {
+    isPromise: i18nPromise instanceof Promise,
+  })
+
+  // Store promise for onMounted to await
+  ;(window as any).__pngGeneratorI18nPromise = i18nPromise
+} catch (err) {
+  console.error('[PNG_GENERATOR_CELL] FAILED to initialize i18n', err)
+  ;(window as any).__pngGeneratorI18nError = err
+}
 
 // Initialize PngGeneratorCell instance
 const cellInstance = new PngGeneratorCell()
@@ -671,19 +687,37 @@ const handlePersistCancel = () => {
 
 // Check cell health on mount
 onMounted(async () => {
-  logger.debug('PNG Generator Cell mounted', { 
+  console.log('[PNG_GENERATOR_CELL] onMounted - component mounted to DOM')
+
+  // ⚡ AWAIT i18n translations before anything else
+  try {
+    const i18nPromise = (window as any).__pngGeneratorI18nPromise
+    if (i18nPromise instanceof Promise) {
+      console.log('[PNG_GENERATOR_CELL] onMounted - awaiting i18n promise...')
+      await i18nPromise
+      console.log('[PNG_GENERATOR_CELL] onMounted - ✅ i18n loaded successfully')
+    } else {
+      console.warn('[PNG_GENERATOR_CELL] onMounted - no i18n promise found')
+    }
+  } catch (i18nErr: any) {
+    console.error('[PNG_GENERATOR_CELL] onMounted - ❌ i18n failed', {
+      error: i18nErr?.message || String(i18nErr),
+    })
+  }
+
+  logger.debug('PNG Generator Cell mounted', {
     cellId: effectiveCellId.value,
     hasCell: !!props.cell,
     hasCellId: !!props.cellId
   })
-  
+
   // Perform health check
   try {
     const health = await cellInstance.health_check()
     if (health.status !== 'healthy') {
-      logger.warn('Cell health check warning', { 
+      logger.warn('Cell health check warning', {
         status: health.status,
-        reason: health.reason 
+        reason: health.reason
       })
     } else {
       logger.debug('Cell health check passed')

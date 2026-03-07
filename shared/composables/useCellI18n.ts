@@ -29,53 +29,82 @@ const SCARERUNNER_URL =
 /**
  * Load cell-specific translations and merge into global i18n instance.
  *
+ * ⚠️ IMPORTANT: MUST be awaited to ensure translations load before component renders!
+ *
+ * ```typescript
+ * await useCellI18n('png-generator-cell')
+ * ```
+ *
+ * Returns a Promise that blocks until translations are loaded or an error occurs.
+ *
  * @param cellTypeName - Semantic cell type name (e.g. "png-generator-cell")
+ * @returns Promise<void> - resolves when translations are loaded and merged
  */
-export function useCellI18n(cellTypeName: string): void {
+export async function useCellI18n(cellTypeName: string): Promise<void> {
   const i18n = useI18n()
 
   console.log('[useCellI18n] ENTRY - Loading translations for cell', {
     cellTypeName,
     currentLocale: i18n.locale.value,
+    timestamp: new Date().toISOString(),
   })
 
-  // Try to load translations for current locale
-  loadCellTranslations(cellTypeName, i18n.locale.value)
-    .then((translations) => {
-      if (translations && Object.keys(translations).length > 0) {
-        console.log('[useCellI18n] Loaded translations for locale', {
-          cellTypeName,
-          locale: i18n.locale.value,
-          keys: Object.keys(translations),
-        })
+  try {
+    // Load translations for current locale - THIS BLOCKS until complete
+    const translations = await loadCellTranslations(cellTypeName, i18n.locale.value)
 
-        // Merge cell translations into global i18n
-        Object.entries(translations).forEach(([key, value]) => {
-          console.log(`[useCellI18n] Merging key: ${key}`)
-          i18n.global.setLocaleMessage(i18n.locale.value, {
-            ...i18n.global.getLocaleMessage(i18n.locale.value),
-            [key]: value,
-          })
-        })
+    if (translations && Object.keys(translations).length > 0) {
+      console.log('[useCellI18n] Loaded translations successfully', {
+        cellTypeName,
+        locale: i18n.locale.value,
+        keyCount: Object.keys(translations).length,
+        keys: Object.keys(translations),
+      })
 
-        console.log('[useCellI18n] SUCCESS - Translations merged into i18n', {
-          cellTypeName,
-          locale: i18n.locale.value,
-        })
+      // ⚡ ATOMIC MERGE: All at once, not key-by-key
+      const currentMessages = i18n.global.getLocaleMessage(i18n.locale.value) || {}
+      const mergedMessages = {
+        ...currentMessages,
+        ...translations,
       }
-    })
-    .catch((err) => {
-      log.warn('[useCellI18n] Failed to load cell translations', {
+
+      console.log('[useCellI18n] Merging into i18n', {
         cellTypeName,
         locale: i18n.locale.value,
-        error: err instanceof Error ? err.message : String(err),
+        beforeMergeKeys: Object.keys(currentMessages).length,
+        newKeys: Object.keys(translations).length,
+        afterMergeKeys: Object.keys(mergedMessages).length,
       })
-      console.log('[useCellI18n] WARNING - Could not load translations', {
+
+      i18n.global.setLocaleMessage(i18n.locale.value, mergedMessages)
+
+      console.log('[useCellI18n] ✅ SUCCESS - Translations fully loaded and merged', {
         cellTypeName,
         locale: i18n.locale.value,
-        error: err instanceof Error ? err.message : String(err),
+        timestamp: new Date().toISOString(),
       })
+    } else {
+      console.warn('[useCellI18n] ⚠️ NO TRANSLATIONS FOUND', {
+        cellTypeName,
+        locale: i18n.locale.value,
+        isEmpty: !translations || Object.keys(translations).length === 0,
+      })
+    }
+  } catch (err) {
+    console.error('[useCellI18n] ❌ FAILED to load translations', {
+      cellTypeName,
+      locale: i18n.locale.value,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+      timestamp: new Date().toISOString(),
     })
+    log.error('[useCellI18n] Failed to load cell translations', {
+      cellTypeName,
+      locale: i18n.locale.value,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    throw err
+  }
 }
 
 /**
