@@ -41,22 +41,34 @@ const SCARERUNNER_URL =
  * @returns Promise<void> - resolves when translations are loaded and merged
  */
 export async function useCellI18n(cellTypeName: string): Promise<void> {
-  const i18n = useI18n()
+  let i18n
+  try {
+    i18n = useI18n()
+  } catch (err) {
+    console.warn('[useCellI18n] useI18n() threw, trying fallback')
+    // Fallback: try to get from window (for isolated component contexts)
+    i18n = (window as any).__i18n
+    if (!i18n) {
+      throw new Error('useI18n() failed and no i18n available in window context')
+    }
+  }
 
   console.log('[useCellI18n] ENTRY - Loading translations for cell', {
     cellTypeName,
-    currentLocale: i18n.locale.value,
+    currentLocale: i18n.locale?.value,
     timestamp: new Date().toISOString(),
+    hasI18nGlobal: !!i18n?.global,
   })
 
   try {
     // Load translations for current locale - THIS BLOCKS until complete
-    const translations = await loadCellTranslations(cellTypeName, i18n.locale.value)
+    const locale = i18n.locale?.value || 'en'
+    const translations = await loadCellTranslations(cellTypeName, locale)
 
     if (translations && Object.keys(translations).length > 0) {
       console.log('[useCellI18n] Loaded translations successfully', {
         cellTypeName,
-        locale: i18n.locale.value,
+        locale,
         keyCount: Object.keys(translations).length,
         keys: Object.keys(translations),
       })
@@ -66,14 +78,14 @@ export async function useCellI18n(cellTypeName: string): Promise<void> {
       if (!i18n.global) {
         console.error('[useCellI18n] ⚠️ i18n.global is undefined - cannot merge translations', {
           cellTypeName,
-          locale: i18n.locale.value,
+          locale,
           hasI18n: !!i18n,
           i18nKeys: i18n ? Object.keys(i18n) : [],
         })
         throw new Error('i18n.global is undefined - i18n not properly initialized in component context')
       }
 
-      const currentMessages = i18n.global.getLocaleMessage(i18n.locale.value) || {}
+      const currentMessages = i18n.global.getLocaleMessage(locale) || {}
       const mergedMessages = {
         ...currentMessages,
         ...translations,
@@ -87,7 +99,7 @@ export async function useCellI18n(cellTypeName: string): Promise<void> {
         afterMergeKeys: Object.keys(mergedMessages).length,
       })
 
-      i18n.global.setLocaleMessage(i18n.locale.value, mergedMessages)
+      i18n.global.setLocaleMessage(locale, mergedMessages)
 
       console.log('[useCellI18n] ✅ SUCCESS - Translations fully loaded and merged', {
         cellTypeName,
