@@ -133,6 +133,7 @@ import { useCellViewProvider } from './composables/useCellViewProvider'
 import { usePersistenceManager } from './composables/usePersistenceManager'
 import { useAutoSave } from './composables/useAutoSave'
 import { useAutoLoadCellI18n } from './composables/useAutoLoadCellI18n'
+import { useThemeSync } from './composables/useThemeSync'
 import GridContainer from './components/GridContainer.vue'
 import FooterWindowManager from './components/FooterWindowManager.vue'
 import AddCellModal from './components/AddCellModal.vue'
@@ -154,6 +155,11 @@ const { cells, addCell, removeCell, updateCell, toggleMinimize, toggleMaximize, 
 // Monitors cells array and workspaceStore.locale changes.
 // Automatically loads and merges cell translations under namespace: cells.{cellTypeName}
 useAutoLoadCellI18n(cells)
+
+// ⚡ CENTRALIZED Theme Sync: Apply Cockpit-Vue theme to DOM
+// Monitors workspaceStore.theme changes and applies 'dark' class to document.documentElement
+// Enables Tailwind CSS dark mode (dark:bg-gray-950, etc.)
+useThemeSync()
 
 // ── Cell View Provider ────────────────────────────────────────────────────────
 const { getCellTypes, instantiateCellByType, resolveViewSpec } = useCellViewProvider()
