@@ -14,6 +14,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export type HandshakeStatus = 'pending' | 'ready' | 'error'
+export type ThemeMode = 'light' | 'dark' | 'auto'
 
 export const useWorkspaceStore = defineStore('workspace-v2', () => {
   // ── State ──────────────────────────────────────────────────────────────────
@@ -23,6 +24,10 @@ export const useWorkspaceStore = defineStore('workspace-v2', () => {
   const status = ref<HandshakeStatus>('pending')
   const errorCode = ref<string>('')
   const errorMessage = ref<string>('')
+
+  // ── Theme & Locale State (synchronized with host shell) ──────────────────
+  const theme = ref<ThemeMode>('auto')
+  const locale = ref<string>('en')
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -58,6 +63,20 @@ export const useWorkspaceStore = defineStore('workspace-v2', () => {
     errorMessage.value = message
   }
 
+  /**
+   * Update theme preference (synchronized from host shell).
+   */
+  function setTheme(newTheme: ThemeMode) {
+    theme.value = newTheme
+  }
+
+  /**
+   * Update locale preference (synchronized from host shell).
+   */
+  function setLocale(newLocale: string) {
+    locale.value = newLocale
+  }
+
   return {
     workspaceId,
     sessionToken,
@@ -65,8 +84,12 @@ export const useWorkspaceStore = defineStore('workspace-v2', () => {
     status,
     errorCode,
     errorMessage,
+    theme,
+    locale,
     initWorkspace,
     setReady,
     setError,
+    setTheme,
+    setLocale,
   }
 })

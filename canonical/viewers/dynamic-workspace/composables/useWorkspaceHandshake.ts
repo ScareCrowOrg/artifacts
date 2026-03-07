@@ -15,6 +15,7 @@
 
 import { onMounted, onUnmounted } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import type { ThemeMode } from '@/stores/workspaceStore'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('workspace:handshake')
@@ -28,6 +29,31 @@ export interface InitWorkspaceMessage {
     sessionToken: string
     cockpitOrigin: string
     userId: string
+  }
+  timestamp: number
+}
+
+export interface SwitchThemeMessage {
+  type: 'SWITCH_THEME'
+  payload: {
+    theme: ThemeMode
+  }
+  timestamp: number
+}
+
+export interface SwitchLocaleMessage {
+  type: 'SWITCH_LOCALE'
+  payload: {
+    locale: string
+  }
+  timestamp: number
+}
+
+export interface SyncConfigMessage {
+  type: 'SYNC_CONFIG'
+  payload: {
+    theme: ThemeMode
+    locale: string
   }
   timestamp: number
 }
@@ -155,9 +181,43 @@ export function useWorkspaceHandshake() {
       return
     }
 
-    const data = event.data as Partial<InitWorkspaceMessage>
+    const data = event.data as any
 
-    if (!data || data.type !== 'INIT_WORKSPACE') {
+    if (!data || !data.type) {
+      return
+    }
+
+    // ── Handle SWITCH_THEME message ────────────────────────────────────────
+    if (data.type === 'SWITCH_THEME') {
+      const { theme } = (data as Partial<SwitchThemeMessage>).payload ?? {}
+      if (theme) {
+        store.setTheme(theme)
+        log.debug('[WORKSPACE] Theme switched', { theme })
+      }
+      return
+    }
+
+    // ── Handle SWITCH_LOCALE message ───────────────────────────────────────
+    if (data.type === 'SWITCH_LOCALE') {
+      const { locale } = (data as Partial<SwitchLocaleMessage>).payload ?? {}
+      if (locale) {
+        store.setLocale(locale)
+        log.debug('[WORKSPACE] Locale switched', { locale })
+      }
+      return
+    }
+
+    // ── Handle SYNC_CONFIG message (cockpit sends current config) ──────────
+    if (data.type === 'SYNC_CONFIG') {
+      const { theme, locale } = (data as Partial<SyncConfigMessage>).payload ?? {}
+      if (theme) store.setTheme(theme)
+      if (locale) store.setLocale(locale)
+      log.debug('[WORKSPACE] Config synchronized', { theme, locale })
+      return
+    }
+
+    // ── Handle INIT_WORKSPACE message ──────────────────────────────────────
+    if (data.type !== 'INIT_WORKSPACE') {
       return
     }
 
