@@ -7,14 +7,14 @@ WORKDIR /app
 
 # Install Python + dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 \
+    python3 \
     python3-pip \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies (--break-system-packages for PEP 668 compliance)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 # Copy worker files
 COPY config.py main.py ./
