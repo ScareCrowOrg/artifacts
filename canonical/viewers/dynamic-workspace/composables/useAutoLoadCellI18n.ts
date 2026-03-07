@@ -64,6 +64,19 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   const i18nComposer = useI18n() // Local Composer instance (has .locale, .t, etc)
   const store = useWorkspaceStore()
 
+  // Sync i18n locale with workspace store locale
+  // This ensures templates use correct locale when translations are merged
+  const syncLocale = (locale: string) => {
+    const normalizedLocale = normalizeLocale(locale)
+    if (i18nComposer.locale.value !== normalizedLocale) {
+      log.debug('[useAutoLoadCellI18n] Syncing i18n locale', {
+        from: i18nComposer.locale.value,
+        to: normalizedLocale,
+      })
+      i18nComposer.locale.value = normalizedLocale
+    }
+  }
+
   // Track loaded cells to avoid duplicate requests: "cellTypeName-locale"
   const loadedKeys = new Set<string>()
 
@@ -171,6 +184,9 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
           currentLocale,
           isEmptyRaw: !rawLocale,
         })
+        // Ensure i18n locale matches store locale
+        syncLocale(currentLocale)
+        // Then load translations
         names.forEach(name => {
           log.debug('[useAutoLoadCellI18n] Watch calling load()', {
             cellTypeName: name,
@@ -200,6 +216,9 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
         isEmptyNew: !newLocale,
         cellCount: cells.value.length,
       })
+      // Sync i18n locale immediately so templates use correct locale
+      syncLocale(currentLocale)
+      // Then load translations for new locale
       cells.value.forEach(cell => load(cell.cellTypeName, currentLocale))
     },
   )
@@ -213,5 +232,7 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
     cellCount: cells.value.length,
     isEmptyRaw: !initialRawLocale,
   })
+  // Ensure i18n locale matches from the start
+  syncLocale(initialLocale)
   cells.value.forEach(cell => load(cell.cellTypeName, initialLocale))
 }
