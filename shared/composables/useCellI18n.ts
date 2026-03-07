@@ -74,18 +74,30 @@ export async function useCellI18n(cellTypeName: string): Promise<void> {
       })
 
       // ⚡ ATOMIC MERGE: All at once, not key-by-key
-      // BUT FIRST: Check if i18n.global is available (might be undefined in isolated contexts)
-      if (!i18n.global) {
-        console.error('[useCellI18n] ⚠️ i18n.global is undefined - cannot merge translations', {
+      // Use i18n.global if available, otherwise fall back to window.__i18n
+      let i18nGlobal = i18n.global
+
+      if (!i18nGlobal && (window as any).__i18n) {
+        console.log('[useCellI18n] i18n.global undefined, using window.__i18n fallback', {
+          cellTypeName,
+          locale,
+          hasWindowI18n: !!(window as any).__i18n,
+        })
+        i18nGlobal = (window as any).__i18n?.global
+      }
+
+      if (!i18nGlobal) {
+        console.error('[useCellI18n] ⚠️ Cannot find i18n.global - cannot merge translations', {
           cellTypeName,
           locale,
           hasI18n: !!i18n,
+          hasWindowI18n: !!(window as any).__i18n,
           i18nKeys: i18n ? Object.keys(i18n) : [],
         })
         throw new Error('i18n.global is undefined - i18n not properly initialized in component context')
       }
 
-      const currentMessages = i18n.global.getLocaleMessage(locale) || {}
+      const currentMessages = i18nGlobal.getLocaleMessage(locale) || {}
       const mergedMessages = {
         ...currentMessages,
         ...translations,
@@ -93,13 +105,13 @@ export async function useCellI18n(cellTypeName: string): Promise<void> {
 
       console.log('[useCellI18n] Merging into i18n', {
         cellTypeName,
-        locale: i18n.locale.value,
+        locale: i18n.locale?.value || locale,
         beforeMergeKeys: Object.keys(currentMessages).length,
         newKeys: Object.keys(translations).length,
         afterMergeKeys: Object.keys(mergedMessages).length,
       })
 
-      i18n.global.setLocaleMessage(locale, mergedMessages)
+      i18nGlobal.setLocaleMessage(locale, mergedMessages)
 
       console.log('[useCellI18n] ✅ SUCCESS - Translations fully loaded and merged', {
         cellTypeName,

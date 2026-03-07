@@ -14,7 +14,8 @@
  * }
  */
 <template>
-  <div class="png-generator-cell bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-lg p-4 shadow-sm">
+  <!-- ⚡ CRITICAL: Don't render until i18n is loaded -->
+  <div v-if="i18nLoaded" class="png-generator-cell bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-lg p-4 shadow-sm">
     <div class="cell-header mb-4">
       <h3 class="text-lg font-semibold text-primary dark:text-primary-light">
         {{ $t('pngGeneratorCell.title') }}
@@ -393,6 +394,9 @@ const localParams = ref({
 // Background removal state
 const isProcessingBackground = ref(false)
 
+// i18n loading state - prevents template rendering before translations load
+const i18nLoaded = ref(false)
+
 // Persistence state
 const showPersistModal = ref(false)
 const isPersisting = ref(false)
@@ -696,13 +700,19 @@ onMounted(async () => {
       console.log('[PNG_GENERATOR_CELL] onMounted - awaiting i18n promise...')
       await i18nPromise
       console.log('[PNG_GENERATOR_CELL] onMounted - ✅ i18n loaded successfully')
+      // ⚡ CRITICAL: Signal that i18n is ready so template can render
+      i18nLoaded.value = true
     } else {
       console.warn('[PNG_GENERATOR_CELL] onMounted - no i18n promise found')
+      // Fallback: still allow rendering even if i18n loading was skipped
+      i18nLoaded.value = true
     }
   } catch (i18nErr: any) {
     console.error('[PNG_GENERATOR_CELL] onMounted - ❌ i18n failed', {
       error: i18nErr?.message || String(i18nErr),
     })
+    // Fallback: allow rendering with fallback i18n keys
+    i18nLoaded.value = true
   }
 
   logger.debug('PNG Generator Cell mounted', {
