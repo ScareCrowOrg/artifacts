@@ -652,17 +652,16 @@
     }
   },
   "job_types": {
-    "_id": {
+    "name": {
       "type": "TEXT",
-      "constraints": "PRIMARY KEY",
+      "constraints": "NOT NULL",
       "description": "Primary key \u2013 canonical job type name (matches filename without .json)",
       "indexed": true
     },
     "worker_type": {
       "type": "TEXT",
       "constraints": "NOT NULL",
-      "description": "Worker implementation type (e.g. 'ollama', 'rembg', 'stable-diffusion')",
-      "indexed": true
+      "description": "Worker implementation type (e.g. 'ollama', 'rembg', 'stable-diffusion')"
     },
     "endpoint": {
       "type": "TEXT",
@@ -682,7 +681,7 @@
     "timeout": {
       "type": "INTEGER",
       "constraints": "NOT NULL",
-      "description": "HTTP request timeout in seconds (1\u20133600)"
+      "description": "HTTP request timeout in seconds"
     },
     "result_storage": {
       "type": "TEXT",
