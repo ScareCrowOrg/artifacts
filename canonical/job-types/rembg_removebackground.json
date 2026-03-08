@@ -2,7 +2,6 @@
   "name": "rembg_removebackground",
   "job_type": "rembg_removebackground",
   "description": "GPU-accelerated background removal via rembg service",
-  "worker": "rembg",
   "worker_type": "rembg",
   "endpoint": "http://scareverse-worker-rembg:9000",
   "queue": "scareverse:cpu-jobs:queue",
@@ -13,5 +12,9 @@
   "result_key_ttl": 120,
   "timeout": 60,
   "worker_availability_key": "state:worker:rembg_removebackground:available",
-  "aliases": ["REMOTE_REMBG", "background_removal", "rembg_removebackground"]
+  "aliases": [
+    "REMOTE_REMBG",
+    "background_removal",
+    "rembg_removebackground"
+  ]
 }

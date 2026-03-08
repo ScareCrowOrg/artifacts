@@ -19,8 +19,12 @@ services:
       REDIS_L2_PASSWORD: ${REDIS_L2_PASSWORD:-}
       REDIS_L2_DB: ${REDIS_L2_DB:-0}
 
-      # Atomic worker endpoints
-      WORKER_REMBG_ENDPOINT: ${WORKER_REMBG_ENDPOINT:-http://scareverse-worker-rembg:9000}
+      # Atomic worker endpoints (override JSON defaults from artifacts/canonical/job-types/)
+      WORKER_REMBG_REMOVEBACKGROUND_ENDPOINT: ${WORKER_REMBG_REMOVEBACKGROUND_ENDPOINT:-http://scareverse-worker-rembg:9000}
+      WORKER_OLLAMA_GENERATE_ENDPOINT: ${WORKER_OLLAMA_GENERATE_ENDPOINT:-http://scareverse-ollama-worker:8080}
+      WORKER_OLLAMA_CHAT_ENDPOINT: ${WORKER_OLLAMA_CHAT_ENDPOINT:-http://scareverse-ollama-worker:8080}
+      WORKER_SD_GENERATE_ENDPOINT: ${WORKER_SD_GENERATE_ENDPOINT:-http://scareverse-sd-worker:8080}
+      WORKER_INSTANTMESH_ENDPOINT: ${WORKER_INSTANTMESH_ENDPOINT:-http://scareverse-worker-instantmesh:8000}
 
       # Pooling strategy
       BRPOP_L1_TIMEOUT: ${BRPOP_L1_TIMEOUT:-1}

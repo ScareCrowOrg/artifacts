@@ -2,9 +2,8 @@
   "name": "ollama_generate",
   "job_type": "ollama_generate",
   "description": "LLM text generation via Ollama service",
-  "worker": "ollama",
   "worker_type": "ollama",
-  "endpoint": "http://scareverse-ollama-worker:9000",
+  "endpoint": "http://scareverse-ollama-worker:8080",
   "queue": "scareverse:cpu-jobs:queue",
   "queue_l1": "scareverse:cpu-jobs:queue",
   "queue_l2": "scareverse:cpu-jobs:queue",
@@ -13,5 +12,7 @@
   "result_key_ttl": 60,
   "timeout": 120,
   "worker_availability_key": "state:worker:ollama_generate:available",
-  "aliases": ["ollama_generate"]
+  "aliases": [
+    "ollama_generate"
+  ]
 }

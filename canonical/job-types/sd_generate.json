@@ -2,9 +2,8 @@
   "name": "sd_generate",
   "job_type": "sd_generate",
   "description": "Image generation via Stable Diffusion service",
-  "worker": "stable-diffusion",
   "worker_type": "stable-diffusion",
-  "endpoint": "http://scareverse-sd-worker:9000",
+  "endpoint": "http://scareverse-sd-worker:8080",
   "queue": "scareverse:cpu-jobs:queue",
   "queue_l1": "scareverse:cpu-jobs:queue",
   "queue_l2": "scareverse:cpu-jobs:queue",
@@ -13,5 +12,7 @@
   "result_key_ttl": 120,
   "timeout": 300,
   "worker_availability_key": "state:worker:sd_generate:available",
-  "aliases": ["sd_generate"]
+  "aliases": [
+    "sd_generate"
+  ]
 }

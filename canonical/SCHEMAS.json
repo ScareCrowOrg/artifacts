@@ -650,5 +650,56 @@
       "description": "UTC timestamp when content was created",
       "indexed": true
     }
+  },
+  "job_types": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY",
+      "description": "Primary key \u2013 canonical job type name (matches filename without .json)",
+      "indexed": true
+    },
+    "worker_type": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Worker implementation type (e.g. 'ollama', 'rembg', 'stable-diffusion')",
+      "indexed": true
+    },
+    "endpoint": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Default HTTP base URL of the atomic worker (overridable via env var)"
+    },
+    "queue_l1": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Redis L1 (owner/local) queue name"
+    },
+    "queue_l2": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Redis L2 (global) queue name"
+    },
+    "timeout": {
+      "type": "INTEGER",
+      "constraints": "NOT NULL",
+      "description": "HTTP request timeout in seconds (1\u20133600)"
+    },
+    "result_storage": {
+      "type": "TEXT",
+      "description": "Result persistence strategy: 'rpush_l1' (RPUSH to L1) or 'hset_l2' (HSET to L2)"
+    },
+    "result_key_prefix": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Redis key prefix for storing job results (e.g. 'scareverse:ollama-results')"
+    },
+    "result_key_ttl": {
+      "type": "INTEGER",
+      "description": "TTL in seconds for result keys in Redis"
+    },
+    "aliases": {
+      "type": "JSON",
+      "description": "Legacy or alternate job-type names that resolve to this entry"
+    }
   }
 }
