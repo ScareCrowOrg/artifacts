@@ -1,0 +1,12 @@
+{
+  "job_type": "sd_generate",
+  "description": "Image generation via Stable Diffusion service",
+  "worker": "stable-diffusion",
+  "queue": "scareverse:cpu-jobs:queue",
+  "result_storage": "rpush_l1",
+  "result_key_prefix": "scareverse:sd-results",
+  "result_key_ttl": 120,
+  "timeout": 300,
+  "worker_availability_key": "state:worker:sd_generate:available",
+  "aliases": ["sd_generate"]
+}

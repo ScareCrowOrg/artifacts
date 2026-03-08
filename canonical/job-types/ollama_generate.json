@@ -1,0 +1,12 @@
+{
+  "job_type": "ollama_generate",
+  "description": "LLM text generation via Ollama service",
+  "worker": "ollama",
+  "queue": "scareverse:cpu-jobs:queue",
+  "result_storage": "rpush_l1",
+  "result_key_prefix": "scareverse:ollama-results",
+  "result_key_ttl": 60,
+  "timeout": 120,
+  "worker_availability_key": "state:worker:ollama_generate:available",
+  "aliases": ["ollama_generate"]
+}

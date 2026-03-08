@@ -1,0 +1,12 @@
+{
+  "job_type": "instantmesh",
+  "description": "3D mesh generation via InstantMesh service",
+  "worker": "instantmesh",
+  "queue": "scareverse:3d-jobs:queue",
+  "result_storage": "rpush_l1",
+  "result_key_prefix": "scareverse:3d-results",
+  "result_key_ttl": 300,
+  "timeout": 120,
+  "worker_availability_key": "state:worker:instantmesh:available",
+  "aliases": ["instantmesh"]
+}

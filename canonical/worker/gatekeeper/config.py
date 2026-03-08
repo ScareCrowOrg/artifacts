@@ -50,6 +50,17 @@ BRPOP_L2_TIMEOUT = int(os.getenv("BRPOP_L2_TIMEOUT", "20"))
 # Queue Names
 # ============================================================================
 
+# Consolidated queues (Phase 2.2): all CPU/GPU jobs share cpu-jobs queue,
+# 3D mesh jobs use 3d-jobs queue.
+CPU_JOBS_QUEUE_L1 = os.getenv("CPU_JOBS_QUEUE_L1", "scareverse:cpu-jobs:queue")
+CPU_JOBS_QUEUE_L2 = os.getenv("CPU_JOBS_QUEUE_L2", "scareverse:cpu-jobs:queue")
+
+THREE_D_JOBS_QUEUE_L1 = os.getenv("THREE_D_JOBS_QUEUE_L1", "scareverse:3d-jobs:queue")
+THREE_D_JOBS_QUEUE_L2 = os.getenv("THREE_D_JOBS_QUEUE_L2", "scareverse:3d-jobs:queue")
+
+# Legacy per-type queues – kept for backward compatibility with existing
+# backend routers that push directly (ollama_proxy, stable_diffusion_queue).
+# GateKeeper monitors both legacy and consolidated queues automatically.
 REMBG_QUEUE_L1 = os.getenv("REMBG_QUEUE_L1", "scareverse:rembg-jobs:queue")
 REMBG_QUEUE_L2 = os.getenv("REMBG_QUEUE_L2", "scareverse:rembg-jobs:queue")
 
@@ -77,9 +88,12 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
             "WORKER_REMBG_ENDPOINT",
             "http://scareverse-worker-rembg:9000"
         ),
-        "queue_l1": REMBG_QUEUE_L1,
-        "queue_l2": REMBG_QUEUE_L2,
+        "queue_l1": CPU_JOBS_QUEUE_L1,
+        "queue_l2": CPU_JOBS_QUEUE_L2,
         "timeout": int(os.getenv("REMBG_JOB_TIMEOUT", "60")),
+        "result_storage": "rpush_l1",
+        "result_key_prefix": os.getenv("REMBG_RESULT_KEY_PREFIX", "scareverse:rembg-results"),
+        "result_key_ttl": int(os.getenv("REMBG_RESULT_TTL", "120")),
     },
     "background_removal": {
         "worker_name": "rembg",
@@ -87,9 +101,25 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
             "WORKER_REMBG_ENDPOINT",
             "http://scareverse-worker-rembg:9000"
         ),
-        "queue_l1": REMBG_QUEUE_L1,
-        "queue_l2": REMBG_QUEUE_L2,
+        "queue_l1": CPU_JOBS_QUEUE_L1,
+        "queue_l2": CPU_JOBS_QUEUE_L2,
         "timeout": int(os.getenv("REMBG_JOB_TIMEOUT", "60")),
+        "result_storage": "rpush_l1",
+        "result_key_prefix": os.getenv("REMBG_RESULT_KEY_PREFIX", "scareverse:rembg-results"),
+        "result_key_ttl": int(os.getenv("REMBG_RESULT_TTL", "120")),
+    },
+    "rembg_removebackground": {
+        "worker_name": "rembg",
+        "endpoint": os.getenv(
+            "WORKER_REMBG_ENDPOINT",
+            "http://scareverse-worker-rembg:9000"
+        ),
+        "queue_l1": CPU_JOBS_QUEUE_L1,
+        "queue_l2": CPU_JOBS_QUEUE_L2,
+        "timeout": int(os.getenv("REMBG_JOB_TIMEOUT", "60")),
+        "result_storage": "rpush_l1",
+        "result_key_prefix": os.getenv("REMBG_RESULT_KEY_PREFIX", "scareverse:rembg-results"),
+        "result_key_ttl": int(os.getenv("REMBG_RESULT_TTL", "120")),
     },
     # Phase 2 (future)
     "instantmesh": {
@@ -98,9 +128,12 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
             "WORKER_INSTANTMESH_ENDPOINT",
             "http://scareverse-worker-instantmesh:8000"
         ),
-        "queue_l1": INSTANTMESH_QUEUE_L1,
-        "queue_l2": INSTANTMESH_QUEUE_L2,
+        "queue_l1": THREE_D_JOBS_QUEUE_L1,
+        "queue_l2": THREE_D_JOBS_QUEUE_L2,
         "timeout": int(os.getenv("INSTANTMESH_JOB_TIMEOUT", "120")),
+        "result_storage": "rpush_l1",
+        "result_key_prefix": os.getenv("THREE_D_RESULT_KEY_PREFIX", "scareverse:3d-results"),
+        "result_key_ttl": int(os.getenv("THREE_D_RESULT_TTL", "300")),
     },
     # Ollama LLM workers – result_storage "rpush_l1" ensures results are stored
     # via RPUSH on Redis L1 so the backend router can BRPOP them directly.
@@ -110,8 +143,8 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
             "WORKER_OLLAMA_ENDPOINT",
             "http://scareverse-ollama-worker:9000"
         ),
-        "queue_l1": OLLAMA_QUEUE,
-        "queue_l2": OLLAMA_QUEUE,
+        "queue_l1": CPU_JOBS_QUEUE_L1,
+        "queue_l2": CPU_JOBS_QUEUE_L2,
         "timeout": int(os.getenv("OLLAMA_JOB_TIMEOUT", "120")),
         "result_storage": "rpush_l1",
         "result_key_prefix": os.getenv("OLLAMA_RESULT_KEY_PREFIX", "scareverse:ollama-results"),
@@ -123,8 +156,8 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
             "WORKER_OLLAMA_ENDPOINT",
             "http://scareverse-ollama-worker:9000"
         ),
-        "queue_l1": OLLAMA_QUEUE,
-        "queue_l2": OLLAMA_QUEUE,
+        "queue_l1": CPU_JOBS_QUEUE_L1,
+        "queue_l2": CPU_JOBS_QUEUE_L2,
         "timeout": int(os.getenv("OLLAMA_JOB_TIMEOUT", "120")),
         "result_storage": "rpush_l1",
         "result_key_prefix": os.getenv("OLLAMA_RESULT_KEY_PREFIX", "scareverse:ollama-results"),
@@ -138,8 +171,8 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
             "WORKER_SD_ENDPOINT",
             "http://scareverse-sd-worker:9000"
         ),
-        "queue_l1": SD_QUEUE,
-        "queue_l2": SD_QUEUE,
+        "queue_l1": CPU_JOBS_QUEUE_L1,
+        "queue_l2": CPU_JOBS_QUEUE_L2,
         "timeout": int(os.getenv("SD_JOB_TIMEOUT", "300")),
         "result_storage": "rpush_l1",
         "result_key_prefix": os.getenv("SD_RESULT_KEY_PREFIX", "scareverse:sd-results"),

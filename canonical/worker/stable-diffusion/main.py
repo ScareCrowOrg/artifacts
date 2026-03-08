@@ -8,10 +8,19 @@ and result persistence. This worker is only responsible for calling the SD API.
 Endpoints:
 - POST /process  – Receive job from GateKeeper, call SD API, return result
 - GET  /health   – Liveness probe for Docker health check
+
+Worker Heartbeat:
+  On startup the worker registers availability in Redis L1 under the key
+  state:worker:sd_generate:available with a short TTL. A background task
+  refreshes this key periodically so that redis_job_client can discover
+  the worker before enqueuing jobs.
 """
 
+import asyncio
+import json
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import httpx
@@ -28,6 +37,15 @@ logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Heartbeat configuration
+# ---------------------------------------------------------------------------
+
+HEARTBEAT_INTERVAL = int(getattr(config, "HEARTBEAT_INTERVAL", 20))
+HEARTBEAT_TTL = HEARTBEAT_INTERVAL * 3
+
+_AVAILABILITY_KEYS = ["state:worker:sd_generate:available"]
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
@@ -40,11 +58,91 @@ app = FastAPI(
 # Shared HTTP client (created at startup, reused across requests)
 _http_client: Optional[httpx.AsyncClient] = None
 
+# Redis L1 client for heartbeat (optional – worker continues without it)
+_redis_l1: Optional[Any] = None
+_heartbeat_task: Optional[asyncio.Task] = None
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+async def _build_redis_l1() -> Optional[Any]:
+    """Create and return an async Redis L1 client, or None on failure."""
+    try:
+        import redis.asyncio as aioredis
+
+        redis_host = getattr(config, "REDIS_L1_HOST", "redis-local")
+        redis_port = int(getattr(config, "REDIS_L1_PORT", 6380))
+        redis_password = getattr(config, "REDIS_L1_PASSWORD", "scarerunner")
+        redis_db = int(getattr(config, "REDIS_L1_DB", 0))
+
+        kwargs: Dict[str, Any] = {
+            "host": redis_host,
+            "port": redis_port,
+            "db": redis_db,
+            "decode_responses": True,
+            "socket_connect_timeout": 5,
+        }
+        if redis_password:
+            kwargs["password"] = redis_password
+
+        client = aioredis.Redis(**kwargs)
+        await client.ping()
+        logger.info("SD worker connected to Redis L1: %s:%d", redis_host, redis_port)
+        return client
+    except Exception as exc:
+        logger.warning(
+            "Cannot connect to Redis L1 for heartbeat: %s – "
+            "worker will start without availability signaling",
+            exc,
+        )
+        return None
+
+
+async def _publish_availability(redis_client: Any) -> None:
+    """Set all availability keys in Redis L1."""
+    payload = json.dumps({
+        "worker_id": config.WORKER_ID,
+        "service": "stable-diffusion",
+        "job_types": ["sd_generate"],
+        "status": "available",
+        "timestamp": _utcnow_iso(),
+    })
+    for key in _AVAILABILITY_KEYS:
+        await redis_client.set(key, payload, ex=HEARTBEAT_TTL)
+
+
+async def _heartbeat_loop() -> None:
+    """Periodically refresh worker availability keys in Redis L1."""
+    global _redis_l1
+
+    while True:
+        try:
+            if _redis_l1 is not None:
+                await _publish_availability(_redis_l1)
+                logger.debug("Heartbeat refreshed for SD worker (TTL=%ds)", HEARTBEAT_TTL)
+        except Exception as exc:
+            logger.warning("Heartbeat publish failed: %s", exc)
+            _redis_l1 = await _build_redis_l1()
+
+        await asyncio.sleep(HEARTBEAT_INTERVAL)
+
 
 @app.on_event("startup")
 async def startup() -> None:
-    global _http_client
+    global _http_client, _redis_l1, _heartbeat_task
     _http_client = httpx.AsyncClient()
+
+    _redis_l1 = await _build_redis_l1()
+    if _redis_l1 is not None:
+        try:
+            await _publish_availability(_redis_l1)
+            logger.info("SD worker availability registered")
+        except Exception as exc:
+            logger.warning("Failed to register initial availability: %s", exc)
+
+    _heartbeat_task = asyncio.create_task(_heartbeat_loop())
     logger.info(
         "SD worker %s ready – sd_host=%s port=%d",
         config.WORKER_ID,
@@ -55,7 +153,24 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
-    global _http_client
+    global _http_client, _redis_l1, _heartbeat_task
+
+    if _heartbeat_task is not None:
+        _heartbeat_task.cancel()
+        try:
+            await _heartbeat_task
+        except asyncio.CancelledError:
+            pass
+
+    if _redis_l1 is not None:
+        try:
+            for key in _AVAILABILITY_KEYS:
+                await _redis_l1.delete(key)
+            logger.info("SD worker availability keys removed")
+        except Exception as exc:
+            logger.warning("Failed to remove availability keys: %s", exc)
+        await _redis_l1.aclose()
+
     if _http_client:
         await _http_client.aclose()
     logger.info("SD worker stopped")

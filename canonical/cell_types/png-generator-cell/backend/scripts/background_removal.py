@@ -14,6 +14,11 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Result key prefix and queue must match GateKeeper config
+_REMBG_RESULT_KEY_PREFIX = "scareverse:rembg-results"
+_CPU_JOBS_QUEUE = "scareverse:cpu-jobs:queue"
+_REMBG_RESULT_TTL = 120
+
 
 async def queue_background_removal_job(
     input_image_base64: str,
@@ -25,8 +30,8 @@ async def queue_background_removal_job(
     
     This function:
     1. Creates a unique job_id
-    2. Queues the job to Redis with REMOTE_REMBG type
-    3. Polls Redis for job completion
+    2. Queues the job to the consolidated cpu-jobs queue with rembg_removebackground type
+    3. Uses BRPOP to wait for the result pushed by GateKeeper to L1
     4. Returns the transparent PNG result
     
     Args:
@@ -45,6 +50,7 @@ async def queue_background_removal_job(
     Raises:
         Exception: If Redis connection fails or job times out
     """
+    job_id = None
     try:
         # Generate unique job ID
         job_id = str(uuid.uuid4())
@@ -58,36 +64,36 @@ async def queue_background_removal_job(
         if ',' in input_image_base64:
             input_image_base64 = input_image_base64.split(',', 1)[1]
         
-        # Prepare job data
+        # Prepare job data using canonical job type and queue
         job_data = {
             "job_id": job_id,
-            "job_type": "REMOTE_REMBG",
+            "job_type": "rembg_removebackground",
             "service": "rembg",
-            "input_image_base64": input_image_base64,
+            "image_data": input_image_base64,
             "alpha_matting": alpha_matting,
             "timestamp": time.time()
         }
         
-        # Queue job to Redis
-        queue_name = "scareverse:rembg-jobs:queue"
-        await redis_client.lpush(queue_name, json.dumps(job_data))
+        # Queue job to the consolidated CPU jobs queue
+        await redis_client.lpush(_CPU_JOBS_QUEUE, json.dumps(job_data))
         
         logger.info(f"✅ Job queued: {job_id}")
-        logger.debug(f"   Queue: {queue_name}")
+        logger.debug(f"   Queue: {_CPU_JOBS_QUEUE}")
         logger.debug(f"   Alpha matting: {alpha_matting}")
         
-        # Poll for job completion
-        result = await poll_job_status(redis_client, job_id, timeout)
+        # Wait for result via BRPOP (GateKeeper pushes result to this key)
+        result_key = f"{_REMBG_RESULT_KEY_PREFIX}:{job_id}"
+        result = await brpop_result(redis_client, result_key, timeout)
         
-        if result["status"] == "completed":
-            logger.info(f"✅ Background removal completed: {job_id}")
+        if result is None:
+            logger.error(f"❌ Background removal timeout: {job_id}")
             return {
-                "success": True,
-                "output_image_base64": result.get("output_image_base64", ""),
-                "job_id": job_id,
-                "processing_time": result.get("processing_time", 0)
+                "success": False,
+                "error": f"Job did not complete within {timeout} seconds",
+                "job_id": job_id
             }
-        elif result["status"] == "failed":
+        
+        if result.get("status") == "error":
             error_msg = result.get("error", "Unknown error")
             logger.error(f"❌ Background removal failed: {job_id} - {error_msg}")
             return {
@@ -95,93 +101,54 @@ async def queue_background_removal_job(
                 "error": error_msg,
                 "job_id": job_id
             }
-        else:
-            # Timeout or unknown status
-            logger.error(f"❌ Background removal timeout: {job_id}")
-            return {
-                "success": False,
-                "error": f"Job timeout or unknown status: {result['status']}",
-                "job_id": job_id
-            }
+        
+        logger.info(f"✅ Background removal completed: {job_id}")
+        return {
+            "success": True,
+            "output_image_base64": result.get("result", ""),
+            "job_id": job_id,
+            "processing_time": result.get("processing_time", 0)
+        }
             
     except Exception as e:
         logger.error(f"Failed to queue background removal job: {e}", exc_info=True)
         return {
             "success": False,
             "error": f"Failed to queue job: {str(e)}",
-            "job_id": job_id if 'job_id' in locals() else None
+            "job_id": job_id
         }
 
 
-async def poll_job_status(
+async def brpop_result(
     redis_client,
-    job_id: str,
+    result_key: str,
     timeout: float = 60.0,
-    poll_interval: float = 0.5
-) -> Dict[str, Any]:
+) -> Optional[Dict[str, Any]]:
     """
-    Poll Redis for job status until completion or timeout.
-    
+    Wait for a job result via BRPOP from Redis L1.
+
+    GateKeeper pushes the result JSON to `result_key` via RPUSH after the
+    atomic worker completes. This function blocks until the result arrives
+    or the timeout elapses.
+
     Args:
         redis_client: Redis client instance
-        job_id: Job identifier to poll
+        result_key: Full Redis key to BRPOP from
         timeout: Maximum time to wait in seconds
-        poll_interval: Time between polls in seconds
-        
+
     Returns:
-        Dict containing job status and result data
+        Parsed result dict, or None on timeout
     """
-    # Use the same status prefix as worker_bridge.py
-    status_key = f"scareverse:rembg-status:{job_id}"
-    start_time = time.time()
-    
-    logger.debug(f"Polling job status: {job_id} (timeout: {timeout}s)")
-    
-    while time.time() - start_time < timeout:
-        # Get job status from Redis (stored as Hash)
-        status_data = await redis_client.hgetall(status_key)
-        
-        if status_data:
-            status = status_data.get("status", "unknown")
-            
-            if status == "completed":
-                # Job completed successfully
-                logger.debug(f"Job completed: {job_id}")
-                
-                # Deserialize complex fields from JSON
-                result = {
-                    "status": "completed",
-                    "job_id": job_id,
-                    "output_image_base64": status_data.get("output_image_base64", ""),
-                    "processing_time": float(status_data.get("processing_time", 0)),
-                    "alpha_matting": status_data.get("alpha_matting", "true") == "true"
-                }
-                
-                return result
-                
-            elif status == "failed":
-                # Job failed
-                logger.debug(f"Job failed: {job_id}")
-                return {
-                    "status": "failed",
-                    "job_id": job_id,
-                    "error": status_data.get("error", "Unknown error")
-                }
-            
-            elif status == "processing":
-                # Still processing, continue polling
-                logger.debug(f"Job still processing: {job_id}")
-        
-        # Wait before next poll
-        await asyncio.sleep(poll_interval)
-    
-    # Timeout reached
-    logger.warning(f"Job polling timeout: {job_id}")
-    return {
-        "status": "timeout",
-        "job_id": job_id,
-        "error": f"Job did not complete within {timeout} seconds"
-    }
+    logger.debug(f"Waiting for result via BRPOP: key={result_key} timeout={timeout}s")
+    try:
+        result = await redis_client.brpop(result_key, timeout=int(timeout))
+        if result is None:
+            return None
+        _key, raw_value = result
+        return json.loads(raw_value)
+    except Exception as e:
+        logger.error(f"BRPOP failed for key {result_key}: {e}")
+        return None
 
 
 async def get_redis_client():
@@ -260,3 +227,4 @@ if __name__ == "__main__":
     result = queue_background_removal_job_sync(input_image)
     
     print(json.dumps(result, indent=2))
+

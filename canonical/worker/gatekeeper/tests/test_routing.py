@@ -109,34 +109,34 @@ class TestJobRouting:
 
 class TestResultPersistence:
     @pytest.mark.asyncio
-    async def test_success_persists_to_redis_l2(
-        self, gatekeeper, mock_redis_l2, rembg_job
+    async def test_success_persists_to_redis_l1(
+        self, gatekeeper, mock_redis_l1, mock_redis_l2, rembg_job
     ):
         mock_result = {"job_id": rembg_job["job_id"], "result": "xyz", "status": "ok"}
         gatekeeper.http.post.return_value = _mock_response(200, mock_result)
 
         await gatekeeper._dispatch("q", json.dumps(rembg_job), rembg_job, "owner")
 
-        mock_redis_l2.hset.assert_called_once()
-        key_arg = mock_redis_l2.hset.call_args[0][0]
+        mock_redis_l1.rpush.assert_called_once()
+        key_arg = mock_redis_l1.rpush.call_args[0][0]
         assert rembg_job["job_id"] in key_arg
-        mapping = mock_redis_l2.hset.call_args[1]["mapping"]
-        assert mapping["status"] == "completed"
+        assert "scareverse:rembg-results" in key_arg
+        mock_redis_l2.hset.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_failure_persists_to_redis_l2(
-        self, gatekeeper, mock_redis_l2, rembg_job
+    async def test_failure_persists_to_redis_l1(
+        self, gatekeeper, mock_redis_l1, mock_redis_l2, rembg_job
     ):
-        # Max retries config-driven; patch to speed test
-        with patch.object(config, "WORKER_MAX_RETRIES", 0):
-            gatekeeper.http.post.return_value = _mock_response(500, {"detail": "boom"})
-            await gatekeeper._dispatch("q", json.dumps(rembg_job), rembg_job, "owner")
+        # 4xx triggers permanent failure and error persistence without retry
+        gatekeeper.http.post.return_value = _mock_response(400, {"detail": "bad request"})
+        await gatekeeper._dispatch("q", json.dumps(rembg_job), rembg_job, "owner")
 
-        # With 0 retries: 1 initial attempt only
-        assert gatekeeper.http.post.call_count == 1
-        mock_redis_l2.hset.assert_called()
-        mapping = mock_redis_l2.hset.call_args[1]["mapping"]
-        assert mapping["status"] == "failed"
+        # Error result should be RPUSH'd to L1 (not HSET to L2)
+        mock_redis_l1.rpush.assert_called()
+        mock_redis_l2.hset.assert_not_called()
+        pushed_json = mock_redis_l1.rpush.call_args[0][1]
+        pushed_data = json.loads(pushed_json)
+        assert pushed_data["status"] == "error"
 
 
 # ---------------------------------------------------------------------------
@@ -349,19 +349,58 @@ class TestRpushL1Persistence:
 
 
 # ---------------------------------------------------------------------------
-# Rembg still uses L2 HSET (unchanged behaviour)
+# Rembg now uses L1 RPUSH (Phase 2.1: unified result storage)
 # ---------------------------------------------------------------------------
 
 
-class TestRembgStillUsesL2Hset:
+class TestRembgRpushL1:
     @pytest.mark.asyncio
-    async def test_rembg_success_still_hset_to_l2(
+    async def test_rembg_success_rpush_to_l1_not_l2_hset(
         self, gatekeeper, mock_redis_l2, mock_redis_l1, rembg_job
     ):
-        """Rembg results still go to Redis L2 via HSET (no regression)."""
+        """Rembg results now go to Redis L1 via RPUSH (Phase 2.1 fix)."""
         mock_result = {"job_id": rembg_job["job_id"], "result": "xyz", "status": "ok"}
         gatekeeper.http.post.return_value = _mock_response(200, mock_result)
         await gatekeeper._dispatch("q", json.dumps(rembg_job), rembg_job, "owner")
 
-        mock_redis_l2.hset.assert_called_once()
-        mock_redis_l1.rpush.assert_not_called()
+        mock_redis_l1.rpush.assert_called_once()
+        mock_redis_l2.hset.assert_not_called()
+
+        key_arg = mock_redis_l1.rpush.call_args[0][0]
+        assert "scareverse:rembg-results" in key_arg
+        assert rembg_job["job_id"] in key_arg
+
+    @pytest.mark.asyncio
+    async def test_rembg_canonical_type_rpush_to_l1(
+        self, gatekeeper, mock_redis_l1, mock_redis_l2
+    ):
+        """rembg_removebackground (canonical alias) also persists to L1 RPUSH."""
+        rembg_canonical_job = {
+            "job_id": "job-rembg-canonical-001",
+            "job_type": "rembg_removebackground",
+            "image_data": "abc123",
+            "alpha_matting": True,
+            "_source": "owner",
+        }
+        mock_result = {"job_id": rembg_canonical_job["job_id"], "result": "xyz", "status": "ok"}
+        gatekeeper.http.post.return_value = _mock_response(200, mock_result)
+        await gatekeeper._dispatch(
+            "q", json.dumps(rembg_canonical_job), rembg_canonical_job, "owner"
+        )
+
+        mock_redis_l1.rpush.assert_called_once()
+        mock_redis_l2.hset.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rembg_ttl_set_on_l1_result_key(
+        self, gatekeeper, mock_redis_l1, rembg_job
+    ):
+        """TTL must be set on the L1 result key after RPUSH."""
+        mock_result = {"job_id": rembg_job["job_id"], "result": "xyz", "status": "ok"}
+        gatekeeper.http.post.return_value = _mock_response(200, mock_result)
+        await gatekeeper._dispatch("q", json.dumps(rembg_job), rembg_job, "owner")
+
+        mock_redis_l1.expire.assert_called_once()
+        key_arg, ttl_arg = mock_redis_l1.expire.call_args[0]
+        assert "scareverse:rembg-results" in key_arg
+        assert ttl_arg > 0
