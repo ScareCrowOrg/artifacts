@@ -58,19 +58,6 @@ CPU_JOBS_QUEUE_L2 = os.getenv("CPU_JOBS_QUEUE_L2", "scareverse:cpu-jobs:queue")
 THREE_D_JOBS_QUEUE_L1 = os.getenv("THREE_D_JOBS_QUEUE_L1", "scareverse:3d-jobs:queue")
 THREE_D_JOBS_QUEUE_L2 = os.getenv("THREE_D_JOBS_QUEUE_L2", "scareverse:3d-jobs:queue")
 
-# Legacy per-type queues – kept for backward compatibility with existing
-# backend routers that push directly (ollama_proxy, stable_diffusion_queue).
-# GateKeeper monitors both legacy and consolidated queues automatically.
-REMBG_QUEUE_L1 = os.getenv("REMBG_QUEUE_L1", "scareverse:rembg-jobs:queue")
-REMBG_QUEUE_L2 = os.getenv("REMBG_QUEUE_L2", "scareverse:rembg-jobs:queue")
-
-INSTANTMESH_QUEUE_L1 = os.getenv("INSTANTMESH_QUEUE_L1", "scareverse:3d-jobs:queue")
-INSTANTMESH_QUEUE_L2 = os.getenv("INSTANTMESH_QUEUE_L2", "scareverse:3d-jobs:queue")
-
-# Ollama/SD queues – single queue (same L1 for owner and global jobs)
-OLLAMA_QUEUE = os.getenv("OLLAMA_QUEUE", "scareverse:ollama-jobs:queue")
-SD_QUEUE = os.getenv("SD_QUEUE", "scareverse:sd-jobs:queue")
-
 # Dead-letter queue for permanently failed jobs
 DEAD_LETTER_QUEUE = os.getenv("DEAD_LETTER_QUEUE", "scareverse:dead-letter:queue")
 
@@ -158,14 +145,14 @@ JOB_TYPES_CONFIG: Dict[str, Any] = {
     },
 }
 
-# All queues monitored by this GateKeeper
+# All queues monitored by this GateKeeper (derived from JOB_TYPES_CONFIG – single source of truth)
 ALL_QUEUES_L1 = list({
-    cfg.get("queue_l1", REMBG_QUEUE_L1)
+    cfg.get("queue_l1")
     for cfg in JOB_TYPES_CONFIG.values()
     if cfg.get("queue_l1")
 })
 ALL_QUEUES_L2 = list({
-    cfg.get("queue_l2", REMBG_QUEUE_L2)
+    cfg.get("queue_l2")
     for cfg in JOB_TYPES_CONFIG.values()
     if cfg.get("queue_l2")
 })

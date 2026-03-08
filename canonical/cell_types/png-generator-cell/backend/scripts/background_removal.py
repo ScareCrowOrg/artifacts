@@ -14,9 +14,8 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# Result key prefix and queue must match GateKeeper config
+# Result key prefix must match GateKeeper config
 _REMBG_RESULT_KEY_PREFIX = "scareverse:rembg-results"
-_CPU_JOBS_QUEUE = "scareverse:cpu-jobs:queue"
 _REMBG_RESULT_TTL = 120
 
 
@@ -27,18 +26,18 @@ async def queue_background_removal_job(
 ) -> Dict[str, Any]:
     """
     Queue a background removal job to Redis for GPU Worker processing.
-    
+
     This function:
-    1. Creates a unique job_id
-    2. Queues the job to the consolidated cpu-jobs queue with rembg_removebackground type
-    3. Uses BRPOP to wait for the result pushed by GateKeeper to L1
-    4. Returns the transparent PNG result
-    
+    1. Calls redis_job_client.create_job() with owner-first scheduling
+       (checks worker availability; enqueues to L1 if available, L2 otherwise)
+    2. Uses BRPOP to wait for the result pushed by GateKeeper to L1
+    3. Returns the transparent PNG result
+
     Args:
         input_image_base64: Base64-encoded input image (with or without data URI prefix)
         alpha_matting: Enable alpha matting for better edge quality (default: True)
         timeout: Maximum time to wait for job completion in seconds
-        
+
     Returns:
         Dict containing:
             - success: Boolean indicating success/failure
@@ -46,76 +45,86 @@ async def queue_background_removal_job(
             - error: Error message (if failure)
             - job_id: Unique job identifier
             - processing_time: Time taken by GPU worker
-            
+
     Raises:
         Exception: If Redis connection fails or job times out
     """
     job_id = None
     try:
-        # Generate unique job ID
         job_id = str(uuid.uuid4())
-        
-        logger.info(f"Queueing background removal job: {job_id}")
-        
-        # Get Redis client
-        redis_client = await get_redis_client()
-        
+        logger.info("Queueing background removal job: %s", job_id)
+
         # Strip data URI prefix if present
         if ',' in input_image_base64:
             input_image_base64 = input_image_base64.split(',', 1)[1]
-        
-        # Prepare job data using canonical job type and queue
-        job_data = {
-            "job_id": job_id,
-            "job_type": "rembg_removebackground",
-            "service": "rembg",
+
+        # Build job payload
+        payload = {
             "image_data": input_image_base64,
             "alpha_matting": alpha_matting,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
-        
-        # Queue job to the consolidated CPU jobs queue
-        await redis_client.lpush(_CPU_JOBS_QUEUE, json.dumps(job_data))
-        
-        logger.info(f"✅ Job queued: {job_id}")
-        logger.debug(f"   Queue: {_CPU_JOBS_QUEUE}")
-        logger.debug(f"   Alpha matting: {alpha_matting}")
-        
+
+        # Enqueue via unified redis_job_client (owner-first scheduling)
+        try:
+            from app.services.redis_job_client import create_job
+            enqueued_job_id, location = await create_job(
+                job_type="rembg_removebackground",
+                payload=payload,
+                owner_user_id="cell-script",
+                job_id=job_id,
+            )
+            logger.info("Job enqueued via redis_job_client to %s: %s", location, job_id)
+        except (ImportError, ModuleNotFoundError):
+            # Fallback: direct LPUSH when running outside backend app context.
+            # Matches the job_data structure that create_job() would produce.
+            logger.warning("redis_job_client not available; using direct LPUSH fallback")
+            redis_client = await _get_redis_client()
+            job_data = {
+                "job_id": job_id,
+                "job_type": "rembg_removebackground",
+                "user_id": "cell-script",
+                "queue": "scareverse:cpu-jobs:queue",
+                **payload,
+            }
+            await redis_client.lpush("scareverse:cpu-jobs:queue", json.dumps(job_data))
+
         # Wait for result via BRPOP (GateKeeper pushes result to this key)
+        redis_client = await _get_redis_client()
         result_key = f"{_REMBG_RESULT_KEY_PREFIX}:{job_id}"
         result = await brpop_result(redis_client, result_key, timeout)
-        
+
         if result is None:
-            logger.error(f"❌ Background removal timeout: {job_id}")
+            logger.error("Background removal timeout: %s", job_id)
             return {
                 "success": False,
                 "error": f"Job did not complete within {timeout} seconds",
-                "job_id": job_id
+                "job_id": job_id,
             }
-        
+
         if result.get("status") == "error":
             error_msg = result.get("error", "Unknown error")
-            logger.error(f"❌ Background removal failed: {job_id} - {error_msg}")
+            logger.error("Background removal failed: %s – %s", job_id, error_msg)
             return {
                 "success": False,
                 "error": error_msg,
-                "job_id": job_id
+                "job_id": job_id,
             }
-        
-        logger.info(f"✅ Background removal completed: {job_id}")
+
+        logger.info("Background removal completed: %s", job_id)
         return {
             "success": True,
             "output_image_base64": result.get("result", ""),
             "job_id": job_id,
-            "processing_time": result.get("processing_time", 0)
+            "processing_time": result.get("processing_time", 0),
         }
-            
+
     except Exception as e:
-        logger.error(f"Failed to queue background removal job: {e}", exc_info=True)
+        logger.error("Failed to queue background removal job: %s", e, exc_info=True)
         return {
             "success": False,
             "error": f"Failed to queue job: {str(e)}",
-            "job_id": job_id
+            "job_id": job_id,
         }
 
 
@@ -151,7 +160,7 @@ async def brpop_result(
         return None
 
 
-async def get_redis_client():
+async def _get_redis_client():
     """
     Get Redis client for job queueing.
     

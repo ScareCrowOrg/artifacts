@@ -61,7 +61,7 @@ class ResourceOrchestrator:
 
                 vram_free = telemetry.get("vram_free_mb", 0)
                 ram_free = telemetry.get("ram_free_mb", 0)
-                queue_depth = await self.get_queue_depth(config.REMBG_QUEUE_L1)
+                queue_depth = await self.get_queue_depth(config.CPU_JOBS_QUEUE_L1)
 
                 logger.info(
                     "Telemetry state: VRAM=%dMB RAM=%dMB queue_depth=%d",
