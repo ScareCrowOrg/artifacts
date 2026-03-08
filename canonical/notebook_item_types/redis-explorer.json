@@ -1,13 +1,16 @@
 {
   "id": "redis-explorer",
-  "name": "redis-explorer",
-  "description": "Hierarchical Redis key explorer with state invalidation capabilities for debugging and observability",
+  "name": "Redis Explorer",
+  "description": "Hierarchical Redis key explorer with interactive navigation, inspection, and management capabilities for debugging and observability",
   "version": "1.0.0",
   "category": "debugging",
   "can_render_dynamically": true,
   "default_refs": {
+    "basecell": [
+      "frontend/RedisExplorerCell.ts"
+    ],
     "view": [
-      "frontend/RedisExplorerView.vue"
+      "frontend/View.vue"
     ],
     "scripts": [
       "backend/scripts/main.py"
@@ -21,7 +24,8 @@
     "title": "Redis Explorer",
     "current_prefix": "",
     "delimiter": ":",
-    "max_depth": 1
+    "max_depth": 1,
+    "action": "info"
   },
   "allow_instance_override_refs": true,
   "properties_schema": {
@@ -49,10 +53,13 @@
       "type": "integer",
       "default": 1,
       "description": "Maximum depth levels to display"
-    ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+    },
+    "action": {
+      "type": "string",
+      "default": "info",
+      "enum": ["info", "scan", "get", "delete"],
+      "description": "Default action to perform"
+    }
   },
   "_discovery": {
     "labels": [
@@ -80,8 +87,7 @@
       "Manage Redis keys and values"
     ]
   },
-  "kind": "cell"
-,
-  "updated_at": "2026-02-24T00:00:00",
+  "kind": "cell",
+  "updated_at": "2026-03-08T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }

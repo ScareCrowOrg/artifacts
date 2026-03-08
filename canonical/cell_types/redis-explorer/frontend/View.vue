@@ -249,7 +249,11 @@
 import { ref, computed, onMounted, watch, type Ref } from 'vue'
 import { createLogger } from '#shared/logger.js'
 import { apiFetch } from '@/services/apiService'
+import { RedisExplorerCell } from './RedisExplorerCell'
 const logger = createLogger('cell:redis-explorer')
+
+// Initialize BaseCell instance for headless execution support
+const cellInstance = new RedisExplorerCell()
 
 // Define props interface
 interface Props {
