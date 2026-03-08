@@ -96,11 +96,21 @@ def _load_job_types_from_artifacts(
         Dict mapping each job-type name to its full definition dict.
     """
     if job_types_dir is None:
-        # config.py is at artifacts/canonical/worker/gatekeeper/config.py.
-        # Traversing 4 parent directories reaches the project root:
-        #   [0] gatekeeper/  [1] worker/  [2] canonical/  [3] artifacts/  [4] project root
-        project_root = Path(__file__).resolve().parents[4]
-        job_types_dir = project_root / "artifacts" / "canonical" / "job-types"
+        # Resolve job-types directory.
+        # In Docker (/app/config.py): /app/artifacts/canonical/job-types
+        # In development (artifacts/canonical/worker/gatekeeper/config.py): up 4 parents
+        current = Path(__file__).resolve()
+
+        # Try Docker path first: /app/artifacts/canonical/job-types
+        job_types_dir = Path("/app/artifacts/canonical/job-types")
+        if not job_types_dir.exists():
+            # Try local development: up 4 parents from gatekeeper/config.py
+            try:
+                project_root = current.parents[4]
+                job_types_dir = project_root / "artifacts" / "canonical" / "job-types"
+            except IndexError:
+                # Last resort: try parent directory
+                job_types_dir = current.parent / "artifacts" / "canonical" / "job-types"
 
     if not job_types_dir.exists():
         logger.warning("job-types directory not found: %s", job_types_dir)
