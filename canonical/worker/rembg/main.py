@@ -135,6 +135,9 @@ async def _heartbeat_loop() -> None:
         "status": "available",
     })
 
+    _last_reconnect_attempt: float = 0.0
+    _reconnect_cooldown: float = 60.0  # Minimum seconds between reconnect attempts
+
     while True:
         try:
             if _redis_l1 is not None:
@@ -144,8 +147,11 @@ async def _heartbeat_loop() -> None:
                 )
         except Exception as exc:
             logger.warning("Heartbeat publish failed: %s", exc)
-            # Attempt reconnect on next cycle
-            _redis_l1 = await _build_redis_l1()
+            import time as _time
+            now = _time.monotonic()
+            if now - _last_reconnect_attempt >= _reconnect_cooldown:
+                _last_reconnect_attempt = now
+                _redis_l1 = await _build_redis_l1()
 
         await asyncio.sleep(HEARTBEAT_INTERVAL)
 

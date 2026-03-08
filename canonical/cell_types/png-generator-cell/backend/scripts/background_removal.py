@@ -141,7 +141,7 @@ async def brpop_result(
     """
     logger.debug(f"Waiting for result via BRPOP: key={result_key} timeout={timeout}s")
     try:
-        result = await redis_client.brpop(result_key, timeout=int(timeout))
+        result = await redis_client.brpop(result_key, timeout=timeout)
         if result is None:
             return None
         _key, raw_value = result

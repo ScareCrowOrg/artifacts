@@ -82,44 +82,22 @@ COMMANDS_QUEUE = os.getenv("COMMANDS_QUEUE", "commands:gatekeeper:queue")
 # ============================================================================
 
 JOB_TYPES_CONFIG: Dict[str, Any] = {
-    "REMOTE_REMBG": {
-        "worker_name": "rembg",
-        "endpoint": os.getenv(
-            "WORKER_REMBG_ENDPOINT",
-            "http://scareverse-worker-rembg:9000"
-        ),
-        "queue_l1": CPU_JOBS_QUEUE_L1,
-        "queue_l2": CPU_JOBS_QUEUE_L2,
-        "timeout": int(os.getenv("REMBG_JOB_TIMEOUT", "60")),
-        "result_storage": "rpush_l1",
-        "result_key_prefix": os.getenv("REMBG_RESULT_KEY_PREFIX", "scareverse:rembg-results"),
-        "result_key_ttl": int(os.getenv("REMBG_RESULT_TTL", "120")),
-    },
-    "background_removal": {
-        "worker_name": "rembg",
-        "endpoint": os.getenv(
-            "WORKER_REMBG_ENDPOINT",
-            "http://scareverse-worker-rembg:9000"
-        ),
-        "queue_l1": CPU_JOBS_QUEUE_L1,
-        "queue_l2": CPU_JOBS_QUEUE_L2,
-        "timeout": int(os.getenv("REMBG_JOB_TIMEOUT", "60")),
-        "result_storage": "rpush_l1",
-        "result_key_prefix": os.getenv("REMBG_RESULT_KEY_PREFIX", "scareverse:rembg-results"),
-        "result_key_ttl": int(os.getenv("REMBG_RESULT_TTL", "120")),
-    },
-    "rembg_removebackground": {
-        "worker_name": "rembg",
-        "endpoint": os.getenv(
-            "WORKER_REMBG_ENDPOINT",
-            "http://scareverse-worker-rembg:9000"
-        ),
-        "queue_l1": CPU_JOBS_QUEUE_L1,
-        "queue_l2": CPU_JOBS_QUEUE_L2,
-        "timeout": int(os.getenv("REMBG_JOB_TIMEOUT", "60")),
-        "result_storage": "rpush_l1",
-        "result_key_prefix": os.getenv("REMBG_RESULT_KEY_PREFIX", "scareverse:rembg-results"),
-        "result_key_ttl": int(os.getenv("REMBG_RESULT_TTL", "120")),
+    # Shared rembg worker configuration used by all rembg aliases
+    **{
+        alias: {
+            "worker_name": "rembg",
+            "endpoint": os.getenv(
+                "WORKER_REMBG_ENDPOINT",
+                "http://scareverse-worker-rembg:9000"
+            ),
+            "queue_l1": CPU_JOBS_QUEUE_L1,
+            "queue_l2": CPU_JOBS_QUEUE_L2,
+            "timeout": int(os.getenv("REMBG_JOB_TIMEOUT", "60")),
+            "result_storage": "rpush_l1",
+            "result_key_prefix": os.getenv("REMBG_RESULT_KEY_PREFIX", "scareverse:rembg-results"),
+            "result_key_ttl": int(os.getenv("REMBG_RESULT_TTL", "120")),
+        }
+        for alias in ("REMOTE_REMBG", "background_removal", "rembg_removebackground")
     },
     # Phase 2 (future)
     "instantmesh": {
