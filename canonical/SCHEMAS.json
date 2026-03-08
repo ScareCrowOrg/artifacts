@@ -652,9 +652,9 @@
     }
   },
   "job_types": {
-    "name": {
+    "_id": {
       "type": "TEXT",
-      "constraints": "NOT NULL",
+      "constraints": "PRIMARY KEY",
       "description": "Primary key \u2013 canonical job type name (matches filename without .json)",
       "indexed": true
     },
