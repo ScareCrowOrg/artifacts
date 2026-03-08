@@ -1,6 +1,6 @@
 {
   "id": "redis-explorer",
-  "name": "Redis Explorer",
+  "name": "redis-explorer",
   "description": "Hierarchical Redis key explorer with interactive navigation, inspection, and management capabilities for debugging and observability",
   "version": "1.0.0",
   "category": "debugging",
