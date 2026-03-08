@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "AUTO-GENERATED from Pydantic models - DO NOT EDIT MANUALLY. Canonical collection schemas - source of truth for ScareVerse canonical data. To update schemas, modify Pydantic models and run: python scripts/generate_canonical_schemas.py",
-  "last_updated": "2026-03-07",
+  "last_updated": "2026-03-08",
   "permissions": {
     "_id": {
       "type": "TEXT",
@@ -649,60 +649,6 @@
       "type": "DATETIME",
       "description": "UTC timestamp when content was created",
       "indexed": true
-    }
-  },
-  "job_types": {
-    "_id": {
-      "type": "TEXT",
-      "constraints": "PRIMARY KEY",
-      "description": "Primary key; same value as job_type (canonical name)"
-    },
-    "job_type": {
-      "type": "TEXT",
-      "constraints": "NOT NULL",
-      "description": "Canonical job type name (e.g., ollama_generate, rembg_removebackground)",
-      "indexed": true
-    },
-    "description": {
-      "type": "TEXT",
-      "description": "Human-readable description of the job type"
-    },
-    "worker": {
-      "type": "TEXT",
-      "constraints": "NOT NULL",
-      "description": "Worker service name",
-      "indexed": true
-    },
-    "queue": {
-      "type": "TEXT",
-      "constraints": "NOT NULL",
-      "description": "Redis queue name for L1 enqueue"
-    },
-    "result_storage": {
-      "type": "TEXT",
-      "constraints": "NOT NULL",
-      "description": "Result storage strategy (rpush_l1 or hset_l2)"
-    },
-    "result_key_prefix": {
-      "type": "TEXT",
-      "constraints": "NOT NULL",
-      "description": "Redis key prefix for result storage"
-    },
-    "result_key_ttl": {
-      "type": "INTEGER",
-      "description": "TTL in seconds for result keys"
-    },
-    "timeout": {
-      "type": "INTEGER",
-      "description": "Job processing timeout in seconds"
-    },
-    "worker_availability_key": {
-      "type": "TEXT",
-      "description": "Redis key for worker availability signaling"
-    },
-    "aliases": {
-      "type": "JSON",
-      "description": "Legacy alias names that map to this job type"
     }
   }
 }
