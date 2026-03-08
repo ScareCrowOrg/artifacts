@@ -1,8 +1,13 @@
 {
+  "name": "instantmesh",
   "job_type": "instantmesh",
   "description": "3D mesh generation via InstantMesh service",
   "worker": "instantmesh",
+  "worker_type": "instantmesh",
+  "endpoint": "http://scareverse-worker-instantmesh:8000",
   "queue": "scareverse:3d-jobs:queue",
+  "queue_l1": "scareverse:3d-jobs:queue",
+  "queue_l2": "scareverse:3d-jobs:queue",
   "result_storage": "rpush_l1",
   "result_key_prefix": "scareverse:3d-results",
   "result_key_ttl": 300,

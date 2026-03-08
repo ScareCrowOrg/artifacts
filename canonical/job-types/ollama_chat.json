@@ -1,8 +1,13 @@
 {
+  "name": "ollama_chat",
   "job_type": "ollama_chat",
   "description": "LLM chat inference via Ollama service",
   "worker": "ollama",
+  "worker_type": "ollama",
+  "endpoint": "http://scareverse-ollama-worker:9000",
   "queue": "scareverse:cpu-jobs:queue",
+  "queue_l1": "scareverse:cpu-jobs:queue",
+  "queue_l2": "scareverse:cpu-jobs:queue",
   "result_storage": "rpush_l1",
   "result_key_prefix": "scareverse:ollama-results",
   "result_key_ttl": 60,

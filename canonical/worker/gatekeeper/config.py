@@ -3,11 +3,18 @@ Configuration module for GateKeeper Worker.
 
 Manages dual-source Redis configuration (L1 owner + L2 global),
 multi-source pooling strategy, and HTTP routing to atomic workers.
+
+Job types are loaded dynamically from artifacts/canonical/job-types/*.json,
+eliminating the need to hard-code worker endpoints in this file.
 """
 
+import json
+import logging
 import os
 from pathlib import Path
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Base Paths
@@ -65,85 +72,113 @@ DEAD_LETTER_QUEUE = os.getenv("DEAD_LETTER_QUEUE", "scareverse:dead-letter:queue
 COMMANDS_QUEUE = os.getenv("COMMANDS_QUEUE", "commands:gatekeeper:queue")
 
 # ============================================================================
-# Job Routing: Job Type → Atomic Worker HTTP Endpoint
+# Job Routing: Dynamic Job Type → Atomic Worker HTTP Endpoint
 # ============================================================================
 
-JOB_TYPES_CONFIG: Dict[str, Any] = {
-    # Shared rembg worker configuration used by all rembg aliases
-    **{
-        alias: {
-            "worker_name": "rembg",
-            "endpoint": os.getenv(
-                "WORKER_REMBG_ENDPOINT",
-                "http://scareverse-worker-rembg:9000"
-            ),
-            "queue_l1": CPU_JOBS_QUEUE_L1,
-            "queue_l2": CPU_JOBS_QUEUE_L2,
-            "timeout": int(os.getenv("REMBG_JOB_TIMEOUT", "60")),
-            "result_storage": "rpush_l1",
-            "result_key_prefix": os.getenv("REMBG_RESULT_KEY_PREFIX", "scareverse:rembg-results"),
-            "result_key_ttl": int(os.getenv("REMBG_RESULT_TTL", "120")),
+def _load_job_types_from_artifacts(
+    job_types_dir: "Path | None" = None,
+) -> Dict[str, Any]:
+    """
+    Load job-type definitions from artifacts/canonical/job-types/*.json.
+
+    Each JSON file defines a job type with its routing configuration.
+    The ``name`` field is used as the primary key. Endpoints can be overridden
+    at runtime via environment variables of the form
+    ``WORKER_{NAME_UPPER}_ENDPOINT``.
+
+    Args:
+        job_types_dir: Optional explicit path to the job-types directory.
+            Defaults to ``<project_root>/artifacts/canonical/job-types/``,
+            where the project root is resolved relative to this file:
+            ``artifacts/canonical/worker/gatekeeper/config.py`` → 4 parents up.
+
+    Returns:
+        Dict mapping each job-type name to its full definition dict.
+    """
+    if job_types_dir is None:
+        # config.py is at artifacts/canonical/worker/gatekeeper/config.py.
+        # Traversing 4 parent directories reaches the project root:
+        #   [0] gatekeeper/  [1] worker/  [2] canonical/  [3] artifacts/  [4] project root
+        project_root = Path(__file__).resolve().parents[4]
+        job_types_dir = project_root / "artifacts" / "canonical" / "job-types"
+
+    if not job_types_dir.exists():
+        logger.warning("job-types directory not found: %s", job_types_dir)
+        return {}
+
+    job_types: Dict[str, Any] = {}
+    for json_file in sorted(job_types_dir.glob("*.json")):
+        try:
+            with open(json_file, encoding="utf-8") as fh:
+                definition = json.load(fh)
+
+            name = definition.get("name")
+            if not name:
+                logger.warning("Job type file missing 'name' field: %s", json_file)
+                continue
+
+            # Allow env var override of endpoint
+            env_key = f"WORKER_{name.upper().replace('-', '_')}_ENDPOINT"
+            definition["endpoint"] = os.getenv(env_key, definition.get("endpoint"))
+
+            job_types[name] = definition
+            logger.debug("Loaded job-type: %s", name)
+        except Exception as exc:
+            logger.error("Failed to load job-type from %s: %s", json_file, exc)
+
+    return job_types
+
+
+def _build_job_types_config(
+    job_types_dir: "Path | None" = None,
+) -> Dict[str, Any]:
+    """
+    Build JOB_TYPES_CONFIG from loaded job-type definitions.
+
+    Each entry in the returned dict follows the structure expected by the
+    GateKeeper dispatcher. Aliases defined in each job-type JSON file are
+    expanded as additional keys so that legacy job-type names (e.g.
+    ``REMOTE_REMBG``, ``background_removal``) continue to resolve correctly.
+
+    Args:
+        job_types_dir: Optional path passed through to
+            ``_load_job_types_from_artifacts``. Defaults to the canonical
+            artifacts directory.
+
+    Returns:
+        Dict mapping every job-type name (and alias) to its routing config.
+    """
+    loaded = _load_job_types_from_artifacts(job_types_dir)
+    config: Dict[str, Any] = {}
+
+    for name, job_type in loaded.items():
+        entry: Dict[str, Any] = {
+            "worker_name": job_type.get("worker_type", name),
+            "endpoint": job_type.get("endpoint"),
+            "queue_l1": job_type.get("queue_l1"),
+            "queue_l2": job_type.get("queue_l2"),
+            "timeout": int(job_type.get("timeout", 60)),
+            "result_storage": job_type.get("result_storage", "rpush_l1"),
+            "result_key_prefix": job_type.get("result_key_prefix"),
+            "result_key_ttl": int(job_type.get("result_key_ttl", 120)),
         }
-        for alias in ("REMOTE_REMBG", "background_removal", "rembg_removebackground")
-    },
-    # Phase 2 (future)
-    "instantmesh": {
-        "worker_name": "instantmesh",
-        "endpoint": os.getenv(
-            "WORKER_INSTANTMESH_ENDPOINT",
-            "http://scareverse-worker-instantmesh:8000"
-        ),
-        "queue_l1": THREE_D_JOBS_QUEUE_L1,
-        "queue_l2": THREE_D_JOBS_QUEUE_L2,
-        "timeout": int(os.getenv("INSTANTMESH_JOB_TIMEOUT", "120")),
-        "result_storage": "rpush_l1",
-        "result_key_prefix": os.getenv("THREE_D_RESULT_KEY_PREFIX", "scareverse:3d-results"),
-        "result_key_ttl": int(os.getenv("THREE_D_RESULT_TTL", "300")),
-    },
-    # Ollama LLM workers – result_storage "rpush_l1" ensures results are stored
-    # via RPUSH on Redis L1 so the backend router can BRPOP them directly.
-    "ollama_generate": {
-        "worker_name": "ollama",
-        "endpoint": os.getenv(
-            "WORKER_OLLAMA_ENDPOINT",
-            "http://scareverse-ollama-worker:9000"
-        ),
-        "queue_l1": CPU_JOBS_QUEUE_L1,
-        "queue_l2": CPU_JOBS_QUEUE_L2,
-        "timeout": int(os.getenv("OLLAMA_JOB_TIMEOUT", "120")),
-        "result_storage": "rpush_l1",
-        "result_key_prefix": os.getenv("OLLAMA_RESULT_KEY_PREFIX", "scareverse:ollama-results"),
-        "result_key_ttl": int(os.getenv("OLLAMA_RESULT_TTL", "60")),
-    },
-    "ollama_chat": {
-        "worker_name": "ollama",
-        "endpoint": os.getenv(
-            "WORKER_OLLAMA_ENDPOINT",
-            "http://scareverse-ollama-worker:9000"
-        ),
-        "queue_l1": CPU_JOBS_QUEUE_L1,
-        "queue_l2": CPU_JOBS_QUEUE_L2,
-        "timeout": int(os.getenv("OLLAMA_JOB_TIMEOUT", "120")),
-        "result_storage": "rpush_l1",
-        "result_key_prefix": os.getenv("OLLAMA_RESULT_KEY_PREFIX", "scareverse:ollama-results"),
-        "result_key_ttl": int(os.getenv("OLLAMA_RESULT_TTL", "60")),
-    },
-    # Stable Diffusion worker – result_storage "rpush_l1" ensures results are
-    # stored via RPUSH on Redis L1 so the backend router can BRPOP them.
-    "sd_generate": {
-        "worker_name": "stable-diffusion",
-        "endpoint": os.getenv(
-            "WORKER_SD_ENDPOINT",
-            "http://scareverse-sd-worker:9000"
-        ),
-        "queue_l1": CPU_JOBS_QUEUE_L1,
-        "queue_l2": CPU_JOBS_QUEUE_L2,
-        "timeout": int(os.getenv("SD_JOB_TIMEOUT", "300")),
-        "result_storage": "rpush_l1",
-        "result_key_prefix": os.getenv("SD_RESULT_KEY_PREFIX", "scareverse:sd-results"),
-        "result_key_ttl": int(os.getenv("SD_RESULT_TTL", "120")),
-    },
-}
+        config[name] = entry
+
+        # Expand aliases so legacy job-type names still route correctly.
+        for alias in job_type.get("aliases", []):
+            if alias != name:
+                config[alias] = entry
+
+    return config
+
+
+# Load job-types at module init (single source of truth)
+JOB_TYPES_CONFIG = _build_job_types_config()
+
+if not JOB_TYPES_CONFIG:
+    logger.warning("⚠️ No job-types loaded from artifacts/canonical/job-types/")
+    logger.warning("   GateKeeper will start without configured workers")
+    logger.warning("   Add JSON files to artifacts/canonical/job-types/ and restart")
 
 # All queues monitored by this GateKeeper (derived from JOB_TYPES_CONFIG – single source of truth)
 ALL_QUEUES_L1 = list({
