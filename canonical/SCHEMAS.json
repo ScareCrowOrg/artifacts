@@ -700,5 +700,116 @@
       "type": "JSON",
       "description": "Legacy or alternate job-type names that resolve to this entry"
     }
+  },
+  "service_tokens": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY",
+      "description": "Unique PAT UUID"
+    },
+    "user_id": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Owner user UUID",
+      "indexed": true
+    },
+    "name": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Human-readable token name"
+    },
+    "token_prefix": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "First 8 characters of raw JWT (for UI display)"
+    },
+    "jwt_jti": {
+      "type": "TEXT",
+      "constraints": "NOT NULL UNIQUE",
+      "description": "JWT jti claim - unique token ID for revocation",
+      "indexed": true
+    },
+    "scopes": {
+      "type": "JSON",
+      "description": "List of granted scopes"
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "indexed": true,
+      "description": "Creation timestamp"
+    },
+    "expires_at": {
+      "type": "DATETIME",
+      "indexed": true,
+      "description": "Expiration timestamp - matches JWT exp claim"
+    },
+    "last_used_at": {
+      "type": "DATETIME",
+      "description": "Timestamp of last successful use"
+    },
+    "is_active": {
+      "type": "BOOLEAN",
+      "constraints": "NOT NULL",
+      "description": "False when token is revoked",
+      "indexed": true
+    },
+    "revoked_at": {
+      "type": "DATETIME",
+      "description": "Revocation timestamp (audit trail)"
+    },
+    "environment": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Deployment environment: production, staging, or development",
+      "indexed": true
+    }
+  },
+  "platform_nodes": {
+    "_id": {
+      "type": "TEXT",
+      "constraints": "PRIMARY KEY",
+      "description": "Unique node UUID"
+    },
+    "user_id": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Owner user UUID",
+      "indexed": true
+    },
+    "node_nickname": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Node nickname - unique per user (^[a-z0-9-]+$, max 64 chars)"
+    },
+    "node_type": {
+      "type": "TEXT",
+      "constraints": "NOT NULL",
+      "description": "Node type: runner, worker, launcher, or edge_node",
+      "indexed": true
+    },
+    "endpoint_url": {
+      "type": "TEXT",
+      "description": "HTTPS endpoint for this node"
+    },
+    "platform_info": {
+      "type": "JSON",
+      "description": "Platform metadata: hostname, os, python_version, gpu_count, etc."
+    },
+    "registered_at": {
+      "type": "DATETIME",
+      "indexed": true,
+      "description": "Node registration timestamp"
+    },
+    "last_heartbeat": {
+      "type": "DATETIME",
+      "indexed": true,
+      "description": "Timestamp of the last received heartbeat"
+    },
+    "is_active": {
+      "type": "BOOLEAN",
+      "constraints": "NOT NULL",
+      "description": "False when node is deregistered",
+      "indexed": true
+    }
   }
 }
