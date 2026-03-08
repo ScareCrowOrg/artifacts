@@ -2,7 +2,9 @@ version: "3.9"
 
 services:
   gatekeeper:
-    build: .
+    build:
+      context: ../..  # Build context is artifacts/canonical/ to include job-types/
+      dockerfile: worker/gatekeeper/Dockerfile
     image: scareverse-worker-gatekeeper:latest
     container_name: scareverse-gatekeeper
     restart: unless-stopped
