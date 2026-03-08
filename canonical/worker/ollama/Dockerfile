@@ -29,4 +29,6 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=5 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Run both services: Ollama in background, worker in foreground
-CMD ollama serve & sleep 10 && python main.py
+# Use explicit shell to override ollama/ollama's ENTRYPOINT
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["ollama serve & sleep 10 && python main.py"]

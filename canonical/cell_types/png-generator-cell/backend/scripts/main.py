@@ -406,32 +406,20 @@ async def handle_generate_png(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 "metadata": result.get("metadata", {})
             }
         else:
-            # Service failed, use fallback
-            logger.warning(f"PNG generation failed, using fallback: {result.get('error')}")
-            fallback_png = _create_fallback_png()
-            
+            # Service failed - return error, no fake fallback
+            logger.error(f"PNG generation failed: {result.get('error')}")
             return {
-                "success": True,
-                "message": "PNG generation failed, using fallback placeholder",
-                "prompt": prompt,
-                "has_png": True,
-                "generatedPng": fallback_png,
-                "error": result.get("error"),
-                "fallback": True
+                "success": False,
+                "error": result.get("error", "SD generation failed"),
+                "prompt": prompt
             }
     except Exception as e:
-        # Unexpected error, use fallback
+        # Unexpected error - return error, no fake fallback
         logger.error(f"Unexpected error during PNG generation: {e}", exc_info=True)
-        fallback_png = _create_fallback_png()
-        
         return {
-            "success": True,
-            "message": "PNG generation error, using fallback placeholder",
-            "prompt": prompt,
-            "has_png": True,
-            "generatedPng": fallback_png,
-            "error": str(e),
-            "fallback": True
+            "success": False,
+            "error": f"PNG generation error: {str(e)}",
+            "prompt": prompt
         }
 
 
