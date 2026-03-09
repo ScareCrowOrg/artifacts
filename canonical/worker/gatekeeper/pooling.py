@@ -8,7 +8,7 @@ a longer timeout. This ensures the local node's own jobs are prioritised.
 
 import asyncio
 import logging
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import redis.asyncio as aioredis
 
@@ -33,7 +33,11 @@ class MultiSourcePooler:
     def __init__(
         self,
         redis_l1: aioredis.Redis,
-        redis_l2: aioredis.Redis,
+        # redis_l2 accepts either aioredis.Redis (direct TCP) or
+        # CentralHubRedisClient (HTTP) – both expose a compatible brpop/lpush
+        # interface.  Using Any avoids a circular import; both clients implement
+        # the required brpop(keys, timeout) and lpush(key, value) methods.
+        redis_l2: Any,
         queues_l1: Optional[list] = None,
         queues_l2: Optional[list] = None,
     ):

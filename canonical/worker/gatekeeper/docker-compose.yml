@@ -15,11 +15,9 @@ services:
       REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
 
-      # Redis L2 – CentralHub (global)
-      REDIS_L2_HOST: ${REDIS_L2_HOST:-host.docker.internal}
-      REDIS_L2_PORT: ${REDIS_L2_PORT:-6379}
-      REDIS_L2_PASSWORD: ${REDIS_L2_PASSWORD:-}
-      REDIS_L2_DB: ${REDIS_L2_DB:-0}
+      # CentralHub – L2 access via HTTP (no direct Redis credentials needed)
+      CENTRALHUB_URL: ${CENTRALHUB_URL:-http://centralhub:8080}
+      CENTRALHUB_SERVICE_TOKEN: ${CENTRALHUB_SERVICE_TOKEN:-internal-gatekeeper-token}
 
       # Atomic worker endpoints (override JSON defaults from artifacts/canonical/job-types/)
       WORKER_REMBG_REMOVEBACKGROUND_ENDPOINT: ${WORKER_REMBG_REMOVEBACKGROUND_ENDPOINT:-http://scareverse-worker-rembg:9000}
@@ -35,8 +33,6 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - scareverse-net
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
 networks:
   scareverse-net:

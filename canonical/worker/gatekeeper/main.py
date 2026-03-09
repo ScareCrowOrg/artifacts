@@ -25,6 +25,7 @@ import httpx
 import redis.asyncio as aioredis
 
 import config
+from centralhub_redis_client import CentralHubRedisClient
 from pooling import MultiSourcePooler
 from orchestrator import ResourceOrchestrator
 
@@ -85,7 +86,7 @@ class GateKeeper:
     def __init__(
         self,
         redis_l1: aioredis.Redis,
-        redis_l2: aioredis.Redis,
+        redis_l2: CentralHubRedisClient,
         http_client: httpx.AsyncClient,
     ):
         self.redis_l1 = redis_l1
@@ -102,7 +103,7 @@ class GateKeeper:
     async def run(self) -> None:
         """Start the dispatcher loop and background tasks."""
         logger.info("GateKeeper %s starting up", self.worker_id)
-        logger.info("L1: %s:%d  L2: %s:%d", config.REDIS_L1_HOST, config.REDIS_L1_PORT, config.REDIS_L2_HOST, config.REDIS_L2_PORT)
+        logger.info("L1: %s:%d  L2: %s (via CentralHub HTTP)", config.REDIS_L1_HOST, config.REDIS_L1_PORT, config.CENTRALHUB_URL)
         logger.info("Queues L1: %s", config.ALL_QUEUES_L1)
         logger.info("Queues L2: %s", config.ALL_QUEUES_L2)
 
@@ -384,19 +385,17 @@ async def main() -> None:
         config.REDIS_L1_PASSWORD,
         config.REDIS_L1_DB,
     )
-    redis_l2 = _build_redis(
-        config.REDIS_L2_HOST,
-        config.REDIS_L2_PORT,
-        config.REDIS_L2_PASSWORD,
-        config.REDIS_L2_DB,
+    redis_l2_client = CentralHubRedisClient(
+        auth_token=config.CENTRALHUB_SERVICE_TOKEN,
+        base_url=config.CENTRALHUB_URL,
     )
 
     async with httpx.AsyncClient() as http_client:
-        gatekeeper = GateKeeper(redis_l1, redis_l2, http_client)
+        gatekeeper = GateKeeper(redis_l1, redis_l2_client, http_client)
         await gatekeeper.run()
 
     await redis_l1.aclose()
-    await redis_l2.aclose()
+    await redis_l2_client.close()
 
 
 if __name__ == "__main__":

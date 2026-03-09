@@ -32,13 +32,14 @@ REDIS_L1_PASSWORD = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
 REDIS_L1_DB = int(os.getenv("REDIS_L1_DB", "0"))
 
 # ============================================================================
-# Redis L2 Configuration (Global - CentralHub)
+# CentralHub Configuration (L2 access via HTTP – no direct Redis credentials)
 # ============================================================================
 
-REDIS_L2_HOST = os.getenv("REDIS_L2_HOST", "host.docker.internal")
-REDIS_L2_PORT = int(os.getenv("REDIS_L2_PORT", "6379"))
-REDIS_L2_PASSWORD = os.getenv("REDIS_L2_PASSWORD", "")
-REDIS_L2_DB = int(os.getenv("REDIS_L2_DB", "0"))
+CENTRALHUB_URL = os.getenv("CENTRALHUB_URL", "http://centralhub:8080")
+CENTRALHUB_SERVICE_TOKEN = os.getenv(
+    "CENTRALHUB_SERVICE_TOKEN",
+    "internal-gatekeeper-token",
+)
 
 # ============================================================================
 # Multi-Source Pooling Strategy
