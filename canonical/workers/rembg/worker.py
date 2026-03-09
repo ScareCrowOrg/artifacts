@@ -15,12 +15,14 @@ from typing import Any, Dict, Optional
 # (PYTHONPATH=/app/artifacts) and when running tests from within the worker dir.
 try:
     from canonical.shared.base_worker import BaseWorker
+    from canonical.shared.utils import strip_data_uri_prefix
 except ImportError:
     # Fallback for isolated development / direct execution
     _shared = Path(__file__).resolve().parents[2] / "shared"
     if str(_shared) not in sys.path:
         sys.path.insert(0, str(_shared.parent.parent))
     from canonical.shared.base_worker import BaseWorker
+    from canonical.shared.utils import strip_data_uri_prefix
 
 
 class RembgWorker(BaseWorker):
@@ -50,12 +52,8 @@ class RembgWorker(BaseWorker):
         import rembg
         from PIL import Image
 
-        image_base64: str = self.input_data["image_base64"]
+        image_base64 = strip_data_uri_prefix(self.input_data["image_base64"])
         alpha_matting: bool = self.input_data.get("alpha_matting", True)
-
-        # Strip data-URI prefix if present
-        if "," in image_base64:
-            image_base64 = image_base64.split(",", 1)[1]
 
         # Decode input
         image_bytes = base64.b64decode(image_base64)

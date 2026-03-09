@@ -183,6 +183,9 @@ class GateKeeper:
 
         try:
             if execution_model == "subprocess":
+                # Subprocess workers receive a clean input_data dict via stdin.
+                # Support both "input_data" (subprocess contract) and "payload"
+                # (legacy backend format) for backward compatibility with queued jobs.
                 input_data = job.get("input_data") or job.get("payload") or {}
                 result = await execute_subprocess_job(job_type, job_id, input_data, route)
                 await self._persist_success(job_id, result, source, job_type)

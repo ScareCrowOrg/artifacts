@@ -7,7 +7,7 @@
 
   "service": {
     "name": "ollama",
-    "endpoint": "http://scareverse-ollama-service:8080"
+    "endpoint": "http://scareverse-ollama-service:11434"
   },
 
   "configuration": {

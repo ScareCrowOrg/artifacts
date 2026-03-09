@@ -10,6 +10,8 @@ from .worker_executor import WorkerExecutor
 from .redis_client import get_redis_client, close_redis_client, reset_redis_client
 from .centralhub_client import CentralHubClient, get_centralhub_client, close_centralhub_client
 
+from .utils import utcnow_iso, load_job_type_definitions, safe_json_loads, strip_data_uri_prefix
+
 __all__ = [
     "BaseWorker",
     "WorkerExecutor",
@@ -19,4 +21,8 @@ __all__ = [
     "CentralHubClient",
     "get_centralhub_client",
     "close_centralhub_client",
+    "utcnow_iso",
+    "load_job_type_definitions",
+    "safe_json_loads",
+    "strip_data_uri_prefix",
 ]

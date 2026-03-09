@@ -51,6 +51,23 @@ def load_job_type_definitions(job_types_dir: Path) -> Dict[str, Any]:
     return result
 
 
+def strip_data_uri_prefix(data: str) -> str:
+    """
+    Strip base64 data-URI prefix if present.
+
+    Handles both ``data:image/png;base64,<b64>`` and plain base64 strings.
+
+    Args:
+        data: Input string (with or without data-URI prefix).
+
+    Returns:
+        Plain base64 string without prefix.
+    """
+    if "," in data:
+        return data.split(",", 1)[1]
+    return data
+
+
 def safe_json_loads(raw: str, context: str = "") -> Optional[Dict[str, Any]]:
     """Parse JSON string, returning None and logging on error."""
     try:

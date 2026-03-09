@@ -9,7 +9,7 @@ job-type config shape expected by the dispatcher.
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import config
 
@@ -25,10 +25,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-_executor: "_WorkerExecutor | None" = None
+_executor: Optional[_WorkerExecutor] = None
 
 
-def _get_executor() -> "_WorkerExecutor":
+def _get_executor() -> _WorkerExecutor:
     global _executor
     if _executor is None:
         _executor = _WorkerExecutor(workers_path=str(config.WORKERS_PATH))
