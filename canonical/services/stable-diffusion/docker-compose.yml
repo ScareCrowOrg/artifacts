@@ -1,0 +1,74 @@
+version: "3.9"
+
+# ==============================================================================
+# Stable Diffusion Infrastructure Service
+# ==============================================================================
+# Long-lived Stable Diffusion GPU inference service.
+# GateKeeper routes "sd_generate" jobs here via HTTP.
+#
+# This service no longer includes a FastAPI wrapper – GateKeeper communicates
+# with SD through the stable-diffusion-wrapper subprocess worker or via
+# a dedicated HTTP worker defined in workers/stable-diffusion-wrapper/.
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose down
+#
+# Prerequisites:
+#   - NVIDIA Container Toolkit installed (8-10GB VRAM minimum for SDXL)
+#   - External network scareverse-net created:
+#       docker network create scareverse-net
+#   - .env file with HF_HUB_CACHE_PATH
+# ==============================================================================
+
+services:
+
+  stable-diffusion:
+    image: stability-ai/sd-webui:latest
+    container_name: scareverse-sd-service
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      HF_HUB_CACHE: /root/.cache/huggingface
+      HF_HUB_OFFLINE: "0"
+      PYTHONUNBUFFERED: "1"
+
+    volumes:
+      - type: bind
+        source: ${HF_HUB_CACHE_PATH:-/root/.cache/huggingface}
+        target: /root/.cache/huggingface
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    shm_size: "2gb"
+
+    ports:
+      - "9090:9090"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 15s
+      start_period: 120s
+      retries: 5
+
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    networks:
+      - scareverse-net
+
+networks:
+  scareverse-net:
+    external: true

@@ -1,0 +1,71 @@
+version: "3.9"
+
+# ==============================================================================
+# Ollama Infrastructure Service
+# ==============================================================================
+# Long-lived Ollama LLM inference service.
+# GateKeeper routes "ollama_generate" / "ollama_chat" jobs here via HTTP.
+#
+# This service no longer includes a FastAPI wrapper – GateKeeper communicates
+# with Ollama directly through the ollama-wrapper subprocess worker or via
+# a dedicated HTTP worker defined in workers/ollama-wrapper/.
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose down
+#
+# Prerequisites:
+#   - NVIDIA Container Toolkit installed
+#   - External network scareverse-net created:
+#       docker network create scareverse-net
+#   - .env file with REDIS_L1_HOST, REDIS_L1_PASSWORD, OLLAMA_MODELS_PATH
+# ==============================================================================
+
+services:
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: scareverse-ollama-service
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      OLLAMA_HOST: "0.0.0.0:11434"
+      OLLAMA_MODELS: /root/.ollama
+
+    volumes:
+      - type: bind
+        source: ${OLLAMA_MODELS_PATH:-/root/.ollama}
+        target: /root/.ollama
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    ports:
+      - "11434:11434"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+      interval: 30s
+      timeout: 15s
+      start_period: 90s
+      retries: 5
+
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    networks:
+      - scareverse-net
+
+networks:
+  scareverse-net:
+    external: true

@@ -1,9 +1,19 @@
 {
   "name": "sd_generate",
-  "job_type": "sd_generate",
+  "version": "2.0.0",
   "description": "Image generation via Stable Diffusion service",
-  "worker_type": "stable-diffusion",
-  "endpoint": "http://scareverse-sd-worker:8080",
+
+  "execution_model": "service",
+
+  "service": {
+    "name": "stable-diffusion",
+    "endpoint": "http://scareverse-sd-service:9090"
+  },
+
+  "configuration": {
+    "timeout_seconds": 300
+  },
+
   "queue": "scareverse:cpu-jobs:queue",
   "queue_l1": "scareverse:cpu-jobs:queue",
   "queue_l2": "scareverse:cpu-jobs:queue",
@@ -11,8 +21,32 @@
   "result_key_prefix": "scareverse:sd-results",
   "result_key_ttl": 120,
   "timeout": 300,
+
   "worker_availability_key": "state:worker:sd_generate:available",
+
   "aliases": [
     "sd_generate"
-  ]
+  ],
+
+  "input_schema": {
+    "type": "object",
+    "required": ["prompt"],
+    "properties": {
+      "prompt": {"type": "string"},
+      "negative_prompt": {"type": "string", "default": ""},
+      "model": {"type": "string", "default": "stabilityai/stable-diffusion-xl-base-1.0"},
+      "width": {"type": "integer", "default": 512},
+      "height": {"type": "integer", "default": 512},
+      "num_inference_steps": {"type": "integer", "default": 20},
+      "guidance_scale": {"type": "number", "default": 7.5}
+    }
+  },
+
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "image_base64": {"type": "string"},
+      "seed": {"type": "integer"}
+    }
+  }
 }

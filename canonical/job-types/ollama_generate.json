@@ -1,9 +1,19 @@
 {
   "name": "ollama_generate",
-  "job_type": "ollama_generate",
+  "version": "2.0.0",
   "description": "LLM text generation via Ollama service",
-  "worker_type": "ollama",
-  "endpoint": "http://scareverse-ollama-worker:8080",
+
+  "execution_model": "service",
+
+  "service": {
+    "name": "ollama",
+    "endpoint": "http://scareverse-ollama-service:8080"
+  },
+
+  "configuration": {
+    "timeout_seconds": 120
+  },
+
   "queue": "scareverse:cpu-jobs:queue",
   "queue_l1": "scareverse:cpu-jobs:queue",
   "queue_l2": "scareverse:cpu-jobs:queue",
@@ -11,8 +21,30 @@
   "result_key_prefix": "scareverse:ollama-results",
   "result_key_ttl": 60,
   "timeout": 120,
+
   "worker_availability_key": "state:worker:ollama_generate:available",
+
   "aliases": [
     "ollama_generate"
-  ]
+  ],
+
+  "input_schema": {
+    "type": "object",
+    "required": ["prompt"],
+    "properties": {
+      "prompt": {"type": "string"},
+      "model": {"type": "string", "default": "mistral"},
+      "stream": {"type": "boolean", "default": false},
+      "options": {"type": "object"}
+    }
+  },
+
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "response": {"type": "string"},
+      "model": {"type": "string"},
+      "done": {"type": "boolean"}
+    }
+  }
 }

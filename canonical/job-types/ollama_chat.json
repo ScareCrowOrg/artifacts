@@ -1,9 +1,19 @@
 {
   "name": "ollama_chat",
-  "job_type": "ollama_chat",
+  "version": "2.0.0",
   "description": "LLM chat inference via Ollama service",
-  "worker_type": "ollama",
-  "endpoint": "http://scareverse-ollama-worker:8080",
+
+  "execution_model": "service",
+
+  "service": {
+    "name": "ollama",
+    "endpoint": "http://scareverse-ollama-service:8080"
+  },
+
+  "configuration": {
+    "timeout_seconds": 120
+  },
+
   "queue": "scareverse:cpu-jobs:queue",
   "queue_l1": "scareverse:cpu-jobs:queue",
   "queue_l2": "scareverse:cpu-jobs:queue",
@@ -11,8 +21,30 @@
   "result_key_prefix": "scareverse:ollama-results",
   "result_key_ttl": 60,
   "timeout": 120,
+
   "worker_availability_key": "state:worker:ollama_chat:available",
+
   "aliases": [
     "ollama_chat"
-  ]
+  ],
+
+  "input_schema": {
+    "type": "object",
+    "required": ["messages"],
+    "properties": {
+      "messages": {"type": "array", "items": {"type": "object"}},
+      "model": {"type": "string", "default": "mistral"},
+      "stream": {"type": "boolean", "default": false},
+      "options": {"type": "object"}
+    }
+  },
+
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "message": {"type": "object"},
+      "model": {"type": "string"},
+      "done": {"type": "boolean"}
+    }
+  }
 }

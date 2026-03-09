@@ -1,9 +1,19 @@
 {
   "name": "instantmesh",
-  "job_type": "instantmesh",
+  "version": "2.0.0",
   "description": "3D mesh generation via InstantMesh service",
-  "worker_type": "instantmesh",
-  "endpoint": "http://scareverse-worker-instantmesh:8000",
+
+  "execution_model": "service",
+
+  "service": {
+    "name": "instantmesh",
+    "endpoint": "http://scareverse-worker-instantmesh:8000"
+  },
+
+  "configuration": {
+    "timeout_seconds": 120
+  },
+
   "queue": "scareverse:3d-jobs:queue",
   "queue_l1": "scareverse:3d-jobs:queue",
   "queue_l2": "scareverse:3d-jobs:queue",
@@ -11,8 +21,27 @@
   "result_key_prefix": "scareverse:3d-results",
   "result_key_ttl": 300,
   "timeout": 120,
+
   "worker_availability_key": "state:worker:instantmesh:available",
+
   "aliases": [
     "instantmesh"
-  ]
+  ],
+
+  "input_schema": {
+    "type": "object",
+    "required": ["image_base64"],
+    "properties": {
+      "image_base64": {"type": "string"},
+      "num_views": {"type": "integer", "default": 6}
+    }
+  },
+
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "mesh_url": {"type": "string"},
+      "mesh_base64": {"type": "string"}
+    }
+  }
 }
