@@ -297,22 +297,33 @@ class CentralHubRedisClient:
         """
         Set TTL on key via HTTP.
 
+        **Current behaviour**: no-op — TTL is automatically managed by
+        CentralHub when ``hset`` is called via ``POST /api/redis/jobs/{id}/status``.
+        CentralHub applies a default TTL to every job-status update, so a
+        separate ``EXPIRE`` call is not required.
+
+        If CentralHub ever exposes a dedicated ``/api/redis/jobs/{id}/expire``
+        endpoint the implementation below can be uncommented and activated:
+
+        .. code-block:: python
+
+            job_id = key.split(":")[-1] if ":" in key else key
+            response = await self.client.post(
+                f"/api/redis/jobs/{job_id}/expire",
+                json={"ttl_seconds": seconds},
+            )
+            response.raise_for_status()
+
         Args:
-            key: Key to set TTL on
-            seconds: TTL in seconds
+            key: Status key (e.g. ``state:job:<job_id>``).
+            seconds: Desired TTL in seconds (informational, not sent to API).
 
         Returns:
-            True if successful
+            True (always, for compatibility with redis-py interface).
         """
-        try:
-            # For Phase 1B, TTL is automatically set by CentralHub
-            # This is a no-op for compatibility
-            logger.debug("EXPIRE operation handled by CentralHub: %s (TTL=%ss)", key, seconds)
-            return True
-
-        except Exception as e:
-            logger.error("Failed to set expire: %s", e)
-            raise
+        # TTL is automatically applied by CentralHub on each hset call.
+        logger.debug("EXPIRE no-op – TTL managed by CentralHub: key=%s ttl=%ss", key, seconds)
+        return True
 
     async def close(self):
         """Close HTTP client and release connections."""

@@ -388,6 +388,10 @@ async def main() -> None:
     redis_l2_client = CentralHubRedisClient(
         auth_token=config.CENTRALHUB_SERVICE_TOKEN,
         base_url=config.CENTRALHUB_URL,
+        # HTTP client timeout must exceed the BRPOP long-poll timeout so that
+        # the underlying connection is never dropped before the server responds.
+        # Adding a 10-second buffer accounts for network latency.
+        timeout=float(config.BRPOP_L2_TIMEOUT) + 10,
     )
 
     async with httpx.AsyncClient() as http_client:

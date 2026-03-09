@@ -8,13 +8,35 @@ a longer timeout. This ensures the local node's own jobs are prioritised.
 
 import asyncio
 import logging
-from typing import Any, Optional, Tuple
+from typing import Dict, List, Optional, Protocol, Tuple, Union
 
 import redis.asyncio as aioredis
 
 import config
 
 logger = logging.getLogger(__name__)
+
+
+class RedisLikeClient(Protocol):
+    """
+    Structural interface satisfied by both aioredis.Redis (direct TCP) and
+    CentralHubRedisClient (HTTP).
+
+    Using a Protocol avoids circular imports while still providing type
+    checking and IDE auto-completion for all L2 operations.
+    """
+
+    async def brpop(
+        self,
+        keys: Union[str, List[str]],
+        timeout: int,
+    ) -> Optional[Tuple[str, str]]: ...
+
+    async def lpush(self, key: str, value: str) -> int: ...
+
+    async def hset(self, key: str, mapping: Dict) -> int: ...
+
+    async def expire(self, key: str, seconds: int) -> bool: ...
 
 
 class MultiSourcePooler:
@@ -33,11 +55,7 @@ class MultiSourcePooler:
     def __init__(
         self,
         redis_l1: aioredis.Redis,
-        # redis_l2 accepts either aioredis.Redis (direct TCP) or
-        # CentralHubRedisClient (HTTP) – both expose a compatible brpop/lpush
-        # interface.  Using Any avoids a circular import; both clients implement
-        # the required brpop(keys, timeout) and lpush(key, value) methods.
-        redis_l2: Any,
+        redis_l2: RedisLikeClient,
         queues_l1: Optional[list] = None,
         queues_l2: Optional[list] = None,
     ):
