@@ -162,6 +162,7 @@ def _build_job_types_config(
                 "result_storage": job_type.get("result_storage", "rpush_l1"),
                 "result_key_prefix": job_type.get("result_key_prefix"),
                 "result_key_ttl": int(job_type.get("result_key_ttl", 120)),
+                "dependencies": job_type.get("dependencies", []),
             }
         else:
             # Service execution model (default): HTTP routing
@@ -177,6 +178,7 @@ def _build_job_types_config(
                 "result_storage": job_type.get("result_storage", "rpush_l1"),
                 "result_key_prefix": job_type.get("result_key_prefix"),
                 "result_key_ttl": int(job_type.get("result_key_ttl", 120)),
+                "dependencies": job_type.get("dependencies", []),
             }
 
         config[name] = entry

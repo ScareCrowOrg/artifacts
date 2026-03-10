@@ -1,6 +1,6 @@
 {
   "name": "ollama_generate",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "LLM text generation via Ollama service",
 
   "execution_model": "service",
@@ -21,6 +21,10 @@
   "result_key_prefix": "scareverse:ollama-results",
   "result_key_ttl": 60,
   "timeout": 120,
+
+  "dependencies": [
+    "ollama"
+  ],
 
   "worker_availability_key": "state:worker:ollama_generate:available",
 

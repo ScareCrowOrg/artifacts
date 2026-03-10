@@ -24,7 +24,7 @@ import signal
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 import redis.asyncio as aioredis
@@ -166,6 +166,9 @@ class GateKeeper:
             ),
             asyncio.create_task(
                 self.venv_manager.start_health_checks(), name="venv_health_checks"
+            ),
+            asyncio.create_task(
+                self._check_worker_availability(), name="worker_availability"
             ),
         ]
         await _shutdown_event.wait()
@@ -367,6 +370,94 @@ class GateKeeper:
             except Exception as exc:
                 logger.warning("Heartbeat publish failed: %s", exc)
             await asyncio.sleep(config.WORKER_HEARTBEAT_INTERVAL)
+
+    # ------------------------------------------------------------------
+    # Worker Availability
+    # ------------------------------------------------------------------
+
+    async def _check_worker_availability(self) -> None:
+        """
+        Health check loop: verify all service dependencies are healthy.
+
+        For each job-type with dependencies:
+        1. Query Docker daemon for container health status
+        2. If ALL dependencies healthy → set state:worker:{job_type}:available in Redis L1
+        3. If ANY dependency unhealthy → remove the key
+
+        Runs every VENV_HEALTH_CHECK_INTERVAL (default 60s).
+        """
+        while not _shutdown_event.is_set():
+            try:
+                for job_type, job_type_config in config.JOB_TYPES_CONFIG.items():
+                    dependencies = job_type_config.get("dependencies", [])
+
+                    if not dependencies:
+                        # No dependencies → always available
+                        key = f"state:worker:{job_type}:available"
+                        await self.redis_l1.set(key, "1", ex=120)
+                        continue
+
+                    all_healthy = await self._check_docker_health(dependencies)
+
+                    key = f"state:worker:{job_type}:available"
+                    if all_healthy:
+                        await self.redis_l1.set(key, "1", ex=120)
+                        logger.info("✅ %s available (all dependencies healthy)", job_type)
+                    else:
+                        await self.redis_l1.delete(key)
+                        logger.warning("⚠️ %s unavailable (dependency unhealthy)", job_type)
+
+            except Exception as exc:
+                logger.error("Worker availability check failed: %s", exc)
+
+            await asyncio.sleep(config.VENV_HEALTH_CHECK_INTERVAL)
+
+    async def _check_docker_health(self, container_names: List[str]) -> bool:
+        """
+        Check if Docker containers are healthy.
+
+        Queries the Docker daemon via the docker-py SDK. Containers must have a
+        HEALTHCHECK defined in their image or docker-compose configuration; without
+        one, ``Health.Status`` is ``None`` and the container is treated as unhealthy.
+
+        Args:
+            container_names: List of Docker container names/IDs to check.
+
+        Returns:
+            True if all containers report ``healthy`` status.
+            False if any container is unhealthy, starting, missing, or has no
+            health-check configured (Status is None).
+            True if docker-py is not installed (assumes healthy as a safe fallback).
+            False if the Docker daemon is unreachable or any other unexpected error.
+        """
+        try:
+            import docker  # type: ignore[import-untyped]
+
+            client = docker.from_env()
+
+            for container_name in container_names:
+                try:
+                    container = client.containers.get(container_name)
+                    health = container.attrs.get("State", {}).get("Health", {})
+                    status = health.get("Status")  # "healthy", "unhealthy", "starting"
+
+                    if status != "healthy":
+                        logger.warning("Container %s status: %s", container_name, status)
+                        return False
+
+                except docker.errors.NotFound:
+                    logger.error("Container %s not found", container_name)
+                    return False
+
+            return True
+
+        except ImportError:
+            logger.warning("docker-py not installed, cannot check container health")
+            return True  # Assume healthy if can't check
+
+        except Exception as exc:
+            logger.error("Error checking Docker health: %s", exc)
+            return False
 
 
 # ---------------------------------------------------------------------------

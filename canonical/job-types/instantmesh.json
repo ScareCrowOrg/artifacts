@@ -1,6 +1,6 @@
 {
   "name": "instantmesh",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "3D mesh generation via InstantMesh service",
 
   "execution_model": "service",
@@ -21,6 +21,8 @@
   "result_key_prefix": "scareverse:3d-results",
   "result_key_ttl": 300,
   "timeout": 120,
+
+  "dependencies": [],
 
   "worker_availability_key": "state:worker:instantmesh:available",
 

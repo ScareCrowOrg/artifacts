@@ -290,3 +290,52 @@ class TestJobTypesConfigModuleInit:
     def test_all_queues_l2_derived_from_config(self):
         assert len(config.ALL_QUEUES_L2) > 0
         assert "scareverse:cpu-jobs:queue" in config.ALL_QUEUES_L2
+
+    def test_sd_generate_has_stable_diffusion_dependency(self):
+        """sd_generate declares a dependency on stable-diffusion container."""
+        entry = config.JOB_TYPES_CONFIG["sd_generate"]
+        assert "dependencies" in entry
+        assert "stable-diffusion" in entry["dependencies"]
+
+    def test_ollama_generate_has_ollama_dependency(self):
+        """ollama_generate declares a dependency on ollama container."""
+        entry = config.JOB_TYPES_CONFIG["ollama_generate"]
+        assert "dependencies" in entry
+        assert "ollama" in entry["dependencies"]
+
+    def test_ollama_chat_has_ollama_dependency(self):
+        """ollama_chat declares a dependency on ollama container."""
+        entry = config.JOB_TYPES_CONFIG["ollama_chat"]
+        assert "dependencies" in entry
+        assert "ollama" in entry["dependencies"]
+
+    def test_rembg_has_no_dependencies(self):
+        """rembg_removebackground has no external dependencies (subprocess worker)."""
+        entry = config.JOB_TYPES_CONFIG["rembg_removebackground"]
+        assert "dependencies" in entry
+        assert entry["dependencies"] == []
+
+    def test_instantmesh_has_no_dependencies(self):
+        """instantmesh has no declared dependencies."""
+        entry = config.JOB_TYPES_CONFIG["instantmesh"]
+        assert "dependencies" in entry
+        assert entry["dependencies"] == []
+
+    def test_dependencies_field_defaults_to_empty_list(self, tmp_path):
+        """Missing dependencies field in JSON defaults to empty list."""
+        _write_json(
+            tmp_path,
+            "no_deps.json",
+            {
+                "name": "no_deps",
+                "execution_model": "service",
+                "service": {"name": "no-deps", "endpoint": "http://no-deps:9000"},
+                "queue_l1": "scareverse:cpu-jobs:queue",
+                "queue_l2": "scareverse:cpu-jobs:queue",
+                "result_storage": "rpush_l1",
+                "result_key_prefix": "scareverse:no-deps-results",
+                "timeout": 60,
+            },
+        )
+        result = _build_job_types_config(tmp_path)
+        assert result["no_deps"]["dependencies"] == []

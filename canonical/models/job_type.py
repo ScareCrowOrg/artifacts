@@ -68,3 +68,7 @@ class JobType(BaseModel):
         default_factory=list,
         description="Legacy or alternate job-type names that resolve to this entry",
     )
+    dependencies: List[str] = Field(
+        default_factory=list,
+        description="Docker container names that must be healthy for this job-type to be available",
+    )
