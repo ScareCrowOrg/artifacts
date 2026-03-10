@@ -25,7 +25,7 @@ if _GATEKEEPER_DIR not in sys.path:
     sys.path.insert(0, _GATEKEEPER_DIR)
 
 # --- Step 2: pre-import bare modules and alias under the package namespace ------
-_BARE_MODULES = ("config", "pooling", "orchestrator", "job_executor", "service_executor", "main")
+_BARE_MODULES = ("config", "pooling", "orchestrator", "job_executor", "service_executor", "worker_discovery", "main")
 for _mod in _BARE_MODULES:
     if _mod not in sys.modules:
         import importlib

@@ -34,6 +34,7 @@ from job_executor import execute_subprocess_job
 from orchestrator import ResourceOrchestrator
 from pooling import MultiSourcePooler
 from service_executor import ServiceExecutor
+from worker_discovery import WorkerDiscovery
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -102,6 +103,11 @@ class GateKeeper:
         self.service_executor = ServiceExecutor(http_client)
         self.worker_id = config.WORKER_ID
 
+        # Worker discovery: scan workers/ directory on startup
+        self._worker_discovery = WorkerDiscovery(config.WORKERS_PATH)
+        self.discovered_workers = self._worker_discovery.discover()
+        self._worker_discovery.log_summary()
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -115,6 +121,11 @@ class GateKeeper:
             config.CENTRALHUB_URL,
         )
         logger.info("Workers path: %s", config.WORKERS_PATH)
+        logger.info(
+            "🔧 Worker Discovery: %d worker(s) loaded: %s",
+            len(self.discovered_workers),
+            list(self.discovered_workers.keys()),
+        )
         logger.info("Queues L1: %s", config.ALL_QUEUES_L1)
         logger.info("Queues L2: %s", config.ALL_QUEUES_L2)
 
