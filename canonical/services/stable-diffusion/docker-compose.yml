@@ -1,40 +1,65 @@
 version: "3.9"
 
 # ==============================================================================
-# Stable Diffusion Infrastructure Service
+# Stable Diffusion FastAPI Service
 # ==============================================================================
-# Long-lived Stable Diffusion GPU inference service.
-# GateKeeper routes "sd_generate" jobs here via HTTP.
+# Long-lived Stable Diffusion GPU inference service with FastAPI wrapper.
+# GateKeeper routes "sd_generate" jobs here via HTTP POST /generate.
 #
-# This service no longer includes a FastAPI wrapper – GateKeeper communicates
-# with SD through the stable-diffusion-wrapper subprocess worker or via
-# a dedicated HTTP worker defined in workers/stable-diffusion-wrapper/.
+# This service exposes:
+#   - POST /generate: Generate image from text prompt
+#   - GET /health: Health check endpoint
+#
+# Features:
+#   - Lazy model loading (loads on first request, stays in memory)
+#   - GPU-accelerated with torch.float16 precision
+#   - Base64 PNG responses
+#   - Supports both SD 1.5 and SDXL via AutoPipeline detection
+#   - OOM error handling with CUDA cache clearing
 #
 # Usage:
 #   docker-compose up -d
 #   docker-compose down
+#   curl http://localhost:9090/health
+#   curl -X POST http://localhost:9090/generate \
+#     -H "Content-Type: application/json" \
+#     -d '{"prompt": "a beautiful landscape", "num_inference_steps": 10}'
 #
 # Prerequisites:
 #   - NVIDIA Container Toolkit installed (8-10GB VRAM minimum for SDXL)
 #   - External network scareverse-net created:
 #       docker network create scareverse-net
-#   - .env file with HF_HUB_CACHE_PATH
+#   - .env file with HF_HUB_CACHE_PATH (optional, defaults to /root/.cache/huggingface)
 # ==============================================================================
 
 services:
 
   stable-diffusion:
-    image: stability-ai/sd-webui:latest
     container_name: scareverse-sd-service
+
+    # Build from local Dockerfile (FastAPI wrapper)
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: scareverse/sd-service:latest
+
     runtime: nvidia
+
     environment:
+      # NVIDIA/CUDA settings (required for GPU access)
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
+
+      # HuggingFace configuration (cache for SD models)
       HF_HUB_CACHE: /root/.cache/huggingface
       HF_HUB_OFFLINE: "0"
+
+      # Python configuration
       PYTHONUNBUFFERED: "1"
 
     volumes:
+      # HuggingFace model cache (for SD models)
       - type: bind
         source: ${HF_HUB_CACHE_PATH:-/root/.cache/huggingface}
         target: /root/.cache/huggingface
@@ -60,6 +85,7 @@ services:
       retries: 5
 
     restart: unless-stopped
+
     logging:
       driver: "json-file"
       options:
