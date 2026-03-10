@@ -25,10 +25,11 @@ services:
     restart: unless-stopped
 
     volumes:
-      # Mount entire artifacts/ directory so GateKeeper can discover and
+      # Mount artifacts/ directory so GateKeeper can discover and
       # execute workers as subprocesses, and import shared libraries.
       # Workers write .venv/ into this mount on first execution.
-      - ../../../../:/app/artifacts:cached
+      # Path: from project root, artifacts/ → /app/artifacts inside container
+      - ../../../:/app/artifacts:cached
 
     environment:
       # Python import path (enables "from canonical.shared import ...")
