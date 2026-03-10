@@ -250,7 +250,7 @@ class TestHealthChecks:
 
         # Touch requirements.txt to make it newer than the venv.
         req_file = worker_dir / "requirements.txt"
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.02)
         req_file.touch()
 
         rebuild_called = []
@@ -378,6 +378,65 @@ class TestRebuildVenv:
         # Path is the same string but venv was rebuilt.
         assert new_exe.exists()
         assert str(new_exe) == str(old_exe)
+
+    @pytest.mark.asyncio
+    async def test_rebuild_failure_counter_increments(self, tmp_path):
+        """Each consecutive rebuild failure increments the failure counter."""
+        workers_path = tmp_path / "workers"
+        _make_worker(workers_path, "fail-worker")
+        discovered = _make_discovered(workers_path, "fail-worker")
+
+        manager = VenvManager(workers_path, max_rebuild_failures=3)
+        await manager.setup_all_venvs(discovered)
+
+        with patch.object(
+            manager, "_setup_venv", side_effect=RuntimeError("build error")
+        ):
+            await manager._rebuild_venv("fail-worker")
+            await manager._rebuild_venv("fail-worker")
+
+        assert manager._rebuild_failures["fail-worker"] == 2
+
+    @pytest.mark.asyncio
+    async def test_rebuild_disables_worker_after_max_failures(self, tmp_path):
+        """Worker is removed from ready_venvs after max_rebuild_failures."""
+        workers_path = tmp_path / "workers"
+        _make_worker(workers_path, "max-fail-worker")
+        discovered = _make_discovered(workers_path, "max-fail-worker")
+
+        manager = VenvManager(workers_path, max_rebuild_failures=2)
+        await manager.setup_all_venvs(discovered)
+
+        with patch.object(
+            manager, "_setup_venv", side_effect=RuntimeError("build error")
+        ):
+            await manager._rebuild_venv("max-fail-worker")
+            await manager._rebuild_venv("max-fail-worker")
+
+        # Worker should be removed from ready_venvs after max failures.
+        assert manager.get_venv_python("max-fail-worker") is None
+
+    @pytest.mark.asyncio
+    async def test_rebuild_failure_counter_resets_on_success(self, tmp_path):
+        """Consecutive failure counter resets after a successful rebuild."""
+        workers_path = tmp_path / "workers"
+        _make_worker(workers_path, "reset-worker")
+        discovered = _make_discovered(workers_path, "reset-worker")
+
+        manager = VenvManager(workers_path, max_rebuild_failures=5)
+        await manager.setup_all_venvs(discovered)
+
+        # Simulate one failure.
+        with patch.object(
+            manager, "_setup_venv", side_effect=RuntimeError("build error")
+        ):
+            await manager._rebuild_venv("reset-worker")
+
+        assert manager._rebuild_failures.get("reset-worker", 0) == 1
+
+        # Successful rebuild clears the counter.
+        await manager._rebuild_venv("reset-worker")
+        assert manager._rebuild_failures.get("reset-worker", 0) == 0
 
 
 # ---------------------------------------------------------------------------

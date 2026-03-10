@@ -123,7 +123,7 @@ class TestGateKeeperPhase3Integration:
         await manager.setup_all_venvs(discovered)
 
         # Make requirements.txt newer than the venv directory.
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.02)
         (worker_dir / "requirements.txt").touch()
 
         rebuilt: list = []

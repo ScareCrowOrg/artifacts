@@ -42,15 +42,19 @@ class VenvManager:
         workers_path: Path,
         health_check_interval: int = 60,
         metrics: "Optional[GateKeeperMetrics]" = None,
+        max_rebuild_failures: int = 3,
     ) -> None:
         self.workers_path = Path(workers_path)
         self.health_check_interval = health_check_interval
         self.metrics = metrics
+        self.max_rebuild_failures = max_rebuild_failures
 
         # worker_name → Path to venv python executable
         self.ready_venvs: Dict[str, Path] = {}
         # worker_name → metadata dict
         self.venv_metadata: Dict[str, dict] = {}
+        # worker_name → consecutive rebuild failure count
+        self._rebuild_failures: Dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Public API
@@ -165,11 +169,18 @@ class VenvManager:
         python_exe = venv_path / "bin" / "python"
 
         if python_exe.exists():
-            # Verify the existing venv is still functional.
-            await self._verify_venv(worker_name, python_exe)
-            self.venv_metadata[worker_name] = {"status": "reused"}
-            logger.debug("[%s] Reusing existing venv", worker_name)
-            return python_exe
+            # Verify the existing venv is still functional before reusing it.
+            is_valid = await self._verify_venv(worker_name, python_exe)
+            if not is_valid:
+                logger.warning(
+                    "[%s] Existing venv failed verification – rebuilding", worker_name
+                )
+                shutil.rmtree(venv_path, ignore_errors=True)
+                # Fall through to create a new venv below.
+            else:
+                self.venv_metadata[worker_name] = {"status": "reused"}
+                logger.debug("[%s] Reusing existing venv", worker_name)
+                return python_exe
 
         # Create a new venv.
         logger.info("[%s] Creating new venv at %s", worker_name, venv_path)
@@ -240,7 +251,13 @@ class VenvManager:
             return False
 
     async def _rebuild_venv(self, worker_name: str) -> None:
-        """Remove and recreate the venv for *worker_name*."""
+        """Remove and recreate the venv for *worker_name*.
+
+        Consecutive rebuild failures are tracked.  After *max_rebuild_failures*
+        consecutive failures the worker is removed from ``ready_venvs`` so that
+        health checks stop attempting (and to prevent silently serving a broken
+        venv to the job dispatcher).
+        """
         venv_path = self.workers_path / worker_name / ".venv"
         try:
             if venv_path.exists():
@@ -249,9 +266,26 @@ class VenvManager:
 
             python_exe = await self._setup_venv(worker_name)
             self.ready_venvs[worker_name] = python_exe
+            # Reset failure counter on success.
+            self._rebuild_failures.pop(worker_name, None)
             logger.info("✅ [%s] Venv rebuilt successfully", worker_name)
         except Exception as exc:
-            logger.error("❌ [%s] Venv rebuild failed: %s", worker_name, exc)
+            failure_count = self._rebuild_failures.get(worker_name, 0) + 1
+            self._rebuild_failures[worker_name] = failure_count
+            logger.error(
+                "❌ [%s] Venv rebuild failed (%d/%d): %s",
+                worker_name,
+                failure_count,
+                self.max_rebuild_failures,
+                exc,
+            )
+            if failure_count >= self.max_rebuild_failures:
+                logger.error(
+                    "🚨 [%s] Disabling worker: exceeded %d consecutive rebuild failures",
+                    worker_name,
+                    self.max_rebuild_failures,
+                )
+                self.ready_venvs.pop(worker_name, None)
 
     # ------------------------------------------------------------------
     # Logging
@@ -333,9 +367,10 @@ class VenvManager:
 
         _, stderr = await proc.communicate()
         if proc.returncode != 0:
+            # Limit stderr to 200 chars to avoid leaking sensitive path/env details.
+            stderr_snippet = (stderr.decode()[:200] if stderr else "").strip()
             raise RuntimeError(
                 f"Command failed (exit {proc.returncode}): "
-                f"{' '.join(str(c) for c in cmd[:3])} – "
-                f"{stderr.decode()[:500] if stderr else ''}"
+                f"{Path(cmd[0]).name} – {stderr_snippet}"
             )
         return proc.returncode

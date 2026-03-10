@@ -57,7 +57,10 @@ class JSONFormatter(logging.Formatter):
         "source",
     )
 
-    def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+    def format(self, record: logging.LogRecord) -> str:
+        # Signature intentionally returns str (same as the base class at runtime).
+        # The `# type: ignore[override]` below is NOT needed because the base
+        # Formatter.format() already returns str; keeping the signature clean.
         log_obj: Dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(
                 record.created, tz=timezone.utc
