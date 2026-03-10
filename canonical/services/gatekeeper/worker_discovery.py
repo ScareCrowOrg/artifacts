@@ -8,7 +8,7 @@ a queryable registry for the job dispatcher.
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class WorkerDiscovery:
             └── requirements.txt
     """
 
-    def __init__(self, workers_path: "str | Path"):
+    def __init__(self, workers_path: Union[str, Path]):
         self.workers_path = Path(workers_path)
         self.discovered_workers: Dict[str, dict] = {}
 

@@ -103,7 +103,10 @@ class GateKeeper:
         self.service_executor = ServiceExecutor(http_client)
         self.worker_id = config.WORKER_ID
 
-        # Worker discovery: scan workers/ directory on startup
+        # Worker discovery: scan workers/ directory on startup.
+        # This is a synchronous filesystem scan (no I/O wait) so it's
+        # intentionally kept in __init__ to ensure workers are available
+        # before the first job loop iteration begins.
         self._worker_discovery = WorkerDiscovery(config.WORKERS_PATH)
         self.discovered_workers = self._worker_discovery.discover()
         self._worker_discovery.log_summary()

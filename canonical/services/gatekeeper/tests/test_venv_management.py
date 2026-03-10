@@ -149,11 +149,11 @@ class TestVenvReuse:
         await proc.wait()
 
         executor = WorkerExecutor(workers_path=str(workers_path))
+        mtime_before = venv_dir.stat().st_mtime
         python_exe = await executor._ensure_venv("pre-venv-worker")
         mtime_after = venv_dir.stat().st_mtime
 
         # Mtime should be unchanged (venv not recreated)
-        mtime_before = venv_dir.stat().st_mtime
         assert mtime_before == mtime_after
         assert python_exe.exists()
 
