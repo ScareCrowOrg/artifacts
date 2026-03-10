@@ -313,8 +313,8 @@ class TestScenario3ConcurrentJobHandling:
         assert len(rpush_calls) == 2
 
         keys = {c[0][0] for c in rpush_calls}
-        assert any("rembg-concurrent-rembg-A" in k or "e2e-concurrent-rembg-A" in k for k in keys)
-        assert any("rembg-concurrent-rembg-B" in k or "e2e-concurrent-rembg-B" in k for k in keys)
+        assert any("e2e-concurrent-rembg-A" in k for k in keys), f"Job A key not found: {keys}"
+        assert any("e2e-concurrent-rembg-B" in k for k in keys), f"Job B key not found: {keys}"
 
         # Verify results are stored separately
         payloads = {json.loads(c[0][1])["image_base64"] for c in rpush_calls}
