@@ -22,6 +22,7 @@ import logging
 import os
 import signal
 import sys
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -31,9 +32,12 @@ import redis.asyncio as aioredis
 import config
 from centralhub_redis_client import CentralHubRedisClient
 from job_executor import execute_subprocess_job
+from json_logger import configure_json_logging
+from metrics import GateKeeperMetrics
 from orchestrator import ResourceOrchestrator
 from pooling import MultiSourcePooler
 from service_executor import ServiceExecutor
+from venv_manager import VenvManager
 from worker_discovery import WorkerDiscovery
 
 # ---------------------------------------------------------------------------
@@ -41,6 +45,8 @@ from worker_discovery import WorkerDiscovery
 # ---------------------------------------------------------------------------
 
 logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
+if config.LOG_FORMAT_TYPE == "json":
+    configure_json_logging(level=config.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -103,6 +109,16 @@ class GateKeeper:
         self.service_executor = ServiceExecutor(http_client)
         self.worker_id = config.WORKER_ID
 
+        # Metrics collection (venv + job execution).
+        self.metrics = GateKeeperMetrics()
+
+        # VenvManager: eager startup setup + periodic health checks.
+        self.venv_manager = VenvManager(
+            workers_path=config.WORKERS_PATH,
+            health_check_interval=config.VENV_HEALTH_CHECK_INTERVAL,
+            metrics=self.metrics,
+        )
+
         # Worker discovery: scan workers/ directory on startup.
         # This is a synchronous filesystem scan (no I/O wait) so it's
         # intentionally kept in __init__ to ensure workers are available
@@ -132,11 +148,24 @@ class GateKeeper:
         logger.info("Queues L1: %s", config.ALL_QUEUES_L1)
         logger.info("Queues L2: %s", config.ALL_QUEUES_L2)
 
+        # Eagerly set up venvs for all discovered subprocess workers.
+        logger.info("⚙️  Setting up venvs for all workers...")
+        setup_results = await self.venv_manager.setup_all_venvs(
+            self.discovered_workers
+        )
+        self.venv_manager.log_summary()
+        failed = [w for w, ok in setup_results.items() if not ok]
+        if failed:
+            logger.warning("⚠️  Venv setup failed for: %s", ", ".join(failed))
+
         tasks = [
             asyncio.create_task(self._job_loop(), name="job_loop"),
             asyncio.create_task(self._heartbeat_loop(), name="heartbeat"),
             asyncio.create_task(
                 self.orchestrator.monitor_and_publish(), name="orchestrator"
+            ),
+            asyncio.create_task(
+                self.venv_manager.start_health_checks(), name="venv_health_checks"
             ),
         ]
         await _shutdown_event.wait()
@@ -194,6 +223,7 @@ class GateKeeper:
             return
 
         execution_model = route.get("execution_model", "service")
+        start_time = time.time()
 
         try:
             if execution_model == "subprocess":
@@ -202,21 +232,31 @@ class GateKeeper:
                 # (legacy backend format) for backward compatibility with queued jobs.
                 input_data = job.get("input_data") or job.get("payload") or {}
                 result = await execute_subprocess_job(job_type, job_id, input_data, route)
+                elapsed = time.time() - start_time
+                self.metrics.record_job_execution(job_type, elapsed, success=True)
                 await self._persist_success(job_id, result, source, job_type)
             else:
                 # "service" model: HTTP POST
                 result = await self.service_executor.execute(job_type, job_id, job, route)
+                elapsed = time.time() - start_time
+                self.metrics.record_job_execution(job_type, elapsed, success=True)
                 await self._persist_success(job_id, result, source, job_type)
 
         except TimeoutError as exc:
+            elapsed = time.time() - start_time
+            self.metrics.record_job_execution(job_type, elapsed, success=False)
             logger.error("[%s] Timeout: %s", job_id, exc)
             await self._persist_error(job_id, str(exc), source, job_type)
             await self.pooler.push_to_dead_letter(raw_job)
         except ValueError as exc:
+            elapsed = time.time() - start_time
+            self.metrics.record_job_execution(job_type, elapsed, success=False)
             logger.error("[%s] Permanent failure: %s", job_id, exc)
             await self._persist_error(job_id, str(exc), source, job_type)
             await self.pooler.push_to_dead_letter(raw_job)
         except Exception as exc:
+            elapsed = time.time() - start_time
+            self.metrics.record_job_execution(job_type, elapsed, success=False)
             logger.error("[%s] Dispatch failed: %s", job_id, exc, exc_info=True)
             await self._persist_error(job_id, str(exc), source, job_type)
             await self.pooler.push_to_dead_letter(raw_job)

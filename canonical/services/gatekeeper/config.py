@@ -237,6 +237,13 @@ HTTP_REQUEST_TIMEOUT = int(os.getenv("HTTP_REQUEST_TIMEOUT", "60"))
 HTTP_CONNECT_TIMEOUT = int(os.getenv("HTTP_CONNECT_TIMEOUT", "10"))
 
 # ============================================================================
+# Venv Health Checks
+# ============================================================================
+
+# Interval (seconds) between periodic venv health-check iterations.
+VENV_HEALTH_CHECK_INTERVAL = int(os.getenv("VENV_HEALTH_CHECK_INTERVAL", "60"))
+
+# ============================================================================
 # Logging
 # ============================================================================
 
@@ -245,6 +252,8 @@ LOG_FORMAT = os.getenv(
     "LOG_FORMAT",
     "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
+# When set to "json", switch to structured JSON log output via JSONFormatter.
+LOG_FORMAT_TYPE = os.getenv("LOG_FORMAT_TYPE", "text")
 
 # ============================================================================
 # Result Storage
