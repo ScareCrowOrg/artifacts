@@ -7,7 +7,8 @@
 
   "service": {
     "name": "stable-diffusion",
-    "endpoint": "http://scareverse-sd-service:9090"
+    "endpoint": "http://scareverse-sd-service:9090",
+    "health_path": "/health"
   },
 
   "configuration": {

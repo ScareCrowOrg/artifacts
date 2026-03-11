@@ -168,7 +168,7 @@ class GateKeeper:
                 self.venv_manager.start_health_checks(), name="venv_health_checks"
             ),
             asyncio.create_task(
-                self._check_worker_availability(), name="worker_availability"
+                self._check_service_availability(), name="service_availability"
             ),
         ]
         await _shutdown_event.wait()
@@ -372,91 +372,85 @@ class GateKeeper:
             await asyncio.sleep(config.WORKER_HEARTBEAT_INTERVAL)
 
     # ------------------------------------------------------------------
-    # Worker Availability
+    # Service Availability
     # ------------------------------------------------------------------
 
-    async def _check_worker_availability(self) -> None:
+    async def _check_service_availability(self) -> None:
         """
-        Health check loop: verify all service dependencies are healthy.
+        Service availability signaling loop.
 
-        For each job-type with dependencies:
-        1. Query Docker daemon for container health status
-        2. If ALL dependencies healthy → set state:worker:{job_type}:available in Redis L1
-        3. If ANY dependency unhealthy → remove the key
+        Probes each service dependency via HTTP and writes
+        ``state:service:{service_name}:available`` to Redis L1 (TTL 120s).
 
-        Runs every VENV_HEALTH_CHECK_INTERVAL (default 60s).
+        - Subprocess workers with no external dependencies are always marked
+          available (they run locally inside GateKeeper).
+        - Service workers (e.g. stable-diffusion, ollama) are probed at their
+          HTTP health endpoint. No Docker daemon or docker.sock is required.
+
+        Runs every ``VENV_HEALTH_CHECK_INTERVAL`` seconds.
         """
         while not _shutdown_event.is_set():
             try:
-                for job_type, job_type_config in config.JOB_TYPES_CONFIG.items():
-                    dependencies = job_type_config.get("dependencies", [])
+                seen_services: set = set()
+                for job_type, job_config in config.JOB_TYPES_CONFIG.items():
+                    execution_model = job_config.get("execution_model", "service")
+                    dependencies = job_config.get("dependencies", [])
 
-                    if not dependencies:
-                        # No dependencies → always available
-                        key = f"state:worker:{job_type}:available"
+                    if execution_model == "subprocess" or not dependencies:
+                        # No external deps → subprocess worker always available locally
+                        key = f"state:service:{job_type}:available"
                         await self.redis_l1.set(key, "1", ex=120)
                         continue
 
-                    all_healthy = await self._check_docker_health(dependencies)
+                    # Probe each unique service dependency via HTTP
+                    endpoint = job_config.get("endpoint", "")
+                    health_path = job_config.get("health_path", "/health")
 
-                    key = f"state:worker:{job_type}:available"
-                    if all_healthy:
-                        await self.redis_l1.set(key, "1", ex=120)
-                        logger.info("✅ %s available (all dependencies healthy)", job_type)
-                    else:
-                        await self.redis_l1.delete(key)
-                        logger.warning("⚠️ %s unavailable (dependency unhealthy)", job_type)
+                    for dep in dependencies:
+                        if dep in seen_services:
+                            continue
+                        seen_services.add(dep)
+
+                        health_url = (
+                            f"{endpoint.rstrip('/')}{health_path}" if endpoint else ""
+                        )
+                        healthy = await self._probe_http_health(health_url)
+
+                        key = f"state:service:{dep}:available"
+                        if healthy:
+                            await self.redis_l1.set(key, "1", ex=120)
+                            logger.info(
+                                "✅ Service %s available (%s)", dep, health_url
+                            )
+                        else:
+                            await self.redis_l1.delete(key)
+                            logger.warning(
+                                "⚠️ Service %s unavailable (%s)", dep, health_url
+                            )
 
             except Exception as exc:
-                logger.error("Worker availability check failed: %s", exc)
+                logger.error("Service availability check failed: %s", exc)
 
             await asyncio.sleep(config.VENV_HEALTH_CHECK_INTERVAL)
 
-    async def _check_docker_health(self, container_names: List[str]) -> bool:
+    async def _probe_http_health(self, url: str) -> bool:
         """
-        Check if Docker containers are healthy.
-
-        Queries the Docker daemon via the docker-py SDK. Containers must have a
-        HEALTHCHECK defined in their image or docker-compose configuration; without
-        one, ``Health.Status`` is ``None`` and the container is treated as unhealthy.
+        Probe a service health endpoint via HTTP GET.
 
         Args:
-            container_names: List of Docker container names/IDs to check.
+            url: Full health check URL (e.g. ``http://host:port/health``).
 
         Returns:
-            True if all containers report ``healthy`` status.
-            False if any container is unhealthy, starting, missing, or has no
-            health-check configured (Status is None).
-            True if docker-py is not installed (assumes healthy as a safe fallback).
-            False if the Docker daemon is unreachable or any other unexpected error.
+            True if the service responds with a 2xx/3xx status code.
+            False if the URL is empty, the request times out, or any error occurs.
         """
+        if not url:
+            return False
         try:
-            import docker  # type: ignore[import-untyped]
-
-            client = docker.from_env()
-
-            for container_name in container_names:
-                try:
-                    container = client.containers.get(container_name)
-                    health = container.attrs.get("State", {}).get("Health", {})
-                    status = health.get("Status")  # "healthy", "unhealthy", "starting"
-
-                    if status != "healthy":
-                        logger.warning("Container %s status: %s", container_name, status)
-                        return False
-
-                except docker.errors.NotFound:
-                    logger.error("Container %s not found", container_name)
-                    return False
-
-            return True
-
-        except ImportError:
-            logger.warning("docker-py not installed, cannot check container health")
-            return True  # Assume healthy if can't check
-
+            response = await self.http.get(url, timeout=5.0)
+            return response.status_code < 400
         except Exception as exc:
-            logger.error("Error checking Docker health: %s", exc)
+            logger.debug("Health probe failed for %s: %s", url, exc)
             return False
 
 

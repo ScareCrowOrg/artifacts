@@ -1,13 +1,13 @@
 """
-Unit tests for GateKeeper worker availability mechanism.
+Unit tests for GateKeeper service availability mechanism.
 
 Validates:
-- _check_docker_health(): returns True when all containers are healthy,
-  False when any container is unhealthy/missing/errored.
-- _check_worker_availability(): sets/deletes Redis keys correctly based on
-  dependency health status.
-- Graceful handling of missing docker-py, Docker daemon errors, and
-  ImportError.
+- _probe_http_health(): returns True on 2xx, False on 4xx/5xx/timeout/empty URL.
+- _check_service_availability(): sets/deletes the correct Redis keys based on
+  HTTP probe results (state:service:{name}:available).
+- Subprocess workers (no deps) are always marked available without probing.
+- Deduplication: the same service dependency is only probed once per cycle.
+- Loop resilience: exceptions are caught so the loop continues.
 """
 
 import asyncio
@@ -48,165 +48,101 @@ def gatekeeper(mock_redis_l1, mock_redis_l2, mock_http_client) -> GateKeeper:
 
 
 # ---------------------------------------------------------------------------
-# _check_docker_health tests
+# _probe_http_health tests
 # ---------------------------------------------------------------------------
 
 
-class TestCheckDockerHealth:
+class TestProbeHttpHealth:
     @pytest.mark.asyncio
-    async def test_all_healthy_returns_true(self, gatekeeper):
-        """All containers healthy → returns True."""
-        mock_container = MagicMock()
-        mock_container.attrs = {"State": {"Health": {"Status": "healthy"}}}
+    async def test_empty_url_returns_false(self, gatekeeper):
+        """Empty URL → returns False without making any HTTP request."""
+        result = await gatekeeper._probe_http_health("")
+        assert result is False
 
-        mock_client = MagicMock()
-        mock_client.containers.get.return_value = mock_container
+    @pytest.mark.asyncio
+    async def test_200_response_returns_true(self, gatekeeper):
+        """HTTP 200 → returns True."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
 
-        mock_docker = MagicMock()
-        mock_docker.from_env.return_value = mock_client
+        gatekeeper.http.get = AsyncMock(return_value=mock_response)
 
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["container-a", "container-b"])
-
+        result = await gatekeeper._probe_http_health("http://service:9090/health")
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_unhealthy_container_returns_false(self, gatekeeper):
-        """Container with 'unhealthy' status → returns False."""
-        mock_container = MagicMock()
-        mock_container.attrs = {"State": {"Health": {"Status": "unhealthy"}}}
+    async def test_201_response_returns_true(self, gatekeeper):
+        """HTTP 201 → returns True (< 400)."""
+        mock_response = MagicMock()
+        mock_response.status_code = 201
 
-        mock_client = MagicMock()
-        mock_client.containers.get.return_value = mock_container
+        gatekeeper.http.get = AsyncMock(return_value=mock_response)
 
-        mock_docker = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-        mock_docker.errors = MagicMock()
-        mock_docker.errors.NotFound = Exception
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["container-a"])
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_starting_container_returns_false(self, gatekeeper):
-        """Container with 'starting' status → returns False."""
-        mock_container = MagicMock()
-        mock_container.attrs = {"State": {"Health": {"Status": "starting"}}}
-
-        mock_client = MagicMock()
-        mock_client.containers.get.return_value = mock_container
-
-        mock_docker = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-        mock_docker.errors = MagicMock()
-        mock_docker.errors.NotFound = Exception
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["container-a"])
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_container_not_found_returns_false(self, gatekeeper):
-        """Container not found (NotFound exception) → returns False."""
-
-        class NotFound(Exception):
-            pass
-
-        mock_client = MagicMock()
-        mock_client.containers.get.side_effect = NotFound("not found")
-
-        mock_docker = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-        mock_docker.errors = MagicMock()
-        mock_docker.errors.NotFound = NotFound
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["missing-container"])
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_import_error_assumes_healthy(self, gatekeeper):
-        """docker-py not installed → assumes healthy (returns True)."""
-        import sys
-
-        original = sys.modules.pop("docker", None)
-        try:
-            result = await gatekeeper._check_docker_health(["some-container"])
-        finally:
-            if original is not None:
-                sys.modules["docker"] = original
-
+        result = await gatekeeper._probe_http_health("http://service:9090/health")
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_docker_daemon_error_returns_false(self, gatekeeper):
-        """Unexpected Docker daemon error → returns False."""
-        mock_docker = MagicMock()
-        mock_docker.from_env.side_effect = Exception("Cannot connect to Docker daemon")
+    async def test_400_response_returns_false(self, gatekeeper):
+        """HTTP 400 → returns False."""
+        mock_response = MagicMock()
+        mock_response.status_code = 400
 
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["container-a"])
+        gatekeeper.http.get = AsyncMock(return_value=mock_response)
 
+        result = await gatekeeper._probe_http_health("http://service:9090/health")
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_empty_list_returns_true(self, gatekeeper):
-        """Empty container list → no checks needed, returns True."""
-        mock_docker = MagicMock()
-        mock_client = MagicMock()
-        mock_docker.from_env.return_value = mock_client
+    async def test_500_response_returns_false(self, gatekeeper):
+        """HTTP 500 → returns False."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
 
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health([])
+        gatekeeper.http.get = AsyncMock(return_value=mock_response)
 
-        assert result is True
-        mock_client.containers.get.assert_not_called()
+        result = await gatekeeper._probe_http_health("http://service:9090/health")
+        assert result is False
 
     @pytest.mark.asyncio
-    async def test_second_container_unhealthy_returns_false(self, gatekeeper):
-        """First container healthy, second unhealthy → returns False."""
+    async def test_connection_error_returns_false(self, gatekeeper):
+        """Connection error → returns False."""
+        gatekeeper.http.get = AsyncMock(
+            side_effect=Exception("Connection refused")
+        )
 
-        class NotFound(Exception):
-            pass
+        result = await gatekeeper._probe_http_health("http://service:9090/health")
+        assert result is False
 
-        healthy_container = MagicMock()
-        healthy_container.attrs = {"State": {"Health": {"Status": "healthy"}}}
+    @pytest.mark.asyncio
+    async def test_timeout_returns_false(self, gatekeeper):
+        """Timeout → returns False."""
+        import httpx
 
-        unhealthy_container = MagicMock()
-        unhealthy_container.attrs = {"State": {"Health": {"Status": "unhealthy"}}}
+        gatekeeper.http.get = AsyncMock(
+            side_effect=httpx.TimeoutException("timed out")
+        )
 
-        mock_client = MagicMock()
-        mock_client.containers.get.side_effect = [healthy_container, unhealthy_container]
-
-        mock_docker = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-        mock_docker.errors = MagicMock()
-        mock_docker.errors.NotFound = NotFound
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["healthy-c", "unhealthy-c"])
-
+        result = await gatekeeper._probe_http_health("http://service:9090/health")
         assert result is False
 
 
 # ---------------------------------------------------------------------------
-# _check_worker_availability tests
+# _check_service_availability tests
 # ---------------------------------------------------------------------------
 
 
-class TestCheckWorkerAvailability:
+class TestCheckServiceAvailability:
     @pytest.mark.asyncio
-    async def test_sets_key_for_no_dependency_job_types(self, gatekeeper, mock_redis_l1):
-        """Job-types without dependencies always set the availability key."""
+    async def test_subprocess_no_deps_always_sets_key(self, gatekeeper, mock_redis_l1):
+        """Subprocess workers with no dependencies always set their availability key."""
         import config as config_module
 
         job_types_config: Dict[str, Any] = {
             "rembg_removebackground": {
+                "execution_model": "subprocess",
                 "dependencies": [],
+                "endpoint": "",
+                "health_path": "/health",
             }
         }
 
@@ -217,22 +153,25 @@ class TestCheckWorkerAvailability:
              patch.object(config_module, "VENV_HEALTH_CHECK_INTERVAL", 60), \
              patch("asyncio.sleep", side_effect=fake_sleep):
             try:
-                await gatekeeper._check_worker_availability()
+                await gatekeeper._check_service_availability()
             except asyncio.CancelledError:
                 pass
 
         mock_redis_l1.set.assert_called_once_with(
-            "state:worker:rembg_removebackground:available", "1", ex=120
+            "state:service:rembg_removebackground:available", "1", ex=120
         )
 
     @pytest.mark.asyncio
-    async def test_sets_key_when_dependencies_healthy(self, gatekeeper, mock_redis_l1):
-        """Job-types with healthy dependencies get availability key set."""
+    async def test_service_no_deps_sets_key(self, gatekeeper, mock_redis_l1):
+        """Service workers with empty dependencies also get the key set directly."""
         import config as config_module
 
         job_types_config: Dict[str, Any] = {
-            "sd_generate": {
-                "dependencies": ["stable-diffusion"],
+            "instantmesh": {
+                "execution_model": "service",
+                "dependencies": [],
+                "endpoint": "http://instantmesh:8000",
+                "health_path": "/health",
             }
         }
 
@@ -241,29 +180,27 @@ class TestCheckWorkerAvailability:
 
         with patch.object(config_module, "JOB_TYPES_CONFIG", job_types_config), \
              patch.object(config_module, "VENV_HEALTH_CHECK_INTERVAL", 60), \
-             patch.object(
-                 gatekeeper, "_check_docker_health", new=AsyncMock(return_value=True)
-             ), \
              patch("asyncio.sleep", side_effect=fake_sleep):
             try:
-                await gatekeeper._check_worker_availability()
+                await gatekeeper._check_service_availability()
             except asyncio.CancelledError:
                 pass
 
         mock_redis_l1.set.assert_called_once_with(
-            "state:worker:sd_generate:available", "1", ex=120
+            "state:service:instantmesh:available", "1", ex=120
         )
 
     @pytest.mark.asyncio
-    async def test_deletes_key_when_dependencies_unhealthy(
-        self, gatekeeper, mock_redis_l1
-    ):
-        """Job-types with unhealthy dependencies get availability key deleted."""
+    async def test_healthy_service_sets_key(self, gatekeeper, mock_redis_l1):
+        """Service with healthy HTTP probe → sets state:service:{dep}:available."""
         import config as config_module
 
         job_types_config: Dict[str, Any] = {
             "sd_generate": {
+                "execution_model": "service",
                 "dependencies": ["stable-diffusion"],
+                "endpoint": "http://scareverse-sd-service:9090",
+                "health_path": "/health",
             }
         }
 
@@ -272,23 +209,89 @@ class TestCheckWorkerAvailability:
 
         with patch.object(config_module, "JOB_TYPES_CONFIG", job_types_config), \
              patch.object(config_module, "VENV_HEALTH_CHECK_INTERVAL", 60), \
-             patch.object(
-                 gatekeeper, "_check_docker_health", new=AsyncMock(return_value=False)
-             ), \
+             patch.object(gatekeeper, "_probe_http_health", new=AsyncMock(return_value=True)), \
              patch("asyncio.sleep", side_effect=fake_sleep):
             try:
-                await gatekeeper._check_worker_availability()
+                await gatekeeper._check_service_availability()
+            except asyncio.CancelledError:
+                pass
+
+        mock_redis_l1.set.assert_called_once_with(
+            "state:service:stable-diffusion:available", "1", ex=120
+        )
+        mock_redis_l1.delete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unhealthy_service_deletes_key(self, gatekeeper, mock_redis_l1):
+        """Service with failing HTTP probe → deletes state:service:{dep}:available."""
+        import config as config_module
+
+        job_types_config: Dict[str, Any] = {
+            "sd_generate": {
+                "execution_model": "service",
+                "dependencies": ["stable-diffusion"],
+                "endpoint": "http://scareverse-sd-service:9090",
+                "health_path": "/health",
+            }
+        }
+
+        async def fake_sleep(_delay):
+            raise asyncio.CancelledError
+
+        with patch.object(config_module, "JOB_TYPES_CONFIG", job_types_config), \
+             patch.object(config_module, "VENV_HEALTH_CHECK_INTERVAL", 60), \
+             patch.object(gatekeeper, "_probe_http_health", new=AsyncMock(return_value=False)), \
+             patch("asyncio.sleep", side_effect=fake_sleep):
+            try:
+                await gatekeeper._check_service_availability()
             except asyncio.CancelledError:
                 pass
 
         mock_redis_l1.delete.assert_called_once_with(
-            "state:worker:sd_generate:available"
+            "state:service:stable-diffusion:available"
         )
         mock_redis_l1.set.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_exception_does_not_crash_loop(self, gatekeeper, mock_redis_l1):
-        """Exception inside loop is caught; loop continues to next iteration."""
+    async def test_shared_dependency_probed_once(self, gatekeeper, mock_redis_l1):
+        """Two job-types sharing the same dependency probe it only once."""
+        import config as config_module
+
+        job_types_config: Dict[str, Any] = {
+            "ollama_generate": {
+                "execution_model": "service",
+                "dependencies": ["ollama"],
+                "endpoint": "http://scareverse-ollama-service:11434",
+                "health_path": "/api/version",
+            },
+            "ollama_chat": {
+                "execution_model": "service",
+                "dependencies": ["ollama"],
+                "endpoint": "http://scareverse-ollama-service:11434",
+                "health_path": "/api/version",
+            },
+        }
+
+        probe_mock = AsyncMock(return_value=True)
+
+        async def fake_sleep(_delay):
+            raise asyncio.CancelledError
+
+        with patch.object(config_module, "JOB_TYPES_CONFIG", job_types_config), \
+             patch.object(config_module, "VENV_HEALTH_CHECK_INTERVAL", 60), \
+             patch.object(gatekeeper, "_probe_http_health", new=probe_mock), \
+             patch("asyncio.sleep", side_effect=fake_sleep):
+            try:
+                await gatekeeper._check_service_availability()
+            except asyncio.CancelledError:
+                pass
+
+        # Probe called only once despite two job types sharing "ollama"
+        probe_mock.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_exception_in_loop_is_recovered(self, gatekeeper, mock_redis_l1):
+        """Exception inside the loop body is caught and the loop continues."""
         import config as config_module
 
         call_count = 0
@@ -299,296 +302,67 @@ class TestCheckWorkerAvailability:
             if call_count >= 2:
                 raise asyncio.CancelledError
 
-        with patch.object(
-            config_module,
-            "JOB_TYPES_CONFIG",
-            {"sd_generate": {"dependencies": ["sd"]}},
-        ), patch.object(config_module, "VENV_HEALTH_CHECK_INTERVAL", 60), patch.object(
-            gatekeeper,
-            "_check_docker_health",
-            new=AsyncMock(side_effect=RuntimeError("boom")),
-        ), patch(
-            "asyncio.sleep", side_effect=fake_sleep
-        ):
+        job_types_config: Dict[str, Any] = {
+            "sd_generate": {
+                "execution_model": "service",
+                "dependencies": ["stable-diffusion"],
+                "endpoint": "http://scareverse-sd-service:9090",
+                "health_path": "/health",
+            }
+        }
+
+        call_num = 0
+
+        async def probe_side_effect(url: str) -> bool:
+            nonlocal call_num
+            call_num += 1
+            if call_num == 1:
+                raise RuntimeError("Redis error")
+            return True
+
+        with patch.object(config_module, "JOB_TYPES_CONFIG", job_types_config), \
+             patch.object(config_module, "VENV_HEALTH_CHECK_INTERVAL", 60), \
+             patch.object(gatekeeper, "_probe_http_health", side_effect=probe_side_effect), \
+             patch("asyncio.sleep", side_effect=fake_sleep):
             try:
-                await gatekeeper._check_worker_availability()
+                await gatekeeper._check_service_availability()
             except asyncio.CancelledError:
                 pass
 
-        # Loop ran and slept at least once after recovering from exception
-        assert call_count >= 1
-
-
-
-# ---------------------------------------------------------------------------
-# _check_docker_health tests
-# ---------------------------------------------------------------------------
-
-
-class TestCheckDockerHealth:
-    @pytest.mark.asyncio
-    async def test_all_healthy_returns_true(self, gatekeeper):
-        """All containers healthy → returns True."""
-        mock_container = MagicMock()
-        mock_container.attrs = {"State": {"Health": {"Status": "healthy"}}}
-
-        mock_client = MagicMock()
-        mock_client.containers.get.return_value = mock_container
-
-        mock_docker = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["container-a", "container-b"])
-
-        assert result is True
-
-    @pytest.mark.asyncio
-    async def test_unhealthy_container_returns_false(self, gatekeeper):
-        """Container with 'unhealthy' status → returns False."""
-        mock_container = MagicMock()
-        mock_container.attrs = {"State": {"Health": {"Status": "unhealthy"}}}
-
-        mock_client = MagicMock()
-        mock_client.containers.get.return_value = mock_container
-
-        mock_docker = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-        mock_docker.errors = MagicMock()
-        mock_docker.errors.NotFound = Exception
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["container-a"])
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_starting_container_returns_false(self, gatekeeper):
-        """Container with 'starting' status → returns False."""
-        mock_container = MagicMock()
-        mock_container.attrs = {"State": {"Health": {"Status": "starting"}}}
-
-        mock_client = MagicMock()
-        mock_client.containers.get.return_value = mock_container
-
-        mock_docker = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-        mock_docker.errors = MagicMock()
-        mock_docker.errors.NotFound = Exception
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["container-a"])
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_container_not_found_returns_false(self, gatekeeper):
-        """Container not found (NotFound exception) → returns False."""
-
-        class NotFound(Exception):
-            pass
-
-        mock_client = MagicMock()
-        mock_client.containers.get.side_effect = NotFound("not found")
-
-        mock_docker = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-        mock_docker.errors = MagicMock()
-        mock_docker.errors.NotFound = NotFound
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["missing-container"])
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_import_error_assumes_healthy(self, gatekeeper):
-        """docker-py not installed → assumes healthy (returns True)."""
-        import sys
-
-        original = sys.modules.pop("docker", None)
-        try:
-            result = await gatekeeper._check_docker_health(["some-container"])
-        finally:
-            if original is not None:
-                sys.modules["docker"] = original
-
-        assert result is True
-
-    @pytest.mark.asyncio
-    async def test_docker_daemon_error_returns_false(self, gatekeeper):
-        """Unexpected Docker daemon error → returns False."""
-        mock_docker = MagicMock()
-        mock_docker.from_env.side_effect = Exception("Cannot connect to Docker daemon")
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["container-a"])
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_empty_list_returns_true(self, gatekeeper):
-        """Empty container list → no checks needed, returns True."""
-        mock_docker = MagicMock()
-        mock_client = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health([])
-
-        assert result is True
-        mock_client.containers.get.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_second_container_unhealthy_returns_false(self, gatekeeper):
-        """First container healthy, second unhealthy → returns False."""
-
-        class NotFound(Exception):
-            pass
-
-        healthy_container = MagicMock()
-        healthy_container.attrs = {"State": {"Health": {"Status": "healthy"}}}
-
-        unhealthy_container = MagicMock()
-        unhealthy_container.attrs = {"State": {"Health": {"Status": "unhealthy"}}}
-
-        mock_client = MagicMock()
-        mock_client.containers.get.side_effect = [healthy_container, unhealthy_container]
-
-        mock_docker = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-        mock_docker.errors = MagicMock()
-        mock_docker.errors.NotFound = NotFound
-
-        with patch.dict("sys.modules", {"docker": mock_docker}):
-            result = await gatekeeper._check_docker_health(["healthy-c", "unhealthy-c"])
-
-        assert result is False
-
-
-# ---------------------------------------------------------------------------
-# _check_worker_availability tests
-# ---------------------------------------------------------------------------
-
-
-class TestCheckWorkerAvailability:
-    @pytest.mark.asyncio
-    async def test_sets_key_for_no_dependency_job_types(self, gatekeeper, mock_redis_l1):
-        """Job-types without dependencies always set the availability key."""
-        job_types_config: Dict[str, Any] = {
-            "rembg_removebackground": {
-                "dependencies": [],
-            }
-        }
-
-        _shutdown_calls = 0
-
-        async def run_once():
-            nonlocal _shutdown_calls
-            # Patch sleep to raise after first iteration
-            original_sleep = asyncio.sleep
-
-            async def fake_sleep(_delay):
-                raise asyncio.CancelledError
-
-            with patch("main.config") as mock_cfg:
-                mock_cfg.JOB_TYPES_CONFIG = job_types_config
-                mock_cfg.VENV_HEALTH_CHECK_INTERVAL = 60
-                with patch("asyncio.sleep", side_effect=fake_sleep):
-                    try:
-                        await gatekeeper._check_worker_availability()
-                    except asyncio.CancelledError:
-                        pass
-
-        await run_once()
-
+        # Loop ran twice: first iteration raised, second set the key
+        assert call_count == 2
         mock_redis_l1.set.assert_called_once_with(
-            "state:worker:rembg_removebackground:available", "1", ex=120
+            "state:service:stable-diffusion:available", "1", ex=120
         )
 
     @pytest.mark.asyncio
-    async def test_sets_key_when_dependencies_healthy(self, gatekeeper, mock_redis_l1):
-        """Job-types with healthy dependencies get availability key set."""
+    async def test_health_url_uses_health_path(self, gatekeeper, mock_redis_l1):
+        """Health probe URL is constructed from endpoint + health_path."""
+        import config as config_module
+
         job_types_config: Dict[str, Any] = {
-            "sd_generate": {
-                "dependencies": ["stable-diffusion"],
+            "ollama_generate": {
+                "execution_model": "service",
+                "dependencies": ["ollama"],
+                "endpoint": "http://scareverse-ollama-service:11434",
+                "health_path": "/api/version",
             }
         }
+
+        probe_mock = AsyncMock(return_value=True)
 
         async def fake_sleep(_delay):
             raise asyncio.CancelledError
 
-        with patch("main.config") as mock_cfg:
-            mock_cfg.JOB_TYPES_CONFIG = job_types_config
-            mock_cfg.VENV_HEALTH_CHECK_INTERVAL = 60
-            with patch.object(
-                gatekeeper, "_check_docker_health", new=AsyncMock(return_value=True)
-            ):
-                with patch("asyncio.sleep", side_effect=fake_sleep):
-                    try:
-                        await gatekeeper._check_worker_availability()
-                    except asyncio.CancelledError:
-                        pass
+        with patch.object(config_module, "JOB_TYPES_CONFIG", job_types_config), \
+             patch.object(config_module, "VENV_HEALTH_CHECK_INTERVAL", 60), \
+             patch.object(gatekeeper, "_probe_http_health", new=probe_mock), \
+             patch("asyncio.sleep", side_effect=fake_sleep):
+            try:
+                await gatekeeper._check_service_availability()
+            except asyncio.CancelledError:
+                pass
 
-        mock_redis_l1.set.assert_called_once_with(
-            "state:worker:sd_generate:available", "1", ex=120
+        probe_mock.assert_called_once_with(
+            "http://scareverse-ollama-service:11434/api/version"
         )
-
-    @pytest.mark.asyncio
-    async def test_deletes_key_when_dependencies_unhealthy(
-        self, gatekeeper, mock_redis_l1
-    ):
-        """Job-types with unhealthy dependencies get availability key deleted."""
-        job_types_config: Dict[str, Any] = {
-            "sd_generate": {
-                "dependencies": ["stable-diffusion"],
-            }
-        }
-
-        async def fake_sleep(_delay):
-            raise asyncio.CancelledError
-
-        with patch("main.config") as mock_cfg:
-            mock_cfg.JOB_TYPES_CONFIG = job_types_config
-            mock_cfg.VENV_HEALTH_CHECK_INTERVAL = 60
-            with patch.object(
-                gatekeeper, "_check_docker_health", new=AsyncMock(return_value=False)
-            ):
-                with patch("asyncio.sleep", side_effect=fake_sleep):
-                    try:
-                        await gatekeeper._check_worker_availability()
-                    except asyncio.CancelledError:
-                        pass
-
-        mock_redis_l1.delete.assert_called_once_with(
-            "state:worker:sd_generate:available"
-        )
-        mock_redis_l1.set.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_exception_does_not_crash_loop(self, gatekeeper, mock_redis_l1):
-        """Exception inside loop is caught; loop continues to next iteration."""
-        call_count = 0
-
-        async def fake_sleep(_delay):
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 2:
-                raise asyncio.CancelledError
-
-        with patch("main.config") as mock_cfg:
-            mock_cfg.JOB_TYPES_CONFIG = {"sd_generate": {"dependencies": ["sd"]}}
-            mock_cfg.VENV_HEALTH_CHECK_INTERVAL = 60
-            with patch.object(
-                gatekeeper,
-                "_check_docker_health",
-                new=AsyncMock(side_effect=RuntimeError("boom")),
-            ):
-                with patch("asyncio.sleep", side_effect=fake_sleep):
-                    try:
-                        await gatekeeper._check_worker_availability()
-                    except asyncio.CancelledError:
-                        pass
-
-        # Loop ran and slept at least once after recovering from exception
-        assert call_count >= 1

@@ -292,19 +292,19 @@ class TestJobTypesConfigModuleInit:
         assert "scareverse:cpu-jobs:queue" in config.ALL_QUEUES_L2
 
     def test_sd_generate_has_stable_diffusion_dependency(self):
-        """sd_generate declares a dependency on stable-diffusion container."""
+        """sd_generate declares a dependency on stable-diffusion service."""
         entry = config.JOB_TYPES_CONFIG["sd_generate"]
         assert "dependencies" in entry
         assert "stable-diffusion" in entry["dependencies"]
 
     def test_ollama_generate_has_ollama_dependency(self):
-        """ollama_generate declares a dependency on ollama container."""
+        """ollama_generate declares a dependency on ollama service."""
         entry = config.JOB_TYPES_CONFIG["ollama_generate"]
         assert "dependencies" in entry
         assert "ollama" in entry["dependencies"]
 
     def test_ollama_chat_has_ollama_dependency(self):
-        """ollama_chat declares a dependency on ollama container."""
+        """ollama_chat declares a dependency on ollama service."""
         entry = config.JOB_TYPES_CONFIG["ollama_chat"]
         assert "dependencies" in entry
         assert "ollama" in entry["dependencies"]
@@ -339,3 +339,49 @@ class TestJobTypesConfigModuleInit:
         )
         result = _build_job_types_config(tmp_path)
         assert result["no_deps"]["dependencies"] == []
+
+    def test_sd_generate_has_service_name_and_health_path(self):
+        """sd_generate exposes service_name and health_path for HTTP probing."""
+        entry = config.JOB_TYPES_CONFIG["sd_generate"]
+        assert entry.get("service_name") == "stable-diffusion"
+        assert entry.get("health_path") == "/health"
+
+    def test_ollama_generate_has_service_name_and_health_path(self):
+        """ollama_generate exposes service_name and non-default health_path."""
+        entry = config.JOB_TYPES_CONFIG["ollama_generate"]
+        assert entry.get("service_name") == "ollama"
+        assert entry.get("health_path") == "/api/version"
+
+    def test_service_name_defaults_to_empty_string(self, tmp_path):
+        """Service entries without service.name get empty service_name."""
+        _write_json(
+            tmp_path,
+            "no_service_name.json",
+            {
+                "name": "anon_service",
+                "execution_model": "service",
+                "service": {"endpoint": "http://anon:9000"},
+                "queue_l1": "scareverse:cpu-jobs:queue",
+                "queue_l2": "scareverse:cpu-jobs:queue",
+                "timeout": 60,
+            },
+        )
+        result = _build_job_types_config(tmp_path)
+        assert result["anon_service"]["service_name"] == ""
+
+    def test_health_path_defaults_to_slash_health(self, tmp_path):
+        """Service entries without service.health_path default to '/health'."""
+        _write_json(
+            tmp_path,
+            "default_health.json",
+            {
+                "name": "default_health_svc",
+                "execution_model": "service",
+                "service": {"name": "my-svc", "endpoint": "http://my-svc:9000"},
+                "queue_l1": "scareverse:cpu-jobs:queue",
+                "queue_l2": "scareverse:cpu-jobs:queue",
+                "timeout": 60,
+            },
+        )
+        result = _build_job_types_config(tmp_path)
+        assert result["default_health_svc"]["health_path"] == "/health"

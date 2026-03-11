@@ -171,7 +171,9 @@ def _build_job_types_config(
             entry = {
                 "execution_model": "service",
                 "worker_name": job_type.get("worker_type", name),
+                "service_name": service_cfg.get("name", ""),
                 "endpoint": endpoint,
+                "health_path": service_cfg.get("health_path", "/health"),
                 "queue_l1": job_type.get("queue_l1"),
                 "queue_l2": job_type.get("queue_l2"),
                 "timeout": int(job_type.get("timeout", 60)),

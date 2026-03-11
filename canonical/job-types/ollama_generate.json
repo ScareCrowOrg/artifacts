@@ -7,7 +7,8 @@
 
   "service": {
     "name": "ollama",
-    "endpoint": "http://scareverse-ollama-service:11434"
+    "endpoint": "http://scareverse-ollama-service:11434",
+    "health_path": "/api/version"
   },
 
   "configuration": {
