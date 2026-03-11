@@ -6,8 +6,8 @@
  * View.vue is just the presentation layer - it will receive an instance of this cell as a prop.
  */
 
+import { BaseCell } from '@/types/BaseCell'
 import type {
-  BaseCell,
   CellResult,
   CellMetadata,
   ValidationError,
@@ -201,3 +201,4 @@ export class ChatIACell extends BaseCell {
     this.conversationId = id
   }
 }
+// HMR Test

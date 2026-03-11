@@ -9,7 +9,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { useAuthStore } from './auth.js'
+import { useAuthStore } from '@/stores/auth.js'
 
 export const usePermissionsStore = defineStore('permissions', () => {
   const authStore = useAuthStore()

@@ -229,7 +229,9 @@ function initializeStores() {
 }
 
 // Initialize stores immediately in setup context
+console.debug('[ChatIA-View] Setup starting', { hasCellInstance: !!props.cellInstance })
 initializeStores()
+console.debug('[ChatIA-View] Stores initialized', { hasChatStore: !!chatStore, hasUIStore: !!uiStore })
 
 // ============ CONVERSATIONID: EPHEMERAL → PERSISTENT ============
 
@@ -549,10 +551,12 @@ const chatComponentAPI: ChatComponentAPI = {
 
 // Register component with store on mount
 onMounted(() => {
-  chatStore.registerChatComponent(chatComponentAPI)
-  
-  // Initialize from cell data if available
-  if (props.cell.initial_data) {
+  console.debug('[ChatIA-View] onMounted START', { cellId: props.cell?.id })
+  try {
+    chatStore.registerChatComponent(chatComponentAPI)
+
+    // Initialize from cell data if available
+    if (props.cell.initial_data) {
     const { selectedModel, enableIntentionClassification, selectedCollections } = props.cell.initial_data
     
     if (selectedModel) {
@@ -580,7 +584,16 @@ onMounted(() => {
     chatHistory.createConversation('Nova Conversa')
   }
   
-  scrollToBottom()
+    scrollToBottom()
+    console.debug('[ChatIA-View] onMounted SUCCESS', { cellId: props.cell?.id })
+  } catch (err) {
+    console.error('[ChatIA-View] onMounted FAILED', {
+      cellId: props.cell?.id,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined
+    })
+    throw err
+  }
 })
 
 // Unregister component from store on unmount
