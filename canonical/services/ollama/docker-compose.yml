@@ -1,14 +1,19 @@
 version: "3.9"
 
 # ==============================================================================
-# Ollama Infrastructure Service
+# Ollama Infrastructure Service with FastAPI Wrapper
 # ==============================================================================
-# Long-lived Ollama LLM inference service.
-# GateKeeper routes "ollama_generate" / "ollama_chat" jobs here via HTTP.
+# Two-tier service:
+#   1. ollama-raw: Raw Ollama container (GPU inference)
+#   2. ollama-wrapper: FastAPI wrapper with Redis heartbeat registration
 #
-# This service no longer includes a FastAPI wrapper – GateKeeper communicates
-# with Ollama directly through the ollama-wrapper subprocess worker or via
-# a dedicated HTTP worker defined in workers/ollama-wrapper/.
+# The wrapper:
+#   - Runs on port 11434 (externally visible)
+#   - Proxies requests to ollama-raw:11434
+#   - Registers heartbeat to Redis L1 (state:service:ollama:available)
+#   - Enables GateKeeper to detect service health via Redis (no HTTP probes needed)
+#
+# GateKeeper routes "ollama_generate" / "ollama_chat" jobs to wrapper via HTTP.
 #
 # Usage:
 #   docker-compose up -d
@@ -23,9 +28,9 @@ version: "3.9"
 
 services:
 
-  ollama:
+  ollama-raw:
     image: ollama/ollama:latest
-    container_name: scareverse-ollama-service
+    container_name: scareverse-ollama-raw
     runtime: nvidia
     environment:
       NVIDIA_VISIBLE_DEVICES: all
@@ -46,8 +51,9 @@ services:
               count: all
               capabilities: [gpu]
 
-    ports:
-      - "11434:11434"
+    # Internal only - no port exposure
+    expose:
+      - "11434"
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
@@ -55,6 +61,45 @@ services:
       timeout: 15s
       start_period: 90s
       retries: 5
+
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    networks:
+      - scareverse-net
+
+  ollama-wrapper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scareverse-ollama-service
+    depends_on:
+      - ollama-raw
+    environment:
+      OLLAMA_HOST: "http://ollama-raw:11434"
+      OLLAMA_REQUEST_TIMEOUT: "120"
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
+      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
+      REDIS_L1_DB: ${REDIS_L1_DB:-0}
+      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
+      REDIS_HEARTBEAT_INTERVAL: "60"
+      SERVICE_HOST: "0.0.0.0"
+      SERVICE_PORT: "11434"
+      LOG_LEVEL: "INFO"
+
+    ports:
+      - "11434:11434"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/health"]
+      interval: 30s
+      timeout: 15s
+      start_period: 30s
+      retries: 3
 
     restart: unless-stopped
     logging:
