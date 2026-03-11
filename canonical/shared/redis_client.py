@@ -39,6 +39,9 @@ CENTRALHUB_URL: str = os.getenv("CENTRALHUB_URL", "http://centralhub:8080")
 CENTRALHUB_SERVICE_TOKEN: str = os.getenv("CENTRALHUB_SERVICE_TOKEN", "")
 CENTRALHUB_TIMEOUT: int = int(os.getenv("CENTRALHUB_TIMEOUT", "10"))
 
+# Worker ID for GateKeeper service registry capability checks
+WORKER_ID: str = os.getenv("WORKER_ID", "gatekeeper-01")
+
 # Prefix for service-level availability keys
 SERVICE_AVAILABILITY_KEY_PREFIX = "state:service"
 
@@ -115,15 +118,17 @@ _JOB_TYPE_MAP: Optional[Dict[str, Dict[str, Any]]] = None
 
 def _load_job_type_map() -> Dict[str, Dict[str, Any]]:
     """
-    Build a job_type → {queue, dependencies} mapping from canonical JSON files.
+    Build a job_type → {queue, dependencies, execution_model} mapping from canonical JSON files.
 
     Looks for ``artifacts/canonical/job-types/*.json`` relative to this file.
-    Each entry records the queue name and declared service dependencies so
-    ``create_job()`` can decide whether to route to L1 or CentralHub L2.
+    Each entry records the queue name, declared service dependencies, and
+    execution_model so ``create_job()`` can decide whether to route to L1 or
+    CentralHub L2.
 
     Returns:
         Dict mapping canonical name (and any aliases) to a dict with keys
-        ``queue`` (str) and ``dependencies`` (List[str]).
+        ``queue`` (str), ``dependencies`` (List[str]), and
+        ``execution_model`` (str: "service" | "subprocess").
     """
     # This file lives at artifacts/canonical/shared/redis_client.py
     # parents[0] = shared/  parents[1] = canonical/
@@ -158,6 +163,7 @@ def _load_job_type_map() -> Dict[str, Dict[str, Any]]:
         entry: Dict[str, Any] = {
             "queue": queue,
             "dependencies": definition.get("dependencies", []),
+            "execution_model": definition.get("execution_model", "service"),
         }
         mapping[name] = entry
 
@@ -223,6 +229,54 @@ async def _all_services_available(
     return True
 
 
+async def _check_local_gatekeeper_can_serve(
+    redis_l1: Redis,
+    job_type: str,
+    worker_id: Optional[str] = None,
+) -> bool:
+    """
+    Check if the local GateKeeper can execute this job-type.
+
+    Queries ``state:gatekeeper:{worker_id}:serving_job_types`` to determine
+    if the endpoint is available locally. This key is written by GateKeeper's
+    ``_register_serving_capability()`` heartbeat loop.
+
+    Args:
+        redis_l1:  Connected async Redis L1 client.
+        job_type:  Canonical job type to check (e.g. ``"sd_generate"``).
+        worker_id: GateKeeper worker ID; defaults to the ``WORKER_ID`` env var.
+
+    Returns:
+        True if ``job_type`` is in the serving list, False if missing or on error.
+    """
+    effective_worker_id = worker_id if worker_id is not None else WORKER_ID
+    key = f"state:gatekeeper:{effective_worker_id}:serving_job_types"
+    try:
+        raw = await redis_l1.get(key)
+        if raw is None:
+            logger.debug(
+                "Capability registry missing for worker %s – falling back to L2",
+                effective_worker_id,
+            )
+            return False
+        serving_types: List[str] = json.loads(raw)
+        return job_type in serving_types
+    except json.JSONDecodeError as exc:
+        logger.warning(
+            "Cannot parse serving_job_types for worker %s: %s – falling back to L2",
+            effective_worker_id,
+            exc,
+        )
+        return False
+    except Exception as exc:
+        logger.warning(
+            "Cannot check GateKeeper capability for %s: %s – falling back to L2",
+            job_type,
+            exc,
+        )
+        return False
+
+
 # ---------------------------------------------------------------------------
 # CentralHub L2 fallback
 # ---------------------------------------------------------------------------
@@ -281,13 +335,17 @@ async def create_job(
     Create a job with owner-first scheduling.
 
     Checks Redis L1 for service availability based on the job-type's declared
-    ``dependencies``. If all dependency services are available, pushes directly
-    to the L1 queue (fast path). Otherwise falls back to CentralHub which
-    enqueues to L2 for eventual processing.
+    ``dependencies``. For "service" execution model, also checks that the local
+    GateKeeper can serve this job-type via its capability registry. If all checks
+    pass, pushes directly to the L1 queue (fast path). Otherwise falls back to
+    CentralHub which enqueues to L2 for eventual processing.
 
     Availability keys (``state:service:{name}:available``) are maintained by:
     - GateKeeper's HTTP health-probe loop (for stock services like Ollama)
     - Services themselves via a startup/heartbeat registration (e.g. SD API)
+
+    Capability keys (``state:gatekeeper:{worker_id}:serving_job_types``) are
+    maintained by GateKeeper's ``_register_serving_capability()`` heartbeat.
 
     Args:
         job_type:      Canonical job type (e.g. ``"sd_generate"``).
@@ -315,6 +373,7 @@ async def create_job(
 
     queue: str = job_def["queue"]
     dependencies: List[str] = job_def["dependencies"]
+    execution_model: str = job_def.get("execution_model", "service")
 
     job_data: Dict[str, Any] = {
         "job_id": job_id,
@@ -328,13 +387,31 @@ async def create_job(
 
     # ------------------------------------------------------------------
     # Owner-first: try L1 if all service dependencies are available
+    # and (for service execution model) the local GateKeeper can serve
+    # this job-type.
     # ------------------------------------------------------------------
+    route_to_l1 = False
     if redis_l1 is not None and await _all_services_available(redis_l1, dependencies):
+        if execution_model == "subprocess":
+            # Subprocess job-types bypass capability check (always available locally)
+            route_to_l1 = True
+        else:
+            can_serve_locally = await _check_local_gatekeeper_can_serve(redis_l1, job_type)
+            if can_serve_locally:
+                route_to_l1 = True
+            else:
+                logger.info(
+                    "Job %s (%s) routing to L2: local GateKeeper cannot serve job-type",
+                    job_id, job_type,
+                )
+
+    if route_to_l1 and redis_l1 is not None:
         try:
             await redis_l1.lpush(queue, json.dumps(job_data))
+            label = "subprocess, always local" if execution_model == "subprocess" else "services available, GateKeeper capable"
             logger.info(
-                "Job %s (%s) enqueued to L1 queue=%s (services available)",
-                job_id, job_type, queue,
+                "Job %s (%s) enqueued to L1 queue=%s (%s)",
+                job_id, job_type, queue, label,
             )
             return job_id, "l1"
         except Exception as exc:
@@ -349,7 +426,7 @@ async def create_job(
     try:
         await _enqueue_via_centralhub(queue, job_data, owner_user_id)
         logger.info(
-            "Job %s (%s) enqueued via CentralHub L2 (services unavailable or L1 error)",
+            "Job %s (%s) enqueued via CentralHub L2 (services unavailable or local GateKeeper incapable)",
             job_id, job_type,
         )
         return job_id, "l2"

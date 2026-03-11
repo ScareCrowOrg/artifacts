@@ -170,6 +170,9 @@ class GateKeeper:
             asyncio.create_task(
                 self._check_service_availability(), name="service_availability"
             ),
+            asyncio.create_task(
+                self._register_serving_capability(), name="serving_capability"
+            ),
         ]
         await _shutdown_event.wait()
         logger.info("Shutdown requested – cancelling tasks")
@@ -369,6 +372,67 @@ class GateKeeper:
                 )
             except Exception as exc:
                 logger.warning("Heartbeat publish failed: %s", exc)
+            await asyncio.sleep(config.WORKER_HEARTBEAT_INTERVAL)
+
+    # ------------------------------------------------------------------
+    # Service Registry: capability heartbeat
+    # ------------------------------------------------------------------
+
+    async def _register_serving_capability(self) -> None:
+        """
+        Heartbeat: publish which job-types this GateKeeper can execute.
+
+        Probes each service job-type endpoint to determine local capability.
+        Subprocess job-types are always listed (no endpoint to probe).
+
+        Runs every WORKER_HEARTBEAT_INTERVAL seconds with TTL = 3× interval.
+        """
+        previous_serving_types: Optional[List[str]] = None
+
+        while not _shutdown_event.is_set():
+            try:
+                serving_types: List[str] = []
+
+                for job_type, job_config in config.JOB_TYPES_CONFIG.items():
+                    execution_model = job_config.get("execution_model", "service")
+
+                    if execution_model == "subprocess":
+                        serving_types.append(job_type)
+                    else:
+                        endpoint = job_config.get("endpoint", "")
+                        health_path = job_config.get("health_path", "/health")
+                        if endpoint and await self._probe_http_health(
+                            f"{endpoint.rstrip('/')}{health_path}"
+                        ):
+                            serving_types.append(job_type)
+
+                key = f"state:gatekeeper:{self.worker_id}:serving_job_types"
+                ttl = config.WORKER_HEARTBEAT_INTERVAL * 3
+                await self.redis_l1.set(key, json.dumps(serving_types), ex=ttl)
+
+                if previous_serving_types is None:
+                    logger.info(
+                        "GateKeeper %s capability registered: %s (TTL %ds)",
+                        self.worker_id,
+                        serving_types,
+                        ttl,
+                    )
+                else:
+                    added = [t for t in serving_types if t not in previous_serving_types]
+                    removed = [t for t in previous_serving_types if t not in serving_types]
+                    if added or removed:
+                        logger.info(
+                            "GateKeeper %s capability updated – added: %s, removed: %s",
+                            self.worker_id,
+                            added,
+                            removed,
+                        )
+
+                previous_serving_types = serving_types
+
+            except Exception as exc:
+                logger.warning("Failed to register serving capability: %s", exc)
+
             await asyncio.sleep(config.WORKER_HEARTBEAT_INTERVAL)
 
     # ------------------------------------------------------------------

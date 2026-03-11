@@ -70,3 +70,61 @@ from canonical.shared.centralhub_client import get_centralhub_client
 - **Self-contained**: No imports from `backend/`. Clients are standalone copies adapted for artifacts/ use.
 - **Lazy singletons**: Redis and CentralHub clients use module-level singletons for connection reuse.
 - **Path fallbacks**: All modules resolve paths for both Docker (absolute) and local development (relative).
+
+---
+
+## GateKeeper Service Registry
+
+Each GateKeeper instance publishes its execution capability via a Redis heartbeat.
+This enables smart job routing: jobs are enqueued to L1 only if the local GateKeeper
+can actually execute them. Otherwise they fall back to L2 (CentralHub) for routing to
+a capable GateKeeper on another host.
+
+### Registry Key
+
+```
+state:gatekeeper:{worker_id}:serving_job_types = [
+  "sd_generate",
+  "ollama_generate",
+  "rembg_removebackground"
+]
+```
+
+This key is written by `GateKeeper._register_serving_capability()` every
+`WORKER_HEARTBEAT_INTERVAL` seconds with TTL = `3 × WORKER_HEARTBEAT_INTERVAL`
+(tolerates one missed heartbeat before expiry).
+
+### Routing Decision in `create_job()`
+
+```
+1. Check service dependencies  → state:service:{name}:available
+2. For "service" execution model:
+   Check local GateKeeper capability → state:gatekeeper:{worker_id}:serving_job_types
+3. Enqueue to L1 if both pass, L2 otherwise
+4. Subprocess job-types bypass step 2 (always available locally)
+```
+
+### Example: Multi-Host Scenario
+
+```
+Host A (ScareRunner + SD container + GateKeeper):
+  state:gatekeeper:gk-host-a:serving_job_types = ["sd_generate", "ollama_generate", "rembg_removebackground"]
+
+Host B (ScareRunner + GateKeeper, NO SD container):
+  state:gatekeeper:gk-host-b:serving_job_types = ["ollama_generate", "rembg_removebackground"]
+
+create_job("sd_generate") called on Host B:
+  → Check 1: stable-diffusion deps available? True (if sd is probed externally)
+  → Check 2: gk-host-b can serve sd_generate? False (not in list)
+  → Route to L2 automatically
+  → GateKeeper on Host A picks it up from L2 and executes ✅
+```
+
+### Troubleshooting
+
+| Symptom | Likely Cause | Resolution |
+|---------|-------------|------------|
+| Jobs always go to L2 | `state:gatekeeper:{id}:serving_job_types` key missing | GateKeeper not running or heartbeat failing |
+| Service job-type never routes to L1 | Service health endpoint not responding | Check service container + health_path config |
+| Key exists but wrong content | Stale TTL from previous GateKeeper instance | Wait for TTL expiry (3× HEARTBEAT_INTERVAL) or restart GateKeeper |
+| Subprocess jobs still go to L2 | `execution_model` not set in job-type JSON | Add `"execution_model": "subprocess"` to job-type JSON |
