@@ -386,29 +386,43 @@ async def create_job(
     redis_l1 = await get_redis_client()
 
     # ------------------------------------------------------------------
-    # Owner-first: try L1 if all service dependencies are available
-    # and (for service execution model) the local GateKeeper can serve
-    # this job-type.
+    # Owner-first: try L1 if:
+    # 1. GateKeeper can serve this job-type (has the worker)
+    # 2. All service dependencies are available (services healthy)
+    #
+    # Check capability FIRST because it's independent of dependencies.
+    # A job may have no dependencies but GateKeeper may not have the worker.
     # ------------------------------------------------------------------
     route_to_l1 = False
-    if redis_l1 is not None and await _all_services_available(redis_l1, dependencies):
+    if redis_l1 is not None:
+        # FIRST: Check if GateKeeper can serve this job-type
+        can_serve = False
         if execution_model == "subprocess":
-            # Subprocess job-types bypass capability check (always available locally)
-            route_to_l1 = True
+            # Subprocess jobs always available locally (worker is in this process)
+            can_serve = True
         else:
-            can_serve_locally = await _check_local_gatekeeper_can_serve(redis_l1, job_type)
-            if can_serve_locally:
+            # Service jobs: check if GateKeeper has this job-type in its registry
+            can_serve = await _check_local_gatekeeper_can_serve(redis_l1, job_type)
+
+        if not can_serve:
+            logger.info(
+                "Job %s (%s) routing to L2: local GateKeeper cannot serve job-type",
+                job_id, job_type,
+            )
+        else:
+            # SECOND: Check if all service dependencies are available
+            if await _all_services_available(redis_l1, dependencies):
                 route_to_l1 = True
             else:
                 logger.info(
-                    "Job %s (%s) routing to L2: local GateKeeper cannot serve job-type",
+                    "Job %s (%s) routing to L2: required services unavailable",
                     job_id, job_type,
                 )
 
     if route_to_l1 and redis_l1 is not None:
         try:
             await redis_l1.lpush(queue, json.dumps(job_data))
-            label = "subprocess, always local" if execution_model == "subprocess" else "services available, GateKeeper capable"
+            label = "subprocess (local)" if execution_model == "subprocess" else "service (GateKeeper capable, dependencies available)"
             logger.info(
                 "Job %s (%s) enqueued to L1 queue=%s (%s)",
                 job_id, job_type, queue, label,
