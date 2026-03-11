@@ -3,6 +3,80 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
+// Performance Tracing Plugin - Detailed startup timing
+const performanceTracingPlugin = {
+  name: 'performance-tracing',
+  apply: 'serve',
+  enforce: 'pre',
+
+  resolveId(id) {
+    const shouldTrace = process.env.VITE_TRACE === 'true' || process.env.VITE_TRACE_RESOLVE === 'true';
+    if (shouldTrace) {
+      const start = performance.now();
+      return () => {
+        const duration = (performance.now() - start).toFixed(2);
+        if (duration > 50) {
+          console.error(`  ⏱️ [RESOLVE] ${duration.padStart(6)}ms | ${id}`);
+        }
+      };
+    }
+  },
+
+  load(id) {
+    const shouldTrace = process.env.VITE_TRACE === 'true' || process.env.VITE_TRACE_LOAD === 'true';
+    if (shouldTrace) {
+      const start = performance.now();
+      return () => {
+        const duration = (performance.now() - start).toFixed(2);
+        if (duration > 100) {
+          console.error(`  ⏱️ [LOAD] ${duration.padStart(6)}ms | ${id}`);
+        }
+      };
+    }
+  },
+
+  configureServer(server) {
+    const initStart = performance.now();
+    const shouldTrace = process.env.VITE_TRACE === 'true';
+
+    console.error('\n' + '━'.repeat(100));
+    console.error('🚀 VITE INITIALIZATION STARTED');
+    console.error(`   Trace enabled: ${shouldTrace}`);
+    console.error(`   Node env: ${process.env.NODE_ENV}`);
+    console.error(`   Root: ${process.cwd()}`);
+    console.error('━'.repeat(100) + '\n');
+
+    // Track first request and server ready
+    let firstRequest = true;
+    let serverReady = false;
+
+    // Hook into Vite's ready event
+    server.httpServer?.once('listening', () => {
+      const readyDuration = (performance.now() - initStart).toFixed(2);
+      serverReady = true;
+      console.error('\n' + '─'.repeat(100));
+      console.error(`✅ VITE SERVER READY`);
+      console.error(`   Duration: ${readyDuration}ms`);
+      console.error(`   Listening on: http://0.0.0.0:${server.config.server.port}`);
+      console.error('─'.repeat(100) + '\n');
+    });
+
+    server.middlewares.use((req, res, next) => {
+      if (firstRequest && !req.url.includes('__vite') && !req.url.includes('node_modules')) {
+        firstRequest = false;
+        const totalDuration = (performance.now() - initStart).toFixed(2);
+        console.error('\n' + '─'.repeat(100));
+        console.error(`📍 FIRST REQUEST RECEIVED`);
+        console.error(`   Path: ${req.url}`);
+        console.error(`   Total startup time: ${totalDuration}ms`);
+        console.error(`   Server ready: ${serverReady}`);
+        console.error('─'.repeat(100) + '\n');
+      }
+      next();
+    });
+  },
+}
+
 // Rebuild Observability Plugin - Logs file change triggers
 const rebuildObservabilityPlugin = {
   name: 'rebuild-observability',
@@ -132,6 +206,7 @@ const urlRewritePlugin = {
 export default defineConfig({
   root: '/app/artifacts',
   plugins: [
+    performanceTracingPlugin,
     rebuildObservabilityPlugin,
     migrationWarningPlugin,
     urlRewritePlugin,
