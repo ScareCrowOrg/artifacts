@@ -2,6 +2,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
+import fs from 'fs'
 
 // Performance Tracing Plugin - Detailed startup timing
 const performanceTracingPlugin = {
@@ -124,6 +125,67 @@ const rebuildObservabilityPlugin = {
   },
 }
 
+// Viewer Warmup Plugin - Pre-compile viewers on startup
+// Automatically discovers and pre-compiles all viewers to avoid cold-start delays
+const viewerWarmupPlugin = {
+  name: 'viewer-warmup',
+  apply: 'serve',
+  enforce: 'post',
+
+  async configureServer(server) {
+    // Schedule warmup after server is ready
+    setTimeout(async () => {
+      try {
+        const viewersDir = path.resolve(process.cwd(), 'canonical/viewers')
+
+        // Check if viewers directory exists
+        if (!fs.existsSync(viewersDir)) {
+          console.error('❌ [Viewer Warmup] Viewers directory not found:', viewersDir)
+          return
+        }
+
+        const viewers = fs.readdirSync(viewersDir).filter(f => {
+          return fs.statSync(path.join(viewersDir, f)).isDirectory()
+        })
+
+        console.error('\n' + '━'.repeat(100))
+        console.error('🔥 VIEWER WARMUP STARTED')
+        console.error(`   Found ${viewers.length} viewers to pre-compile`)
+        console.error('━'.repeat(100) + '\n')
+
+        let successCount = 0
+        let failCount = 0
+
+        for (const viewer of viewers) {
+          const viewerUrl = `http://localhost:5052/canonical/viewers/${viewer}/main.ts`
+          try {
+            const startTime = performance.now()
+            const response = await fetch(viewerUrl)
+            const duration = (performance.now() - startTime).toFixed(2)
+
+            if (response.ok) {
+              console.error(`  ✅ ${viewer.padEnd(30)} ${duration.padStart(6)}ms`)
+              successCount++
+            } else {
+              console.error(`  ⚠️  ${viewer.padEnd(30)} HTTP ${response.status}`)
+              failCount++
+            }
+          } catch (error) {
+            console.error(`  ❌ ${viewer.padEnd(30)} ${error.message}`)
+            failCount++
+          }
+        }
+
+        console.error('\n' + '─'.repeat(100))
+        console.error(`✅ VIEWER WARMUP COMPLETED: ${successCount}/${viewers.length} pre-compiled`)
+        console.error('─'.repeat(100) + '\n')
+      } catch (error) {
+        console.error('❌ [Viewer Warmup] Error:', error.message)
+      }
+    }, 2000) // Wait 2s for Vite to initialize
+  },
+}
+
 // Migration Warning Plugin - Pedagogical approach (DISABLED)
 // Previously warned about @/ imports, but now @/ is resolved to #shared/ via alias
 // This allows shared utilities to use @/ imports which work in both contexts:
@@ -208,6 +270,7 @@ export default defineConfig({
   plugins: [
     performanceTracingPlugin,
     rebuildObservabilityPlugin,
+    viewerWarmupPlugin,
     migrationWarningPlugin,
     urlRewritePlugin,
     artifactsRewritePlugin,
