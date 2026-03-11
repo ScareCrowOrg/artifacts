@@ -3,6 +3,47 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
+// Rebuild Observability Plugin - Logs file change triggers
+const rebuildObservabilityPlugin = {
+  name: 'rebuild-observability',
+  apply: 'serve',
+  handleHotUpdate({ file, server, modules }) {
+    const timestamp = new Date().toISOString();
+    const relativePath = file.replace(process.cwd() + '/', '');
+    console.log(`\n🔄 [${timestamp}] HMR Update Triggered`);
+    console.log(`   File: ${relativePath}`);
+    console.log(`   Affected modules: ${modules.length}`);
+    if (modules.length > 0) {
+      modules.forEach((mod, idx) => {
+        console.log(`     ${idx + 1}. ${mod.url || mod.id}`);
+      });
+    }
+  },
+  configureServer(server) {
+    // Monitor file watch events
+    const originalWatcher = server.watcher;
+    if (originalWatcher) {
+      originalWatcher.on('change', (file) => {
+        const timestamp = new Date().toISOString();
+        const relativePath = file.replace(process.cwd() + '/', '');
+        console.log(`📝 [${timestamp}] File changed: ${relativePath}`);
+      });
+
+      originalWatcher.on('add', (file) => {
+        const timestamp = new Date().toISOString();
+        const relativePath = file.replace(process.cwd() + '/', '');
+        console.log(`➕ [${timestamp}] File added: ${relativePath}`);
+      });
+
+      originalWatcher.on('unlink', (file) => {
+        const timestamp = new Date().toISOString();
+        const relativePath = file.replace(process.cwd() + '/', '');
+        console.log(`❌ [${timestamp}] File deleted: ${relativePath}`);
+      });
+    }
+  },
+}
+
 // Migration Warning Plugin - Pedagogical approach (DISABLED)
 // Previously warned about @/ imports, but now @/ is resolved to #shared/ via alias
 // This allows shared utilities to use @/ imports which work in both contexts:
@@ -85,6 +126,7 @@ const urlRewritePlugin = {
 export default defineConfig({
   root: '/app/artifacts',
   plugins: [
+    rebuildObservabilityPlugin,
     migrationWarningPlugin,
     urlRewritePlugin,
     artifactsRewritePlugin,
