@@ -98,6 +98,9 @@ export default defineConfig({
     port: 5052,
     host: '0.0.0.0',  // Listen on all interfaces (container networking)
     strictPort: true,  // Fail if port 5052 is already in use
+    watch: {
+      ignored: ['**/node_modules/**', '**/.git/**']  // Ignore node_modules and .git
+    },
 
     // CORS configuration for cross-origin requests from frontend
     // Can be overridden with VITE_CORS_ORIGINS environment variable
