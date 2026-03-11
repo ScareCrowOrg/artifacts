@@ -20,12 +20,13 @@ Architecture:
 import asyncio
 import logging
 import os
-import time
 from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+
+from canonical.shared.services.base_service import BaseService
 
 # Configure logging
 logging.basicConfig(
@@ -46,12 +47,6 @@ OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://scareverse-ollama-service:11434")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_REQUEST_TIMEOUT", "120"))
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "11434"))
 SERVICE_HOST = os.getenv("SERVICE_HOST", "0.0.0.0")
-
-# Redis heartbeat configuration
-_REDIS_HEARTBEAT_INTERVAL = int(os.getenv("REDIS_HEARTBEAT_INTERVAL", "60"))
-_SERVICE_NAME = "ollama"
-_AVAILABILITY_KEY = f"state:service:{_SERVICE_NAME}:available"
-_AVAILABILITY_TTL = _REDIS_HEARTBEAT_INTERVAL * 3  # 3× interval for safety margin
 
 # Global HTTP client
 _http_client: Optional[httpx.AsyncClient] = None
@@ -84,51 +79,8 @@ class ChatRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Redis heartbeat – self-registers state:service:ollama:available
+# Startup / Shutdown
 # ---------------------------------------------------------------------------
-
-async def _redis_heartbeat_loop() -> None:
-    """
-    Background task: write ``state:service:ollama:available`` to Redis L1
-    every ``REDIS_HEARTBEAT_INTERVAL`` seconds with a 3× TTL.
-
-    Services own their availability reporting – this removes the need for
-    GateKeeper to probe HTTP endpoints, and is more reliable than external probes.
-    """
-    redis_host = os.getenv("REDIS_L1_HOST", "redis-local")
-    redis_port = int(os.getenv("REDIS_L1_PORT", "6380"))
-    redis_db = int(os.getenv("REDIS_L1_DB", "0"))
-    redis_password = os.getenv("REDIS_L1_PASSWORD", "scarerunner") or None
-
-    try:
-        import redis.asyncio as aioredis
-    except ImportError:
-        logger.warning("redis-py not installed – heartbeat registration disabled")
-        return
-
-    kwargs = {
-        "host": redis_host,
-        "port": redis_port,
-        "db": redis_db,
-        "decode_responses": True,
-        "socket_connect_timeout": 5,
-        "socket_keepalive": True,
-    }
-    if redis_password:
-        kwargs["password"] = redis_password
-
-    client = None
-    while True:
-        try:
-            if client is None:
-                client = aioredis.Redis(**kwargs)
-            await client.set(_AVAILABILITY_KEY, "1", ex=_AVAILABILITY_TTL)
-            logger.debug("Heartbeat: %s refreshed (TTL %ds)", _AVAILABILITY_KEY, _AVAILABILITY_TTL)
-        except Exception as exc:
-            logger.warning("Heartbeat failed for %s: %s", _AVAILABILITY_KEY, exc)
-            client = None  # Force reconnect on next iteration
-        await asyncio.sleep(_REDIS_HEARTBEAT_INTERVAL)
-
 
 @app.on_event("startup")
 async def startup_event() -> None:
@@ -136,9 +88,10 @@ async def startup_event() -> None:
     global _http_client
     _http_client = httpx.AsyncClient(base_url=OLLAMA_HOST, timeout=OLLAMA_TIMEOUT)
 
-    # Start heartbeat as fire-and-forget background task
-    asyncio.create_task(_redis_heartbeat_loop())
-    logger.info("Ollama wrapper started: proxy=%s, heartbeat=%s", OLLAMA_HOST, _AVAILABILITY_KEY)
+    # Fire-and-forget heartbeat via BaseService
+    service = BaseService("ollama", logger=logger)
+    asyncio.create_task(service.heartbeat())
+    logger.info("Ollama wrapper started: proxy=%s, heartbeat=state:service:ollama:available", OLLAMA_HOST)
 
 
 @app.on_event("shutdown")

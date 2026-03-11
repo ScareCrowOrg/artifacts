@@ -14,6 +14,7 @@ from .redis_client import (
     create_job,
 )
 from .centralhub_client import CentralHubClient, get_centralhub_client, close_centralhub_client
+from .services.base_service import BaseService
 
 from .utils import utcnow_iso, load_job_type_definitions, safe_json_loads, strip_data_uri_prefix
 
@@ -27,6 +28,7 @@ __all__ = [
     "CentralHubClient",
     "get_centralhub_client",
     "close_centralhub_client",
+    "BaseService",
     "utcnow_iso",
     "load_job_type_definitions",
     "safe_json_loads",

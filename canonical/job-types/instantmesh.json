@@ -22,7 +22,7 @@
   "result_key_ttl": 300,
   "timeout": 120,
 
-  "dependencies": [],
+  "dependencies": ["instantmesh"],
 
   "worker_availability_key": "state:worker:instantmesh:available",
 

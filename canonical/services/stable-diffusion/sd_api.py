@@ -30,6 +30,8 @@ from pydantic import BaseModel, Field
 from diffusers import AutoPipelineForText2Image
 import uvicorn
 
+from canonical.shared.services.base_service import BaseService
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -49,63 +51,14 @@ app = FastAPI(
 pipeline: Optional[object] = None
 current_model: Optional[str] = None
 
-# ---------------------------------------------------------------------------
-# Redis heartbeat – self-registers state:service:stable-diffusion:available
-# ---------------------------------------------------------------------------
-
-_REDIS_HEARTBEAT_INTERVAL = int(os.getenv("REDIS_HEARTBEAT_INTERVAL", "60"))
 _SERVICE_NAME = "stable-diffusion"
-_AVAILABILITY_KEY = f"state:service:{_SERVICE_NAME}:available"
-_AVAILABILITY_TTL = _REDIS_HEARTBEAT_INTERVAL * 3  # 3× interval so one missed beat is fine
-
-
-async def _redis_heartbeat_loop() -> None:
-    """
-    Background task: write ``state:service:stable-diffusion:available`` to Redis L1
-    every ``REDIS_HEARTBEAT_INTERVAL`` seconds with a 3× TTL.
-
-    Services own their availability reporting – this removes the need for
-    GateKeeper to probe Docker container health via docker.sock.
-    """
-    redis_host = os.getenv("REDIS_L1_HOST", "redis-local")
-    redis_port = int(os.getenv("REDIS_L1_PORT", "6380"))
-    redis_db = int(os.getenv("REDIS_L1_DB", "0"))
-    redis_password = os.getenv("REDIS_L1_PASSWORD", "scarerunner") or None
-
-    try:
-        import redis.asyncio as aioredis
-    except ImportError:
-        logger.warning("redis-py not installed – heartbeat registration disabled")
-        return
-
-    kwargs = {
-        "host": redis_host,
-        "port": redis_port,
-        "db": redis_db,
-        "decode_responses": True,
-        "socket_connect_timeout": 5,
-        "socket_keepalive": True,
-    }
-    if redis_password:
-        kwargs["password"] = redis_password
-
-    client = None
-    while True:
-        try:
-            if client is None:
-                client = aioredis.Redis(**kwargs)
-            await client.set(_AVAILABILITY_KEY, "1", ex=_AVAILABILITY_TTL)
-            logger.debug("Heartbeat: %s refreshed (TTL %ds)", _AVAILABILITY_KEY, _AVAILABILITY_TTL)
-        except Exception as exc:
-            logger.warning("Heartbeat failed for %s: %s", _AVAILABILITY_KEY, exc)
-            client = None  # Force reconnect on next iteration
-        await asyncio.sleep(_REDIS_HEARTBEAT_INTERVAL)
 
 
 @app.on_event("startup")
 async def startup_event() -> None:
     """Start the Redis heartbeat loop as a background task on app startup."""
-    asyncio.create_task(_redis_heartbeat_loop())
+    service = BaseService(_SERVICE_NAME, logger=logger)
+    asyncio.create_task(service.heartbeat())
     logger.info("Redis heartbeat task started for service '%s'", _SERVICE_NAME)
 
 
