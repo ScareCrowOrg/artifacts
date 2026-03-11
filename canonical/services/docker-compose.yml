@@ -1,0 +1,282 @@
+# ScareVerse Stack - Meta-orchestrator
+#
+# Brings all services up together with correct startup ordering:
+#   redis-local (6380) → backend (5050) → vite (5052)
+#
+# Usage (from project root):
+#   docker-compose -f artifacts/canonical/services/docker-compose.yml up
+#   docker-compose -f artifacts/canonical/services/docker-compose.yml up -d
+#   docker-compose -f artifacts/canonical/services/docker-compose.yml logs -f
+#   docker-compose -f artifacts/canonical/services/docker-compose.yml down
+#
+# Individual services can also be managed independently:
+#   docker-compose -f artifacts/canonical/services/redis/docker-compose.yml up -d
+#   docker-compose -f artifacts/canonical/services/backend/docker-compose.yml up -d
+#   docker-compose -f artifacts/canonical/services/vite/docker-compose.yml up -d
+
+version: '3.8'
+
+services:
+  # ─── Redis L1 Cache (Local) ──────────────────────────────────────────────────
+  redis-local:
+    image: redis:7-alpine
+    container_name: scareverse-redis-local
+    ports:
+      - "6380:6380"
+    volumes:
+      - redis_local_data:/data
+    environment:
+      - REDIS_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
+    command: redis-server --port 6380 --appendonly yes --requirepass ${REDIS_L1_PASSWORD:-scarerunner}
+    networks:
+      - scareverse-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6380", "-a", "${REDIS_L1_PASSWORD:-scarerunner}", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # ─── Backend API ─────────────────────────────────────────────────────────────
+  backend:
+    container_name: scareverse-backend
+    build:
+      context: ../../..
+      dockerfile: artifacts/canonical/services/backend/Dockerfile
+    image: scareverse/backend:latest
+    depends_on:
+      redis-local:
+        condition: service_healthy
+    ports:
+      - "5050:5050"
+    volumes:
+      - ../../../artifacts/canonical:/app/artifacts/canonical:rw
+      - ../../../artifacts/runtime:/app/artifacts/runtime:rw
+      - ../../../artifacts/sandbox:/app/artifacts/sandbox:rw
+      - ../../../artifacts/shared:/app/artifacts/shared:rw
+      - ../../../artifacts/package.json:/app/artifacts/package.json:ro
+      - ../../../artifacts/vite.config.ts:/app/artifacts/vite.config.ts:ro
+      - ../../../backend:/app/backend:ro
+      - ../../../backend/logs:/app/backend/logs:rw
+    environment:
+      # API Server
+      - API_HOST=${API_HOST:-0.0.0.0}
+      - API_PORT=${API_PORT:-5050}
+      - API_DEBUG=${API_DEBUG:-true}
+      - API_PREFIX=${API_PREFIX:-/api}
+      - API_VERSION=${API_VERSION:-v1}
+      - UVICORN_RELOAD=${UVICORN_RELOAD:-false}
+
+      # Authentication & Security
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
+      - AUTH_TOKEN=${AUTH_TOKEN}
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+
+      # Frontend / Vite
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+      - VITE_SCARERUNNER_URL=${VITE_SCARERUNNER_URL}
+      - VITE_CENTRALHUB_URL=${VITE_CENTRALHUB_URL}
+      - VITE_CORS_ORIGINS=${VITE_CORS_ORIGINS}
+      - VITE_HMR_HOST=${VITE_HMR_HOST:-localhost}
+      - VITE_HMR_PORT=${VITE_HMR_PORT:-5052}
+      - VITE_HMR_PROTOCOL=${VITE_HMR_PROTOCOL:-ws}
+      - VITE_TRACE=${VITE_TRACE:-false}
+      - VITE_TRACE_RESOLVE=${VITE_TRACE_RESOLVE:-false}
+      - VITE_TRACE_LOAD=${VITE_TRACE_LOAD:-false}
+      - VITE_DEBUG=${VITE_DEBUG:-false}
+
+      # Python & Logging
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_CONVERSATION_TRACING=${ENABLE_CONVERSATION_TRACING:-true}
+      - TRACE_RETENTION_DAYS=${TRACE_RETENTION_DAYS:-2}
+      - TRACE_MAX_FRAGMENT_SIZE=${TRACE_MAX_FRAGMENT_SIZE:-10485760}
+
+      # HTTP Client
+      - HTTP_CONNECTION_TIMEOUT=${HTTP_CONNECTION_TIMEOUT:-10}
+      - HTTP_READ_TIMEOUT=${HTTP_READ_TIMEOUT:-30}
+
+      # GitHub
+      - GITHUB_PAT=${GITHUB_PAT}
+      - GITHUB_CONFIG_URL=${GITHUB_CONFIG_URL}
+
+      # Base Directory & Artifacts
+      - BASE_DIR=${BASE_DIR:-/app}
+      - ARTIFACTS_DIR=${ARTIFACTS_DIR:-artifacts}
+      - TREE_CACHE_TTL=${TREE_CACHE_TTL:-60}
+
+      # CentralHub
+      - CENTRALHUB_URL=${CENTRALHUB_URL:-http://host.docker.internal:5051}
+      - CENTRALHUB_ENABLED=${CENTRALHUB_ENABLED:-false}
+
+      # MongoDB (disabled - use CentralHub proxy)
+      - MONGODB_ENABLED=false
+
+      # Redis L1
+      - REDIS_L1_ENABLED=${REDIS_L1_ENABLED:-true}
+      - REDIS_L1_HOST=${REDIS_L1_HOST:-redis-local}
+      - REDIS_L1_PORT=${REDIS_L1_PORT:-6380}
+      - REDIS_L1_DB=${REDIS_L1_DB:-0}
+      - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
+
+      # Redis L2 (global)
+      - REDIS_L2_ENABLED=${REDIS_L2_ENABLED:-true}
+      - REDIS_L2_HOST=${REDIS_L2_HOST:-host.docker.internal}
+      - REDIS_L2_PORT=${REDIS_L2_PORT:-6379}
+      - REDIS_L2_DB=${REDIS_L2_DB:-0}
+      - REDIS_L2_PASSWORD=${REDIS_L2_PASSWORD:-}
+
+      # Legacy Redis vars
+      - REDIS_ENABLED=${REDIS_ENABLED:-true}
+      - REDIS_HOST=${REDIS_HOST:-host.docker.internal}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_CACHE_ENABLED=${REDIS_CACHE_ENABLED:-true}
+      - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-300}
+      - REDIS_CACHE_TTL_CELULAS=${REDIS_CACHE_TTL_CELULAS:-600}
+      - REDIS_CACHE_TTL_LIVROS=${REDIS_CACHE_TTL_LIVROS:-900}
+      - REDIS_CACHE_TTL_CONFIG=${REDIS_CACHE_TTL_CONFIG:-1200}
+      - REDIS_CACHE_TTL_CANONICAL=${REDIS_CACHE_TTL_CANONICAL:-1500}
+
+      # Ollama
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:5050}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral}
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-300}
+      - OLLAMA_MODELS=${OLLAMA_MODELS}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL}
+
+      # Gemini
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_API_URL=${GEMINI_API_URL:-https://generativelanguage.googleapis.com/v1beta}
+      - GEMINI_TIMEOUT=${GEMINI_TIMEOUT:-120}
+      - GEMINI_DEFAULT_MODEL=${GEMINI_DEFAULT_MODEL:-gemini-2.5-flash}
+      - GEMINI_MODELS=${GEMINI_MODELS}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+
+      # OpenAI
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_URL=${OPENAI_API_URL:-https://api.openai.com/v1}
+      - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-4o-mini}
+      - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-60.0}
+      - OPENAI_MODELS=${OPENAI_MODELS}
+
+      # Vector Store & RAG
+      - VECTORSTORE_PATH=${VECTORSTORE_PATH:-chroma_db}
+      - VECTORSTORE_COLLECTION=${VECTORSTORE_COLLECTION:-scareverse_docs}
+      - VECTORSTORE_PATH_INGESTION=${VECTORSTORE_PATH_INGESTION:-/app/backend/chroma_db/ingestion}
+      - CHUNK_SIZE=${CHUNK_SIZE:-1000}
+      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-200}
+      - EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-20}
+      - EMBEDDING_BATCH_DELAY=${EMBEDDING_BATCH_DELAY:-0.5}
+      - EMBEDDING_MAX_CONCURRENT=${EMBEDDING_MAX_CONCURRENT:-1}
+      - RAG_POSTPROCESS_LLM_ENABLED=${RAG_POSTPROCESS_LLM_ENABLED:-true}
+      - RAG_POSTPROCESS_LLM_MODEL=${RAG_POSTPROCESS_LLM_MODEL:-phi3:latest}
+      - RAG_VECTORSTORE_PATH=${RAG_VECTORSTORE_PATH}
+
+      # External AI
+      - STABLE_DIFFUSION_URL=${STABLE_DIFFUSION_URL}
+      - STABLE_DIFFUSION_TIMEOUT=${STABLE_DIFFUSION_TIMEOUT:-120}
+      - STABLE_FAST_3D_API_KEY=${STABLE_FAST_3D_API_KEY}
+      - STABLE_FAST_3D_URL=${STABLE_FAST_3D_URL}
+      - STABLE_FAST_3D_TIMEOUT=${STABLE_FAST_3D_TIMEOUT:-60}
+
+      # Cloudflare R2
+      - STORAGE_MODE=${STORAGE_MODE:-r2}
+      - R2_ENABLED=${R2_ENABLED:-false}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+
+      # User LLM credentials
+      - GEMINI_API_KEY_USER=${GEMINI_API_KEY_USER:-}
+
+      # Hub
+      - HUB_URL=${HUB_URL:-}
+      - ANONYMIZED_TELEMETRY=${ANONYMIZED_TELEMETRY:-false}
+
+    networks:
+      - scareverse-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Vite Dev Server ──────────────────────────────────────────────────────────
+  vite:
+    container_name: scareverse-vite
+    build:
+      context: ../../..
+      dockerfile: artifacts/canonical/services/vite/Dockerfile
+    image: scareverse/vite:latest
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5052:5052"
+    volumes:
+      - ../../../artifacts/canonical:/app/artifacts/canonical:rw
+      - ../../../artifacts/runtime:/app/artifacts/runtime:rw
+      - ../../../artifacts/sandbox:/app/artifacts/sandbox:rw
+      - ../../../artifacts/shared:/app/artifacts/shared:rw
+      - ../../../artifacts/package.json:/app/artifacts/package.json:ro
+      - ../../../artifacts/vite.config.ts:/app/artifacts/vite.config.ts:ro
+    environment:
+      - NODE_ENV=development
+      - VITE_HMR_HOST=${VITE_HMR_HOST:-localhost}
+      - VITE_HMR_PORT=${VITE_HMR_PORT:-5052}
+      - VITE_HMR_PROTOCOL=${VITE_HMR_PROTOCOL:-ws}
+      - VITE_CORS_ORIGINS=${VITE_CORS_ORIGINS:-http://localhost:8000,http://localhost:5173,http://localhost:5050}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+      - VITE_SCARERUNNER_URL=${VITE_SCARERUNNER_URL}
+      - VITE_CENTRALHUB_URL=${VITE_CENTRALHUB_URL}
+      - VITE_TRACE=${VITE_TRACE:-false}
+      - VITE_TRACE_RESOLVE=${VITE_TRACE_RESOLVE:-false}
+      - VITE_TRACE_LOAD=${VITE_TRACE_LOAD:-false}
+      - VITE_DEBUG=${VITE_DEBUG:-false}
+    networks:
+      - scareverse-net
+    healthcheck:
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "http://localhost:5052/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ─── Network ──────────────────────────────────────────────────────────────────
+networks:
+  scareverse-net:
+    driver: bridge
+    name: scareverse-net
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  redis_local_data:
+    driver: local
+    name: scareverse_redis_local_data

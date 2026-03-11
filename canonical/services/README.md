@@ -20,6 +20,9 @@ separately from ephemeral subprocess job workers.
 
 | Directory | Type | Purpose |
 |-----------|------|---------|
+| `backend/` | Docker (Python 3.11 + Node.js) | Backend API (FastAPI/uvicorn) + Gemini CLI |
+| `vite/` | Docker (Node 20-alpine) | Vite dev server for on-demand TS/Vue compilation |
+| `redis/` | Docker (redis:7-alpine) | Redis L1 local cache (port 6380) |
 | `gatekeeper/` | Docker (FastAPI) | Unified job dispatcher (L1/L2 Redis → workers) |
 | `ollama/` | Docker (Ollama image) | LLM inference service |
 | `stable-diffusion/` | Docker (SD image) | Image generation service |
@@ -40,6 +43,14 @@ to determine the execution model and routing for each job type.
 ## Starting Services
 
 ```bash
+# Full stack (meta-orchestrator - recommended)
+docker-compose -f artifacts/canonical/services/docker-compose.yml up
+
+# Individual services
+docker-compose -f artifacts/canonical/services/redis/docker-compose.yml up -d
+docker-compose -f artifacts/canonical/services/backend/docker-compose.yml up -d
+docker-compose -f artifacts/canonical/services/vite/docker-compose.yml up -d
+
 # GateKeeper
 cd services/gatekeeper && docker-compose up -d
 

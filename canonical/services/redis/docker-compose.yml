@@ -1,0 +1,47 @@
+# Redis L1 Service - Standalone docker-compose
+#
+# Local Redis cache (L1) for artifact metadata and session data.
+# Uses redis:7-alpine with password protection and AOF persistence.
+#
+# Usage (from project root):
+#   docker-compose -f artifacts/canonical/services/redis/docker-compose.yml up -d
+#   docker-compose -f artifacts/canonical/services/redis/docker-compose.yml logs -f
+#   docker-compose -f artifacts/canonical/services/redis/docker-compose.yml down
+
+version: '3.8'
+
+services:
+  redis-local:
+    image: redis:7-alpine
+    container_name: scareverse-redis-local
+    ports:
+      - "6380:6380"
+    volumes:
+      - redis_local_data:/data
+    environment:
+      - REDIS_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
+    command: redis-server --port 6380 --appendonly yes --requirepass ${REDIS_L1_PASSWORD:-scarerunner}
+    networks:
+      - scareverse-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6380", "-a", "${REDIS_L1_PASSWORD:-scarerunner}", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  scareverse-net:
+    driver: bridge
+    name: scareverse-net
+
+volumes:
+  redis_local_data:
+    driver: local
+    name: scareverse_redis_local_data
