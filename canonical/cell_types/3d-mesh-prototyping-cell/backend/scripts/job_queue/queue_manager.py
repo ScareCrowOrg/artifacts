@@ -14,8 +14,18 @@ from typing import Dict, Any
 from pathlib import Path
 from datetime import datetime
 
-from .redis_client import get_redis_client
 from .file_manager import get_shared_volume_path
+
+# Redis L1 client from canonical shared (single source of truth)
+# Supports fallback: tries backend app context first, then direct connection
+try:
+    from canonical.shared.redis_client import get_redis_client
+except ImportError:
+    # Local dev fallback: add shared to path
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / 'shared'))
+    from redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
