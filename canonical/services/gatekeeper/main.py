@@ -14,6 +14,14 @@ Responsibilities:
 - Persist job result / error back to Redis.
 - Run ResourceOrchestrator monitoring loop concurrently.
 - Publish heartbeat to Redis L1.
+
+IMPORTANT: GateKeeper is a JOB CONSUMER, not a health checker.
+- Services (Ollama, SD, InstantMesh) self-register availability via BaseService
+  → write state:service:{name}:available to Redis L1 on startup (every 60s)
+- Backend/ScareRunner checks service availability when ENQUEUEING jobs
+  → via create_job() which reads state:service:{dep}:available
+- GateKeeper only consumes jobs from Redis and executes them
+  → does NOT probe services or write availability keys
 """
 
 import asyncio
@@ -173,9 +181,6 @@ class GateKeeper:
             ),
             asyncio.create_task(
                 self.venv_manager.start_health_checks(), name="venv_health_checks"
-            ),
-            asyncio.create_task(
-                self._check_service_availability(), name="service_availability"
             ),
             asyncio.create_task(
                 self._register_serving_capability(), name="serving_capability"
@@ -446,83 +451,6 @@ class GateKeeper:
     # Service Availability
     # ------------------------------------------------------------------
 
-    async def _check_service_availability(self) -> None:
-        """
-        Service availability signaling loop.
-
-        Probes each service dependency via HTTP and writes
-        ``state:service:{service_name}:available`` to Redis L1 (TTL 120s).
-
-        - Subprocess workers with no external dependencies are always marked
-          available (they run locally inside GateKeeper).
-        - Service workers (e.g. stable-diffusion, ollama) are probed at their
-          HTTP health endpoint. No Docker daemon or docker.sock is required.
-
-        Runs every ``VENV_HEALTH_CHECK_INTERVAL`` seconds.
-        """
-        while not _shutdown_event.is_set():
-            try:
-                seen_services: set = set()
-                for job_type, job_config in config.JOB_TYPES_CONFIG.items():
-                    execution_model = job_config.get("execution_model", "service")
-                    dependencies = job_config.get("dependencies", [])
-
-                    if execution_model == "subprocess" or not dependencies:
-                        # No external deps → subprocess worker always available locally
-                        key = f"state:service:{job_type}:available"
-                        await self.redis_l1.set(key, "1", ex=120)
-                        continue
-
-                    # Probe each unique service dependency via HTTP
-                    endpoint = job_config.get("endpoint", "")
-                    health_path = job_config.get("health_path", "/health")
-
-                    for dep in dependencies:
-                        if dep in seen_services:
-                            continue
-                        seen_services.add(dep)
-
-                        health_url = (
-                            f"{endpoint.rstrip('/')}{health_path}" if endpoint else ""
-                        )
-                        healthy = await self._probe_http_health(health_url)
-
-                        key = f"state:service:{dep}:available"
-                        if healthy:
-                            await self.redis_l1.set(key, "1", ex=120)
-                            logger.info(
-                                "✅ Service %s available (%s)", dep, health_url
-                            )
-                        else:
-                            await self.redis_l1.delete(key)
-                            logger.warning(
-                                "⚠️ Service %s unavailable (%s)", dep, health_url
-                            )
-
-            except Exception as exc:
-                logger.error("Service availability check failed: %s", exc)
-
-            await asyncio.sleep(config.VENV_HEALTH_CHECK_INTERVAL)
-
-    async def _probe_http_health(self, url: str) -> bool:
-        """
-        Probe a service health endpoint via HTTP GET.
-
-        Args:
-            url: Full health check URL (e.g. ``http://host:port/health``).
-
-        Returns:
-            True if the service responds with a 2xx/3xx status code.
-            False if the URL is empty, the request times out, or any error occurs.
-        """
-        if not url:
-            return False
-        try:
-            response = await self.http.get(url, timeout=config.SERVICE_HEALTH_PROBE_TIMEOUT)
-            return response.status_code < 400
-        except Exception as exc:
-            logger.debug("Health probe failed for %s: %s", url, exc)
-            return False
 
 
 # ---------------------------------------------------------------------------
