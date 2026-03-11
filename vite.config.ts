@@ -10,36 +10,42 @@ const rebuildObservabilityPlugin = {
   handleHotUpdate({ file, server, modules }) {
     const timestamp = new Date().toISOString();
     const relativePath = file.replace(process.cwd() + '/', '');
-    console.log(`\n🔄 [${timestamp}] HMR Update Triggered`);
-    console.log(`   File: ${relativePath}`);
-    console.log(`   Affected modules: ${modules.length}`);
+    console.error(`\n🔄 [${timestamp}] HMR Update Triggered`);
+    console.error(`   File: ${relativePath}`);
+    console.error(`   Affected modules: ${modules.length}`);
     if (modules.length > 0) {
       modules.forEach((mod, idx) => {
-        console.log(`     ${idx + 1}. ${mod.url || mod.id}`);
+        console.error(`     ${idx + 1}. ${mod.url || mod.id}`);
       });
     }
   },
   configureServer(server) {
+    console.error('\n⚙️ [Rebuild Plugin] configureServer called - watcher initialized');
+
     // Monitor file watch events
     const originalWatcher = server.watcher;
     if (originalWatcher) {
+      console.error('✅ [Rebuild Plugin] Watcher found, attaching listeners');
+
       originalWatcher.on('change', (file) => {
         const timestamp = new Date().toISOString();
         const relativePath = file.replace(process.cwd() + '/', '');
-        console.log(`📝 [${timestamp}] File changed: ${relativePath}`);
+        console.error(`📝 [${timestamp}] File changed: ${relativePath}`);
       });
 
       originalWatcher.on('add', (file) => {
         const timestamp = new Date().toISOString();
         const relativePath = file.replace(process.cwd() + '/', '');
-        console.log(`➕ [${timestamp}] File added: ${relativePath}`);
+        console.error(`➕ [${timestamp}] File added: ${relativePath}`);
       });
 
       originalWatcher.on('unlink', (file) => {
         const timestamp = new Date().toISOString();
         const relativePath = file.replace(process.cwd() + '/', '');
-        console.log(`❌ [${timestamp}] File deleted: ${relativePath}`);
+        console.error(`❌ [${timestamp}] File deleted: ${relativePath}`);
       });
+    } else {
+      console.error('❌ [Rebuild Plugin] NO WATCHER FOUND!');
     }
   },
 }
@@ -150,7 +156,14 @@ export default defineConfig({
         '**/__pycache__/**',            // Python cache
         '**/.DS_Store',                 // macOS metadata
         '**/dist/**',                   // Build output (if any)
-      ]
+      ],
+      // Chokidar polling for Docker volumes on Windows
+      // REQUIRED: Native inotify doesn't work with Docker volumes on Windows
+      // Values: aggregateTimeout groups rapid changes, poll is check interval
+      // These values prevent continuous recompilation while detecting changes
+      usePolling: process.env.VITE_CHOKIDAR_USEPOLLING !== 'false',
+      aggregateTimeout: 1000,  // Wait 1s before triggering update
+      poll: 3000,              // Check for changes every 3s (slower = less CPU)
     },
 
     // CORS configuration for cross-origin requests from frontend

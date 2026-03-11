@@ -102,11 +102,9 @@ import { createLogger } from '@/utils/logger'
 import { executeAction, parseActionURL, hasAction, isProposalAction } from '@/composables/useActionRegistry'
 import { safeParseJSON } from '../utils/actionLinksPlugin'
 import { useChatStore } from '../stores/chat'
-import { usePermissionsStore } from '@/stores/permissions'
 
 const log = createLogger('chat:actionlink')
 const { t } = useI18n()
-const permissionsStore = usePermissionsStore()
 
 // Constants for action handling
 const DEFAULT_CONTEXT_LINES = 3
@@ -247,8 +245,10 @@ const isJsonAction = computed(() => {
 })
 
 // Computed: is the current user an admin?
+// NOTE: Admin view disabled - permissions must come from backend/CentralHub, not local store
+// TODO: If admin view is needed, implement via backend API call
 const isAdmin = computed(() => {
-  return permissionsStore.isAdmin
+  return false // Always hide admin view for now
 })
 
 // Computed: pretty-printed JSON for admin view

@@ -246,9 +246,22 @@ export function useCellViewProvider() {
       })
 
       try {
-        const ViewComponent = defineAsyncComponent(() =>
-          import(/* @vite-ignore */ importUrl),
-        )
+        const ViewComponent = defineAsyncComponent(() => {
+          log.debug('[useCellViewProvider] Dynamic import START', { importUrl })
+          return import(/* @vite-ignore */ importUrl)
+            .then(module => {
+              log.debug('[useCellViewProvider] Dynamic import SUCCESS', { importUrl, moduleKeys: Object.keys(module) })
+              return module
+            })
+            .catch(err => {
+              log.error('[useCellViewProvider] Dynamic import FAILED', {
+                importUrl,
+                error: err instanceof Error ? err.message : String(err),
+                stack: err instanceof Error ? err.stack : undefined
+              })
+              throw err
+            })
+        })
 
         log.info('[useCellViewProvider] resolveViewSpec: custom View component created', {
           importUrl,
