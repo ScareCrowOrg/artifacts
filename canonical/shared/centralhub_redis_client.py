@@ -1,16 +1,15 @@
 """
-CentralHub Redis HTTP Client
+CentralHub Redis HTTP Client – CANONICAL LOCATION
 
 Provides HTTP-based Redis operations via CentralHub with RBAC.
 Implements the same interface as redis-py for easy migration.
 
+**SINGLE SOURCE OF TRUTH**: artifacts/canonical/shared/centralhub_redis_client.py
+GateKeeper and other components import from here (no local copies).
+For backend parity, keep backend/app/clients/centralhub_redis_client.py in sync.
+
 Reference: Phase 1B Redis HTTP Abstraction
 Usage: docs/issues/redis-survey/DEVELOPER_QUICK_START.md
-
-NOTE: This file is a copy of backend/app/clients/centralhub_redis_client.py
-included here so that the GateKeeper Docker image (which only copies
-worker/gatekeeper/*.py) can import it without requiring the full backend.
-Keep both files in sync when making changes.
 """
 
 import json

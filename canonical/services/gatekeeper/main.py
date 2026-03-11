@@ -30,8 +30,15 @@ import httpx
 import redis.asyncio as aioredis
 
 import config
-from centralhub_redis_client import CentralHubRedisClient
 from job_executor import execute_subprocess_job
+
+# Shared utilities from artifacts/canonical/shared (PYTHONPATH=/app/artifacts in Docker)
+try:
+    from canonical.shared.centralhub_redis_client import CentralHubRedisClient
+except ImportError:
+    # Fallback for local development (relative import)
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'shared'))
+    from centralhub_redis_client import CentralHubRedisClient
 from json_logger import configure_json_logging
 from metrics import GateKeeperMetrics
 from orchestrator import ResourceOrchestrator
