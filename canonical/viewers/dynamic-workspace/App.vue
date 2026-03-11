@@ -123,7 +123,11 @@
  */
 
 // ── Tailwind CSS & Design System ──────────────────────────────────────────────
-import '@/styles/index.css'
+// ⚠️ TEMPORARILY DISABLED for performance testing
+// import '@/styles/index.css'
+// TODO: This import takes 20-25 seconds on every request due to Tailwind JIT scanning
+// Solution: Lazy-load Tailwind or use alternative CSS strategy
+// See: VITE_SLOWNESS_ROOT_CAUSE.md
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
