@@ -14,6 +14,16 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Redis L1 client from canonical shared (single source of truth)
+try:
+    from canonical.shared.redis_client import get_redis_client
+except ImportError:
+    # Local dev fallback: add shared to path
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / 'shared'))
+    from redis_client import get_redis_client
+
 # Result key prefix must match GateKeeper config
 _REMBG_RESULT_KEY_PREFIX = "scareverse:rembg-results"
 _REMBG_RESULT_TTL = 120
@@ -79,7 +89,7 @@ async def queue_background_removal_job(
             # Fallback: direct LPUSH when running outside backend app context.
             # Matches the job_data structure that create_job() would produce.
             logger.warning("redis_job_client not available; using direct LPUSH fallback")
-            redis_client = await _get_redis_client()
+            redis_client = await get_redis_client()
             job_data = {
                 "job_id": job_id,
                 "job_type": "rembg_removebackground",
@@ -90,7 +100,7 @@ async def queue_background_removal_job(
             await redis_client.lpush("scareverse:cpu-jobs:queue", json.dumps(job_data))
 
         # Wait for result via BRPOP (GateKeeper pushes result to this key)
-        redis_client = await _get_redis_client()
+        redis_client = await get_redis_client()
         result_key = f"{_REMBG_RESULT_KEY_PREFIX}:{job_id}"
         result = await brpop_result(redis_client, result_key, timeout)
 
@@ -158,43 +168,6 @@ async def brpop_result(
     except Exception as e:
         logger.error(f"BRPOP failed for key {result_key}: {e}")
         return None
-
-
-async def _get_redis_client():
-    """
-    Get Redis client for job queueing.
-    
-    Attempts to import from core backend app first, falls back to
-    standalone Redis client for direct script execution.
-    
-    Returns:
-        Redis client instance with async support
-        
-    Raises:
-        Exception: If Redis connection fails
-    """
-    try:
-        # Try to import from core (when running as part of backend app)
-        try:
-            from app.core.redis_client import get_redis_client as get_core_redis
-            return await get_core_redis()
-        except (ImportError, ModuleNotFoundError):
-            # Fallback: create Redis client directly (standalone execution)
-            # Use Redis L1 (local cache), not L2
-            import redis.asyncio as redis
-            import os
-
-            redis_host = os.getenv('REDIS_L1_HOST', 'redis-local')
-            redis_port = int(os.getenv('REDIS_L1_PORT', '6380'))
-            redis_password = os.getenv('REDIS_L1_PASSWORD', 'scarerunner')
-            redis_db = int(os.getenv('REDIS_L1_DB', '0'))
-
-            redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}"
-            logger.info(f"Creating standalone Redis L1 client: {redis_host}:{redis_port}")
-            return redis.from_url(redis_url, decode_responses=True)
-    except Exception as e:
-        logger.error(f"Failed to get Redis client: {e}")
-        raise
 
 
 # Synchronous wrapper for backward compatibility
