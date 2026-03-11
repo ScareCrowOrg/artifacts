@@ -294,12 +294,12 @@ class TestCheckServiceAvailability:
         """Exception inside the loop body is caught and the loop continues."""
         import config as config_module
 
-        call_count = 0
+        sleep_count = 0
 
         async def fake_sleep(_delay):
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 2:
+            nonlocal sleep_count
+            sleep_count += 1
+            if sleep_count >= 2:
                 raise asyncio.CancelledError
 
         job_types_config: Dict[str, Any] = {
@@ -311,13 +311,13 @@ class TestCheckServiceAvailability:
             }
         }
 
-        call_num = 0
+        probe_count = 0
 
         async def probe_side_effect(url: str) -> bool:
-            nonlocal call_num
-            call_num += 1
-            if call_num == 1:
-                raise RuntimeError("Redis error")
+            nonlocal probe_count
+            probe_count += 1
+            if probe_count == 1:
+                raise RuntimeError("Transient probe error")
             return True
 
         with patch.object(config_module, "JOB_TYPES_CONFIG", job_types_config), \
@@ -329,8 +329,9 @@ class TestCheckServiceAvailability:
             except asyncio.CancelledError:
                 pass
 
-        # Loop ran twice: first iteration raised, second set the key
-        assert call_count == 2
+        # Loop ran twice: first iteration raised (exception caught), second set the key
+        assert sleep_count == 2
+        assert probe_count == 2
         mock_redis_l1.set.assert_called_once_with(
             "state:service:stable-diffusion:available", "1", ex=120
         )

@@ -447,7 +447,7 @@ class GateKeeper:
         if not url:
             return False
         try:
-            response = await self.http.get(url, timeout=5.0)
+            response = await self.http.get(url, timeout=config.SERVICE_HEALTH_PROBE_TIMEOUT)
             return response.status_code < 400
         except Exception as exc:
             logger.debug("Health probe failed for %s: %s", url, exc)

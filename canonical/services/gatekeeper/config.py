@@ -247,6 +247,9 @@ HTTP_CONNECT_TIMEOUT = int(os.getenv("HTTP_CONNECT_TIMEOUT", "10"))
 # Interval (seconds) between periodic venv health-check iterations.
 VENV_HEALTH_CHECK_INTERVAL = int(os.getenv("VENV_HEALTH_CHECK_INTERVAL", "60"))
 
+# Timeout (seconds) for each HTTP health-probe request to a service dependency.
+SERVICE_HEALTH_PROBE_TIMEOUT = float(os.getenv("SERVICE_HEALTH_PROBE_TIMEOUT", "5.0"))
+
 # ============================================================================
 # Logging
 # ============================================================================
