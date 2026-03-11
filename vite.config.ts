@@ -141,7 +141,16 @@ export default defineConfig({
     host: '0.0.0.0',  // Listen on all interfaces (container networking)
     strictPort: true,  // Fail if port 5052 is already in use
     watch: {
-      ignored: ['**/node_modules/**', '**/.git/**']  // Ignore node_modules and .git
+      ignored: [
+        '**/node_modules/**',           // Ignore node_modules
+        '**/.git/**',                   // Ignore git directory
+        '**/SCHEMAS.json',              // CRITICAL: Ignore auto-generated schemas (causes continuous recompile)
+        '**/SCHEMAS.json.backup',       // Also ignore backup
+        '**/*.pyc',                     // Python compiled files
+        '**/__pycache__/**',            // Python cache
+        '**/.DS_Store',                 // macOS metadata
+        '**/dist/**',                   // Build output (if any)
+      ]
     },
 
     // CORS configuration for cross-origin requests from frontend
