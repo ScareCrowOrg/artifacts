@@ -1,0 +1,8 @@
+{
+  "version": "0.1",
+  "name": "redis",
+  "description": "Redis cache layer",
+  "build": false,
+  "image": "redis:7-alpine",
+  "imageTag": "staging"
+}
