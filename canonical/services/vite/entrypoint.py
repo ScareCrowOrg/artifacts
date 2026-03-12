@@ -19,7 +19,7 @@ Usage (set in Dockerfile CMD):
 
 import asyncio
 import logging
-import subprocess
+import os
 import sys
 import threading
 
@@ -67,9 +67,11 @@ def main() -> None:
     heartbeat_thread.start()
     logger.info("✅ Heartbeat thread started: state:service:vite:available")
 
+    # Change to artifacts directory and replace this process with npm run dev
+    # Using os.execvp ensures npm dev runs as PID 1 with full environment inheritance
     logger.info("Starting npm run dev (/app/artifacts)...")
-    result = subprocess.run(["npm", "run", "dev"], cwd="/app/artifacts")
-    sys.exit(result.returncode)
+    os.chdir("/app/artifacts")
+    os.execvp("npm", ["npm", "run", "dev"])
 
 
 if __name__ == "__main__":
