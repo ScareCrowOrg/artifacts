@@ -3,6 +3,8 @@
   "name": "redis",
   "description": "Redis cache layer",
   "build": false,
-  "image": "redis:7-alpine",
-  "imageTag": "staging"
+  "image": "localhost:5001/scareverse-redis:staging",
+  "imageTag": "staging",
+  "checksum": "sha256:8080a3ec60036b766f91add39c4506079d53812f100630ed4b710c20fb95736b",
+  "lastBuilt": "2026-03-12T19:42:18.165Z"
 }
