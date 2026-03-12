@@ -43,8 +43,8 @@ RUN pip install --no-cache-dir -r backend-requirements.txt
 # Copy backend application code
 COPY backend/ ./backend/
 
-# Fix permissions
-RUN mkdir -p /app/backend/logs \
+# Create directories and fix permissions
+RUN mkdir -p /app/artifacts /app/backend/logs \
     && chown -R appuser:appuser /app
 
 # Expose Backend API port only
