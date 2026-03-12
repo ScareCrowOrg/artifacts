@@ -241,6 +241,13 @@ services:
       - ../../../artifacts/shared:/app/artifacts/shared:rw
       - ../../../artifacts/package.json:/app/artifacts/package.json:ro
       - ../../../artifacts/vite.config.ts:/app/artifacts/vite.config.ts:ro
+
+    # RAM disk for Vite build process (compile cache, temp files)
+    # Dramatically speeds up rebuilds by eliminating disk I/O
+    tmpfs:
+      - /app/artifacts/node_modules/.vite
+      - /app/artifacts/.vite
+      - /tmp
     environment:
       - NODE_ENV=development
       # PYTHONPATH enables entrypoint.py to import canonical.shared.services.base_service
