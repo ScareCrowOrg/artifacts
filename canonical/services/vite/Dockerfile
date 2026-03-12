@@ -24,7 +24,7 @@ RUN apk add --no-cache curl python3 py3-pip
 # Install redis-py for BaseService heartbeat (minimal dep - no pip venv needed)
 RUN pip install --no-cache-dir --break-system-packages redis
 
-# Create non-root user
+# Create non-root user (Alpine-compatible syntax)
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app/artifacts
@@ -35,7 +35,10 @@ COPY artifacts/package.json ./
 COPY artifacts/tailwind.config.cjs ./
 COPY artifacts/postcss.config.cjs ./
 COPY artifacts/vite.config.ts ./
-RUN npm install && chown -R appuser:appuser /app/artifacts
+RUN npm install
+
+# Fix permissions for non-root user (after install, before USER switch)
+RUN chown -R appuser:appgroup /app/artifacts && chmod -R 755 /app/artifacts
 
 # Copy heartbeat entrypoint
 COPY artifacts/canonical/services/vite/entrypoint.py /app/entrypoint.py
