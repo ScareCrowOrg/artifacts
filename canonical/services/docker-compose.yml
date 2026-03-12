@@ -46,10 +46,8 @@ services:
   # ─── Backend API ─────────────────────────────────────────────────────────────
   backend:
     container_name: scareverse-backend
-    build:
-      context: ../../..
-      dockerfile: artifacts/canonical/services/backend/Dockerfile
-    image: scareverse/backend:latest
+    image: localhost:5001/scareverse-backend:latest
+    # Note: Build via ./build-backend.ps1 and publish to local registry (localhost:5001)
     depends_on:
       redis-local:
         condition: service_healthy
