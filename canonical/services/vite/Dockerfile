@@ -7,6 +7,9 @@
 # Port:
 #   5052 - Vite dev server (HMR + on-demand compilation)
 #
+# Entrypoint:
+#   Python script that starts heartbeat thread + npm run dev in foreground.
+#
 # See: docker-compose.yml for runtime environment variables and volume mounts.
 
 FROM node:20-alpine
@@ -15,8 +18,11 @@ LABEL maintainer="ScareVerse Team"
 LABEL description="ScareVerse Vite Service - dynamic TypeScript/Vue compilation"
 LABEL version="1.0.0"
 
-# curl for health checks
-RUN apk add --no-cache curl
+# curl for health checks; python3 + pip for heartbeat entrypoint
+RUN apk add --no-cache curl python3 py3-pip
+
+# Install redis-py for BaseService heartbeat (minimal dep - no pip venv needed)
+RUN pip install --no-cache-dir --break-system-packages redis
 
 # Create non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
@@ -31,6 +37,10 @@ COPY artifacts/postcss.config.cjs ./
 COPY artifacts/vite.config.ts ./
 RUN npm install && chown -R appuser:appuser /app/artifacts
 
+# Copy heartbeat entrypoint
+COPY artifacts/canonical/services/vite/entrypoint.py /app/entrypoint.py
+RUN chmod +x /app/entrypoint.py
+
 EXPOSE 5052
 
 ENV NODE_ENV=development
@@ -41,4 +51,4 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
 
 USER appuser
 
-CMD ["npm", "run", "dev"]
+CMD ["python3", "/app/entrypoint.py"]

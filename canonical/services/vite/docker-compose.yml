@@ -32,6 +32,8 @@ services:
 
     environment:
       - NODE_ENV=development
+      # PYTHONPATH enables entrypoint.py to import canonical.shared.services.base_service
+      - PYTHONPATH=/app/artifacts
 
       # Vite HMR (Hot Module Replacement)
       - VITE_HMR_HOST=${VITE_HMR_HOST:-localhost}

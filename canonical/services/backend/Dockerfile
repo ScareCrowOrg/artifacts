@@ -43,14 +43,6 @@ RUN pip install --no-cache-dir -r backend-requirements.txt
 # Copy backend application code
 COPY backend/ ./backend/
 
-# Copy artifacts Node.js configuration and install dependencies
-# node_modules built inside container (Linux-native, avoids cross-platform issues)
-COPY artifacts/package.json ./artifacts/
-COPY artifacts/tailwind.config.cjs ./artifacts/
-COPY artifacts/postcss.config.cjs ./artifacts/
-COPY artifacts/vite.config.ts ./artifacts/
-RUN cd /app/artifacts && npm install
-
 # Fix permissions
 RUN mkdir -p /app/backend/logs \
     && chown -R appuser:appuser /app

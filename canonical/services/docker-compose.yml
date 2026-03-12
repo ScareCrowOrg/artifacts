@@ -243,6 +243,8 @@ services:
       - ../../../artifacts/vite.config.ts:/app/artifacts/vite.config.ts:ro
     environment:
       - NODE_ENV=development
+      # PYTHONPATH enables entrypoint.py to import canonical.shared.services.base_service
+      - PYTHONPATH=/app/artifacts
       - VITE_HMR_HOST=${VITE_HMR_HOST:-localhost}
       - VITE_HMR_PORT=${VITE_HMR_PORT:-5052}
       - VITE_HMR_PROTOCOL=${VITE_HMR_PROTOCOL:-ws}
