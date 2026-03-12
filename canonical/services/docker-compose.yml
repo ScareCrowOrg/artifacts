@@ -249,13 +249,14 @@ services:
       - VITE_HMR_PORT=${VITE_HMR_PORT:-5052}
       - VITE_HMR_PROTOCOL=${VITE_HMR_PROTOCOL:-ws}
       - VITE_CORS_ORIGINS=${VITE_CORS_ORIGINS:-http://localhost:8000,http://localhost:5173,http://localhost:5050}
-      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:5050}
       - VITE_SCARERUNNER_URL=${VITE_SCARERUNNER_URL}
       - VITE_CENTRALHUB_URL=${VITE_CENTRALHUB_URL}
-      - VITE_TRACE=${VITE_TRACE:-false}
-      - VITE_TRACE_RESOLVE=${VITE_TRACE_RESOLVE:-false}
-      - VITE_TRACE_LOAD=${VITE_TRACE_LOAD:-false}
-      - VITE_DEBUG=${VITE_DEBUG:-false}
+      # Vite tracing (hardcoded for dev observability)
+      - VITE_TRACE=true
+      - VITE_TRACE_RESOLVE=true
+      - VITE_TRACE_LOAD=true
+      - VITE_DEBUG=true
     networks:
       - scareverse-net
     healthcheck:
