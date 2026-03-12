@@ -1,0 +1,6 @@
+{
+  "version": "0.1",
+  "description": "ScareVerse Backend - FastAPI/uvicorn service",
+  "build": false,
+  "image": "localhost:5001/scareverse-backend:latest"
+}
