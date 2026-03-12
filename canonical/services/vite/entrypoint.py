@@ -67,11 +67,16 @@ def main() -> None:
     heartbeat_thread.start()
     logger.info("✅ Heartbeat thread started: state:service:vite:available")
 
+    # Debug: check if VITE_TRACE is in environment
+    vite_trace = os.environ.get("VITE_TRACE", "NOT_FOUND")
+    vite_debug = os.environ.get("VITE_DEBUG", "NOT_FOUND")
+    logger.info("Environment check: VITE_TRACE=%s, VITE_DEBUG=%s", vite_trace, vite_debug)
+
     # Change to artifacts directory and replace this process with npm run dev
-    # Using os.execvp ensures npm dev runs as PID 1 with full environment inheritance
+    # Using os.execvpe() with os.environ ensures npm dev runs as PID 1 with FULL environment inheritance
     logger.info("Starting npm run dev (/app/artifacts)...")
     os.chdir("/app/artifacts")
-    os.execvp("npm", ["npm", "run", "dev"])
+    os.execvpe("npm", ["npm", "run", "dev"], os.environ)
 
 
 if __name__ == "__main__":
