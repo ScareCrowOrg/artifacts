@@ -31,17 +31,17 @@ WORKDIR /app/artifacts
 
 # Install Node.js dependencies at build time (Linux-native binaries)
 # artifacts/canonical, shared, runtime etc. are mounted at runtime via volumes
-COPY artifacts/package.json ./
-COPY artifacts/tailwind.config.cjs ./
-COPY artifacts/postcss.config.cjs ./
-COPY artifacts/vite.config.ts ./
+COPY package.json ./
+COPY tailwind.config.cjs ./
+COPY postcss.config.cjs ./
+COPY vite.config.ts ./
 RUN npm install
 
 # Fix permissions for non-root user (after install, before USER switch)
 RUN chown -R appuser:appgroup /app/artifacts && chmod -R 755 /app/artifacts
 
 # Copy heartbeat entrypoint
-COPY artifacts/canonical/services/vite/entrypoint.py /app/entrypoint.py
+COPY entrypoint.py /app/entrypoint.py
 RUN chmod +x /app/entrypoint.py
 
 EXPOSE 5052

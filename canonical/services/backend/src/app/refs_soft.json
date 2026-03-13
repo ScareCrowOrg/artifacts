@@ -1,0 +1,8 @@
+[
+  {
+    "collection": "cells",
+    "property": "origemLivroId",
+    "canonicalPath": "/artifacts/canonical/books",
+    "canonicalProperty": "id"
+  }
+]

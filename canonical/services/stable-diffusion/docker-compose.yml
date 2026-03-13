@@ -40,7 +40,7 @@ services:
       context: .
       dockerfile: Dockerfile
 
-    image: scareverse/sd-service:latest
+    image: localhost:5001/scareverse-stable-diffusion:staging
 
     runtime: nvidia
 

@@ -1,0 +1,798 @@
+"""
+Core Orchestrator class for cell workflow execution.
+
+This module implements the main orchestrator logic responsible for:
+- Monitoring the issues-queue for PENDING cells
+- Loading and parsing workflow definitions
+- Executing workflows using LangGraph and custom graphs
+- Managing cell state transitions
+- Publishing events and state changes
+
+Technical naming: All method names and parameters in English.
+"""
+
+import asyncio
+import importlib
+import logging
+import time
+from pathlib import Path
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+
+from app.models import Celula, TipoCelula, Agent, Livro, EstadoCelula
+from app.database import db
+from app.config import BASE_DIR
+from app.workflow_executor import (
+    WorkflowState,
+    parse_workflow_yaml,
+    build_workflow_graph,
+    load_custom_graph,
+    find_graph_reference
+)
+from app.event_bus import publish_cell_state_changed_sync
+
+from .helpers import (
+    celula_to_pipeline_item,
+    update_celula_from_pipeline_item,
+    publish_pipeline_fragments
+)
+
+logger = logging.getLogger(__name__)
+
+
+class Orchestrator:
+    """
+    Main orchestrator class for managing cell workflow execution.
+    
+    Responsibilities:
+    - Monitor issues-queue for PENDING cells
+    - Load and parse workflow definitions
+    - Execute workflows using LangGraph
+    - Manage cell state transitions
+    """
+    
+    def __init__(self, agent_id: str = "main-workflow-orchestrator-v1"):
+        """
+        Initialize the orchestrator.
+        
+        Args:
+            agent_id: ID of the orchestrator agent
+        """
+        self.agent_id = agent_id
+        self.agent = self._load_agent()
+        self.issues_queue = self._load_issues_queue()
+        self.workflow_graph = build_workflow_graph()
+        
+        # Get config from agent
+        config = self.agent.agent_specific_config
+        self.polling_interval = config.get("polling_interval_seconds", 5)
+        self.max_concurrent_cells = config.get("max_concurrent_cells", 2)
+        
+        # Event for manual triggering
+        self.process_trigger_event = asyncio.Event()
+        
+        # Monitoring control
+        self.monitoring_active = False
+        self.monitoring_task: Optional[asyncio.Task] = None
+        
+        # Processing control (pause/resume)
+        self.processing_paused = False
+        
+        logger.info(f"Orchestrator initialized: {self.agent.name}")
+        logger.info(f"Polling interval: {self.polling_interval}s")
+        logger.info(f"Max concurrent cells: {self.max_concurrent_cells}")
+    
+    def _load_agent(self) -> Agent:
+        """Load the orchestrator agent from database."""
+        agent = db.find_one("agents", self.agent_id, Agent, is_canonical=True)
+        
+        if not agent:
+            raise ValueError(f"Orchestrator agent not found: {self.agent_id}")
+        
+        logger.info(f"Loaded agent: {agent.name}")
+        return agent
+    
+    def _load_issues_queue(self) -> Livro:
+        """Load the issues-queue book from database."""
+        book = db.find_one(
+            "livros",
+            "book-issues-queue-v1",
+            Livro,
+            is_canonical=True
+        )
+        
+        if not book:
+            raise ValueError("issues-queue book not found")
+        
+        logger.info(f"Loaded book: {book.name} with {len(book.celulas)} cells")
+        return book
+    
+    def get_pending_cells(self) -> List[Celula]:
+        """
+        Get all PENDING cells whose origemLivroId matches the issues-queue book.
+        
+        Returns:
+            List of PENDING Celula instances
+        """
+        try:
+            # Get all non-canonical cells
+            all_cells = db.find_many("celulas", Celula, is_canonical=False)
+            # Filter by origemLivroId and PENDING state
+            pending_cells = [
+                cell for cell in all_cells
+                if cell.origemLivroId == self.issues_queue.id and cell.estado == EstadoCelula.PENDENTE
+            ]
+            logger.info(f"Found {len(pending_cells)} pending cells")
+            return pending_cells
+        except Exception as e:
+            logger.error(f"Error fetching pending cells: {e}")
+            return []
+    
+    def update_cell_state(
+        self,
+        cell_id: str,
+        new_state: EstadoCelula,
+        output_data: Optional[Dict[str, Any]] = None,
+        error_data: Optional[str] = None
+    ) -> bool:
+        """
+        Update cell state in the database.
+        
+        Args:
+            cell_id: ID of the cell to update
+            new_state: New state for the cell
+            output_data: Optional output data to merge into cell.data
+            error_data: Optional error message
+            
+        Returns:
+            True if update succeeded, False otherwise
+        """
+        try:
+            updates = {
+                "estado": new_state.value,
+                "dataAtualizacao": datetime.utcnow()
+            }
+            
+            # Update output data if provided
+            if output_data:
+                cell = db.find_one("celulas", cell_id, Celula, is_canonical=False)
+                if cell:
+                    # Merge output_data into existing cell.data
+                    updated_data = {**cell.data, **output_data}
+                    updates["data"] = updated_data
+            
+            # Add error data if provided
+            if error_data:
+                updates["error_data"] = error_data
+            
+            db.update("celulas", cell_id, updates, is_canonical=False)
+            logger.info(f"Cell {cell_id} state updated to: {new_state.value}")
+            
+            # Publish state change event
+            try:
+                cell = db.find_one("celulas", cell_id, Celula, is_canonical=False)
+                cell_data = cell.model_dump() if cell else None
+                publish_cell_state_changed_sync(cell_id, new_state.value, cell_data)
+            except Exception as e:
+                logger.warning(f"Failed to publish state change event: {e}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating cell {cell_id}: {e}")
+            return False
+    
+    def execute_cell_workflow(self, cell_id: str) -> bool:
+        """
+        Execute the workflow for a specific cell.
+        
+        Args:
+            cell_id: ID of the cell to execute
+            
+        Returns:
+            True if execution succeeded, False otherwise
+        """
+        try:
+            # Load cell
+            cell = db.find_one("celulas", cell_id, Celula, is_canonical=False)
+            if not cell:
+                logger.error(f"Cell not found: {cell_id}")
+                return False
+            
+            # Update state to RUNNING
+            self.update_cell_state(cell_id, EstadoCelula.EXECUTANDO)
+            
+            # Load cell type
+            cell_type = db.find_one(
+                "tipos_celula",
+                cell.tipoCelulaId,
+                TipoCelula,
+                is_canonical=True
+            )
+            
+            if not cell_type:
+                error_msg = f"Cell type not found: {cell.tipoCelulaId}"
+                logger.error(error_msg)
+                self.update_cell_state(
+                    cell_id,
+                    EstadoCelula.ERRO,
+                    error_data=error_msg
+                )
+                return False
+            
+            # Load agent responsible for this cell
+            agent = db.find_one(
+                "agents",
+                cell.assignee_id,
+                Agent,
+                is_canonical=True
+            )
+            
+            if not agent:
+                logger.warning(f"Agent not found: {cell.assignee_id}, continuing without agent context")
+                agent_data = {}
+            else:
+                logger.info(f"Loaded agent: {agent.name} (model: {agent.model_ia_model_id_ref})")
+                agent_data = {
+                    "id": agent.id,
+                    "name": agent.name,
+                    "model_ia_model_id_ref": agent.model_ia_model_id_ref,
+                    "agent_type_id": agent.agent_type_id
+                }
+            
+            # Convert Celula to PipelineItem
+            pipeline_item = celula_to_pipeline_item(cell, agent_data)
+            pipeline_item.update_status("running")
+            
+            # Track last fragment ID for incremental Redis publishing
+            last_fragment_id = pipeline_item.fragments[-1].id if pipeline_item.fragments else None
+            
+            # PRIORITY 1: Check for custom graph file (*graph.py) in python_refs
+            graph_ref = find_graph_reference(cell_type)
+            
+            if graph_ref:
+                return self._execute_custom_graph(
+                    cell_id, cell, cell_type, agent_data, 
+                    pipeline_item, last_fragment_id, graph_ref
+                )
+            
+            # PRIORITY 2: Check for YAML workflow file reference
+            workflow_def = self._load_workflow_from_yaml(cell_type)
+            
+            # PRIORITY 3: Fallback to inline workflow
+            if not workflow_def:
+                if not cell_type.workflows or "main_workflow" not in cell_type.workflows:
+                    error_msg = "Cell type has no main_workflow defined, no workflow file found, and no custom graph"
+                    logger.error(error_msg)
+                    self.update_cell_state(
+                        cell_id,
+                        EstadoCelula.ERRO,
+                        error_data=error_msg
+                    )
+                    return False
+                
+                logger.info(f"Using inline workflow from cell type: {cell_type.name}")
+                workflow_def = cell_type.workflows["main_workflow"]
+            
+            # Execute via LangGraph workflow
+            return self._execute_langgraph_workflow(
+                cell_id, cell, agent_data, workflow_def
+            )
+            
+        except Exception as e:
+            logger.error(f"Error executing cell workflow: {e}", exc_info=True)
+            self.update_cell_state(
+                cell_id,
+                EstadoCelula.ERRO,
+                error_data=str(e)
+            )
+            return False
+    
+    def _execute_custom_graph(
+        self, 
+        cell_id: str, 
+        cell: Celula,
+        cell_type: TipoCelula,
+        agent_data: Dict[str, Any],
+        pipeline_item,
+        last_fragment_id: Optional[str],
+        graph_ref: str
+    ) -> bool:
+        """Execute workflow using custom graph (importlib or LangGraph)."""
+        logger.info(f"Found custom graph reference: {graph_ref}")
+        
+        # Try importlib-based execution first (new approach)
+        try:
+            logger.info("Attempting importlib-based execution with PipelineItem...")
+            
+            # Convert file path to module path
+            module_path = graph_ref.replace(str(BASE_DIR) + "/", "").replace("backend/", "").replace(".py", "").replace("/", ".")
+            
+            logger.info(f"Loading module: {module_path}")
+            workflow_module = importlib.import_module(module_path)
+            
+            # Check if module has execute() function
+            if hasattr(workflow_module, 'execute'):
+                logger.info("Found execute() function, invoking with PipelineItem...")
+                
+                # Execute workflow with PipelineItem
+                result_item = workflow_module.execute(pipeline_item)
+                
+                # Publish new fragments to Redis
+                publish_pipeline_fragments(result_item, since_fragment_id=last_fragment_id)
+                
+                # Check for errors
+                if result_item.error:
+                    logger.error(f"Workflow execution failed: {result_item.error}")
+                    update_celula_from_pipeline_item(cell_id, result_item)
+                    self.update_cell_state(cell_id, EstadoCelula.ERRO, error_data=result_item.error)
+                    return False
+                
+                # Update cell from PipelineItem
+                result_item.update_status("completed")
+                update_celula_from_pipeline_item(cell_id, result_item)
+                
+                # Publish final state change
+                try:
+                    cell = db.find_one("celulas", cell_id, Celula, is_canonical=False)
+                    cell_data = cell.model_dump() if cell else None
+                    publish_cell_state_changed_sync(cell_id, EstadoCelula.FINALIZADO.value, cell_data)
+                except Exception as e:
+                    logger.warning(f"Failed to publish state change event: {e}")
+                
+                logger.info(f"Cell {cell_id} workflow completed successfully via importlib")
+                return True
+            else:
+                logger.info("No execute() function found, falling back to LangGraph execution...")
+                
+        except Exception as e:
+            logger.warning(f"Importlib execution failed: {e}, falling back to LangGraph...")
+        
+        # Fallback to LangGraph execution with custom graph
+        return self._execute_langgraph_custom_graph(cell_id, cell, agent_data, graph_ref)
+    
+    def _execute_langgraph_custom_graph(
+        self, 
+        cell_id: str, 
+        cell: Celula, 
+        agent_data: Dict[str, Any],
+        graph_ref: str
+    ) -> bool:
+        """Execute workflow via custom LangGraph."""
+        logger.info("Executing workflow via custom LangGraph...")
+        
+        try:
+            # Load the custom graph
+            custom_graph = load_custom_graph(graph_ref)
+            
+            # Build initial state for custom graph
+            initial_state = {
+                "cell_id": cell_id,
+                "cell_data": cell.data,
+                "agent_data": agent_data
+            }
+            
+            # Execute custom graph
+            logger.info(f"Executing custom graph from: {graph_ref}")
+            final_state = custom_graph.invoke(initial_state)
+            
+            # Check for errors
+            if final_state.get("error"):
+                logger.error(f"Custom graph execution failed: {final_state['error']}")
+                self.update_cell_state(
+                    cell_id,
+                    EstadoCelula.ERRO,
+                    error_data=final_state["error"]
+                )
+                return False
+            
+            # Update cell with results
+            output_data = self._extract_outputs_from_state(final_state, cell_id)
+            
+            # Update state to COMPLETED
+            self.update_cell_state(
+                cell_id,
+                EstadoCelula.FINALIZADO,
+                output_data=output_data
+            )
+            
+            logger.info(f"Cell {cell_id} custom graph execution completed successfully")
+            return True
+            
+        except Exception as e:
+            error_msg = f"Error executing custom graph: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            self.update_cell_state(
+                cell_id,
+                EstadoCelula.ERRO,
+                error_data=error_msg
+            )
+            return False
+    
+    def _load_workflow_from_yaml(self, cell_type: TipoCelula) -> Optional[str]:
+        """Load workflow definition from YAML file reference."""
+        if not cell_type.yaml_refs:
+            return None
+        
+        for yaml_ref in cell_type.yaml_refs:
+            if 'workflow' in yaml_ref.lower():
+                workflow_file = BASE_DIR / yaml_ref
+                if workflow_file.exists():
+                    logger.info(f"Loading workflow from file: {workflow_file}")
+                    try:
+                        with open(workflow_file, 'r') as f:
+                            workflow_def = f.read()
+                        logger.info(f"Successfully loaded workflow from {yaml_ref}")
+                        return workflow_def
+                    except Exception as e:
+                        logger.error(f"Error reading workflow file {yaml_ref}: {e}")
+                else:
+                    logger.warning(f"Workflow file not found: {workflow_file}")
+        
+        return None
+    
+    def _execute_langgraph_workflow(
+        self,
+        cell_id: str,
+        cell: Celula,
+        agent_data: Dict[str, Any],
+        workflow_def: str
+    ) -> bool:
+        """Execute workflow using standard LangGraph workflow."""
+        # Parse workflow
+        logger.info(f"Parsing workflow for cell")
+        workflow_steps = parse_workflow_yaml(workflow_def)
+        
+        # Build initial state for LangGraph
+        initial_state: WorkflowState = {
+            "cell_id": cell_id,
+            "cell_data": cell.data,
+            "agent_data": agent_data,
+            "workflow_steps": workflow_steps,
+            "current_step_index": 0,
+            "step_outputs": {},
+            "error": None,
+            "completed": False
+        }
+        
+        # Execute workflow using LangGraph
+        logger.info(f"Executing workflow with {len(workflow_steps)} steps")
+        final_state = self.workflow_graph.invoke(initial_state)
+        
+        # Check result
+        if final_state["error"]:
+            logger.error(f"Workflow failed: {final_state['error']}")
+            self.update_cell_state(
+                cell_id,
+                EstadoCelula.ERRO,
+                error_data=final_state["error"]
+            )
+            return False
+        
+        # Extract outputs
+        output_data = {}
+        for key, value in final_state["step_outputs"].items():
+            if isinstance(value, dict) and "stdout" in value:
+                # Extract path from stdout
+                stdout_lines = value["stdout"].strip().split('\n')
+                if stdout_lines:
+                    output_data[f"{key}_path"] = stdout_lines[-1]
+            else:
+                output_data[key] = value
+        
+        # Update state to COMPLETED
+        self.update_cell_state(
+            cell_id,
+            EstadoCelula.FINALIZADO,
+            output_data=output_data
+        )
+        
+        logger.info(f"Cell {cell_id} workflow completed successfully")
+        return True
+    
+    def _extract_outputs_from_state(self, final_state: Dict[str, Any], cell_id: str) -> Dict[str, Any]:
+        """Extract output data from custom graph final state."""
+        output_data = {}
+        
+        # Extract fragments if available
+        if "fragments" in final_state:
+            cell = db.find_one("celulas", cell_id, Celula, is_canonical=False)
+            if cell:
+                cell.fragmentos = final_state["fragments"]
+                db.update("celulas", cell_id, {"fragmentos": cell.fragmentos}, is_canonical=False)
+                logger.info(f"Updated cell with {len(cell.fragmentos)} fragments")
+        
+        # Extract context if available
+        if "context" in final_state:
+            output_data["workflow_context"] = final_state["context"]
+        
+        # Extract any other outputs from the state
+        for key, value in final_state.items():
+            if key not in ["cell_id", "cell_data", "agent_data", "fragments", "context", "error", "completed"]:
+                output_data[key] = value
+        
+        return output_data
+    
+    def start_monitoring(self) -> Dict[str, Any]:
+        """
+        Start the async monitoring loop as a background task.
+        
+        Returns:
+            Dict with status message
+        """
+        try:
+            if self.monitoring_active:
+                return {
+                    "status": "already_running",
+                    "message": "Monitoring is already active"
+                }
+            
+            self.monitoring_active = True
+            
+            # Get or create event loop
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Create monitoring task
+            self.monitoring_task = loop.create_task(self.monitor_queue_async())
+            
+            logger.info("Monitoring loop started")
+            return {
+                "status": "started",
+                "message": "Monitoring loop started successfully"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error starting monitoring: {e}", exc_info=True)
+            self.monitoring_active = False
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def stop_monitoring(self) -> Dict[str, Any]:
+        """
+        Stop the async monitoring loop.
+        
+        Returns:
+            Dict with status message
+        """
+        try:
+            if not self.monitoring_active:
+                return {
+                    "status": "not_running",
+                    "message": "Monitoring is not active"
+                }
+            
+            self.monitoring_active = False
+            
+            # Cancel monitoring task
+            if self.monitoring_task and not self.monitoring_task.done():
+                self.monitoring_task.cancel()
+                logger.info("Monitoring task cancelled")
+            
+            logger.info("Monitoring loop stopped")
+            return {
+                "status": "stopped",
+                "message": "Monitoring loop stopped successfully"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error stopping monitoring: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def get_monitoring_status(self) -> Dict[str, Any]:
+        """
+        Get current monitoring status.
+        
+        Returns:
+            Dict with monitoring status information
+        """
+        return {
+            "active": self.monitoring_active,
+            "polling_interval": self.polling_interval,
+            "max_concurrent_cells": self.max_concurrent_cells,
+            "task_running": self.monitoring_task is not None and not self.monitoring_task.done() if self.monitoring_task else False
+        }
+    
+    def pause_processing(self) -> Dict[str, Any]:
+        """
+        Pause cell processing.
+        
+        Returns:
+            Dict with status message
+        """
+        try:
+            if self.processing_paused:
+                return {
+                    "status": "already_paused",
+                    "message": "Processing is already paused"
+                }
+            
+            self.processing_paused = True
+            logger.info("Cell processing paused")
+            
+            return {
+                "status": "paused",
+                "message": "Cell processing paused successfully"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error pausing processing: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def resume_processing(self) -> Dict[str, Any]:
+        """
+        Resume cell processing.
+        
+        Returns:
+            Dict with status message
+        """
+        try:
+            if not self.processing_paused:
+                return {
+                    "status": "not_paused",
+                    "message": "Processing is not paused"
+                }
+            
+            self.processing_paused = False
+            logger.info("Cell processing resumed")
+            
+            return {
+                "status": "resumed",
+                "message": "Cell processing resumed successfully"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error resuming processing: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def get_processing_status(self) -> Dict[str, Any]:
+        """
+        Get current processing status.
+        
+        Returns:
+            Dict with processing status information
+        """
+        return {
+            "paused": self.processing_paused
+        }
+    
+    def force_process_pending_issues(self) -> Dict[str, Any]:
+        """
+        Force immediate processing of pending issues.
+        
+        Returns:
+            Dict with status and number of pending cells found
+        """
+        try:
+            logger.info("Manual trigger: forcing immediate processing of pending issues")
+            
+            # Get pending cells
+            pending_cells = self.get_pending_cells()
+            pending_count = len(pending_cells)
+            
+            logger.info(f"Manual trigger found {pending_count} pending cells")
+            
+            if pending_count == 0:
+                return {
+                    "status": "no_pending_cells",
+                    "message": "No pending cells to process",
+                    "pending_count": 0
+                }
+            
+            # Set the event to trigger immediate processing
+            self.process_trigger_event.set()
+            
+            return {
+                "status": "processing_triggered",
+                "message": f"Triggered processing of {pending_count} pending cells",
+                "pending_count": pending_count
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in force_process_pending_issues: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": str(e),
+                "pending_count": 0
+            }
+    
+    async def monitor_queue_async(self):
+        """
+        Async monitoring loop with manual trigger support.
+        
+        Continuously polls the issues-queue for PENDING cells
+        and executes their workflows.
+        """
+        logger.info("Starting async queue monitoring loop...")
+        
+        try:
+            while self.monitoring_active:
+                # Check if processing is paused
+                if self.processing_paused:
+                    logger.debug("Processing is paused, skipping cell processing")
+                else:
+                    # Get pending cells
+                    pending_cells = self.get_pending_cells()
+                    
+                    if pending_cells:
+                        logger.info(f"Found {len(pending_cells)} pending cells")
+                        
+                        # Process cells (respecting max_concurrent_cells)
+                        for cell in pending_cells[:self.max_concurrent_cells]:
+                            # Double-check pause status before processing each cell
+                            if self.processing_paused:
+                                logger.info("Processing paused during cell iteration, stopping")
+                                break
+                            logger.info(f"Processing cell: {cell.id}")
+                            self.execute_cell_workflow(cell.id)
+                
+                # Clear the trigger event if it was set
+                if self.process_trigger_event.is_set():
+                    logger.info("Clearing manual trigger event")
+                    self.process_trigger_event.clear()
+                
+                # Wait for either the polling interval or a manual trigger
+                try:
+                    await asyncio.wait_for(
+                        self.process_trigger_event.wait(),
+                        timeout=self.polling_interval
+                    )
+                    logger.info("Manual trigger event received, processing immediately")
+                except asyncio.TimeoutError:
+                    # Normal timeout, continue with regular polling
+                    pass
+            
+            logger.info("Monitoring loop stopped (monitoring_active=False)")
+                
+        except asyncio.CancelledError:
+            logger.info("Monitoring loop cancelled")
+            raise
+        except Exception as e:
+            logger.error(f"Error in monitoring loop: {e}", exc_info=True)
+            self.monitoring_active = False
+            raise
+    
+    def monitor_queue(self):
+        """
+        Main monitoring loop (synchronous version).
+        
+        Continuously polls the issues-queue for PENDING cells
+        and executes their workflows.
+        """
+        logger.info("Starting queue monitoring loop...")
+        
+        try:
+            while True:
+                # Get pending cells
+                pending_cells = self.get_pending_cells()
+                
+                if pending_cells:
+                    logger.info(f"Found {len(pending_cells)} pending cells")
+                    
+                    # Process cells (respecting max_concurrent_cells)
+                    for cell in pending_cells[:self.max_concurrent_cells]:
+                        logger.info(f"Processing cell: {cell.id}")
+                        self.execute_cell_workflow(cell.id)
+                
+                # Sleep before next poll
+                time.sleep(self.polling_interval)
+                
+        except KeyboardInterrupt:
+            logger.info("Monitoring loop interrupted by user")
+        except Exception as e:
+            logger.error(f"Error in monitoring loop: {e}", exc_info=True)
+            raise

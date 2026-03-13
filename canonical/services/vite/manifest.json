@@ -1,0 +1,9 @@
+{
+  "version": "0.1",
+  "name": "vite",
+  "build": true,
+  "image": "localhost:5001/scareverse-vite:staging",
+  "imageTag": "staging",
+  "checksum": "sha256:4b8accc124a3223aba2453c520a3de8a8dd73b184d9fd6ded60c9a19f65f4ea7",
+  "lastBuilt": "2026-03-13T00:00:48.329Z"
+}

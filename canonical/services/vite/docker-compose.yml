@@ -17,7 +17,7 @@ services:
     build:
       context: ../../../..
       dockerfile: artifacts/canonical/services/vite/Dockerfile
-    image: scareverse/vite:latest
+    image: localhost:5001/scareverse-vite:staging
 
     ports:
       - "5052:5052"

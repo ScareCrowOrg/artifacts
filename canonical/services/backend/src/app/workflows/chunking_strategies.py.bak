@@ -1,0 +1,555 @@
+#!/usr/bin/env python3
+"""
+Intelligent Chunking Strategies for Document Ingestion
+
+This module provides specialized chunking strategies for different file types:
+- Markdown: Semantic chunking based on headers (H1, H2, H3)
+- Python: AST-based chunking with docstring extraction
+- Configuration: Structured chunking for YAML/JSON files
+
+Each strategy produces chunks optimized for their target embedding model and collection.
+"""
+
+import ast
+import json
+import logging
+import re
+from pathlib import Path
+from typing import List, Dict, Any, Tuple
+
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Markdown Chunking Strategy
+# ============================================================================
+
+def chunk_markdown(
+    content: str,
+    file_path: Path,
+    document_id: str,
+    chunk_size: int = 1000,
+    chunk_overlap: int = 200
+) -> List[Dict[str, Any]]:
+    """
+    Chunk markdown content using header-based semantic splitting.
+    
+    This strategy:
+    - Splits on headers (H1, H2, H3) to maintain semantic coherence
+    - Removes special characters and noise to optimize embeddings
+    - Targets the documentation collection (scareverse_docs)
+    
+    Args:
+        content: Markdown content to chunk
+        file_path: Source file path
+        document_id: Unique document identifier
+        chunk_size: Maximum chunk size
+        chunk_overlap: Overlap between chunks
+        
+    Returns:
+        List of chunk dictionaries with content and metadata
+    """
+    logger.info("Chunking markdown content with MarkdownHeaderTextSplitter")
+    
+    # Define headers to split on
+    headers_to_split_on = [
+        ("#", "Header 1"),
+        ("##", "Header 2"),
+        ("###", "Header 3"),
+    ]
+    
+    # Create markdown splitter
+    markdown_splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=headers_to_split_on,
+        strip_headers=False
+    )
+    
+    # Split on headers
+    md_header_splits = markdown_splitter.split_text(content)
+    
+    # Further split large sections with RecursiveCharacterTextSplitter
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        length_function=len,
+        separators=["\n\n", "\n", ". ", " ", ""]
+    )
+    
+    chunks = []
+    for idx, doc in enumerate(md_header_splits):
+        # Clean content: remove excessive special characters and noise
+        cleaned_content = _clean_markdown_content(doc.page_content)
+        
+        # If section is large, split further
+        if len(cleaned_content) > chunk_size:
+            sub_chunks = text_splitter.split_text(cleaned_content)
+            for sub_idx, sub_chunk in enumerate(sub_chunks):
+                chunk_metadata = {
+                    "chunk_id": f"{idx}_{sub_idx}",
+                    "document_id": document_id,
+                    "source": str(file_path),
+                    "file_type": "markdown",
+                    "chunk_index": len(chunks),
+                    "char_count": len(sub_chunk),
+                    "embedding_model_id": "mistral",
+                    "target_collection": "scareverse_docs",
+                    **doc.metadata
+                }
+                chunks.append({
+                    "content": sub_chunk,
+                    "metadata": chunk_metadata
+                })
+        else:
+            chunk_metadata = {
+                "chunk_id": str(idx),
+                "document_id": document_id,
+                "source": str(file_path),
+                "file_type": "markdown",
+                "chunk_index": len(chunks),
+                "char_count": len(cleaned_content),
+                "embedding_model_id": "mistral",
+                "target_collection": "scareverse_docs",
+                **doc.metadata
+            }
+            chunks.append({
+                "content": cleaned_content,
+                "metadata": chunk_metadata
+            })
+    
+    logger.info(f"Created {len(chunks)} markdown chunks")
+    return chunks
+
+
+def _clean_markdown_content(content: str) -> str:
+    """
+    Clean markdown content by removing noise and special characters.
+    
+    This improves embedding quality for Mistral model.
+    
+    Args:
+        content: Raw markdown content
+        
+    Returns:
+        Cleaned content
+    """
+    # Remove excessive newlines (more than 2)
+    content = re.sub(r'\n{3,}', '\n\n', content)
+    
+    # Remove markdown image syntax but keep alt text
+    content = re.sub(r'!\[([^\]]*)\]\([^\)]+\)', r'\1', content)
+    
+    # Clean up excessive whitespace
+    content = re.sub(r'[ \t]+', ' ', content)
+    
+    # Remove trailing/leading whitespace from lines
+    lines = [line.strip() for line in content.split('\n')]
+    content = '\n'.join(lines)
+    
+    return content.strip()
+
+
+# ============================================================================
+# Python Code Chunking Strategy (AST-based)
+# ============================================================================
+
+def chunk_python_code(
+    content: str,
+    file_path: Path,
+    document_id: str
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Chunk Python code using AST (Abstract Syntax Tree) analysis.
+    
+    This strategy:
+    - Parses Python code into an AST
+    - Extracts functions, classes, and methods as complete units
+    - Includes docstrings with code chunks for context
+    - Separately extracts docstrings for documentation collection
+    
+    Returns two lists:
+    - code_chunks: For scareverse_code collection (deepseek-coder)
+    - doc_chunks: Docstrings for scareverse_docs collection (mistral)
+    
+    Args:
+        content: Python source code
+        file_path: Source file path
+        document_id: Unique document identifier
+        
+    Returns:
+        Tuple of (code_chunks, doc_chunks)
+    """
+    logger.info("Chunking Python code with AST-based strategy")
+    
+    code_chunks = []
+    doc_chunks = []
+    
+    try:
+        # Parse the Python code into an AST
+        tree = ast.parse(content)
+        
+        # Extract module-level docstring
+        module_docstring = ast.get_docstring(tree)
+        if module_docstring:
+            doc_chunks.append({
+                "content": module_docstring,
+                "metadata": {
+                    "document_id": document_id,
+                    "source": str(file_path),
+                    "file_type": "python_docstring",
+                    "chunk_type": "module_docstring",
+                    "embedding_model_id": "mistral",
+                    "target_collection": "scareverse_docs"
+                }
+            })
+        
+        # Extract classes and functions
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                _extract_code_and_docstring(
+                    node, content, file_path, document_id, code_chunks, doc_chunks
+                )
+        
+        # If no functions/classes found, chunk as whole file
+        if not code_chunks:
+            logger.info("No functions/classes found, creating single code chunk")
+            code_chunks.append({
+                "content": content,
+                "metadata": {
+                    "document_id": document_id,
+                    "source": str(file_path),
+                    "file_type": "python",
+                    "chunk_type": "full_file",
+                    "char_count": len(content),
+                    "embedding_model_id": "deepseek-coder",
+                    "target_collection": "scareverse_code"
+                }
+            })
+    
+    except SyntaxError as e:
+        logger.warning(f"Failed to parse Python file {file_path}: {e}")
+        logger.info("Falling back to simple chunking")
+        # Fallback: treat as plain text with simple chunking
+        code_chunks.append({
+            "content": content,
+            "metadata": {
+                "document_id": document_id,
+                "source": str(file_path),
+                "file_type": "python",
+                "chunk_type": "unparseable",
+                "char_count": len(content),
+                "embedding_model_id": "deepseek-coder",
+                "target_collection": "scareverse_code",
+                "parse_error": str(e)
+            }
+        })
+    
+    logger.info(f"Created {len(code_chunks)} code chunks and {len(doc_chunks)} doc chunks from Python file")
+    return code_chunks, doc_chunks
+
+
+def _extract_code_and_docstring(
+    node: ast.AST,
+    full_content: str,
+    file_path: Path,
+    document_id: str,
+    code_chunks: List[Dict[str, Any]],
+    doc_chunks: List[Dict[str, Any]]
+) -> None:
+    """
+    Extract code and docstring from an AST node (function, class, method).
+    
+    Args:
+        node: AST node (FunctionDef, AsyncFunctionDef, or ClassDef)
+        full_content: Full source code content
+        file_path: Source file path
+        document_id: Document identifier
+        code_chunks: List to append code chunks to
+        doc_chunks: List to append doc chunks to
+    """
+    # Get the source code for this node
+    try:
+        # Get line numbers
+        start_line = node.lineno - 1  # 0-indexed
+        end_line = node.end_lineno if hasattr(node, 'end_lineno') else start_line + 1
+        
+        # Extract source lines
+        lines = full_content.split('\n')
+        source_lines = lines[start_line:end_line]
+        source_code = '\n'.join(source_lines)
+        
+        # Get node name
+        node_name = node.name if hasattr(node, 'name') else "unknown"
+        node_type = type(node).__name__.replace('Def', '').lower()
+        
+        # Extract docstring
+        docstring = ast.get_docstring(node)
+        
+        # Add code chunk (with docstring included for context)
+        code_chunks.append({
+            "content": source_code,
+            "metadata": {
+                "document_id": document_id,
+                "source": str(file_path),
+                "file_type": "python",
+                "chunk_type": node_type,
+                "node_name": node_name,
+                "start_line": start_line + 1,
+                "end_line": end_line,
+                "char_count": len(source_code),
+                "has_docstring": docstring is not None,
+                "embedding_model_id": "deepseek-coder",
+                "target_collection": "scareverse_code"
+            }
+        })
+        
+        # Add docstring as separate doc chunk
+        if docstring:
+            doc_chunks.append({
+                "content": docstring,
+                "metadata": {
+                    "document_id": document_id,
+                    "source": str(file_path),
+                    "file_type": "python_docstring",
+                    "chunk_type": f"{node_type}_docstring",
+                    "node_name": node_name,
+                    "embedding_model_id": "mistral",
+                    "target_collection": "scareverse_docs"
+                }
+            })
+    
+    except Exception as e:
+        logger.warning(f"Failed to extract code from node {type(node).__name__}: {e}")
+
+
+# ============================================================================
+# Configuration File Chunking Strategy
+# ============================================================================
+
+def chunk_configuration_file(
+    content: str,
+    file_path: Path,
+    document_id: str,
+    file_type: str
+) -> List[Dict[str, Any]]:
+    """
+    Chunk configuration files (YAML, JSON, .env) in a structured way.
+    
+    This strategy:
+    - For YAML: Splits by top-level keys
+    - For JSON: Splits by top-level keys
+    - For .env: Groups related environment variables
+    
+    Args:
+        content: Configuration file content
+        file_path: Source file path
+        document_id: Unique document identifier
+        file_type: Type of configuration file (yaml, json, env)
+        
+    Returns:
+        List of chunk dictionaries
+    """
+    logger.info(f"Chunking {file_type} configuration file")
+    
+    chunks = []
+    
+    if file_type in ['yaml', 'yml']:
+        chunks = _chunk_yaml_content(content, file_path, document_id)
+    elif file_type == 'json':
+        chunks = _chunk_json_content(content, file_path, document_id)
+    elif file_type == 'env':
+        chunks = _chunk_env_content(content, file_path, document_id)
+    else:
+        # Fallback: treat as plain text
+        chunks.append({
+            "content": content,
+            "metadata": {
+                "document_id": document_id,
+                "source": str(file_path),
+                "file_type": file_type,
+                "chunk_type": "full_file",
+                "char_count": len(content),
+                "embedding_model_id": "deepseek-coder",
+                "target_collection": "scareverse_code"
+            }
+        })
+    
+    logger.info(f"Created {len(chunks)} configuration chunks")
+    return chunks
+
+
+def _chunk_yaml_content(content: str, file_path: Path, document_id: str) -> List[Dict[str, Any]]:
+    """Chunk YAML content by top-level blocks."""
+    chunks = []
+    
+    try:
+        import yaml
+        data = yaml.safe_load(content)
+        
+        if isinstance(data, dict):
+            for key, value in data.items():
+                chunk_content = yaml.dump({key: value}, default_flow_style=False)
+                chunks.append({
+                    "content": chunk_content,
+                    "metadata": {
+                        "document_id": document_id,
+                        "source": str(file_path),
+                        "file_type": "yaml",
+                        "chunk_type": "yaml_block",
+                        "yaml_key": key,
+                        "char_count": len(chunk_content),
+                        "embedding_model_id": "deepseek-coder",
+                        "target_collection": "scareverse_code"
+                    }
+                })
+        else:
+            # Not a dict, use whole content
+            chunks.append({
+                "content": content,
+                "metadata": {
+                    "document_id": document_id,
+                    "source": str(file_path),
+                    "file_type": "yaml",
+                    "chunk_type": "full_file",
+                    "char_count": len(content),
+                    "embedding_model_id": "deepseek-coder",
+                    "target_collection": "scareverse_code"
+                }
+            })
+    except Exception as e:
+        logger.warning(f"Failed to parse YAML: {e}, using full content")
+        chunks.append({
+            "content": content,
+            "metadata": {
+                "document_id": document_id,
+                "source": str(file_path),
+                "file_type": "yaml",
+                "chunk_type": "unparseable",
+                "char_count": len(content),
+                "embedding_model_id": "deepseek-coder",
+                "target_collection": "scareverse_code"
+            }
+        })
+    
+    return chunks
+
+
+def _chunk_json_content(content: str, file_path: Path, document_id: str) -> List[Dict[str, Any]]:
+    """Chunk JSON content by top-level keys."""
+    chunks = []
+    
+    try:
+        data = json.loads(content)
+        
+        if isinstance(data, dict):
+            for key, value in data.items():
+                chunk_content = json.dumps({key: value}, indent=2, ensure_ascii=False)
+                chunks.append({
+                    "content": chunk_content,
+                    "metadata": {
+                        "document_id": document_id,
+                        "source": str(file_path),
+                        "file_type": "json",
+                        "chunk_type": "json_block",
+                        "json_key": key,
+                        "char_count": len(chunk_content),
+                        "embedding_model_id": "deepseek-coder",
+                        "target_collection": "scareverse_code"
+                    }
+                })
+        else:
+            # Not a dict, use whole content
+            chunks.append({
+                "content": content,
+                "metadata": {
+                    "document_id": document_id,
+                    "source": str(file_path),
+                    "file_type": "json",
+                    "chunk_type": "full_file",
+                    "char_count": len(content),
+                    "embedding_model_id": "deepseek-coder",
+                    "target_collection": "scareverse_code"
+                }
+            })
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse JSON: {e}, using full content")
+        chunks.append({
+            "content": content,
+            "metadata": {
+                "document_id": document_id,
+                "source": str(file_path),
+                "file_type": "json",
+                "chunk_type": "unparseable",
+                "char_count": len(content),
+                "embedding_model_id": "deepseek-coder",
+                "target_collection": "scareverse_code"
+            }
+        })
+    
+    return chunks
+
+
+def _chunk_env_content(content: str, file_path: Path, document_id: str) -> List[Dict[str, Any]]:
+    """Chunk .env content by grouping related variables."""
+    chunks = []
+    
+    lines = content.split('\n')
+    current_chunk_lines = []
+    current_group = None
+    
+    for line in lines:
+        line = line.strip()
+        
+        # Skip empty lines and comments at the start
+        if not line or line.startswith('#'):
+            if current_chunk_lines:
+                current_chunk_lines.append(line)
+            continue
+        
+        # Detect variable name
+        if '=' in line:
+            var_name = line.split('=')[0].strip()
+            # Extract prefix (group)
+            prefix = var_name.split('_')[0] if '_' in var_name else 'general'
+            
+            # Start new chunk if group changes
+            if current_group and prefix != current_group and current_chunk_lines:
+                chunk_content = '\n'.join(current_chunk_lines)
+                chunks.append({
+                    "content": chunk_content,
+                    "metadata": {
+                        "document_id": document_id,
+                        "source": str(file_path),
+                        "file_type": "env",
+                        "chunk_type": "env_group",
+                        "env_group": current_group,
+                        "char_count": len(chunk_content),
+                        "embedding_model_id": "deepseek-coder",
+                        "target_collection": "scareverse_code"
+                    }
+                })
+                current_chunk_lines = []
+            
+            current_group = prefix
+        
+        current_chunk_lines.append(line)
+    
+    # Add final chunk
+    if current_chunk_lines:
+        chunk_content = '\n'.join(current_chunk_lines)
+        chunks.append({
+            "content": chunk_content,
+            "metadata": {
+                "document_id": document_id,
+                "source": str(file_path),
+                "file_type": "env",
+                "chunk_type": "env_group",
+                "env_group": current_group or 'general',
+                "char_count": len(chunk_content),
+                "embedding_model_id": "deepseek-coder",
+                "target_collection": "scareverse_code"
+            }
+        })
+    
+    return chunks

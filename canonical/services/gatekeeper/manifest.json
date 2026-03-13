@@ -1,0 +1,9 @@
+{
+  "version": "0.1",
+  "name": "gatekeeper",
+  "build": true,
+  "image": "localhost:5001/scareverse-gatekeeper:staging",
+  "imageTag": "staging",
+  "checksum": "sha256:08ba6640ed2cdf5bdb762aca9995bf150d988c20d10f484bebae03933d1a7ba5",
+  "lastBuilt": "2026-03-13T00:00:48.327Z"
+}

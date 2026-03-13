@@ -37,14 +37,14 @@ RUN useradd -m -u 1000 -s /bin/bash appuser
 WORKDIR /app
 
 # Install Python dependencies (cache layer - changes rarely)
-COPY backend/requirements.txt ./backend-requirements.txt
+COPY requirements.txt ./backend-requirements.txt
 RUN pip install --no-cache-dir -r backend-requirements.txt
 
-# Copy backend application code
-COPY backend/ ./backend/
+# Copy backend application code (staged into ./src by the builder)
+COPY src/ ./src/
 
 # Create directories and fix permissions
-RUN mkdir -p /app/artifacts /app/backend/logs \
+RUN mkdir -p /app/artifacts /app/src/logs \
     && chown -R appuser:appuser /app
 
 # Expose Backend API port only
@@ -57,7 +57,7 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:5050/api/health || exit 1
 
 # Copy entrypoint (handles UVICORN_RELOAD toggle)
-COPY artifacts/canonical/services/backend/entrypoint.sh /entrypoint.sh
+COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 USER appuser

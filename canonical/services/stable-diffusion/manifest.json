@@ -1,0 +1,9 @@
+{
+  "version": "0.1",
+  "name": "stable-diffusion",
+  "build": true,
+  "image": "localhost:5001/scareverse-stable-diffusion:staging",
+  "imageTag": "staging",
+  "checksum": "sha256:c479b99a0bc7bae01f3c940395363b140076a2afa0a74f0e28b10ff162297038",
+  "lastBuilt": "2026-03-13T00:00:48.329Z"
+}

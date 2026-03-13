@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: scareverse-service-gatekeeper:latest
+    image: localhost:5001/scareverse-gatekeeper:staging
     container_name: scareverse-gatekeeper-service
     restart: unless-stopped
 
