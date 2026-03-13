@@ -15,6 +15,11 @@ LABEL maintainer="ScareVerse Team"
 LABEL description="ScareVerse Backend Service - FastAPI API + Gemini CLI"
 LABEL version="1.0.0"
 
+# Build argument for backend source path
+# Default: backend (when building from monorepo root)
+# Used to avoid staging files - copied directly from source
+ARG BACKEND_SRC_PATH=backend
+
 # System dependencies
 # - curl: health checks
 # - ca-certificates, gnupg: Node.js setup
@@ -37,11 +42,12 @@ RUN useradd -m -u 1000 -s /bin/bash appuser
 WORKDIR /app
 
 # Install Python dependencies (cache layer - changes rarely)
-COPY requirements.txt ./backend-requirements.txt
+COPY artifacts/canonical/services/backend/requirements.txt ./backend-requirements.txt
 RUN pip install --no-cache-dir -r backend-requirements.txt
 
-# Copy backend application code (staged into ./src by the builder)
-COPY src/ ./src/
+# Copy backend application code directly from source (no staging needed)
+# Build arg allows flexibility for different build contexts
+COPY ${BACKEND_SRC_PATH}/ ./src/
 
 # Create directories and fix permissions
 RUN mkdir -p /app/artifacts /app/src/logs \
@@ -57,7 +63,7 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:5050/api/health || exit 1
 
 # Copy entrypoint (handles UVICORN_RELOAD toggle)
-COPY entrypoint.sh /entrypoint.sh
+COPY artifacts/canonical/services/backend/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 USER appuser
