@@ -5,5 +5,5 @@
   "image": "localhost:5001/scareverse-stable-diffusion:staging",
   "imageTag": "staging",
   "checksum": "sha256:1048b7ee3c589c933bbf9c3c3104fe9399489a9eeb72cb9eb25ee3aa7af00e36",
-  "lastBuilt": "2026-03-13T00:10:18.604Z"
+  "lastBuilt": "2026-03-13T00:45:23.802Z"
 }

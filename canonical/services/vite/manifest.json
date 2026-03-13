@@ -5,5 +5,5 @@
   "image": "localhost:5001/scareverse-vite:staging",
   "imageTag": "staging",
   "checksum": "sha256:ee3e41925952f103e819f361296358a3b78e38a08c1312872769b4025e1b1f7c",
-  "lastBuilt": "2026-03-13T00:10:18.604Z"
+  "lastBuilt": "2026-03-13T00:45:23.802Z"
 }

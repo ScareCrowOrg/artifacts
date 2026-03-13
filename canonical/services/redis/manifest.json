@@ -6,5 +6,5 @@
   "image": "localhost:5001/scareverse-redis:staging",
   "imageTag": "staging",
   "checksum": "sha256:5d501a3c9aa6d16d982ff9b8acca2451ec7224e3c3be935c4fb8a3c9bc434bd2",
-  "lastBuilt": "2026-03-13T00:00:48.328Z"
+  "lastBuilt": "2026-03-13T00:45:23.801Z"
 }
