@@ -83,3 +83,11 @@ node_modules/
 # IDE/temp
 .venv_backup/
 .DS_Store
+
+# ========================================
+# SERVICE BUILD ARTIFACTS (NEVER COMMIT)
+# ========================================
+# Backend service source code should NOT be staged into artifacts/
+# Dockerfile uses BACKEND_SRC_PATH=backend to copy from monorepo root
+# If staged here accidentally, git subtree would sync 9k+ files
+canonical/services/backend/src/
