@@ -5,5 +5,5 @@
   "image": "localhost:5001/scareverse-ollama:staging",
   "imageTag": "staging",
   "checksum": "unknown",
-  "lastBuilt": "2026-03-13T00:48:30.462Z"
+  "lastBuilt": "2026-03-13T01:04:19.045Z"
 }
