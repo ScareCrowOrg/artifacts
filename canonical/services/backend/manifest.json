@@ -4,6 +4,6 @@
   "build": false,
   "image": "localhost:5001/scareverse-backend:staging",
   "imageTag": "staging",
-  "checksum": "unknown",
-  "lastBuilt": "2026-03-13T01:04:19.043Z"
+  "checksum": "'sha256:cf74d0b2ddf44a42cbe887726c6719d6a82346145ea90881143fee6c46930c27'",
+  "lastBuilt": "2026-03-13T01:28:06.519Z"
 }

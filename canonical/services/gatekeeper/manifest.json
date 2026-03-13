@@ -4,6 +4,6 @@
   "build": true,
   "image": "localhost:5001/scareverse-gatekeeper:staging",
   "imageTag": "staging",
-  "checksum": "unknown",
-  "lastBuilt": "2026-03-13T01:04:19.044Z"
+  "checksum": "'sha256:e7034941d9cdb7d2c29d4b7c6cf1d6b52fcb26a53020d53ae9018bbd109e2591'",
+  "lastBuilt": "2026-03-13T01:28:06.520Z"
 }
