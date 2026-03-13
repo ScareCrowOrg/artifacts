@@ -47,3 +47,39 @@ pnpm-lock.yaml
 # OS
 .DS_Store
 Thumbs.db
+
+# ========================================
+# BUILD & DEPENDENCY ARTIFACTS
+# ========================================
+# Keep full source but ignore build artifacts and dependencies
+# Launcher needs all canonical/ content to function
+
+# Python virtual environments (installed locally, not distributed)
+venv/
+.venv/
+env/
+.env.venv
+
+# Python build/cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Node modules (reinstalled per environment)
+node_modules/
+.npm/
+
+# Test/cache directories
+.pytest_cache/
+.coverage
+.venv/
+*.egg
+
+# IDE/temp
+.venv_backup/
+.DS_Store
