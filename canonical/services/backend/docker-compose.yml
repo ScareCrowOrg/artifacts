@@ -27,12 +27,20 @@ services:
       - "5050:5050"
 
     volumes:
+      # Backend source code - isolated in container via anonymous volume
+      # Prevents artifacts/backend/src from being modified on host
+      - /app/src
+
+      # Artifacts directories (read-write for generation)
       - ../../../../artifacts/canonical:/app/artifacts/canonical:rw
       - ../../../../artifacts/runtime:/app/artifacts/runtime:rw
       - ../../../../artifacts/sandbox:/app/artifacts/sandbox:rw
       - ../../../../artifacts/shared:/app/artifacts/shared:rw
       - ../../../../artifacts/package.json:/app/artifacts/package.json:ro
       - ../../../../artifacts/vite.config.ts:/app/artifacts/vite.config.ts:ro
+
+      # Backend source and logs (read-only for source, read-write for logs)
+      # Note: /app/src anonymous volume above takes precedence, isolating staged backend/src
       - ../../../../backend:/app/backend:ro
       - ../../../../backend/logs:/app/backend/logs:rw
 
