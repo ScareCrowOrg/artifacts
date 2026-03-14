@@ -40,9 +40,10 @@ RUN npm install
 # Fix permissions for non-root user (after install, before USER switch)
 RUN chown -R appuser:appgroup /app/artifacts && chmod -R 755 /app/artifacts
 
-# Copy heartbeat entrypoint
-COPY entrypoint.py /app/entrypoint.py
-RUN chmod +x /app/entrypoint.py
+# Copy shell entrypoint + heartbeat script
+COPY entrypoint.sh /app/entrypoint.sh
+COPY heartbeat.py /app/heartbeat.py
+RUN chmod +x /app/entrypoint.sh /app/heartbeat.py
 
 EXPOSE 5052
 
@@ -54,4 +55,4 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
 
 USER appuser
 
-CMD ["python3", "/app/entrypoint.py"]
+CMD ["/app/entrypoint.sh"]

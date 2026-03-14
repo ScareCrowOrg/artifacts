@@ -1,0 +1,71 @@
+{
+  "settingsManager": {
+    "title": "Settings Manager",
+    "description": "Manage launcher settings with type validation and Redis L1 push",
+    "loading": "Loading settings…",
+    "emptyState": "No settings found. Create one to get started.",
+    "historyEmptyState": "No modification history found.",
+    "deleteConfirm": "Delete setting '{key}'? This action cannot be undone.",
+    "rollbackConfirm": "Rollback setting '{key}' to its previous value?",
+    "tabs": {
+      "list": "Settings",
+      "create": "Create",
+      "history": "History"
+    },
+    "actions": {
+      "refresh": "Refresh",
+      "createSetting": "Create Setting",
+      "edit": "Edit setting",
+      "delete": "Delete setting",
+      "rollback": "Rollback to previous value",
+      "refreshHistory": "Refresh",
+      "pushRedis": "Push to Redis"
+    },
+    "cols": {
+      "key": "Key",
+      "type": "Type",
+      "value": "Value",
+      "lastUpdated": "Last Updated",
+      "actions": "Actions",
+      "timestamp": "Timestamp",
+      "action": "Action",
+      "settingKey": "Setting",
+      "previousValue": "Previous Value",
+      "newValue": "New Value",
+      "historyActions": "Actions"
+    },
+    "types": {
+      "string": "String",
+      "number": "Number",
+      "boolean": "Boolean",
+      "json": "JSON"
+    },
+    "form": {
+      "keyLabel": "Setting Key",
+      "keyPlaceholder": "e.g. max_upload_size",
+      "categoryLabel": "Category",
+      "categoryPlaceholder": "e.g. general",
+      "typeLabel": "Type",
+      "valueLabel": "Value",
+      "valuePlaceholder": "Setting value",
+      "numberPlaceholder": "Numeric value",
+      "jsonPlaceholder": "{ \"key\": \"value\" }",
+      "createBtn": "Create Setting",
+      "cancelBtn": "Cancel"
+    },
+    "edit": {
+      "title": "Edit Setting",
+      "saveBtn": "Save"
+    },
+    "errors": {
+      "loadFailed": "Failed to load settings",
+      "historyFailed": "Failed to load history",
+      "createFailed": "Failed to create setting",
+      "updateFailed": "Failed to update setting",
+      "deleteFailed": "Failed to delete setting",
+      "rollbackFailed": "Failed to rollback setting",
+      "pushRedisFailed": "Failed to push settings to Redis",
+      "requiredFields": "Please fill in all required fields"
+    }
+  }
+}

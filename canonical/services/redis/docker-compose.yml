@@ -12,6 +12,7 @@ version: '3.8'
 
 services:
   redis:
+    build: .
     image: localhost:5001/scareverse-redis:staging
     container_name: scareverse-redis-local
     ports:
@@ -19,8 +20,12 @@ services:
     volumes:
       - redis_local_data:/data
     environment:
-      - REDIS_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
-    command: redis-server --port 6380 --appendonly yes --requirepass ${REDIS_L1_PASSWORD:-scarerunner}
+      - REDIS_PORT=6380
+      - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
+      - REDIS_L1_HOST=localhost
+      - REDIS_L1_PORT=6380
+      - REDIS_L1_DB=0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     networks:
       - scareverse-net
     restart: unless-stopped

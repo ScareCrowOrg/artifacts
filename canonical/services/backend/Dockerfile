@@ -47,10 +47,10 @@ RUN pip install --no-cache-dir -r backend-requirements.txt
 
 # Copy backend application code directly from source (no staging needed)
 # Build arg allows flexibility for different build contexts
-COPY ${BACKEND_SRC_PATH}/ ./src/
+COPY ${BACKEND_SRC_PATH}/ ./backend/
 
 # Create directories and fix permissions
-RUN mkdir -p /app/artifacts /app/src/logs \
+RUN mkdir -p /app/artifacts /app/backend/logs \
     && chown -R appuser:appuser /app
 
 # Expose Backend API port only

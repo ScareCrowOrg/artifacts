@@ -1,0 +1,84 @@
+{
+  "id": "settings-manager",
+  "name": "settings-manager",
+  "description": "CRUD interface for managing launcher settings with schema validation, history and Redis L1 push",
+  "version": "1.0.0",
+  "category": "configuration",
+  "default_refs": {
+    "view": [
+      "frontend/View.vue"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "default_initial_data": {
+    "currentTab": "list",
+    "historyFilters": {}
+  },
+  "allow_instance_override_refs": false,
+  "can_render_dynamically": true,
+  "permissions": {
+    "required": [],
+    "optional": ["settings:manage", "settings:admin"]
+  },
+  "inputs": {
+    "action": {
+      "type": "enum",
+      "values": ["list", "create", "update", "delete", "history", "rollback", "push_redis"],
+      "description": "Settings operation to perform"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Operation-specific data"
+    },
+    "service": {
+      "type": "string",
+      "default": "launcher",
+      "description": "Target service owning the settings"
+    }
+  },
+  "outputs": {
+    "settings": {
+      "type": "array",
+      "description": "List of settings grouped by category"
+    },
+    "history": {
+      "type": "array",
+      "description": "Modification history entries"
+    }
+  },
+  "_discovery": {
+    "labels": [
+      "#configuration",
+      "#settings",
+      "#admin",
+      "#crud",
+      "#redis"
+    ],
+    "describe": "Administrative cell for managing launcher settings stored in settings.json. Supports creating, updating and deleting settings with type validation (string/number/boolean/json). Maintains a modification history with rollback support. Can push settings to Redis L1 for live service consumption.",
+    "estimated_duration_seconds": 1,
+    "required_resources": [],
+    "dependencies": [],
+    "tags": [
+      "configuration",
+      "settings",
+      "admin",
+      "crud",
+      "history",
+      "redis"
+    ],
+    "use_cases": [
+      "Create and update application settings",
+      "Rollback to a previous settings version",
+      "Push live configuration updates to Redis",
+      "View modification history"
+    ]
+  },
+  "kind": "cell",
+  "created_at": "2026-03-14T00:00:00",
+  "updated_at": "2026-03-14T00:00:00"
+}

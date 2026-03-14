@@ -39,10 +39,8 @@ services:
       - ../../../../artifacts/package.json:/app/artifacts/package.json:ro
       - ../../../../artifacts/vite.config.ts:/app/artifacts/vite.config.ts:ro
 
-      # Backend source and logs (read-only for source, read-write for logs)
-      # Note: /app/src anonymous volume above takes precedence, isolating staged backend/src
-      - ../../../../backend:/app/backend:ro
-      - ../../../../backend/logs:/app/backend/logs:rw
+      # Backend code is already in container via Dockerfile COPY
+      # No mount needed - backend/ is baked into image
 
     environment:
       # API Server
