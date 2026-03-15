@@ -94,6 +94,10 @@ services:
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-60}
       HEARTBEAT_TTL: ${HEARTBEAT_TTL:-180}
 
+    volumes:
+      # Artifacts (for canonical.shared.services.base_service import)
+      - ../../../artifacts:/app/artifacts:ro
+
     ports:
       - "11434:11434"
 
