@@ -82,6 +82,7 @@ services:
     environment:
       OLLAMA_HOST: "http://ollama-raw:11434"
       OLLAMA_REQUEST_TIMEOUT: "120"
+      PYTHONPATH: /app/artifacts
       REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
       REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
