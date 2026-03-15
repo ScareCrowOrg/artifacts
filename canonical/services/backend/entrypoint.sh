@@ -10,6 +10,10 @@ python3 /app/artifacts/canonical/services/backend/heartbeat.py || true
 
 cd /app/backend
 
+# Add /app to PYTHONPATH so imports like 'from artifacts.shared.jwt_utils' work
+# without this, Python looks in /app/backend/artifacts (which doesn't exist)
+export PYTHONPATH="/app:${PYTHONPATH}"
+
 if [ "${UVICORN_RELOAD:-false}" = "true" ]; then
     exec python -u -m uvicorn app.main:app \
         --host "${API_HOST:-0.0.0.0}" \
