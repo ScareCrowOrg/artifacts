@@ -19,7 +19,7 @@ app.use(i18n)
 // ⚡ CRITICAL: Make i18n available globally for dynamically loaded components
 // This ensures isolated components (like cells) can access i18n even if useI18n() fails
 if (typeof window !== 'undefined') {
-  ;(window as any).__i18n = i18n
+  window['__i18n'] = i18n
   console.log('[DynamicWorkspace] i18n registered in window for isolated component access')
 }
 
