@@ -4,8 +4,8 @@
   "build": true,
   "image": "localhost:5001/scareverse-stable-diffusion:staging",
   "imageTag": "staging",
-  "checksum": "'sha256:af0319a56040bacd183c081efbe8e7fb1d6b2bc21b41539d37289243b79c6d45'",
-  "lastBuilt": "2026-03-15T07:08:56.054Z",
+  "checksum": "'sha256:ef6b800e7d515c1be87e2059d6f3fa8920749bb89b85fabfe81bc08e1169bb4e'",
+  "lastBuilt": "2026-03-15T07:24:29.581Z",
   "generate_env_file": false,
   "totp_seed": false
 }

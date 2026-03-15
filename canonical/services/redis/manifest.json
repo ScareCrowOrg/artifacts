@@ -5,8 +5,8 @@
   "build": false,
   "image": "localhost:5001/scareverse-redis:staging",
   "imageTag": "staging",
-  "checksum": "'sha256:e7c135f1f89f075321e9fb57c781ddb753c97904e6cdd89c4f2b8e3ec131813b'",
-  "lastBuilt": "2026-03-15T07:08:56.053Z",
+  "checksum": "'sha256:384aecbceb2208330064a65b3ca94ec6cc69cbebc3a3a867c7bd15b71becf8d5'",
+  "lastBuilt": "2026-03-15T07:24:29.580Z",
   "generate_env_file": false,
   "totp_seed": false,
   "injected_env_vars": [
