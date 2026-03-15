@@ -151,10 +151,12 @@ class WorkerConfig:
     @staticmethod
     def heartbeat_interval() -> int:
         try:
-            value = _get_config("worker_heartbeat_interval")
+            # Try WORKER_HEARTBEAT_INTERVAL first (for backward compatibility)
+            # Fall back to HEARTBEAT_INTERVAL (Launcher-injected global default)
+            value = _get_config("worker_heartbeat_interval") or _get_config("heartbeat_interval")
             return int(value) if value else 30
         except (ValueError, TypeError):
-            logger.warning("[Config] Invalid WORKER_HEARTBEAT_INTERVAL value, using default 30")
+            logger.warning("[Config] Invalid heartbeat interval value, using default 30")
             return 30
 
     @staticmethod
