@@ -4,8 +4,8 @@
   "build": true,
   "image": "localhost:5001/scareverse-gatekeeper:staging",
   "imageTag": "staging",
-  "checksum": "'sha256:adfd89d71a9089fa53233952cb83e666704d8dd3ba4c50cd6229744be765d865'",
-  "lastBuilt": "2026-03-15T07:24:29.579Z",
+  "checksum": "'sha256:d3265bb34d31c60ad71b3701ad3eb19499926615d3fd2adbb84c44bc49594361'",
+  "lastBuilt": "2026-03-15T07:36:15.475Z",
   "generate_env_file": false,
   "totp_seed": true
 }
