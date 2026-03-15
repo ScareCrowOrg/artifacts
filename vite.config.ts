@@ -45,6 +45,20 @@ const performanceTracingPlugin = {
     console.error(`   Trace enabled: ${shouldTrace}`);
     console.error(`   Node env: ${process.env.NODE_ENV}`);
     console.error(`   Root: ${process.cwd()}`);
+    console.error('━'.repeat(100));
+
+    // Log environment variables for debugging
+    console.error('\n📋 ENVIRONMENT VARIABLES:');
+    console.error(`   VITE_TRACE: ${process.env.VITE_TRACE ?? 'undefined'}`);
+    console.error(`   VITE_TRACE_RESOLVE: ${process.env.VITE_TRACE_RESOLVE ?? 'undefined'}`);
+    console.error(`   VITE_TRACE_LOAD: ${process.env.VITE_TRACE_LOAD ?? 'undefined'}`);
+    console.error(`   VITE_DEBUG: ${process.env.VITE_DEBUG ?? 'undefined'}`);
+    console.error(`   VITE_CORS_ORIGINS: ${process.env.VITE_CORS_ORIGINS ?? 'undefined'}`);
+    console.error(`   VITE_COCKPIT_ORIGINS: ${process.env.VITE_COCKPIT_ORIGINS ?? 'undefined'}`);
+    console.error(`   VITE_CENTRALHUB_URL: ${process.env.VITE_CENTRALHUB_URL ?? 'undefined'}`);
+    console.error(`   VITE_HMR_HOST: ${process.env.VITE_HMR_HOST ?? 'undefined'}`);
+    console.error(`   VITE_HMR_PORT: ${process.env.VITE_HMR_PORT ?? 'undefined'}`);
+    console.error(`   VITE_HMR_PROTOCOL: ${process.env.VITE_HMR_PROTOCOL ?? 'undefined'}`);
     console.error('━'.repeat(100) + '\n');
 
     // Track first request and server ready

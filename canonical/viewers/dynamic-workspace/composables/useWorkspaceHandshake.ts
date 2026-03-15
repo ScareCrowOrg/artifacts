@@ -85,7 +85,13 @@ export interface WorkspaceErrorMessage {
 const RUNNER_VERSION = 'v2.0.0-phase1'
 const VALIDATE_SESSION_URL = (() => {
   const url = typeof import.meta !== 'undefined' ? (import.meta as any).env?.VITE_CENTRALHUB_URL : undefined
-  return typeof url === 'string' ? url : 'http://localhost:8000'
+  const result = typeof url === 'string' ? url : 'http://localhost:8000'
+  console.log('[useWorkspaceHandshake] VITE_CENTRALHUB_URL:', {
+    raw: url,
+    type: typeof url,
+    resolved: result,
+  })
+  return result
 })()
 
 /**
@@ -94,10 +100,20 @@ const VALIDATE_SESSION_URL = (() => {
  */
 const EXPECTED_COCKPIT_ORIGINS: string[] = (() => {
   const origins = typeof import.meta !== 'undefined' ? (import.meta as any).env?.VITE_COCKPIT_ORIGINS : undefined
+  console.log('[useWorkspaceHandshake] VITE_COCKPIT_ORIGINS:', {
+    raw: origins,
+    type: typeof origins,
+    isString: typeof origins === 'string',
+    length: typeof origins === 'string' ? origins.length : 'N/A',
+  })
   if (typeof origins === 'string' && origins.length > 0) {
-    return origins.split(',').map((o: string) => o.trim()).filter(Boolean)
+    const parsed = origins.split(',').map((o: string) => o.trim()).filter(Boolean)
+    console.log('[useWorkspaceHandshake] VITE_COCKPIT_ORIGINS parsed:', parsed)
+    return parsed
   }
-  return ['http://localhost:5173', 'http://localhost:8000', 'http://127.0.0.1:5173', 'http://localhost:5052']
+  const fallback = ['http://localhost:5173', 'http://localhost:8000', 'http://127.0.0.1:5173', 'http://localhost:5052']
+  console.log('[useWorkspaceHandshake] Using fallback COCKPIT_ORIGINS:', fallback)
+  return fallback
 })()
 
 // ── Composable ──────────────────────────────────────────────────────────────
