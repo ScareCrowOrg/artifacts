@@ -4,8 +4,8 @@
   "build": true,
   "image": "localhost:5001/scareverse-vite:staging",
   "imageTag": "staging",
-  "checksum": "'sha256:d1f9aa7419ad713ca70f4c2ddc1173cb04e3b329fc7a8b946522f5d52b142e7f'",
-  "lastBuilt": "2026-03-15T06:49:19.651Z",
+  "checksum": "'sha256:15dd621def477db9629331828911712d90832497b59978a70bac0c041dc450bc'",
+  "lastBuilt": "2026-03-15T06:51:51.592Z",
   "generate_env_file": true,
   "totp_seed": false
 }

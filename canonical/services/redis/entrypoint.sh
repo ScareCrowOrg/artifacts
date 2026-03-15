@@ -8,12 +8,14 @@ set -e
 
 REDIS_PORT=${REDIS_PORT:-6380}
 REDIS_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
-# REDIS_ADMIN_USERNAME: Admin user name (injected from settings.json redis:admin:username)
+# REDIS_ADMIN_USERNAME: Admin user name (MUST be injected from settings.json redis:admin:username)
 REDIS_ADMIN_USERNAME=${REDIS_ADMIN_USERNAME:-admin}
-# REDIS_ADMIN_PASSWORD: Admin user password (injected from vault redis:admin:password)
-# If not set, a random password is generated at startup – operators must
-# set REDIS_ADMIN_PASSWORD when Launcher needs admin Redis access.
-REDIS_ADMIN_PASSWORD=${REDIS_ADMIN_PASSWORD:-$(openssl rand -hex 16)}
+# REDIS_ADMIN_PASSWORD: Admin user password (MUST be injected from vault redis:admin:password)
+# This is always injected by Launcher from vault, no random fallback needed.
+if [ -z "$REDIS_ADMIN_PASSWORD" ]; then
+  echo "[entrypoint] ❌ ERROR: REDIS_ADMIN_PASSWORD not set (must be injected by Launcher)"
+  exit 1
+fi
 HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-60}
 HEARTBEAT_TTL=$((HEARTBEAT_INTERVAL * 3))
 
