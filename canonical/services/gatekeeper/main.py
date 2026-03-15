@@ -368,18 +368,13 @@ class GateKeeper:
     # ------------------------------------------------------------------
 
     async def _heartbeat_loop(self) -> None:
-        key = f"state:worker:{self.worker_id}:heartbeat"
+        # Standard heartbeat key for Launcher to verify service availability
+        key = "state:service:gatekeeper:available"
         while not _shutdown_event.is_set():
             try:
                 await self.redis_l1.set(
                     key,
-                    json.dumps(
-                        {
-                            "worker_id": self.worker_id,
-                            "status": "running",
-                            "timestamp": _utcnow_iso(),
-                        }
-                    ),
+                    "1",
                     ex=config.WORKER_HEARTBEAT_INTERVAL * 3,
                 )
             except Exception as exc:
