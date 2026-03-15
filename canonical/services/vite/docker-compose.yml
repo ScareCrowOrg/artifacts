@@ -48,6 +48,9 @@ services:
       - VITE_SCARERUNNER_URL=${VITE_SCARERUNNER_URL}
       - VITE_CENTRALHUB_URL=${VITE_CENTRALHUB_URL}
 
+      # Workspace handshake (Cockpit ↔ Runner communication)
+      - VITE_COCKPIT_ORIGINS=${VITE_COCKPIT_ORIGINS:-http://localhost:5173,http://localhost:8000,http://127.0.0.1:5173,http://localhost:5052}
+
       # Performance tracing (disabled by default)
       - VITE_TRACE=${VITE_TRACE:-false}
       - VITE_TRACE_RESOLVE=${VITE_TRACE_RESOLVE:-false}
