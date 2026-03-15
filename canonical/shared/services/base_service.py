@@ -55,9 +55,9 @@ class BaseService:
         redis_password: Redis password.  Defaults to ``REDIS_L1_PASSWORD``
             env var or ``"scarerunner"``.  Pass ``None`` to disable auth.
         heartbeat_interval: Seconds between key refreshes.  Defaults to
-            ``REDIS_HEARTBEAT_INTERVAL`` env var or ``60``.
+            ``HEARTBEAT_INTERVAL`` (Launcher-injected) or ``REDIS_HEARTBEAT_INTERVAL`` env var or ``60``.
         key_ttl: Redis TTL in seconds for the availability key.  Defaults to
-            ``heartbeat_interval * 3`` when ``None``.
+            ``HEARTBEAT_TTL`` (Launcher-injected) or ``heartbeat_interval * 3`` when ``None``.
         logger: Optional logger.  Defaults to the module logger.
     """
 
@@ -89,10 +89,14 @@ class BaseService:
         else:
             self._redis_password = redis_password or None
 
+        # Try HEARTBEAT_INTERVAL (Launcher-injected) first, fall back to REDIS_HEARTBEAT_INTERVAL
         self._heartbeat_interval = heartbeat_interval if heartbeat_interval is not None else int(
-            os.getenv("REDIS_HEARTBEAT_INTERVAL", "60")
+            os.getenv("HEARTBEAT_INTERVAL") or os.getenv("REDIS_HEARTBEAT_INTERVAL", "60")
         )
-        self._key_ttl = key_ttl if key_ttl is not None else self._heartbeat_interval * 3
+        # Try HEARTBEAT_TTL (Launcher-injected) first, fall back to heartbeat_interval * 3
+        self._key_ttl = key_ttl if key_ttl is not None else int(
+            os.getenv("HEARTBEAT_TTL") or (self._heartbeat_interval * 3)
+        )
         self._availability_key = f"state:service:{service_name}:available"
 
         self._logger = logger or logging.getLogger(__name__)
