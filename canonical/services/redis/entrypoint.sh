@@ -127,12 +127,9 @@ echo "[entrypoint] Setting up Redis ACL..."
 redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" ACL SETUSER default \
   on \
   ">$REDIS_PASSWORD" \
-  '~settings:*' '~vault:*' '~request:secret:*' '~state:*' \
-  '+get' '+mget' '+set' '+mset' '+del' '+exists' '+keys' \
-  '+scan' '+incr' '+decr' '+lpush' '+rpush' '+lpop' '+rpop' \
-  '+lrange' '+sadd' '+srem' '+smembers' '+zadd' '+zrange' \
-  '+@read' '+@write' \
-  '-@admin' '-flushdb' '-flushall' \
+  '~*' '+get' '+mget' \
+  '~request:secret:*' '~state:*' '+set' '+mset' \
+  '-@all' '-@admin' \
   >/dev/null 2>&1
 
 if [ $? -eq 0 ]; then

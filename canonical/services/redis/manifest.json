@@ -5,8 +5,16 @@
   "build": false,
   "image": "localhost:5001/scareverse-redis:staging",
   "imageTag": "staging",
-  "checksum": "'sha256:bafc16b526233ff2ed64d4d66cc070b0de3d240f85db145d784f711a7510a95c'",
-  "lastBuilt": "2026-03-15T00:26:13.599Z",
+  "checksum": "'sha256:22f4ce9abc89862e2c7793eb916e9846784a932f8e93583e6c15a4e9840136bf'",
+  "lastBuilt": "2026-03-15T02:17:49.163Z",
   "generate_env_file": false,
-  "totp_seed": false
+  "totp_seed": false,
+  "injected_env_vars": [
+    {
+      "name": "REDIS_ADMIN_PASSWORD",
+      "source": "vault",
+      "required": true,
+      "description": "Admin user password for Redis ACL (Launcher only)"
+    }
+  ]
 }

@@ -4,8 +4,8 @@
   "build": true,
   "image": "localhost:5001/scareverse-ollama:staging",
   "imageTag": "staging",
-  "checksum": "'sha256:27fb2e0cad88c724caaccd1d95be921f60aa9d8470cf7b529cf315ce770eac71'",
-  "lastBuilt": "2026-03-15T00:26:13.598Z",
+  "checksum": "'sha256:d5bf2e25bc567a25b724c73c00db76f9cb9e2c43acac4f094cf1dec6b02ff735'",
+  "lastBuilt": "2026-03-15T02:17:49.162Z",
   "generate_env_file": false,
   "totp_seed": false
 }
