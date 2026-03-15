@@ -18,7 +18,8 @@ RUN pip install --no-cache-dir \
     safetensors==0.4.2 \
     opencv-python-headless \
     fastapi==0.110.3 \
-    uvicorn[standard]==0.29.0
+    uvicorn[standard]==0.29.0 \
+    redis==5.0.1
 
 # Fix NumPy 2 compatibility with PyTorch 2.2.1
 # Force numpy 1.26.3 which is compatible with PyTorch 2.2.1
