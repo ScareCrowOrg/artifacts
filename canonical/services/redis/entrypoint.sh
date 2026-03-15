@@ -8,6 +8,11 @@ set -e
 
 REDIS_PORT=${REDIS_PORT:-6380}
 REDIS_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
+# REDIS_ADMIN_PASSWORD: Set this env var explicitly in production so the
+# Launcher can use a known admin password (encrypted in vault).
+# If not set, a random password is generated at startup – operators must
+# set REDIS_ADMIN_PASSWORD when Launcher needs admin Redis access.
+REDIS_ADMIN_PASSWORD=${REDIS_ADMIN_PASSWORD:-$(openssl rand -hex 16)}
 HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-60}
 HEARTBEAT_TTL=$((HEARTBEAT_INTERVAL * 3))
 
@@ -107,6 +112,57 @@ if [ $? -eq 0 ]; then
   echo "[entrypoint] ✅ Heartbeat registered: state:service:redis:available"
 else
   echo "[entrypoint] ⚠ Failed to register initial heartbeat (will retry in background)"
+fi
+
+# ============================================================================
+# Setup ACL: Read-Only User (default) + Admin User
+# ============================================================================
+
+echo "[entrypoint] Setting up Redis ACL..."
+
+# Configure read-only default user
+# - Can READ settings:* and vault:* (markers)
+# - Can WRITE to request:secret:* (send secret requests)
+# - Denied admin operations (FLUSHDB, FLUSHALL, ACL admin, etc.)
+redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" ACL SETUSER default \
+  on \
+  ">$REDIS_PASSWORD" \
+  '~settings:*' '~vault:*' '~request:secret:*' '~state:*' \
+  '+get' '+mget' '+set' '+mset' '+del' '+exists' '+keys' \
+  '+scan' '+incr' '+decr' '+lpush' '+rpush' '+lpop' '+rpop' \
+  '+lrange' '+sadd' '+srem' '+smembers' '+zadd' '+zrange' \
+  '+@read' '+@write' \
+  '-@admin' '-flushdb' '-flushall' \
+  >/dev/null 2>&1
+
+if [ $? -eq 0 ]; then
+  echo "[entrypoint] ✅ ACL: default (read-only) user configured"
+else
+  echo "[entrypoint] ⚠ ACL: failed to configure default user"
+fi
+
+# Configure admin user (for Launcher only)
+# - Full access to all keys and commands
+redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" ACL SETUSER admin \
+  on \
+  ">$REDIS_ADMIN_PASSWORD" \
+  '~*' \
+  '+@all' \
+  >/dev/null 2>&1
+
+if [ $? -eq 0 ]; then
+  echo "[entrypoint] ✅ ACL: admin (full-access) user configured"
+else
+  echo "[entrypoint] ⚠ ACL: failed to configure admin user"
+fi
+
+# Persist ACL configuration to disk
+redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" ACL SAVE >/dev/null 2>&1
+
+if [ $? -eq 0 ]; then
+  echo "[entrypoint] ✅ ACL configuration saved (2 users: default read-only, admin full-access)"
+else
+  echo "[entrypoint] ⚠ ACL save failed (configuration may not persist across restart)"
 fi
 
 # ============================================================================

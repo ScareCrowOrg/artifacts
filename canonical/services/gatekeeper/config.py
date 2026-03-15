@@ -1,6 +1,13 @@
 """
 Configuration module for GateKeeper Service.
 
+Phase 4A Update: Adopted centralized config_manager for lazy loading.
+- All settings resolved via get_config() (Redis L1 → env fallback)
+- Secrets resolved via vault.* prefix (SecretClient → env fallback)
+- Module-level __getattr__ provides backward-compatible lazy resolution
+- Config classes group related settings with type-safe static methods
+
+Original description:
 Manages dual-source Redis configuration (L1 owner + L2 global),
 multi-source pooling strategy, and routing to workers (HTTP services
 or subprocess job workers).
@@ -15,9 +22,19 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# Lazy configuration resolution via config_manager
+# Falls back gracefully when Redis / SecretClient are unavailable
+try:
+    from artifacts.shared.config_manager import get_config as _get_config
+except ImportError:
+    # Fallback: resolve directly from environment when artifacts not on path
+    def _get_config(key: str) -> Optional[str]:  # type: ignore[misc]
+        env_key = key.replace("vault.", "").upper().replace(":", "_").replace(".", "_").replace("-", "_")
+        return os.getenv(env_key)
 
 # ============================================================================
 # Base Paths
@@ -26,51 +43,280 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).parent.absolute()
 
 # ============================================================================
-# Redis L1 Configuration (Owner/Local - ScareRunner)
+# Config Classes – Lazy-Loading Static Methods
 # ============================================================================
 
-REDIS_L1_HOST = os.getenv("REDIS_L1_HOST", "redis-local")
-REDIS_L1_PORT = int(os.getenv("REDIS_L1_PORT", "6380"))
-REDIS_L1_PASSWORD = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
-REDIS_L1_DB = int(os.getenv("REDIS_L1_DB", "0"))
+
+class RedisL1Config:
+    """Lazy-loading Redis L1 configuration."""
+
+    @staticmethod
+    def host() -> str:
+        return _get_config("redis_l1_host") or "redis-local"
+
+    @staticmethod
+    def port() -> int:
+        try:
+            value = _get_config("redis_l1_port")
+            return int(value) if value else 6380
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid REDIS_L1_PORT value, using default 6380")
+            return 6380
+
+    @staticmethod
+    def password() -> str:
+        """Resolve from vault.redis_password (secret)."""
+        return _get_config("vault.redis_password") or "scarerunner"
+
+    @staticmethod
+    def db() -> int:
+        try:
+            value = _get_config("redis_l1_db")
+            return int(value) if value else 0
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid REDIS_L1_DB value, using default 0")
+            return 0
+
+
+class CentralHubConfig:
+    """Lazy-loading CentralHub configuration."""
+
+    @staticmethod
+    def url() -> str:
+        return _get_config("centralhub_url") or "http://centralhub:8080"
+
+    @staticmethod
+    def service_token() -> str:
+        """Resolve from vault.centralhub_service_token (secret)."""
+        return _get_config("vault.centralhub_service_token") or "internal-gatekeeper-token"
+
+
+class QueueConfig:
+    """Lazy-loading queue configuration."""
+
+    @staticmethod
+    def priority() -> str:
+        return _get_config("queue_priority") or "owner_first"
+
+    @staticmethod
+    def brpop_l1_timeout() -> int:
+        try:
+            value = _get_config("brpop_l1_timeout")
+            return int(value) if value else 1
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid BRPOP_L1_TIMEOUT value, using default 1")
+            return 1
+
+    @staticmethod
+    def brpop_l2_timeout() -> int:
+        try:
+            value = _get_config("brpop_l2_timeout")
+            return int(value) if value else 20
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid BRPOP_L2_TIMEOUT value, using default 20")
+            return 20
+
+    @staticmethod
+    def cpu_jobs_queue_l1() -> str:
+        return _get_config("cpu_jobs_queue_l1") or "scareverse:cpu-jobs:queue"
+
+    @staticmethod
+    def cpu_jobs_queue_l2() -> str:
+        return _get_config("cpu_jobs_queue_l2") or "scareverse:cpu-jobs:queue"
+
+    @staticmethod
+    def three_d_jobs_queue_l1() -> str:
+        return _get_config("three_d_jobs_queue_l1") or "scareverse:3d-jobs:queue"
+
+    @staticmethod
+    def three_d_jobs_queue_l2() -> str:
+        return _get_config("three_d_jobs_queue_l2") or "scareverse:3d-jobs:queue"
+
+    @staticmethod
+    def dead_letter_queue() -> str:
+        return _get_config("dead_letter_queue") or "scareverse:dead-letter:queue"
+
+    @staticmethod
+    def commands_queue() -> str:
+        return _get_config("commands_queue") or "commands:gatekeeper:queue"
+
+
+class WorkerConfig:
+    """Lazy-loading worker configuration."""
+
+    @staticmethod
+    def worker_id() -> str:
+        return _get_config("worker_id") or "gatekeeper-01"
+
+    @staticmethod
+    def heartbeat_interval() -> int:
+        try:
+            value = _get_config("worker_heartbeat_interval")
+            return int(value) if value else 30
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid WORKER_HEARTBEAT_INTERVAL value, using default 30")
+            return 30
+
+    @staticmethod
+    def max_retries() -> int:
+        try:
+            value = _get_config("worker_max_retries")
+            return int(value) if value else 3
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid WORKER_MAX_RETRIES value, using default 3")
+            return 3
+
+    @staticmethod
+    def retry_delay() -> float:
+        try:
+            value = _get_config("worker_retry_delay")
+            return float(value) if value else 2.0
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid WORKER_RETRY_DELAY value, using default 2.0")
+            return 2.0
+
+
+class TelemetryConfig:
+    """Lazy-loading telemetry and orchestration configuration."""
+
+    @staticmethod
+    def telemetry_key() -> str:
+        return _get_config("telemetry_key") or "state:host:telemetry"
+
+    @staticmethod
+    def stale_after_seconds() -> int:
+        try:
+            value = _get_config("telemetry_stale_after_seconds")
+            return int(value) if value else 15
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid TELEMETRY_STALE_AFTER_SECONDS value, using default 15")
+            return 15
+
+    @staticmethod
+    def scale_up_vram_min_mb() -> int:
+        try:
+            value = _get_config("scale_up_vram_min_mb")
+            return int(value) if value else 3000
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid SCALE_UP_VRAM_MIN_MB value, using default 3000")
+            return 3000
+
+    @staticmethod
+    def scale_up_ram_min_mb() -> int:
+        try:
+            value = _get_config("scale_up_ram_min_mb")
+            return int(value) if value else 2000
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid SCALE_UP_RAM_MIN_MB value, using default 2000")
+            return 2000
+
+    @staticmethod
+    def scale_up_queue_depth() -> int:
+        try:
+            value = _get_config("scale_up_queue_depth")
+            return int(value) if value else 5
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid SCALE_UP_QUEUE_DEPTH value, using default 5")
+            return 5
+
+    @staticmethod
+    def scale_down_idle_seconds() -> int:
+        try:
+            value = _get_config("scale_down_idle_seconds")
+            return int(value) if value else 300
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid SCALE_DOWN_IDLE_SECONDS value, using default 300")
+            return 300
+
+    @staticmethod
+    def worker_state_key_prefix() -> str:
+        return _get_config("worker_state_key_prefix") or "workers:state"
+
+
+class HttpConfig:
+    """Lazy-loading HTTP client configuration."""
+
+    @staticmethod
+    def request_timeout() -> int:
+        try:
+            value = _get_config("http_request_timeout")
+            return int(value) if value else 60
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid HTTP_REQUEST_TIMEOUT value, using default 60")
+            return 60
+
+    @staticmethod
+    def connect_timeout() -> int:
+        try:
+            value = _get_config("http_connect_timeout")
+            return int(value) if value else 10
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid HTTP_CONNECT_TIMEOUT value, using default 10")
+            return 10
+
+
+class HealthCheckConfig:
+    """Lazy-loading health check configuration."""
+
+    @staticmethod
+    def venv_health_check_interval() -> int:
+        try:
+            value = _get_config("venv_health_check_interval")
+            return int(value) if value else 60
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid VENV_HEALTH_CHECK_INTERVAL value, using default 60")
+            return 60
+
+    @staticmethod
+    def service_health_probe_timeout() -> float:
+        try:
+            value = _get_config("service_health_probe_timeout")
+            return float(value) if value else 5.0
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid SERVICE_HEALTH_PROBE_TIMEOUT value, using default 5.0")
+            return 5.0
+
+
+class LoggingConfig:
+    """Lazy-loading logging configuration."""
+
+    @staticmethod
+    def log_level() -> str:
+        return _get_config("log_level") or "INFO"
+
+    @staticmethod
+    def log_format() -> str:
+        return (
+            _get_config("log_format")
+            or "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+
+    @staticmethod
+    def log_format_type() -> str:
+        return _get_config("log_format_type") or "text"
+
+
+class JobStateConfig:
+    """Lazy-loading job state configuration."""
+
+    @staticmethod
+    def key_prefix() -> str:
+        return _get_config("job_state_key_prefix") or "state:job"
+
+    @staticmethod
+    def ttl_seconds() -> int:
+        try:
+            value = _get_config("job_state_ttl_seconds")
+            return int(value) if value else 3600
+        except (ValueError, TypeError):
+            logger.warning("[Config] Invalid JOB_STATE_TTL_SECONDS value, using default 3600")
+            return 3600
+
 
 # ============================================================================
-# CentralHub Configuration (L2 access via HTTP – no direct Redis credentials)
+# Subprocess Workers Path (computed at import-time, not lazy)
 # ============================================================================
 
-CENTRALHUB_URL = os.getenv("CENTRALHUB_URL", "http://centralhub:8080")
-CENTRALHUB_SERVICE_TOKEN = os.getenv(
-    "CENTRALHUB_SERVICE_TOKEN",
-    "internal-gatekeeper-token",
-)
-
-# ============================================================================
-# Multi-Source Pooling Strategy
-# ============================================================================
-
-QUEUE_PRIORITY = os.getenv("QUEUE_PRIORITY", "owner_first")
-BRPOP_L1_TIMEOUT = int(os.getenv("BRPOP_L1_TIMEOUT", "1"))
-BRPOP_L2_TIMEOUT = int(os.getenv("BRPOP_L2_TIMEOUT", "20"))
-
-# ============================================================================
-# Queue Names
-# ============================================================================
-
-CPU_JOBS_QUEUE_L1 = os.getenv("CPU_JOBS_QUEUE_L1", "scareverse:cpu-jobs:queue")
-CPU_JOBS_QUEUE_L2 = os.getenv("CPU_JOBS_QUEUE_L2", "scareverse:cpu-jobs:queue")
-
-THREE_D_JOBS_QUEUE_L1 = os.getenv("THREE_D_JOBS_QUEUE_L1", "scareverse:3d-jobs:queue")
-THREE_D_JOBS_QUEUE_L2 = os.getenv("THREE_D_JOBS_QUEUE_L2", "scareverse:3d-jobs:queue")
-
-DEAD_LETTER_QUEUE = os.getenv("DEAD_LETTER_QUEUE", "scareverse:dead-letter:queue")
-COMMANDS_QUEUE = os.getenv("COMMANDS_QUEUE", "commands:gatekeeper:queue")
-
-# ============================================================================
-# Subprocess Workers Path
-# ============================================================================
-
-# Inside Docker: /app/artifacts/canonical/workers (via volume mount ../../:/app/artifacts)
-# In development: resolved relative to this file (up 3 levels to canonical/, then workers/)
 _default_workers_path = Path("/app/artifacts/canonical/workers")
 if not _default_workers_path.exists():
     try:
@@ -210,61 +456,68 @@ ALL_QUEUES_L2 = list({
     if cfg.get("queue_l2")
 })
 
-# ============================================================================
-# Worker Configuration
-# ============================================================================
-
-WORKER_ID = os.getenv("WORKER_ID", "gatekeeper-01")
-WORKER_HEARTBEAT_INTERVAL = int(os.getenv("WORKER_HEARTBEAT_INTERVAL", "30"))
-WORKER_MAX_RETRIES = int(os.getenv("WORKER_MAX_RETRIES", "3"))
-WORKER_RETRY_DELAY = float(os.getenv("WORKER_RETRY_DELAY", "2.0"))
 
 # ============================================================================
-# Telemetry & Orchestration
+# Module-level __getattr__ – Backward-Compatible Lazy Constant Access
 # ============================================================================
 
-TELEMETRY_KEY = os.getenv("TELEMETRY_KEY", "state:host:telemetry")
-TELEMETRY_STALE_AFTER_SECONDS = int(os.getenv("TELEMETRY_STALE_AFTER_SECONDS", "15"))
+def __getattr__(name: str):
+    """Intercept module-level attribute access for lazy-loading constants.
 
-SCALE_UP_VRAM_MIN_MB = int(os.getenv("SCALE_UP_VRAM_MIN_MB", "3000"))
-SCALE_UP_RAM_MIN_MB = int(os.getenv("SCALE_UP_RAM_MIN_MB", "2000"))
-SCALE_UP_QUEUE_DEPTH = int(os.getenv("SCALE_UP_QUEUE_DEPTH", "5"))
-SCALE_DOWN_IDLE_SECONDS = int(os.getenv("SCALE_DOWN_IDLE_SECONDS", "300"))
+    Maps all constant names (REDIS_L1_HOST, CENTRALHUB_URL, etc.) to config
+    class methods.  When code accesses a constant, this function resolves it
+    lazily via the appropriate config class.
 
-WORKER_STATE_KEY_PREFIX = os.getenv("WORKER_STATE_KEY_PREFIX", "workers:state")
+    Resolution order: Redis L1 → SecretClient (vault.*) → os.getenv → default.
+    """
+    _config_map = {
+        # Redis L1
+        "REDIS_L1_HOST": RedisL1Config.host,
+        "REDIS_L1_PORT": RedisL1Config.port,
+        "REDIS_L1_PASSWORD": RedisL1Config.password,
+        "REDIS_L1_DB": RedisL1Config.db,
+        # CentralHub
+        "CENTRALHUB_URL": CentralHubConfig.url,
+        "CENTRALHUB_SERVICE_TOKEN": CentralHubConfig.service_token,
+        # Queue
+        "QUEUE_PRIORITY": QueueConfig.priority,
+        "BRPOP_L1_TIMEOUT": QueueConfig.brpop_l1_timeout,
+        "BRPOP_L2_TIMEOUT": QueueConfig.brpop_l2_timeout,
+        "CPU_JOBS_QUEUE_L1": QueueConfig.cpu_jobs_queue_l1,
+        "CPU_JOBS_QUEUE_L2": QueueConfig.cpu_jobs_queue_l2,
+        "THREE_D_JOBS_QUEUE_L1": QueueConfig.three_d_jobs_queue_l1,
+        "THREE_D_JOBS_QUEUE_L2": QueueConfig.three_d_jobs_queue_l2,
+        "DEAD_LETTER_QUEUE": QueueConfig.dead_letter_queue,
+        "COMMANDS_QUEUE": QueueConfig.commands_queue,
+        # Worker
+        "WORKER_ID": WorkerConfig.worker_id,
+        "WORKER_HEARTBEAT_INTERVAL": WorkerConfig.heartbeat_interval,
+        "WORKER_MAX_RETRIES": WorkerConfig.max_retries,
+        "WORKER_RETRY_DELAY": WorkerConfig.retry_delay,
+        # Telemetry
+        "TELEMETRY_KEY": TelemetryConfig.telemetry_key,
+        "TELEMETRY_STALE_AFTER_SECONDS": TelemetryConfig.stale_after_seconds,
+        "SCALE_UP_VRAM_MIN_MB": TelemetryConfig.scale_up_vram_min_mb,
+        "SCALE_UP_RAM_MIN_MB": TelemetryConfig.scale_up_ram_min_mb,
+        "SCALE_UP_QUEUE_DEPTH": TelemetryConfig.scale_up_queue_depth,
+        "SCALE_DOWN_IDLE_SECONDS": TelemetryConfig.scale_down_idle_seconds,
+        "WORKER_STATE_KEY_PREFIX": TelemetryConfig.worker_state_key_prefix,
+        # HTTP
+        "HTTP_REQUEST_TIMEOUT": HttpConfig.request_timeout,
+        "HTTP_CONNECT_TIMEOUT": HttpConfig.connect_timeout,
+        # Health checks
+        "VENV_HEALTH_CHECK_INTERVAL": HealthCheckConfig.venv_health_check_interval,
+        "SERVICE_HEALTH_PROBE_TIMEOUT": HealthCheckConfig.service_health_probe_timeout,
+        # Logging
+        "LOG_LEVEL": LoggingConfig.log_level,
+        "LOG_FORMAT": LoggingConfig.log_format,
+        "LOG_FORMAT_TYPE": LoggingConfig.log_format_type,
+        # Job state
+        "JOB_STATE_KEY_PREFIX": JobStateConfig.key_prefix,
+        "JOB_STATE_TTL_SECONDS": JobStateConfig.ttl_seconds,
+    }
 
-# ============================================================================
-# HTTP Client Configuration
-# ============================================================================
+    if name in _config_map:
+        return _config_map[name]()
 
-HTTP_REQUEST_TIMEOUT = int(os.getenv("HTTP_REQUEST_TIMEOUT", "60"))
-HTTP_CONNECT_TIMEOUT = int(os.getenv("HTTP_CONNECT_TIMEOUT", "10"))
-
-# ============================================================================
-# Venv Health Checks
-# ============================================================================
-
-# Interval (seconds) between periodic venv health-check iterations.
-VENV_HEALTH_CHECK_INTERVAL = int(os.getenv("VENV_HEALTH_CHECK_INTERVAL", "60"))
-
-# Timeout (seconds) for each HTTP health-probe request to a service dependency.
-SERVICE_HEALTH_PROBE_TIMEOUT = float(os.getenv("SERVICE_HEALTH_PROBE_TIMEOUT", "5.0"))
-
-# ============================================================================
-# Logging
-# ============================================================================
-
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-LOG_FORMAT = os.getenv(
-    "LOG_FORMAT",
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-# When set to "json", switch to structured JSON log output via JSONFormatter.
-LOG_FORMAT_TYPE = os.getenv("LOG_FORMAT_TYPE", "text")
-
-# ============================================================================
-# Result Storage
-# ============================================================================
-
-JOB_STATE_KEY_PREFIX = os.getenv("JOB_STATE_KEY_PREFIX", "state:job")
-JOB_STATE_TTL_SECONDS = int(os.getenv("JOB_STATE_TTL_SECONDS", "3600"))
+    raise AttributeError(f"module 'config' has no attribute '{name}'")
