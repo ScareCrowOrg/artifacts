@@ -20,11 +20,19 @@ services:
     volumes:
       - redis_local_data:/data
     environment:
-      - REDIS_PORT=6380
+      # Launcher-injected variables
+      - DOCKER_NETWORK=${DOCKER_NETWORK:-scareverse-net-staging}
+      - TENANT_NAME=${TENANT_NAME:-staging}
+      - REDIS_ADMIN_USERNAME=${REDIS_ADMIN_USERNAME:-admin}
+      - REDIS_ADMIN_PASSWORD=${REDIS_ADMIN_PASSWORD}
+      - REDIS_L1_HOST=${REDIS_L1_HOST:-localhost}
+      - REDIS_L1_PORT=${REDIS_L1_PORT:-6380}
+      - REDIS_L1_DB=${REDIS_L1_DB:-0}
       - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
-      - REDIS_L1_HOST=localhost
-      - REDIS_L1_PORT=6380
-      - REDIS_L1_DB=0
+      - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-20}
+      - HEARTBEAT_TTL=${HEARTBEAT_TTL:-60}
+      # Default variables
+      - REDIS_PORT=6380
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     networks:
       - scareverse-net
