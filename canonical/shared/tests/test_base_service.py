@@ -278,3 +278,87 @@ class TestBaseServiceConfiguration:
         custom_logger = logging.getLogger("custom")
         service = BaseService("svc", logger=custom_logger)
         assert service._logger is custom_logger
+
+
+# ---------------------------------------------------------------------------
+# Tests – cleanup() method
+# ---------------------------------------------------------------------------
+
+
+class TestBaseServiceCleanup:
+    @pytest.mark.asyncio
+    async def test_cleanup_deletes_heartbeat_key(self):
+        """cleanup() deletes the availability key in Redis."""
+        mock_redis = AsyncMock()
+        mock_redis.delete = AsyncMock(return_value=1)
+
+        service = _make_service("ollama")
+
+        with patch("redis.asyncio.Redis", return_value=mock_redis):
+            await service.cleanup()
+
+        mock_redis.delete.assert_called_once_with("state:service:ollama:available")
+
+    @pytest.mark.asyncio
+    async def test_cleanup_logs_success_when_key_deleted(self):
+        """cleanup() logs success info when key was present and deleted."""
+        mock_redis = AsyncMock()
+        mock_redis.delete = AsyncMock(return_value=1)
+
+        service = _make_service("ollama")
+        mock_logger = MagicMock()
+        service._logger = mock_logger
+
+        with patch("redis.asyncio.Redis", return_value=mock_redis):
+            await service.cleanup()
+
+        mock_logger.info.assert_called()
+        assert any(
+            "deleted" in str(call).lower() or "cleaned" in str(call).lower()
+            for call in mock_logger.info.call_args_list
+        )
+
+    @pytest.mark.asyncio
+    async def test_cleanup_logs_debug_when_key_absent(self):
+        """cleanup() logs debug when key was already gone (delete returns 0)."""
+        mock_redis = AsyncMock()
+        mock_redis.delete = AsyncMock(return_value=0)
+
+        service = _make_service("stable-diffusion")
+        mock_logger = MagicMock()
+        service._logger = mock_logger
+
+        with patch("redis.asyncio.Redis", return_value=mock_redis):
+            await service.cleanup()
+
+        mock_redis.delete.assert_called_once_with("state:service:stable-diffusion:available")
+        mock_logger.info.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_handles_redis_error_gracefully(self):
+        """cleanup() logs a warning and does not raise when Redis is unreachable."""
+        mock_redis = AsyncMock()
+        mock_redis.delete = AsyncMock(side_effect=ConnectionError("Redis down"))
+
+        service = _make_service("ollama")
+        mock_logger = MagicMock()
+        service._logger = mock_logger
+
+        with patch("redis.asyncio.Redis", return_value=mock_redis):
+            await service.cleanup()  # must not raise
+
+        mock_logger.warning.assert_called_once()
+        assert "cleanup failed" in mock_logger.warning.call_args[0][0].lower()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_handles_missing_redis_import(self):
+        """cleanup() logs a warning and returns when redis-py is not installed."""
+        service = _make_service("ollama")
+        mock_logger = MagicMock()
+        service._logger = mock_logger
+
+        with patch.dict(sys.modules, {"redis": None, "redis.asyncio": None}):
+            await service.cleanup()  # must not raise
+
+        mock_logger.warning.assert_called_once()
+        assert "redis-py not installed" in mock_logger.warning.call_args[0][0].lower()

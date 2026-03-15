@@ -167,3 +167,62 @@ class BaseService:
                 client = None  # force reconnect on next iteration
 
             await asyncio.sleep(self._heartbeat_interval)
+
+    async def cleanup(self) -> None:
+        """Delete the heartbeat key immediately on shutdown.
+
+        Call this on SIGTERM/SIGINT so that GateKeeper stops routing jobs to
+        this service right away instead of waiting up to ``key_ttl`` seconds
+        for the Redis TTL to expire.
+
+        Safe to call even when ``redis-py`` is not installed or Redis is
+        unreachable; errors are logged as warnings and swallowed.
+
+        Example::
+
+            import signal, asyncio
+            service = BaseService("ollama")
+            loop = asyncio.get_event_loop()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(
+                    sig,
+                    lambda: asyncio.create_task(service.cleanup()),
+                )
+        """
+        try:
+            import redis.asyncio as aioredis  # type: ignore[import]
+        except ImportError:
+            self._logger.warning(
+                "redis-py not installed – heartbeat cleanup skipped for '%s'",
+                self.service_name,
+            )
+            return
+
+        connect_kwargs: dict = {
+            "host": self._redis_host,
+            "port": self._redis_port,
+            "db": self._redis_db,
+            "decode_responses": True,
+            "socket_connect_timeout": 5,
+        }
+        if self._redis_password:
+            connect_kwargs["password"] = self._redis_password
+
+        try:
+            client = aioredis.Redis(**connect_kwargs)
+            deleted = await client.delete(self._availability_key)
+            if deleted:
+                self._logger.info(
+                    "✅ Heartbeat key deleted: %s", self._availability_key
+                )
+            else:
+                self._logger.debug(
+                    "Heartbeat key already absent: %s", self._availability_key
+                )
+            await client.aclose()
+        except Exception as exc:
+            self._logger.warning(
+                "Heartbeat cleanup failed for '%s': %s",
+                self.service_name,
+                exc,
+            )
