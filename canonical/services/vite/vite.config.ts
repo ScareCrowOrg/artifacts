@@ -307,7 +307,10 @@ export default defineConfig({
     // CORS configuration for cross-origin requests from frontend
     // Can be overridden with VITE_CORS_ORIGINS environment variable
     cors: {
-      origin: (process.env.VITE_CORS_ORIGINS || 'http://localhost:8000,http://localhost:5173,http://localhost:5050').split(','),
+      origin: (() => {
+        const origins = process.env.VITE_CORS_ORIGINS || 'http://localhost:8000,http://localhost:5173,http://localhost:5050'
+        return typeof origins === 'string' ? origins.split(',') : ['http://localhost:8000', 'http://localhost:5173', 'http://localhost:5050']
+      })(),
       credentials: true,
     },
 
