@@ -21,8 +21,8 @@ LABEL version="1.0.0"
 # curl for health checks; python3 + pip for heartbeat entrypoint
 RUN apk add --no-cache curl python3 py3-pip
 
-# Install redis-py for BaseService heartbeat (minimal dep - no pip venv needed)
-RUN pip install --no-cache-dir --break-system-packages redis
+# Install Python deps for BaseService heartbeat and canonical.shared imports
+RUN pip install --no-cache-dir --break-system-packages redis httpx
 
 # Create non-root user (Alpine-compatible syntax)
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
