@@ -57,6 +57,16 @@ services:
       PYTHONUNBUFFERED: "1"
       PYTHONPATH: /app/artifacts
 
+      # Redis L1 (for heartbeat registration)
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
+      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
+      REDIS_L1_DB: ${REDIS_L1_DB:-0}
+      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
+
+      # Heartbeat (Launcher-injected for service availability tracking)
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-60}
+      HEARTBEAT_TTL: ${HEARTBEAT_TTL:-180}
+
     volumes:
       # Artifacts (for canonical.shared.services.base_service import)
       - ../../../artifacts:/app/artifacts:ro

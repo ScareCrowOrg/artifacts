@@ -82,14 +82,17 @@ services:
     environment:
       OLLAMA_HOST: "http://ollama-raw:11434"
       OLLAMA_REQUEST_TIMEOUT: "120"
-      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
       REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
       REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
-      REDIS_HEARTBEAT_INTERVAL: "60"
       SERVICE_HOST: "0.0.0.0"
       SERVICE_PORT: "11434"
       LOG_LEVEL: "INFO"
+
+      # Heartbeat (Launcher-injected for service availability tracking)
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-60}
+      HEARTBEAT_TTL: ${HEARTBEAT_TTL:-180}
 
     ports:
       - "11434:11434"
