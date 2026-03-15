@@ -96,7 +96,7 @@ services:
 
     volumes:
       # Artifacts (for canonical.shared.services.base_service import)
-      - ../../../artifacts:/app/artifacts:ro
+      - ../../../../artifacts:/app/artifacts:ro
 
     ports:
       - "11434:11434"

@@ -69,7 +69,7 @@ services:
 
     volumes:
       # Artifacts (for canonical.shared.services.base_service import)
-      - ../../../artifacts:/app/artifacts:ro
+      - ../../../../artifacts:/app/artifacts:ro
       # HuggingFace model cache (for SD models)
       - type: bind
         source: ${HF_HUB_CACHE_PATH:-/root/.cache/huggingface}
