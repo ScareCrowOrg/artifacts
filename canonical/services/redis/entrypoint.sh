@@ -8,8 +8,9 @@ set -e
 
 REDIS_PORT=${REDIS_PORT:-6380}
 REDIS_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
-# REDIS_ADMIN_PASSWORD: Set this env var explicitly in production so the
-# Launcher can use a known admin password (encrypted in vault).
+# REDIS_ADMIN_USERNAME: Admin user name (injected from settings.json redis:admin:username)
+REDIS_ADMIN_USERNAME=${REDIS_ADMIN_USERNAME:-admin}
+# REDIS_ADMIN_PASSWORD: Admin user password (injected from vault redis:admin:password)
 # If not set, a random password is generated at startup – operators must
 # set REDIS_ADMIN_PASSWORD when Launcher needs admin Redis access.
 REDIS_ADMIN_PASSWORD=${REDIS_ADMIN_PASSWORD:-$(openssl rand -hex 16)}
@@ -140,7 +141,9 @@ fi
 
 # Configure admin user (for Launcher only)
 # - Full access to all keys and commands
-redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" ACL SETUSER admin \
+# - Username and password injected by Launcher
+echo "[entrypoint] Creating admin user \"$REDIS_ADMIN_USERNAME\"..."
+redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" ACL SETUSER "$REDIS_ADMIN_USERNAME" \
   on \
   ">$REDIS_ADMIN_PASSWORD" \
   '~*' \
@@ -148,9 +151,9 @@ redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" ACL SETUSER admin \
   >/dev/null 2>&1
 
 if [ $? -eq 0 ]; then
-  echo "[entrypoint] ✅ ACL: admin (full-access) user configured"
+  echo "[entrypoint] ✅ ACL: $REDIS_ADMIN_USERNAME (full-access) user configured"
 else
-  echo "[entrypoint] ⚠ ACL: failed to configure admin user"
+  echo "[entrypoint] ⚠ ACL: failed to configure $REDIS_ADMIN_USERNAME user"
 fi
 
 # Persist ACL configuration to disk
