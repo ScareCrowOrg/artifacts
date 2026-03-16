@@ -139,6 +139,78 @@ const rebuildObservabilityPlugin = {
   },
 }
 
+// Error Interception Plugin - Catches and logs full stack traces from esbuild
+// This helps us see the actual error, not just "source.split is not a function"
+const errorInterceptionPlugin = {
+  name: 'error-interception',
+  apply: 'serve',
+
+  async resolveId(id, importer) {
+    // Trace all imports that happen during dynamic-workspace loading
+    if (id.includes('dynamic-workspace') || id.includes('i18n') || importer?.includes('dynamic-workspace')) {
+      console.error(`\n📌 [RESOLVE TRACE] Import detected`);
+      console.error(`   ID: ${id}`);
+      console.error(`   Importer: ${importer || 'entry point'}`);
+    }
+  },
+
+  async transform(code, id) {
+    // Catch errors during transformation
+    if (id.includes('main.ts') || id.includes('dynamic-workspace')) {
+      try {
+        // Just return the code unchanged, but wrap in error handler
+        return { code };
+      } catch (error) {
+        console.error('\n❌ [TRANSFORM ERROR]');
+        console.error(`   File: ${id}`);
+        console.error(`   Error: ${error.message}`);
+        console.error(`   Stack: ${error.stack}`);
+        throw error;
+      }
+    }
+  },
+
+  configureServer(server) {
+    // Hook into Vite's error handler to catch middleware errors
+    const originalUse = server.middlewares.use;
+    server.middlewares.use = function(...args) {
+      const fn = args[args.length - 1];
+      if (typeof fn === 'function') {
+        const wrappedFn = (req, res, next) => {
+          try {
+            const result = fn(req, res, (err) => {
+              if (err) {
+                console.error('\n❌ [MIDDLEWARE ERROR CAUGHT]');
+                console.error(`   Path: ${req.url}`);
+                console.error(`   Error: ${err.message}`);
+                console.error(`   Stack: ${err.stack}`);
+              }
+              next(err);
+            });
+            if (result instanceof Promise) {
+              result.catch((err) => {
+                console.error('\n❌ [ASYNC MIDDLEWARE ERROR]');
+                console.error(`   Path: ${req.url}`);
+                console.error(`   Error: ${err.message}`);
+                console.error(`   Stack: ${err.stack}`);
+              });
+            }
+            return result;
+          } catch (err) {
+            console.error('\n❌ [SYNC MIDDLEWARE ERROR]');
+            console.error(`   Path: ${req.url}`);
+            console.error(`   Error: ${err.message}`);
+            console.error(`   Stack: ${err.stack}`);
+            throw err;
+          }
+        };
+        args[args.length - 1] = wrappedFn;
+      }
+      return originalUse.apply(this, args);
+    };
+  },
+}
+
 // Viewer Warmup Plugin - Pre-compile viewers on startup
 // Automatically discovers and pre-compiles all viewers to avoid cold-start delays
 const viewerWarmupPlugin = {
@@ -284,6 +356,7 @@ export default defineConfig({
   plugins: [
     performanceTracingPlugin,
     rebuildObservabilityPlugin,
+    errorInterceptionPlugin,
     viewerWarmupPlugin,
     migrationWarningPlugin,
     urlRewritePlugin,
@@ -402,7 +475,7 @@ export default defineConfig({
   },
   
   // Logging
-  logLevel: 'info',
+  logLevel: 'debug',  // Enable verbose logging to trace esbuild issues
   clearScreen: false,  // Don't clear terminal on startup
   
   // Test configuration
