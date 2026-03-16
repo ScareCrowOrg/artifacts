@@ -144,6 +144,7 @@ const rebuildObservabilityPlugin = {
 const errorInterceptionPlugin = {
   name: 'error-interception',
   apply: 'serve',
+  enforce: 'pre',  // Run before other plugins
 
   async resolveId(id, importer) {
     // Trace all imports that happen during dynamic-workspace loading
@@ -154,20 +155,22 @@ const errorInterceptionPlugin = {
     }
   },
 
-  async transform(code, id) {
-    // Catch errors during transformation
-    if (id.includes('main.ts') || id.includes('dynamic-workspace')) {
-      try {
-        // Just return the code unchanged, but wrap in error handler
-        return { code };
-      } catch (error) {
-        console.error('\n❌ [TRANSFORM ERROR]');
-        console.error(`   File: ${id}`);
-        console.error(`   Error: ${error.message}`);
-        console.error(`   Stack: ${error.stack}`);
-        throw error;
-      }
+  async load(id) {
+    // Trace all file loads
+    if (id.includes('dynamic-workspace') || id.includes('i18n') || id.includes('main.ts')) {
+      console.error(`\n📂 [LOAD TRACE] File loading`);
+      console.error(`   ID: ${id}`);
     }
+  },
+
+  async transform(code, id) {
+    // Log what we're transforming
+    if (id.includes('main.ts') || id.includes('dynamic-workspace') || id.includes('i18n')) {
+      console.error(`\n🔄 [TRANSFORM START] ${id.substring(id.lastIndexOf('/'))}`);
+      console.error(`   Code length: ${code.length} bytes`);
+      console.error(`   First 100 chars: ${code.substring(0, 100)}`);
+    }
+    return null; // Let other plugins handle it
   },
 
   configureServer(server) {
@@ -183,6 +186,16 @@ const errorInterceptionPlugin = {
                 console.error('\n❌ [MIDDLEWARE ERROR CAUGHT]');
                 console.error(`   Path: ${req.url}`);
                 console.error(`   Error: ${err.message}`);
+                console.error(`   Error details:`, err);
+                if (err.frame) {
+                  console.error(`   Frame:\n${err.frame}`);
+                }
+                if (err.id) {
+                  console.error(`   File ID: ${err.id}`);
+                }
+                if (err.plugin) {
+                  console.error(`   Plugin: ${err.plugin}`);
+                }
                 console.error(`   Stack: ${err.stack}`);
               }
               next(err);
@@ -192,6 +205,16 @@ const errorInterceptionPlugin = {
                 console.error('\n❌ [ASYNC MIDDLEWARE ERROR]');
                 console.error(`   Path: ${req.url}`);
                 console.error(`   Error: ${err.message}`);
+                console.error(`   Error details:`, err);
+                if (err.frame) {
+                  console.error(`   Frame:\n${err.frame}`);
+                }
+                if (err.id) {
+                  console.error(`   File ID: ${err.id}`);
+                }
+                if (err.plugin) {
+                  console.error(`   Plugin: ${err.plugin}`);
+                }
                 console.error(`   Stack: ${err.stack}`);
               });
             }
@@ -200,6 +223,7 @@ const errorInterceptionPlugin = {
             console.error('\n❌ [SYNC MIDDLEWARE ERROR]');
             console.error(`   Path: ${req.url}`);
             console.error(`   Error: ${err.message}`);
+            console.error(`   Error details:`, err);
             console.error(`   Stack: ${err.stack}`);
             throw err;
           }
