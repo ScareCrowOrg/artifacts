@@ -1,29 +1,26 @@
 /**
- * DynamicWorkspace v2 - Phase 2 Entrypoint - DEBUG MODE
+ * DynamicWorkspace v2 - Phase 2 Entrypoint
  *
- * Testing imports one by one to find the culprit
+ * Vue 3 SPA with:
+ * - Pinia for workspace state (handshake store)
+ * - vue-i18n for translations (layout.* keys from v1)
+ * - App.vue orchestrates grid, BaseCell instantiation, and view resolution
  */
 
-// TEST 1: Just Vue
 import { createApp } from 'vue'
-console.log('[MAIN] Vue imported OK')
+import { createPinia } from 'pinia'
+import App from './App.vue'
+import i18n from '@/i18n'
 
-// TEST 2: Try Pinia
-// import { createPinia } from 'pinia'
-// console.log('[MAIN] Pinia imported OK')
+const app = createApp(App)
+app.use(createPinia())
+app.use(i18n)
 
-// TEST 3: Try App.vue
-// import App from './App.vue'
-// console.log('[MAIN] App.vue imported OK')
+// ⚡ CRITICAL: Make i18n available globally for dynamically loaded components
+// This ensures isolated components (like cells) can access i18n even if useI18n() fails
+if (typeof window !== 'undefined') {
+  window['__i18n'] = i18n
+  console.log('[DynamicWorkspace] i18n registered in window for isolated component access')
+}
 
-// TEST 4: Try i18n
-// import i18n from '@/i18n'
-// console.log('[MAIN] i18n imported OK')
-
-// TEST: Minimal app creation
-// const app = createApp(App)
-// app.use(createPinia())
-// app.use(i18n)
-// app.mount('#app')
-
-console.log('[MAIN] All tests complete')
+app.mount('#app')

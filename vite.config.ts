@@ -9,92 +9,121 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Performance Tracing Plugin - Detailed startup timing
-const performanceTracingPlugin = {
-  name: 'performance-tracing',
-  apply: 'serve',
-  enforce: 'pre',
+// FIXED: Now uses Map to track timings outside of hook return values
+// This prevents interference with esbuild's source code processing
+const performanceTracingPlugin = (() => {
+  const timingMap = new Map(); // Track: id → startTime
+  const resolveThresholdMs = 50;
+  const loadThresholdMs = 100;
 
-  resolveId(id) {
-    const shouldTrace = process.env.VITE_TRACE === 'true' || process.env.VITE_TRACE_RESOLVE === 'true';
-    if (shouldTrace) {
-      const start = performance.now();
-      return () => {
-        const duration = (performance.now() - start).toFixed(2);
-        if (duration > 50) {
-          console.error(`  ⏱️ [RESOLVE] ${duration.padStart(6)}ms | ${id}`);
-        }
-      };
-    }
-  },
+  return {
+    name: 'performance-tracing',
+    apply: 'serve',
+    enforce: 'post', // Run after other plugins to avoid interfering with resolution
 
-  load(id) {
-    const shouldTrace = process.env.VITE_TRACE === 'true' || process.env.VITE_TRACE_LOAD === 'true';
-    if (shouldTrace) {
-      const start = performance.now();
-      return () => {
-        const duration = (performance.now() - start).toFixed(2);
-        if (duration > 100) {
-          console.error(`  ⏱️ [LOAD] ${duration.padStart(6)}ms | ${id}`);
-        }
-      };
-    }
-  },
-
-  configureServer(server) {
-    const initStart = performance.now();
-    const shouldTrace = process.env.VITE_TRACE === 'true';
-
-    console.error('\n' + '━'.repeat(100));
-    console.error('🚀 VITE INITIALIZATION STARTED');
-    console.error(`   Trace enabled: ${shouldTrace}`);
-    console.error(`   Node env: ${process.env.NODE_ENV}`);
-    console.error(`   Root: ${__dirname}`);
-    console.error('━'.repeat(100));
-
-    // Log environment variables for debugging
-    console.error('\n📋 ENVIRONMENT VARIABLES:');
-    console.error(`   VITE_TRACE: ${process.env.VITE_TRACE ?? 'undefined'}`);
-    console.error(`   VITE_TRACE_RESOLVE: ${process.env.VITE_TRACE_RESOLVE ?? 'undefined'}`);
-    console.error(`   VITE_TRACE_LOAD: ${process.env.VITE_TRACE_LOAD ?? 'undefined'}`);
-    console.error(`   VITE_DEBUG: ${process.env.VITE_DEBUG ?? 'undefined'}`);
-    console.error(`   VITE_CORS_ORIGINS: ${process.env.VITE_CORS_ORIGINS ?? 'undefined'}`);
-    console.error(`   VITE_COCKPIT_ORIGINS: ${process.env.VITE_COCKPIT_ORIGINS ?? 'undefined'}`);
-    console.error(`   VITE_CENTRALHUB_URL: ${process.env.VITE_CENTRALHUB_URL ?? 'undefined'}`);
-    console.error(`   VITE_HMR_HOST: ${process.env.VITE_HMR_HOST ?? 'undefined'}`);
-    console.error(`   VITE_HMR_PORT: ${process.env.VITE_HMR_PORT ?? 'undefined'}`);
-    console.error(`   VITE_HMR_PROTOCOL: ${process.env.VITE_HMR_PROTOCOL ?? 'undefined'}`);
-    console.error('━'.repeat(100) + '\n');
-
-    // Track first request and server ready
-    let firstRequest = true;
-    let serverReady = false;
-
-    // Hook into Vite's ready event
-    server.httpServer?.once('listening', () => {
-      const readyDuration = (performance.now() - initStart).toFixed(2);
-      serverReady = true;
-      console.error('\n' + '─'.repeat(100));
-      console.error(`✅ VITE SERVER READY`);
-      console.error(`   Duration: ${readyDuration}ms`);
-      console.error(`   Listening on: http://0.0.0.0:${server.config.server.port}`);
-      console.error('─'.repeat(100) + '\n');
-    });
-
-    server.middlewares.use((req, res, next) => {
-      if (firstRequest && !req.url.includes('__vite') && !req.url.includes('node_modules')) {
-        firstRequest = false;
-        const totalDuration = (performance.now() - initStart).toFixed(2);
-        console.error('\n' + '─'.repeat(100));
-        console.error(`📍 FIRST REQUEST RECEIVED`);
-        console.error(`   Path: ${req.url}`);
-        console.error(`   Total startup time: ${totalDuration}ms`);
-        console.error(`   Server ready: ${serverReady}`);
-        console.error('─'.repeat(100) + '\n');
+    resolveId(id) {
+      const shouldTrace = process.env.VITE_TRACE === 'true' || process.env.VITE_TRACE_RESOLVE === 'true';
+      if (shouldTrace) {
+        timingMap.set(`resolve:${id}`, performance.now());
       }
-      next();
-    });
-  },
-}
+      // CRITICAL: Return nothing to let other plugins handle resolution
+      return null;
+    },
+
+    load(id) {
+      const shouldTrace = process.env.VITE_TRACE === 'true' || process.env.VITE_TRACE_LOAD === 'true';
+      if (shouldTrace) {
+        timingMap.set(`load:${id}`, performance.now());
+      }
+      // CRITICAL: Return nothing to let Vite's default load handler process the file
+      return null;
+    },
+
+    transform(code, id) {
+      const shouldTrace = process.env.VITE_TRACE === 'true';
+
+      if (shouldTrace) {
+        // Log resolution timing if we tracked it
+        const resolveKey = `resolve:${id}`;
+        if (timingMap.has(resolveKey)) {
+          const duration = (performance.now() - timingMap.get(resolveKey)).toFixed(2);
+          if (parseInt(duration) > resolveThresholdMs) {
+            console.error(`  ⏱️ [RESOLVE] ${duration.padStart(6)}ms | ${id}`);
+          }
+          timingMap.delete(resolveKey);
+        }
+
+        // Log load timing if we tracked it
+        const loadKey = `load:${id}`;
+        if (timingMap.has(loadKey)) {
+          const duration = (performance.now() - timingMap.get(loadKey)).toFixed(2);
+          if (parseInt(duration) > loadThresholdMs) {
+            console.error(`  ⏱️ [LOAD] ${duration.padStart(6)}ms | ${id}`);
+          }
+          timingMap.delete(loadKey);
+        }
+      }
+
+      // Return nothing - let other plugins handle transformation
+      return null;
+    },
+
+    configureServer(server) {
+      const initStart = performance.now();
+      const shouldTrace = process.env.VITE_TRACE === 'true';
+
+      console.error('\n' + '━'.repeat(100));
+      console.error('🚀 VITE INITIALIZATION STARTED');
+      console.error(`   Trace enabled: ${shouldTrace}`);
+      console.error(`   Node env: ${process.env.NODE_ENV}`);
+      console.error(`   Root: ${__dirname}`);
+      console.error('━'.repeat(100));
+
+      // Log environment variables for debugging
+      console.error('\n📋 ENVIRONMENT VARIABLES:');
+      console.error(`   VITE_TRACE: ${process.env.VITE_TRACE ?? 'undefined'}`);
+      console.error(`   VITE_TRACE_RESOLVE: ${process.env.VITE_TRACE_RESOLVE ?? 'undefined'}`);
+      console.error(`   VITE_TRACE_LOAD: ${process.env.VITE_TRACE_LOAD ?? 'undefined'}`);
+      console.error(`   VITE_DEBUG: ${process.env.VITE_DEBUG ?? 'undefined'}`);
+      console.error(`   VITE_CORS_ORIGINS: ${process.env.VITE_CORS_ORIGINS ?? 'undefined'}`);
+      console.error(`   VITE_COCKPIT_ORIGINS: ${process.env.VITE_COCKPIT_ORIGINS ?? 'undefined'}`);
+      console.error(`   VITE_CENTRALHUB_URL: ${process.env.VITE_CENTRALHUB_URL ?? 'undefined'}`);
+      console.error(`   VITE_HMR_HOST: ${process.env.VITE_HMR_HOST ?? 'undefined'}`);
+      console.error(`   VITE_HMR_PORT: ${process.env.VITE_HMR_PORT ?? 'undefined'}`);
+      console.error(`   VITE_HMR_PROTOCOL: ${process.env.VITE_HMR_PROTOCOL ?? 'undefined'}`);
+      console.error('━'.repeat(100) + '\n');
+
+      // Track first request and server ready
+      let firstRequest = true;
+      let serverReady = false;
+
+      // Hook into Vite's ready event
+      server.httpServer?.once('listening', () => {
+        const readyDuration = (performance.now() - initStart).toFixed(2);
+        serverReady = true;
+        console.error('\n' + '─'.repeat(100));
+        console.error(`✅ VITE SERVER READY`);
+        console.error(`   Duration: ${readyDuration}ms`);
+        console.error(`   Listening on: http://0.0.0.0:${server.config.server.port}`);
+        console.error('─'.repeat(100) + '\n');
+      });
+
+      server.middlewares.use((req, res, next) => {
+        if (firstRequest && !req.url.includes('__vite') && !req.url.includes('node_modules')) {
+          firstRequest = false;
+          const totalDuration = (performance.now() - initStart).toFixed(2);
+          console.error('\n' + '─'.repeat(100));
+          console.error(`📍 FIRST REQUEST RECEIVED`);
+          console.error(`   Path: ${req.url}`);
+          console.error(`   Total startup time: ${totalDuration}ms`);
+          console.error(`   Server ready: ${serverReady}`);
+          console.error('─'.repeat(100) + '\n');
+        }
+        next();
+      });
+    },
+  };
+})()
 
 // Rebuild Observability Plugin - Logs file change triggers
 const rebuildObservabilityPlugin = {
@@ -200,19 +229,15 @@ const errorInterceptionPlugin = {
                 console.error('\n' + '█'.repeat(100));
                 console.error('🚨 ERROR DURING FILE PROCESSING');
                 console.error('█'.repeat(100));
-                console.error(`\n📍 Current file being processed: ${currentFile}`);
-                console.error(`\n📚 Processing stack:`);
+                console.error(`\n📍 Current file: ${currentFile}`);
+                console.error(`📚 Processing stack:`);
                 processingStack.slice(-5).forEach((f, idx) => {
                   console.error(`   ${idx + 1}. ${f}`);
                 });
                 console.error(`\n❌ Error: ${err.message}`);
-                console.error(`\n📍 Location: ${req.url}`);
-                if (err.id) {
-                  console.error(`📄 File ID: ${err.id}`);
-                }
-                if (err.plugin) {
-                  console.error(`🔌 Plugin: ${err.plugin}`);
-                }
+                console.error(`📍 Location: ${req.url}`);
+                console.error(`🔌 Plugin: ${err.plugin || 'unknown'}`);
+                console.error(`📄 File ID: ${err.id || 'unknown'}`);
                 console.error('\n' + '█'.repeat(100));
               }
               next(err);
@@ -229,67 +254,6 @@ const errorInterceptionPlugin = {
             console.error('\n🚨 [SYNC ERROR]');
             console.error(`   Current: ${currentFile}`);
             console.error(`   Error: ${err.message}`);
-            throw err;
-          }
-        };
-        args[args.length - 1] = wrappedFn;
-      }
-      return originalUse.apply(this, args);
-    };
-  },
-
-  configureServer(server) {
-    // Hook into Vite's error handler to catch middleware errors
-    const originalUse = server.middlewares.use;
-    server.middlewares.use = function(...args) {
-      const fn = args[args.length - 1];
-      if (typeof fn === 'function') {
-        const wrappedFn = (req, res, next) => {
-          try {
-            const result = fn(req, res, (err) => {
-              if (err) {
-                console.error('\n❌ [MIDDLEWARE ERROR CAUGHT]');
-                console.error(`   Path: ${req.url}`);
-                console.error(`   Error: ${err.message}`);
-                console.error(`   Error details:`, err);
-                if (err.frame) {
-                  console.error(`   Frame:\n${err.frame}`);
-                }
-                if (err.id) {
-                  console.error(`   File ID: ${err.id}`);
-                }
-                if (err.plugin) {
-                  console.error(`   Plugin: ${err.plugin}`);
-                }
-                console.error(`   Stack: ${err.stack}`);
-              }
-              next(err);
-            });
-            if (result instanceof Promise) {
-              result.catch((err) => {
-                console.error('\n❌ [ASYNC MIDDLEWARE ERROR]');
-                console.error(`   Path: ${req.url}`);
-                console.error(`   Error: ${err.message}`);
-                console.error(`   Error details:`, err);
-                if (err.frame) {
-                  console.error(`   Frame:\n${err.frame}`);
-                }
-                if (err.id) {
-                  console.error(`   File ID: ${err.id}`);
-                }
-                if (err.plugin) {
-                  console.error(`   Plugin: ${err.plugin}`);
-                }
-                console.error(`   Stack: ${err.stack}`);
-              });
-            }
-            return result;
-          } catch (err) {
-            console.error('\n❌ [SYNC MIDDLEWARE ERROR]');
-            console.error(`   Path: ${req.url}`);
-            console.error(`   Error: ${err.message}`);
-            console.error(`   Error details:`, err);
-            console.error(`   Stack: ${err.stack}`);
             throw err;
           }
         };
@@ -443,7 +407,7 @@ const urlRewritePlugin = {
 export default defineConfig({
   root: '/app/artifacts',
   plugins: [
-    performanceTracingPlugin,
+    performanceTracingPlugin,  // FIXED: Now uses Map for timing tracking, doesn't interfere with esbuild
     rebuildObservabilityPlugin,
     fileProcessingTracker,
     errorInterceptionPlugin,
