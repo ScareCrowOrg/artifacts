@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "category": "infrastructure",
   "default_refs": {
+    "basecell": ["frontend/xterm-terminal.ts"],
     "view": ["frontend/View.vue"],
     "scripts": ["backend/scripts/main.py"],
     "docs": ["docs/README.md"]
