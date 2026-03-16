@@ -164,8 +164,8 @@ const errorInterceptionPlugin = {
   },
 
   async transform(code, id) {
-    // Log what we're transforming
-    if (id.includes('main.ts') || id.includes('dynamic-workspace') || id.includes('i18n')) {
+    // Log what we're transforming (only if code is a string)
+    if (typeof code === 'string' && (id.includes('main.ts') || id.includes('dynamic-workspace') || id.includes('i18n'))) {
       console.error(`\n🔄 [TRANSFORM START] ${id.substring(id.lastIndexOf('/'))}`);
       console.error(`   Code length: ${code.length} bytes`);
       console.error(`   First 100 chars: ${code.substring(0, 100)}`);
