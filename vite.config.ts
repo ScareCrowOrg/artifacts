@@ -143,38 +143,99 @@ const rebuildObservabilityPlugin = {
   },
 }
 
-// Error Interception Plugin - Catches and logs full stack traces from esbuild
-// This helps us see the actual error, not just "source.split is not a function"
-const errorInterceptionPlugin = {
-  name: 'error-interception',
+// File Processing Tracker - Global tracking of what Vite is processing
+let currentFile = null
+let processingStack = []
+
+const fileProcessingTracker = {
+  name: 'file-processing-tracker',
   apply: 'serve',
-  // Note: No enforce specified - let Vue plugin run first to handle .vue files
 
   async resolveId(id, importer) {
-    // Trace all imports that happen during dynamic-workspace loading
-    if (id.includes('dynamic-workspace') || id.includes('i18n') || importer?.includes('dynamic-workspace')) {
-      console.error(`\n📌 [RESOLVE TRACE] Import detected`);
-      console.error(`   ID: ${id}`);
-      console.error(`   Importer: ${importer || 'entry point'}`);
+    // Track resolution chain
+    if (id.includes('dynamic-workspace') || id.includes('i18n') || id.includes('App') || id.endsWith('.vue')) {
+      console.error(`\n[RESOLVE] ${id}`);
+      console.error(`  ← from: ${importer || '(entry)'}`);
     }
   },
 
   async load(id) {
-    // Trace all file loads
-    if (id.includes('dynamic-workspace') || id.includes('i18n') || id.includes('main.ts')) {
-      console.error(`\n📂 [LOAD TRACE] File loading`);
-      console.error(`   ID: ${id}`);
+    // Track file loads
+    processingStack.push(id)
+    currentFile = id
+    if (id.includes('dynamic-workspace') || id.includes('i18n') || id.includes('App') || id.includes('shared')) {
+      console.error(`\n[LOAD] ${id}`);
     }
   },
 
   async transform(code, id) {
-    // Log what we're transforming (only if code is a string)
-    if (typeof code === 'string' && (id.includes('main.ts') || id.includes('dynamic-workspace') || id.includes('i18n'))) {
-      console.error(`\n🔄 [TRANSFORM START] ${id.substring(id.lastIndexOf('/'))}`);
-      console.error(`   Code length: ${code.length} bytes`);
-      console.error(`   First 100 chars: ${code.substring(0, 100)}`);
+    // Track transformations - THIS IS WHERE ERRORS HAPPEN
+    processingStack.push(id)
+    currentFile = id
+
+    if (typeof code === 'string') {
+      if (id.includes('main.ts') || id.includes('App.vue') || id.includes('i18n') || id.includes('composables')) {
+        console.error(`\n🔄 [TRANSFORM] ${id}`);
+        console.error(`   Stack: ${processingStack.slice(-3).join(' → ')}`);
+      }
     }
-    return null; // Let other plugins handle it
+    return null
+  },
+}
+
+// Error Interception Plugin - Catches and logs full stack traces from esbuild
+const errorInterceptionPlugin = {
+  name: 'error-interception',
+  apply: 'serve',
+
+  configureServer(server) {
+    const originalUse = server.middlewares.use;
+    server.middlewares.use = function(...args) {
+      const fn = args[args.length - 1];
+      if (typeof fn === 'function') {
+        const wrappedFn = (req, res, next) => {
+          try {
+            const result = fn(req, res, (err) => {
+              if (err) {
+                console.error('\n' + '█'.repeat(100));
+                console.error('🚨 ERROR DURING FILE PROCESSING');
+                console.error('█'.repeat(100));
+                console.error(`\n📍 Current file being processed: ${currentFile}`);
+                console.error(`\n📚 Processing stack:`);
+                processingStack.slice(-5).forEach((f, idx) => {
+                  console.error(`   ${idx + 1}. ${f}`);
+                });
+                console.error(`\n❌ Error: ${err.message}`);
+                console.error(`\n📍 Location: ${req.url}`);
+                if (err.id) {
+                  console.error(`📄 File ID: ${err.id}`);
+                }
+                if (err.plugin) {
+                  console.error(`🔌 Plugin: ${err.plugin}`);
+                }
+                console.error('\n' + '█'.repeat(100));
+              }
+              next(err);
+            });
+            if (result instanceof Promise) {
+              result.catch((err) => {
+                console.error('\n🚨 [ASYNC ERROR]');
+                console.error(`   Current: ${currentFile}`);
+                console.error(`   Error: ${err.message}`);
+              });
+            }
+            return result;
+          } catch (err) {
+            console.error('\n🚨 [SYNC ERROR]');
+            console.error(`   Current: ${currentFile}`);
+            console.error(`   Error: ${err.message}`);
+            throw err;
+          }
+        };
+        args[args.length - 1] = wrappedFn;
+      }
+      return originalUse.apply(this, args);
+    };
   },
 
   configureServer(server) {
@@ -384,6 +445,7 @@ export default defineConfig({
   plugins: [
     performanceTracingPlugin,
     rebuildObservabilityPlugin,
+    fileProcessingTracker,
     errorInterceptionPlugin,
     viewerWarmupPlugin,
     migrationWarningPlugin,
