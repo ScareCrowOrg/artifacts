@@ -1,0 +1,7 @@
+{
+  "version": "0.1",
+  "name": "node-pty-service",
+  "build": false,
+  "image": "localhost:5001/scareverse-node-pty-service:staging",
+  "imageTag": "staging"
+}
