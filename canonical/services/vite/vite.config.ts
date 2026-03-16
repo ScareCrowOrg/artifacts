@@ -8,7 +8,10 @@ import { fileURLToPath } from 'url'
 // ESM doesn't have __dirname, so we create it
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Performance Tracing Plugin - Detailed startup timing
+// Utility: Format timestamp for logs
+const getTimestamp = () => new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 })
+
+// Performance Tracing Plugin - Detailed startup timing with timestamps
 // FIXED: Now uses Map to track timings outside of hook return values
 // This prevents interference with esbuild's source code processing
 const performanceTracingPlugin = (() => {
@@ -48,7 +51,7 @@ const performanceTracingPlugin = (() => {
         if (timingMap.has(resolveKey)) {
           const duration = (performance.now() - timingMap.get(resolveKey)).toFixed(2);
           if (parseInt(duration) > resolveThresholdMs) {
-            console.error(`  ⏱️ [RESOLVE] ${duration.padStart(6)}ms | ${id}`);
+            console.error(`[${getTimestamp()}] ⏱️ [RESOLVE] ${duration.padStart(6)}ms | ${id}`);
           }
           timingMap.delete(resolveKey);
         }
@@ -58,7 +61,7 @@ const performanceTracingPlugin = (() => {
         if (timingMap.has(loadKey)) {
           const duration = (performance.now() - timingMap.get(loadKey)).toFixed(2);
           if (parseInt(duration) > loadThresholdMs) {
-            console.error(`  ⏱️ [LOAD] ${duration.padStart(6)}ms | ${id}`);
+            console.error(`[${getTimestamp()}] ⏱️ [LOAD] ${duration.padStart(6)}ms | ${id}`);
           }
           timingMap.delete(loadKey);
         }
@@ -71,9 +74,10 @@ const performanceTracingPlugin = (() => {
     configureServer(server) {
       const initStart = performance.now();
       const shouldTrace = process.env.VITE_TRACE === 'true';
+      const timestamp = getTimestamp();
 
       console.error('\n' + '━'.repeat(100));
-      console.error('🚀 VITE INITIALIZATION STARTED');
+      console.error(`[${timestamp}] 🚀 VITE INITIALIZATION STARTED`);
       console.error(`   Trace enabled: ${shouldTrace}`);
       console.error(`   Node env: ${process.env.NODE_ENV}`);
       console.error(`   Root: ${__dirname}`);
@@ -325,6 +329,48 @@ const viewerWarmupPlugin = {
   },
 }
 
+// Request Logger Plugin - Logs all HTTP requests processed by Vite
+const requestLoggerPlugin = {
+  name: 'request-logger',
+  apply: 'serve',
+
+  configureServer(server) {
+    const shouldLog = process.env.VITE_REQUEST_LOG === 'true';
+
+    if (!shouldLog) return;
+
+    // Track request start times
+    const requestMap = new Map();
+
+    server.middlewares.use((req, res, next) => {
+      const timestamp = getTimestamp();
+      const requestId = `${req.method}-${req.url}-${Date.now()}`;
+      const startTime = performance.now();
+
+      requestMap.set(requestId, { startTime, timestamp, method: req.method, url: req.url });
+
+      // Log incoming request
+      console.error(`[${timestamp}] 📥 ${req.method.padEnd(6)} ${req.url}`);
+
+      // Intercept response to log completion
+      const originalEnd = res.end;
+      res.end = function(...args) {
+        const duration = (performance.now() - startTime).toFixed(2);
+        const statusCode = res.statusCode;
+        const statusColor = statusCode >= 400 ? '❌' : statusCode >= 300 ? '⚠️ ' : '✅';
+        const completionTime = getTimestamp();
+
+        console.error(`[${completionTime}] ${statusColor} ${req.method.padEnd(6)} ${req.url.padEnd(50)} | HTTP ${statusCode} (${duration}ms)`);
+
+        requestMap.delete(requestId);
+        return originalEnd.apply(res, args);
+      };
+
+      next();
+    });
+  },
+}
+
 // Migration Warning Plugin - Pedagogical approach (DISABLED)
 // Previously warned about @/ imports, but now @/ is resolved to #shared/ via alias
 // This allows shared utilities to use @/ imports which work in both contexts:
@@ -408,6 +454,7 @@ export default defineConfig({
   root: '/app/artifacts',
   plugins: [
     performanceTracingPlugin,  // FIXED: Now uses Map for timing tracking, doesn't interfere with esbuild
+    requestLoggerPlugin,       // Logs all HTTP requests (enable with VITE_REQUEST_LOG=true)
     rebuildObservabilityPlugin,
     fileProcessingTracker,
     errorInterceptionPlugin,
