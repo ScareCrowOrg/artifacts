@@ -3,6 +3,10 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 import fs from 'fs'
+import { fileURLToPath } from 'url'
+
+// ESM doesn't have __dirname, so we create it
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Performance Tracing Plugin - Detailed startup timing
 const performanceTracingPlugin = {
@@ -44,7 +48,7 @@ const performanceTracingPlugin = {
     console.error('🚀 VITE INITIALIZATION STARTED');
     console.error(`   Trace enabled: ${shouldTrace}`);
     console.error(`   Node env: ${process.env.NODE_ENV}`);
-    console.error(`   Root: ${process.cwd()}`);
+    console.error(`   Root: ${__dirname}`);
     console.error('━'.repeat(100));
 
     // Log environment variables for debugging
@@ -98,7 +102,7 @@ const rebuildObservabilityPlugin = {
   apply: 'serve',
   handleHotUpdate({ file, server, modules }) {
     const timestamp = new Date().toISOString();
-    const relativePath = file.replace(process.cwd() + '/', '');
+    const relativePath = file.replace(__dirname + '/', '');
     console.error(`\n🔄 [${timestamp}] HMR Update Triggered`);
     console.error(`   File: ${relativePath}`);
     console.error(`   Affected modules: ${modules.length}`);
@@ -118,19 +122,19 @@ const rebuildObservabilityPlugin = {
 
       originalWatcher.on('change', (file) => {
         const timestamp = new Date().toISOString();
-        const relativePath = file.replace(process.cwd() + '/', '');
+        const relativePath = file.replace(__dirname + '/', '');
         console.error(`📝 [${timestamp}] File changed: ${relativePath}`);
       });
 
       originalWatcher.on('add', (file) => {
         const timestamp = new Date().toISOString();
-        const relativePath = file.replace(process.cwd() + '/', '');
+        const relativePath = file.replace(__dirname + '/', '');
         console.error(`➕ [${timestamp}] File added: ${relativePath}`);
       });
 
       originalWatcher.on('unlink', (file) => {
         const timestamp = new Date().toISOString();
-        const relativePath = file.replace(process.cwd() + '/', '');
+        const relativePath = file.replace(__dirname + '/', '');
         console.error(`❌ [${timestamp}] File deleted: ${relativePath}`);
       });
     } else {
@@ -246,7 +250,7 @@ const viewerWarmupPlugin = {
     // Schedule warmup after server is ready
     setTimeout(async () => {
       try {
-        const viewersDir = path.resolve(process.cwd(), 'canonical/viewers')
+        const viewersDir = path.resolve(__dirname, 'canonical/viewers')
 
         // Check if viewers directory exists
         if (!fs.existsSync(viewersDir)) {
@@ -454,27 +458,27 @@ export default defineConfig({
     alias: {
       // Use flexible paths for both container and local development
       // In container: /app/artifacts
-      // In local/test: process.cwd()
+      // In local/test: __dirname
       
       // Map #artifacts to artifacts root (for all cell types and composition)
-      '#artifacts': process.cwd(),
+      '#artifacts': __dirname,
 
       // Map #shared to shared infrastructure mirror (isolated utilities)
-      '#shared': path.resolve(process.cwd(), 'shared'),
+      '#shared': path.resolve(__dirname, 'shared'),
 
       // Map @/ to #shared for shared utilities (apiService, authService, etc)
       // This allows files that import @/utils/logger to resolve to #shared/utils/logger
       // In cockpit-vue context: @/ → cockpit-vue/src (normal)
       // In Vite context: @/ → #shared/ (this alias, preserving folder structure)
-      '@': path.resolve(process.cwd(), 'shared'),
-      '@/utils': path.resolve(process.cwd(), 'shared/utils'),
-      '@/services': path.resolve(process.cwd(), 'shared/services'),
-      '@/config': path.resolve(process.cwd(), 'shared/config'),
-      '@/components': path.resolve(process.cwd(), 'shared/components'),
-      '@/types': path.resolve(process.cwd(), 'shared/types'),
-      '@/stores': path.resolve(process.cwd(), 'shared/stores'),
-      '@/composables': path.resolve(process.cwd(), 'shared/composables'),
-      '@/i18n': path.resolve(process.cwd(), 'shared/i18n'),
+      '@': path.resolve(__dirname, 'shared'),
+      '@/utils': path.resolve(__dirname, 'shared/utils'),
+      '@/services': path.resolve(__dirname, 'shared/services'),
+      '@/config': path.resolve(__dirname, 'shared/config'),
+      '@/components': path.resolve(__dirname, 'shared/components'),
+      '@/types': path.resolve(__dirname, 'shared/types'),
+      '@/stores': path.resolve(__dirname, 'shared/stores'),
+      '@/composables': path.resolve(__dirname, 'shared/composables'),
+      '@/i18n': path.resolve(__dirname, 'shared/i18n'),
     },
     extensions: ['.ts', '.tsx', '.vue', '.js', '.jsx', '.json'],
   },
@@ -507,7 +511,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
-    root: process.cwd(),  // Use current working directory for tests
+    root: __dirname,  // Use current working directory for tests
     include: ['**/tests/**/*.{test,spec}.{js,ts,jsx,tsx}', '**/*.{test,spec}.{js,ts,jsx,tsx}'],
     exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
     coverage: {
