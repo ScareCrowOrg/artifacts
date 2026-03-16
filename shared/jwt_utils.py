@@ -1,27 +1,27 @@
 """
-Shared Ed25519 JWT utilities for CentralHub and ScareRunner.
+Shared Ed25519 JWT verification utilities.
 
-Provides sign/verify helpers that use asymmetric Ed25519 cryptography so that
-the private signing key never needs to leave CentralHub.
-
+Provides verify helpers that use asymmetric Ed25519 cryptography.
 Public keys are loaded once at startup from
 ``artifacts/canonical/public_keys/*.pub`` (one file per key rotation period,
 named ``YYYY-MM.pub``).  The ``kid`` JWT header claim selects the correct key.
 
+Used by:
+- CentralHub (verifying tokens in HTTP endpoints)
+- Backend (verifying tokens for WebSocket connections)
+- Any other service that needs to validate JWT tokens
+
 Environment variables
 ---------------------
-CENTRALHUB_PRIVATE_KEY
-    PEM-encoded Ed25519 private key used for signing (CentralHub only).
-    Literal ``\\n`` characters are automatically converted to real newlines so
-    the value can be stored as a single-line environment variable.
 PUBLIC_KEYS_DIR
     Optional override for the public-keys directory path.  Defaults to
     ``artifacts/canonical/public_keys`` relative to the project root.
+
+Note: JWT signing (sign_jwt) is handled by CentralHub's jwt_service module.
 """
 
 import logging
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -92,60 +92,7 @@ def load_public_keys(pub_keys_dir: Optional[Path] = None) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# JWT signing (CentralHub only)
-# ---------------------------------------------------------------------------
-
-
-def sign_jwt(
-    payload: Dict[str, Any],
-    private_key_pem: str,
-    kid: Optional[str] = None,
-) -> str:
-    """
-    Sign a JWT payload with an Ed25519 private key.
-
-    Args:
-        payload: JWT claims dict (must include ``exp``).
-        private_key_pem: PEM-encoded Ed25519 private key.  Literal ``\\n``
-            escape sequences are converted to real newlines automatically.
-        kid: Key ID embedded in the JWT ``kid`` header claim.  Defaults to
-            the current UTC year-month (``YYYY-MM``).
-
-    Returns:
-        Encoded JWT string.
-
-    Raises:
-        RuntimeError: If the private key is empty or cannot be loaded.
-        ImportError: If PyJWT with cryptography support is not installed.
-    """
-    import jwt as pyjwt
-    from cryptography.hazmat.primitives.serialization import load_pem_private_key
-
-    if not private_key_pem:
-        raise RuntimeError(
-            "CENTRALHUB_PRIVATE_KEY is not set. "
-            "A PEM-encoded Ed25519 private key is required to sign JWTs. "
-            "See artifacts/canonical/public_keys/README.md for instructions."
-        )
-
-    if kid is None:
-        kid = datetime.now(timezone.utc).strftime("%Y-%m")
-
-    # Convert literal \n escape sequences (common in env-var storage) to real newlines
-    private_key_pem = private_key_pem.replace("\\n", "\n")
-
-    try:
-        private_key = load_pem_private_key(private_key_pem.encode(), password=None)
-    except Exception as exc:
-        raise RuntimeError(f"Failed to load Ed25519 private key: {exc}") from exc
-
-    headers = {"alg": "EdDSA", "kid": kid, "typ": "JWT"}
-
-    return pyjwt.encode(payload, private_key, algorithm="EdDSA", headers=headers)
-
-
-# ---------------------------------------------------------------------------
-# JWT verification (ScareRunner and CentralHub middleware)
+# JWT verification (all services)
 # ---------------------------------------------------------------------------
 
 
