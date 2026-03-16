@@ -1,7 +1,9 @@
 {
   "version": "0.1",
   "name": "node-pty-service",
+  "description": "Node-PTY Service - WebSocket terminal + Git integration for AI agents",
   "build": false,
   "image": "localhost:5001/scareverse-node-pty-service:staging",
-  "imageTag": "staging"
+  "imageTag": "staging",
+  "generate_env_file": false
 }
