@@ -45,7 +45,7 @@
       "description": "Terminal color theme"
     }
   },
-  "can_render_dynamically": false,
+  "can_render_dynamically": true,
   "_discovery": {
     "labels": ["#terminal", "#pty", "#shell", "#infrastructure", "#ai-agents"],
     "describe": "Interactive terminal cell powered by xterm.js. Connects to the Node-PTY Service over WebSocket to provide persistent shell sessions. Serves as shared terminal infrastructure for AI agent CLI tools (GeminiCLI, Claude Code, Aider, OpenInterpreter). Supports Git operations, file system manipulation, and arbitrary command execution.",

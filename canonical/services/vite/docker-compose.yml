@@ -56,6 +56,7 @@ services:
       - VITE_TRACE_RESOLVE=${VITE_TRACE_RESOLVE:-false}
       - VITE_TRACE_LOAD=${VITE_TRACE_LOAD:-false}
       - VITE_DEBUG=${VITE_DEBUG:-false}
+      - VITE_REQUEST_LOG=${VITE_REQUEST_LOG:-false}
 
       # Redis L1 (for heartbeat registration)
       - REDIS_L1_HOST=${REDIS_L1_HOST:-redis}
