@@ -144,7 +144,7 @@ const rebuildObservabilityPlugin = {
 const errorInterceptionPlugin = {
   name: 'error-interception',
   apply: 'serve',
-  enforce: 'pre',  // Run before other plugins
+  // Note: No enforce specified - let Vue plugin run first to handle .vue files
 
   async resolveId(id, importer) {
     // Trace all imports that happen during dynamic-workspace loading
