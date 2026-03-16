@@ -30,11 +30,12 @@
       ],
       "#artifacts/*": ["./*"]
     },
-    "types": ["node", "vite/client"],
+    "types": ["node", "vite/client", "vue", "vue-i18n"],
     "forceConsistentCasingInFileNames": true,
     "useDefineForClassFields": true
   },
   "include": [
+    "vite-env.d.ts",
     "canonical/**/*.ts",
     "canonical/**/*.tsx",
     "canonical/**/*.vue",
