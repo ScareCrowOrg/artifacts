@@ -1,0 +1,7 @@
+{
+  "version": "0.1",
+  "name": "cloudflared",
+  "build": false,
+  "image": "localhost:5001/scareverse-cloudflared:staging",
+  "imageTag": "staging"
+}

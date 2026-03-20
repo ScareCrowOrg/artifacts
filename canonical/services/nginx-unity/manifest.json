@@ -1,0 +1,7 @@
+{
+  "version": "0.1",
+  "name": "nginx-unity",
+  "build": false,
+  "image": "localhost:5001/scareverse-nginx-unity:staging",
+  "imageTag": "staging"
+}

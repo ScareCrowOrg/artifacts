@@ -1,0 +1,84 @@
+version: "3.9"
+
+# ==============================================================================
+# Nginx Unity Service Worker – Standalone docker-compose
+# ==============================================================================
+# Unified reverse proxy that routes all ScareVerse services through a single
+# templated Nginx configuration.
+#
+# Prerequisites:
+#   docker network create scareverse-net
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs -f
+#   docker-compose down
+# ==============================================================================
+
+services:
+  nginx-unity:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: localhost:5001/scareverse-nginx-unity:staging
+    container_name: scareverse-nginx-unity
+
+    environment:
+      # ── Nginx ─────────────────────────────────────────────────────────────
+      NGINX_PORT: ${NGINX_PORT:-80}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+
+      # ── Upstreams ──────────────────────────────────────────────────────────
+      CENTRALHUB_UPSTREAM: ${CENTRALHUB_UPSTREAM:-centralhub:5051}
+      FRONTEND_UPSTREAM: ${FRONTEND_UPSTREAM:-vite-frontend:5173}
+      SCARERUNNER_UPSTREAM: ${SCARERUNNER_UPSTREAM:-scarerunner:5050}
+      GATEKEEPER_UPSTREAM: ${GATEKEEPER_UPSTREAM:-gatekeeper:8000}
+
+      # ── FastAPI sidecar ────────────────────────────────────────────────────
+      SIDECAR_HOST: "0.0.0.0"
+      SIDECAR_PORT: ${SIDECAR_PORT:-9000}
+      WORKER_ID: ${WORKER_ID:-nginx-unity}
+
+      # ── Redis / heartbeat ──────────────────────────────────────────────────
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
+      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
+      REDIS_L1_DB: ${REDIS_L1_DB:-0}
+      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-20}
+      HEARTBEAT_TTL: ${HEARTBEAT_TTL:-60}
+
+      # ── Python path (BaseService import) ────────────────────────────────────
+      PYTHONPATH: /app/artifacts
+
+    volumes:
+      # Artifacts (for canonical.shared.services.base_service import)
+      - ../../../../artifacts:/app/artifacts:ro
+
+    # Expose Nginx HTTP port for localhost testing; remove for pure internal use
+    ports:
+      - "${NGINX_EXTERNAL_PORT:-8080}:${NGINX_PORT:-80}"
+
+    expose:
+      - "${SIDECAR_PORT:-9000}"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${NGINX_PORT:-80}/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+    restart: unless-stopped
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    networks:
+      - scareverse-net
+
+networks:
+  scareverse-net:
+    external: true

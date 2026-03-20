@@ -1,0 +1,80 @@
+version: "3.9"
+
+# ==============================================================================
+# Cloudflared Service Worker – Standalone docker-compose
+# ==============================================================================
+# Exposes ScareVerse backends to the internet through a Cloudflare tunnel.
+# No ports are published; all traffic flows through the Cloudflare edge network.
+#
+# Prerequisites:
+#   docker network create scareverse-net
+#   export TUNNEL_TOKEN=<your-token>   # from Cloudflare dashboard
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs -f
+#   docker-compose down
+# ==============================================================================
+
+services:
+  cloudflared:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: localhost:5001/scareverse-cloudflared:staging
+    container_name: scareverse-cloudflared
+
+    environment:
+      # ── Tunnel ───────────────────────────────────────────────────────────
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+      TUNNEL_NAME: ${TUNNEL_NAME:-scareverse-tunnel}
+
+      # ── Ingress rules (JSON array) ────────────────────────────────────────
+      INGRESS_RULES: ${INGRESS_RULES:-[]}
+
+      # ── Sidecar ───────────────────────────────────────────────────────────
+      HEALTH_HOST: "0.0.0.0"
+      HEALTH_PORT: ${HEALTH_PORT:-8000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      WORKER_ID: ${WORKER_ID:-cloudflared}
+
+      # ── Redis / heartbeat ─────────────────────────────────────────────────
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
+      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
+      REDIS_L1_DB: ${REDIS_L1_DB:-0}
+      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-20}
+      HEARTBEAT_TTL: ${HEARTBEAT_TTL:-60}
+
+      # ── Python path (BaseService import) ─────────────────────────────────
+      PYTHONPATH: /app/artifacts
+
+    volumes:
+      # Artifacts (for canonical.shared.services.base_service import)
+      - ../../../../artifacts:/app/artifacts:ro
+
+    # No ports: all traffic via Cloudflare edge network
+    expose:
+      - "${HEALTH_PORT:-8000}"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${HEALTH_PORT:-8000}/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+    restart: unless-stopped
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    networks:
+      - scareverse-net
+
+networks:
+  scareverse-net:
+    external: true
