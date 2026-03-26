@@ -29,6 +29,7 @@ heartbeat_loop() {
 
   while true; do
     attempt=$((attempt + 1))
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
     # Register availability key in Redis (capture stderr for debugging)
     local output
@@ -36,11 +37,11 @@ heartbeat_loop() {
     local status=$?
 
     if [ $status -eq 0 ]; then
-      echo "[heartbeat] ✓ Attempt $attempt: Key 'state:service:redis:available' refreshed with TTL ${HEARTBEAT_TTL}s"
+      echo "[$timestamp] [heartbeat] ✓ Attempt $attempt: Key 'state:service:redis:available' refreshed with TTL ${HEARTBEAT_TTL}s"
     else
-      echo "[heartbeat] ❌ Attempt $attempt: Failed to set heartbeat key"
-      echo "[heartbeat]    Error: $output"
-      echo "[heartbeat]    Will retry in ${HEARTBEAT_INTERVAL}s..."
+      echo "[$timestamp] [heartbeat] ❌ Attempt $attempt: Failed to set heartbeat key"
+      echo "[$timestamp] [heartbeat]    Error: $output"
+      echo "[$timestamp] [heartbeat]    Will retry in ${HEARTBEAT_INTERVAL}s..."
     fi
 
     sleep $HEARTBEAT_INTERVAL
@@ -83,8 +84,10 @@ echo "[entrypoint] ✅ Starting Redis server..."
 redis-server --port $REDIS_PORT --appendonly yes --requirepass "$REDIS_PASSWORD" &
 REDIS_PID=$!
 
+echo "[entrypoint] Starting heartbeat loop in background..."
 heartbeat_loop &
 HEARTBEAT_PID=$!
+echo "[entrypoint] Heartbeat loop PID: $HEARTBEAT_PID"
 
 # ============================================================================
 # Wait for Redis to be ready
