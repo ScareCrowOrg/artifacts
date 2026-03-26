@@ -24,6 +24,9 @@ HEARTBEAT_TTL=$((HEARTBEAT_INTERVAL * 3))
 # ============================================================================
 
 heartbeat_loop() {
+  # Disable 'set -e' for this loop so it doesn't exit on redis-cli failures
+  set +e
+
   echo "[heartbeat] Starting heartbeat loop (interval: ${HEARTBEAT_INTERVAL}s, ttl: ${HEARTBEAT_TTL}s)"
   local attempt=0
 
@@ -46,6 +49,9 @@ heartbeat_loop() {
 
     sleep $HEARTBEAT_INTERVAL
   done
+
+  # Re-enable 'set -e' if we somehow exit the loop
+  set -e
 }
 
 # ============================================================================
