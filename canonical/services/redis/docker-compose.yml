@@ -52,7 +52,7 @@ services:
 networks:
   scareverse-net:
     driver: bridge
-    name: scareverse-net
+    name: ${DOCKER_NETWORK}
 
 volumes:
   redis_local_data:
