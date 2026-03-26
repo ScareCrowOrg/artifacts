@@ -29,7 +29,7 @@ services:
       - REDIS_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
     command: redis-server --port 6380 --appendonly yes --requirepass ${REDIS_L1_PASSWORD:-scarerunner}
     networks:
-      - scareverse-net
+      - ${DOCKER_NETWORK}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "6380", "-a", "${REDIS_L1_PASSWORD:-scarerunner}", "ping"]
@@ -206,7 +206,7 @@ services:
       - ANONYMIZED_TELEMETRY=${ANONYMIZED_TELEMETRY:-false}
 
     networks:
-      - scareverse-net
+      - ${DOCKER_NETWORK}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5050/api/health"]
       interval: 30s
@@ -263,7 +263,7 @@ services:
       - VITE_TRACE_LOAD=true
       - VITE_DEBUG=true
     networks:
-      - scareverse-net
+      - ${DOCKER_NETWORK}
     healthcheck:
       test: ["CMD", "curl", "-s", "-o", "/dev/null", "http://localhost:5052/"]
       interval: 30s
@@ -281,7 +281,7 @@ services:
 networks:
   scareverse-net:
     driver: bridge
-    name: scareverse-net
+    name: ${DOCKER_NETWORK}
 
 # ─── Volumes ──────────────────────────────────────────────────────────────────
 volumes:

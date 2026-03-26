@@ -186,7 +186,7 @@ services:
       - ANONYMIZED_TELEMETRY=${ANONYMIZED_TELEMETRY:-false}
 
     networks:
-      - scareverse-net
+      - ${DOCKER_NETWORK}
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5050/api/health"]
@@ -206,3 +206,4 @@ services:
 networks:
   scareverse-net:
     external: true
+    name: ${DOCKER_NETWORK}

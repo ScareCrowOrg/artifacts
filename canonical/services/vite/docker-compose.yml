@@ -69,7 +69,7 @@ services:
       - HEARTBEAT_TTL=${HEARTBEAT_TTL:-60}
 
     networks:
-      - scareverse-net
+      - ${DOCKER_NETWORK}
 
     healthcheck:
       test: ["CMD", "curl", "-s", "-o", "/dev/null", "http://localhost:5052/"]
@@ -89,3 +89,4 @@ services:
 networks:
   scareverse-net:
     external: true
+    name: ${DOCKER_NETWORK}

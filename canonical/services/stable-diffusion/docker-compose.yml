@@ -104,8 +104,9 @@ services:
         max-file: "3"
 
     networks:
-      - scareverse-net
+      - ${DOCKER_NETWORK}
 
 networks:
   scareverse-net:
     external: true
+    name: ${DOCKER_NETWORK}
