@@ -25,15 +25,22 @@ HEARTBEAT_TTL=$((HEARTBEAT_INTERVAL * 3))
 
 heartbeat_loop() {
   echo "[heartbeat] Starting heartbeat loop (interval: ${HEARTBEAT_INTERVAL}s, ttl: ${HEARTBEAT_TTL}s)"
+  local attempt=0
 
   while true; do
-    # Register availability key in Redis
-    redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" SET "state:service:redis:available" "1" EX $HEARTBEAT_TTL >/dev/null 2>&1
+    attempt=$((attempt + 1))
 
-    if [ $? -eq 0 ]; then
-      echo "[heartbeat] ✓ state:service:redis:available refreshed (TTL: ${HEARTBEAT_TTL}s)"
+    # Register availability key in Redis (capture stderr for debugging)
+    local output
+    output=$(redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" SET "state:service:redis:available" "1" EX $HEARTBEAT_TTL 2>&1)
+    local status=$?
+
+    if [ $status -eq 0 ]; then
+      echo "[heartbeat] ✓ Attempt $attempt: Key 'state:service:redis:available' refreshed with TTL ${HEARTBEAT_TTL}s"
     else
-      echo "[heartbeat] ⚠ Failed to refresh heartbeat (will retry in ${HEARTBEAT_INTERVAL}s)"
+      echo "[heartbeat] ❌ Attempt $attempt: Failed to set heartbeat key"
+      echo "[heartbeat]    Error: $output"
+      echo "[heartbeat]    Will retry in ${HEARTBEAT_INTERVAL}s..."
     fi
 
     sleep $HEARTBEAT_INTERVAL
@@ -109,12 +116,16 @@ done
 # ============================================================================
 
 echo "[entrypoint] Registering initial heartbeat..."
-redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" SET "state:service:redis:available" "1" EX $HEARTBEAT_TTL >/dev/null 2>&1
+initial_output=$(redis-cli -p $REDIS_PORT -a "$REDIS_PASSWORD" SET "state:service:redis:available" "1" EX $HEARTBEAT_TTL 2>&1)
+initial_status=$?
 
-if [ $? -eq 0 ]; then
-  echo "[entrypoint] ✅ Heartbeat registered: state:service:redis:available"
+if [ $initial_status -eq 0 ]; then
+  echo "[entrypoint] ✅ Heartbeat registered: state:service:redis:available (TTL: ${HEARTBEAT_TTL}s)"
+  echo "[entrypoint]    Key will be checked by Launcher at: state:service:redis:available"
 else
-  echo "[entrypoint] ⚠ Failed to register initial heartbeat (will retry in background)"
+  echo "[entrypoint] ❌ Failed to register initial heartbeat"
+  echo "[entrypoint]    Error: $initial_output"
+  echo "[entrypoint]    Background heartbeat loop will retry..."
 fi
 
 # ============================================================================
