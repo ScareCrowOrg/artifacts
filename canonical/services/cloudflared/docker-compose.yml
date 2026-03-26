@@ -19,8 +19,8 @@ version: "3.9"
 services:
   cloudflared:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../../../..
+      dockerfile: artifacts/canonical/services/cloudflared/Dockerfile
     image: localhost:5001/scareverse-cloudflared:staging
     container_name: scareverse-cloudflared
 
@@ -35,6 +35,11 @@ services:
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
       REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-30}
+      PYTHONPATH: /app/artifacts
+
+    volumes:
+      # Artifacts (for canonical.shared.services.base_service import)
+      - ../../../../artifacts:/app/artifacts:ro
 
     restart: unless-stopped
 
