@@ -51,7 +51,7 @@ services:
 
 networks:
   scareverse-net:
-    driver: bridge
+    external: true
     name: ${DOCKER_NETWORK}
 
 volumes:
