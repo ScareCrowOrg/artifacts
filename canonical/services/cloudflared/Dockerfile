@@ -18,15 +18,12 @@ FROM python:3.11-slim as python-deps
 RUN pip install --no-cache-dir redis
 
 # ==============================================================================
-# Final stage: Alpine base + cloudflared + Python + heartbeat
+# Final stage: Python 3.11 Alpine + cloudflared + heartbeat
 # ==============================================================================
 
-FROM alpine:latest
+FROM python:3.11-alpine
 
 WORKDIR /app
-
-# ── System dependencies ───────────────────────────────────────────────────────
-RUN apk add --no-cache python3
 
 # ── Copy cloudflared binary from official image ────────────────────────────────
 COPY --from=cloudflared-bin /usr/local/bin/cloudflared /usr/local/bin/cloudflared
