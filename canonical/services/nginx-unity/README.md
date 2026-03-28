@@ -1,3 +1,14 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - infrastructure
+  - nginx
+modules:
+  - infrastructure
+code_verified: true
+dead_docs_found: false
+---
 # Nginx Unity Service Worker
 
 Unified Nginx reverse proxy with a FastAPI health sidecar for Launcher integration.

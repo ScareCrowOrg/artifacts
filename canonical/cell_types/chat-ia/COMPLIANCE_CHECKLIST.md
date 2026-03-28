@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - compliance
+  - cell-types
+  - ai
+modules:
+  - frontend
+  - runner
+code_verified: true
+dead_docs_found: false
+---
 # Chat-IA Cell Compliance Checklist
 
 **Date**: 2026-03-10

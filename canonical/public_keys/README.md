@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - security
+  - authentication
+  - keys
+modules:
+  - backend
+  - centralhub
+code_verified: true
+dead_docs_found: false
+---
 # PAT Public Keys
 
 This directory holds Ed25519 public keys used to validate Personal Access Tokens (PATs).

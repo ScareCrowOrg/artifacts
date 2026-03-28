@@ -1,3 +1,15 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - cell-types
+  - settings
+modules:
+  - frontend
+  - runner
+code_verified: true
+dead_docs_found: false
+---
 # Settings Manager Cell
 
 UI for managing launcher settings with type validation, modification history, and Redis L1 push.

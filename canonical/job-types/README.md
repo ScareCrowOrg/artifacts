@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - job-types
+  - gatekeeper
+  - workers
+modules:
+  - backend
+  - infrastructure
+code_verified: true
+dead_docs_found: false
+---
 # Job Type Definitions
 
 This directory contains canonical job-type definitions for the ScareVerse job queue system.

@@ -1,3 +1,14 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - legal
+  - license
+modules:
+  - all
+code_verified: true
+dead_docs_found: false
+---
 # Apache License 2.0
 
 ## ScareVerse Artifacts

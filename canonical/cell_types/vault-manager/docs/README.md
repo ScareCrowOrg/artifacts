@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - cell-types
+  - vault
+  - security
+modules:
+  - frontend
+  - runner
+code_verified: true
+dead_docs_found: false
+---
 # Vault Manager Cell
 
 Secure CRUD interface for managing encrypted secrets in the launcher vault.

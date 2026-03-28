@@ -1,3 +1,15 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - infrastructure
+  - cloudflared
+  - tunnel
+modules:
+  - infrastructure
+code_verified: true
+dead_docs_found: false
+---
 # Cloudflared Service Worker
 
 Standalone service worker that runs a Cloudflare tunnel and exposes a FastAPI health sidecar for Launcher integration.

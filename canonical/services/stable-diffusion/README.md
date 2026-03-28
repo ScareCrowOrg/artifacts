@@ -1,3 +1,15 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - workers
+  - stable-diffusion
+  - ai
+modules:
+  - infrastructure
+code_verified: true
+dead_docs_found: false
+---
 # Stable Diffusion FastAPI Service
 
 GPU-accelerated image generation service with FastAPI wrapper for GateKeeper integration.

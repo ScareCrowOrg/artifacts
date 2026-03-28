@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - cell-types
+  - terminal
+  - xterm
+modules:
+  - frontend
+  - runner
+code_verified: true
+dead_docs_found: false
+---
 # xterm-terminal-cell
 
 Interactive terminal cell for ScareVerse Cockpit powered by [xterm.js](https://xtermjs.org/).

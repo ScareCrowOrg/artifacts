@@ -1,3 +1,16 @@
+---
+processed: true
+processed_date: 2026-03-28
+themes:
+  - terminal
+  - xterm
+  - service
+modules:
+  - infrastructure
+  - runner
+code_verified: true
+dead_docs_found: false
+---
 # Node-PTY Service
 
 Persistent terminal (PTY) infrastructure service for ScareVerse AI agents.
