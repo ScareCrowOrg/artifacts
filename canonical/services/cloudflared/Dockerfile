@@ -15,7 +15,7 @@ FROM cloudflare/cloudflared:latest as cloudflared-bin
 # ==============================================================================
 
 FROM python:3.11-slim as python-deps
-RUN pip install --no-cache-dir redis
+RUN pip install --no-cache-dir redis httpx
 
 # ==============================================================================
 # Final stage: Python 3.11 Alpine + cloudflared + heartbeat
