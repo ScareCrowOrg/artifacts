@@ -70,7 +70,7 @@ services:
         max-file: "3"
 
     networks:
-      - ${DOCKER_NETWORK}
+      - scareverse-net
 
   ollama-wrapper:
     build:
@@ -117,7 +117,7 @@ services:
         max-file: "3"
 
     networks:
-      - ${DOCKER_NETWORK}
+      - scareverse-net
 
 networks:
   scareverse-net:

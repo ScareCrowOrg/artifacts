@@ -77,7 +77,7 @@ services:
         max-file: "3"
 
     networks:
-      - ${DOCKER_NETWORK}
+      - scareverse-net
 
 networks:
   scareverse-net:
