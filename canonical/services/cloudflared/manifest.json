@@ -3,5 +3,7 @@
   "name": "cloudflared",
   "build": false,
   "image": "localhost:5001/scareverse-cloudflared:staging",
-  "imageTag": "staging"
+  "imageTag": "staging",
+  "generate_env_file": false,
+  "totp_seed": false
 }
