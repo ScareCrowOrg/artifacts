@@ -122,4 +122,3 @@ services:
 networks:
   scareverse-net:
     external: true
-    name: ${DOCKER_NETWORK}

@@ -281,7 +281,6 @@ services:
 networks:
   scareverse-net:
     driver: bridge
-    name: ${DOCKER_NETWORK}
 
 # ─── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
