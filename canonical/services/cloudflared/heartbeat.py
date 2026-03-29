@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-Cloudflared heartbeat registration (fire-and-forget).
+Cloudflared heartbeat registration (foreground, keep-alive).
 
-Starts BaseService heartbeat as background task and exits immediately.
-The heartbeat task runs infinitely in background (daemon mode), registering
+Starts BaseService heartbeat and keeps the container alive indefinitely.
+The heartbeat loop runs infinitely in the foreground (PID 1), registering
 state:service:cloudflared:available in Redis L1 every heartbeat_interval seconds.
 
-Called by entrypoint.sh at container startup.
+Docker requires PID 1 to stay alive. This process IS PID 1 - if it exits,
+the container enters restart loop.
+
+Called by entrypoint.sh (with exec) at container startup.
 """
 
 import asyncio
@@ -20,8 +23,8 @@ logging.basicConfig(
 logger = logging.getLogger("cloudflared-heartbeat")
 
 
-def main() -> None:
-    """Start heartbeat as background task and exit."""
+async def main() -> None:
+    """Start heartbeat and keep it running forever (blocking foreground process)."""
     # Ensure artifacts is in path for canonical.shared imports
     if "/app/artifacts" not in sys.path:
         sys.path.insert(0, "/app/artifacts")
@@ -29,24 +32,34 @@ def main() -> None:
     try:
         from canonical.shared.services.base_service import BaseService
     except ImportError as exc:
-        logger.warning("BaseService unavailable – heartbeat disabled: %s", exc)
-        return
+        logger.error("❌ BaseService unavailable – cannot start heartbeat: %s", exc)
+        # Exit with error status so container knows something is wrong
+        sys.exit(1)
 
-    async def start_heartbeat():
-        """Start heartbeat and exit (task runs in background)."""
-        service = BaseService("cloudflared", logger=logger)
-        # Create background task (fire-and-forget)
-        asyncio.create_task(service.heartbeat())
-        # Give it a moment to initialize
-        await asyncio.sleep(1)
+    service = BaseService("cloudflared", logger=logger)
 
-    logger.info("Starting heartbeat registration (fire-and-forget)...")
+    logger.info("🚀 Starting cloudflared heartbeat (PID 1, foreground)...")
+    logger.info("   Registering state:service:cloudflared:available in Redis L1")
+
     try:
-        asyncio.run(start_heartbeat())
-        logger.info("✅ Heartbeat task started: state:service:cloudflared:available")
+        # Await the heartbeat loop directly - this keeps the process alive forever
+        # If heartbeat raises an exception, the container will crash (graceful failure)
+        await service.heartbeat()
+    except KeyboardInterrupt:
+        logger.info("⚙️ Heartbeat interrupted (Ctrl+C)")
+        sys.exit(0)
     except Exception as exc:
-        logger.warning("Heartbeat startup failed: %s", exc)
+        logger.error("❌ Heartbeat loop failed: %s", exc, exc_info=True)
+        # Exit with error status so Docker knows the service is unhealthy
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("⚙️ Shutdown requested")
+        sys.exit(0)
+    except Exception as exc:
+        logger.error("❌ Fatal error: %s", exc, exc_info=True)
+        sys.exit(1)

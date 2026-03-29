@@ -1,8 +1,12 @@
 #!/bin/sh
 #
 # Cloudflared service entrypoint.
-# 1. Starts heartbeat.py (fire-and-forget, registers in Redis and exits)
-# 2. Optionally runs cloudflared tunnel if TUNNEL_TOKEN is set
+#
+# Docker requirement: PID 1 must stay alive for the container to keep running.
+# Strategy: heartbeat.py becomes PID 1 (runs in foreground, indefinitely).
+#          cloudflared tunnel runs in background (if TUNNEL_TOKEN set).
+#
+# If either process dies, container exits (graceful failure detection).
 #
 
 set -e
@@ -10,28 +14,26 @@ set -e
 echo "[entrypoint] Starting cloudflared service..."
 
 # ============================================================================
-# Start heartbeat in background (fire-and-forget)
+# Start tunnel in background if TUNNEL_TOKEN is provided
 # ============================================================================
-# heartbeat.py starts BaseService heartbeat task and exits immediately.
-# The heartbeat task continues running in background.
-
-python /app/heartbeat.py &
-
-# Give heartbeat time to initialize
-sleep 1
-
-# ============================================================================
-# Start tunnel if TUNNEL_TOKEN is provided
-# ============================================================================
+# This runs as a background job. If it dies, heartbeat will continue.
+# If heartbeat dies, container will exit (expected behavior).
 
 if [ -n "${TUNNEL_TOKEN}" ]; then
   echo "[entrypoint] ✅ TUNNEL_TOKEN set – starting cloudflared tunnel in background..."
   cloudflared tunnel --no-autoupdate run --token "${TUNNEL_TOKEN}" &
+  TUNNEL_PID=$!
+  echo "[entrypoint] Tunnel PID: $TUNNEL_PID"
 else
-  echo "[entrypoint] TUNNEL_TOKEN not set – running in heartbeat-only mode (bootstrap phase)"
+  echo "[entrypoint] ⏸️  TUNNEL_TOKEN not set – running in heartbeat-only mode (bootstrap phase)"
 fi
 
-echo "[entrypoint] Cloudflared ready (heartbeat running)"
+# ============================================================================
+# Start heartbeat in FOREGROUND (as PID 1)
+# ============================================================================
+# exec replaces this shell process with heartbeat.py
+# heartbeat.py becomes PID 1 and keeps the container alive indefinitely.
+# When/if heartbeat.py exits, the container exits (graceful shutdown).
 
-# Keep container alive; wait for all background jobs
-wait
+echo "[entrypoint] 🚀 Starting heartbeat in foreground (PID 1)..."
+exec python /app/heartbeat.py
