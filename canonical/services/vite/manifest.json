@@ -7,5 +7,13 @@
   "checksum": "sha256:c4cabc1cddf7ee4e8173bf88ac1c644bb19009ab6a6226d58af9741978e54596",
   "lastBuilt": "2026-03-15T16:44:14.114Z",
   "generate_env_file": true,
-  "totp_seed": false
+  "totp_seed": false,
+  "injected_env_vars": [
+    {
+      "name": "TUNNEL_FQDN",
+      "source": "config",
+      "required": false,
+      "description": "Fully-qualified domain name of the Cloudflare tunnel subdomain. Makes Vite aware of its public address for HMR and asset URLs."
+    }
+  ]
 }

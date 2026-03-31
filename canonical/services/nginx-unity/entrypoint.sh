@@ -19,11 +19,24 @@ export CENTRALHUB_UPSTREAM="${CENTRALHUB_UPSTREAM:-centralhub:5051}"
 export FRONTEND_UPSTREAM="${FRONTEND_UPSTREAM:-vite-frontend:5173}"
 export SCARERUNNER_UPSTREAM="${SCARERUNNER_UPSTREAM:-scarerunner:5050}"
 export GATEKEEPER_UPSTREAM="${GATEKEEPER_UPSTREAM:-gatekeeper:8000}"
+export VITE_UPSTREAM="${VITE_UPSTREAM:-vite:5052}"
+export BACKEND_UPSTREAM="${BACKEND_UPSTREAM:-backend:5050}"
 export LOG_LEVEL="${LOG_LEVEL:-warn}"
+# TUNNEL_FQDN: empty by default; set by orchestration Phase 7 when FQDN is known.
+export TUNNEL_FQDN="${TUNNEL_FQDN:-}"
+# NGINX_SERVER_NAME: used directly in server_name directive.
+# Falls back to "_" (nginx catch-all) when TUNNEL_FQDN is not set.
+export NGINX_SERVER_NAME="${TUNNEL_FQDN:-_}"
+
+if [ -n "${TUNNEL_FQDN}" ]; then
+    echo "[entrypoint] FQDN-aware routing enabled: ${TUNNEL_FQDN}"
+else
+    echo "[entrypoint] TUNNEL_FQDN not set – nginx will use catch-all server_name (_)"
+fi
 
 # ── Template substitution ─────────────────────────────────────────────────────
 echo "[entrypoint] Substituting environment variables in nginx.conf.template..."
-envsubst '$NGINX_PORT $CENTRALHUB_UPSTREAM $FRONTEND_UPSTREAM $SCARERUNNER_UPSTREAM $GATEKEEPER_UPSTREAM $LOG_LEVEL' \
+envsubst '$NGINX_PORT $CENTRALHUB_UPSTREAM $FRONTEND_UPSTREAM $SCARERUNNER_UPSTREAM $GATEKEEPER_UPSTREAM $VITE_UPSTREAM $BACKEND_UPSTREAM $LOG_LEVEL $TUNNEL_FQDN $NGINX_SERVER_NAME' \
     < /etc/nginx/nginx.conf.template \
     > /etc/nginx/nginx.conf
 

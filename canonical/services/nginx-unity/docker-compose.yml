@@ -28,11 +28,19 @@ services:
       NGINX_PORT: ${NGINX_PORT:-80}
       LOG_LEVEL: ${LOG_LEVEL:-warn}
 
+      # ── Tunnel FQDN (injected by orchestration Phase 7) ───────────────────
+      # Set to the Cloudflare tunnel subdomain (e.g. planet.scareverse.net).
+      # Used by nginx.conf.template for server_name and upstream routing.
+      TUNNEL_FQDN: ${TUNNEL_FQDN:-}
+
       # ── Upstreams ──────────────────────────────────────────────────────────
       CENTRALHUB_UPSTREAM: ${CENTRALHUB_UPSTREAM:-centralhub:5051}
       FRONTEND_UPSTREAM: ${FRONTEND_UPSTREAM:-vite-frontend:5173}
       SCARERUNNER_UPSTREAM: ${SCARERUNNER_UPSTREAM:-scarerunner:5050}
       GATEKEEPER_UPSTREAM: ${GATEKEEPER_UPSTREAM:-gatekeeper:8000}
+      # Vite and Backend upstreams for tunnel routing
+      VITE_UPSTREAM: ${VITE_UPSTREAM:-vite:5052}
+      BACKEND_UPSTREAM: ${BACKEND_UPSTREAM:-backend:5050}
 
       # ── FastAPI sidecar ────────────────────────────────────────────────────
       SIDECAR_HOST: "0.0.0.0"

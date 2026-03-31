@@ -48,6 +48,13 @@ services:
       - API_PORT=${API_PORT:-5050}
       - API_DEBUG=${API_DEBUG:-true}
       - API_PREFIX=${API_PREFIX:-/api}
+
+      # Tunnel FQDN (injected by orchestration Phase 7 via manifest injected_env_vars)
+      # Makes the backend aware of its public subdomain address for CORS and redirects.
+      - TUNNEL_FQDN=${TUNNEL_FQDN:-}
+      # Public API URL – constructed from TUNNEL_FQDN when available.
+      # Falls back to empty string; backend should handle both cases.
+      - API_PUBLIC_URL=${API_PUBLIC_URL:-}
       - API_VERSION=${API_VERSION:-v1}
       - UVICORN_RELOAD=${UVICORN_RELOAD:-false}
 

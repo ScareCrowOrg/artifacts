@@ -3,5 +3,27 @@
   "name": "nginx-unity",
   "build": false,
   "image": "localhost:5001/scareverse-nginx-unity:staging",
-  "imageTag": "staging"
+  "imageTag": "staging",
+  "generate_env_file": false,
+  "totp_seed": false,
+  "injected_env_vars": [
+    {
+      "name": "TUNNEL_FQDN",
+      "source": "config",
+      "required": false,
+      "description": "Fully-qualified domain name of the Cloudflare tunnel subdomain (e.g. planet.scareverse.net). Used by nginx to set server_name and route traffic."
+    },
+    {
+      "name": "VITE_SERVICE_NAME",
+      "source": "config",
+      "required": false,
+      "description": "Docker service name for the Vite frontend upstream (e.g. vite). Read from config.vite.service_name."
+    },
+    {
+      "name": "BACKEND_SERVICE_NAME",
+      "source": "config",
+      "required": false,
+      "description": "Docker service name for the backend API upstream (e.g. backend). Read from config.backend.service_name."
+    }
+  ]
 }
