@@ -1,0 +1,9 @@
+{
+  "listeners": {
+    "*:80": {
+      "pass": "routes"
+    }
+  },
+  "routes": [],
+  "upstreams": {}
+}

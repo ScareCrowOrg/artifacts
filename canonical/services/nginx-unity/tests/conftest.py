@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 # ── Path setup ────────────────────────────────────────────────────────────────
 _service_dir = Path(__file__).resolve().parents[1]
-_artifacts_dir = _service_dir.parents[3]  # artifacts/
+_artifacts_dir = _service_dir.parents[2]  # artifacts/
 
 for _p in [str(_service_dir), str(_artifacts_dir)]:
     if _p not in sys.path:

@@ -3,11 +3,10 @@ Tests for nginx-unity configuration validation.
 
 Validates:
 - Config defaults are sensible and of correct types.
-- All upstream env vars are reflected in config.UPSTREAMS.
-- NGINX_PORT, SIDECAR_PORT, HEARTBEAT_INTERVAL, HEARTBEAT_TTL are integers.
+- SIDECAR_PORT, HEARTBEAT_INTERVAL, HEARTBEAT_TTL are integers.
 - LOG_LEVEL defaults to 'info'.
 - WORKER_ID defaults to 'nginx-unity'.
-- Upstream env var overrides are applied correctly.
+- Redis config env var overrides are applied correctly.
 """
 
 import importlib
@@ -41,13 +40,6 @@ class TestConfigDefaults:
     def test_log_level_default(self):
         assert config.LOG_LEVEL == os.getenv("LOG_LEVEL", "info").lower()
 
-    def test_nginx_port_is_int(self):
-        assert isinstance(config.NGINX_PORT, int)
-
-    def test_nginx_port_default(self):
-        cfg = _reload_config({})
-        assert cfg.NGINX_PORT == int(os.getenv("NGINX_PORT", "80"))
-
     def test_sidecar_port_is_int(self):
         assert isinstance(config.SIDECAR_PORT, int)
 
@@ -65,42 +57,27 @@ class TestConfigDefaults:
     def test_heartbeat_ttl_is_int(self):
         assert isinstance(config.HEARTBEAT_TTL, int)
 
-    def test_upstream_check_timeout_is_float(self):
-        assert isinstance(config.UPSTREAM_CHECK_TIMEOUT, float)
-
     def test_redis_port_is_int(self):
         assert isinstance(config.REDIS_L1_PORT, int)
 
     def test_redis_db_is_int(self):
         assert isinstance(config.REDIS_L1_DB, int)
 
+    def test_no_upstream_check_timeout(self):
+        """UPSTREAM_CHECK_TIMEOUT removed – upstream health is now Redis-driven."""
+        assert not hasattr(config, "UPSTREAM_CHECK_TIMEOUT")
+
+    def test_no_upstreams_dict(self):
+        """UPSTREAMS dict removed – routes registered dynamically via Nginx Unit API."""
+        assert not hasattr(config, "UPSTREAMS")
+
+    def test_no_nginx_port(self):
+        """NGINX_PORT removed – Nginx Unit port is fixed at 80."""
+        assert not hasattr(config, "NGINX_PORT")
+
 
 class TestConfigOverrides:
     """Verify environment variable overrides are respected."""
-
-    def test_nginx_port_override(self):
-        cfg = _reload_config({"NGINX_PORT": "8080"})
-        assert cfg.NGINX_PORT == 8080
-
-    def test_centralhub_upstream_override(self):
-        cfg = _reload_config({"CENTRALHUB_UPSTREAM": "myhub:9999"})
-        assert cfg.CENTRALHUB_UPSTREAM == "myhub:9999"
-        assert cfg.UPSTREAMS["centralhub"] == "myhub:9999"
-
-    def test_frontend_upstream_override(self):
-        cfg = _reload_config({"FRONTEND_UPSTREAM": "myfe:4000"})
-        assert cfg.FRONTEND_UPSTREAM == "myfe:4000"
-        assert cfg.UPSTREAMS["frontend"] == "myfe:4000"
-
-    def test_scarerunner_upstream_override(self):
-        cfg = _reload_config({"SCARERUNNER_UPSTREAM": "myrunner:7777"})
-        assert cfg.SCARERUNNER_UPSTREAM == "myrunner:7777"
-        assert cfg.UPSTREAMS["scarerunner"] == "myrunner:7777"
-
-    def test_gatekeeper_upstream_override(self):
-        cfg = _reload_config({"GATEKEEPER_UPSTREAM": "mygk:3333"})
-        assert cfg.GATEKEEPER_UPSTREAM == "mygk:3333"
-        assert cfg.UPSTREAMS["gatekeeper"] == "mygk:3333"
 
     def test_worker_id_override(self):
         cfg = _reload_config({"WORKER_ID": "my-nginx"})
@@ -113,3 +90,19 @@ class TestConfigOverrides:
     def test_heartbeat_ttl_override(self):
         cfg = _reload_config({"HEARTBEAT_TTL": "90"})
         assert cfg.HEARTBEAT_TTL == 90
+
+    def test_redis_host_override(self):
+        cfg = _reload_config({"REDIS_L1_HOST": "myredis"})
+        assert cfg.REDIS_L1_HOST == "myredis"
+
+    def test_redis_port_override(self):
+        cfg = _reload_config({"REDIS_L1_PORT": "6379"})
+        assert cfg.REDIS_L1_PORT == 6379
+
+    def test_redis_password_override(self):
+        cfg = _reload_config({"REDIS_L1_PASSWORD": "secret123"})
+        assert cfg.REDIS_L1_PASSWORD == "secret123"
+
+    def test_sidecar_port_override(self):
+        cfg = _reload_config({"SIDECAR_PORT": "9999"})
+        assert cfg.SIDECAR_PORT == 9999

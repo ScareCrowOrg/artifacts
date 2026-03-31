@@ -3,8 +3,9 @@ version: "3.9"
 # ==============================================================================
 # Nginx Unity Service Worker – Standalone docker-compose
 # ==============================================================================
-# Unified reverse proxy that routes all ScareVerse services through a single
-# templated Nginx configuration.
+# Nginx Unit reverse proxy with dynamic route registration via HTTP API.
+# Routes for vite (/) and backend (/api) are registered after services start
+# via the Node.js orchestrator sidecar polling Redis heartbeat keys.
 #
 # Prerequisites:
 #   docker network create scareverse-net
@@ -24,25 +25,18 @@ services:
     container_name: scareverse-nginx-unity
 
     environment:
-      # ── Nginx ─────────────────────────────────────────────────────────────
-      NGINX_PORT: ${NGINX_PORT:-80}
-      LOG_LEVEL: ${LOG_LEVEL:-warn}
-
       # ── Tunnel FQDN (injected by orchestration Phase 7) ───────────────────
       # Set to the Cloudflare tunnel subdomain (e.g. planet.scareverse.net).
-      # Used by nginx.conf.template for server_name and upstream routing.
       TUNNEL_FQDN: ${TUNNEL_FQDN:-}
 
-      # ── Upstreams ──────────────────────────────────────────────────────────
+      # ── Legacy upstreams (centralhub, gatekeeper, scarerunner) ────────────
+      # Vite and Backend routes are registered dynamically via Unit API.
       CENTRALHUB_UPSTREAM: ${CENTRALHUB_UPSTREAM:-centralhub:5051}
       FRONTEND_UPSTREAM: ${FRONTEND_UPSTREAM:-vite-frontend:5173}
       SCARERUNNER_UPSTREAM: ${SCARERUNNER_UPSTREAM:-scarerunner:5050}
       GATEKEEPER_UPSTREAM: ${GATEKEEPER_UPSTREAM:-gatekeeper:8000}
-      # Vite and Backend upstreams for tunnel routing
-      VITE_UPSTREAM: ${VITE_UPSTREAM:-vite:5052}
-      BACKEND_UPSTREAM: ${BACKEND_UPSTREAM:-backend:5050}
 
-      # ── FastAPI sidecar ────────────────────────────────────────────────────
+      # ── FastAPI heartbeat sidecar ──────────────────────────────────────────
       SIDECAR_HOST: "0.0.0.0"
       SIDECAR_PORT: ${SIDECAR_PORT:-9000}
       WORKER_ID: ${WORKER_ID:-nginx-unity}
@@ -62,19 +56,13 @@ services:
       # Artifacts (for canonical.shared.services.base_service import)
       - ../../../../artifacts:/app/artifacts:ro
 
-    # Expose Nginx HTTP port for localhost testing; remove for pure internal use
+    # Expose Nginx Unit API port for route registration by Node.js orchestrator.
+    # Port 8081 on host maps to Nginx Unit API port 8080 inside container.
     ports:
-      - "${NGINX_EXTERNAL_PORT:-8080}:${NGINX_PORT:-80}"
+      - "${NGINX_UNIT_API_PORT:-8081}:8080"
 
     expose:
       - "${SIDECAR_PORT:-9000}"
-
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${NGINX_PORT:-80}/health"]
-      interval: 30s
-      timeout: 10s
-      start_period: 20s
-      retries: 3
 
     restart: unless-stopped
 

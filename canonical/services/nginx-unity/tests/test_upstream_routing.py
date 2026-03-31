@@ -1,20 +1,18 @@
 """
-Tests for upstream routing configuration and _check_upstream helper.
+Tests for Nginx Unit configuration file (unit.conf.json).
 
 Validates:
-- _check_upstream returns "up" on successful HTTP probe.
-- _check_upstream returns "down" on timeout.
-- _check_upstream returns "down" on connection error.
-- _check_upstream returns "down" when _http_client is None.
-- config.UPSTREAMS contains all expected upstream names.
-- All upstream addresses from config are used in detailed health check.
+- unit.conf.json exists alongside the Dockerfile.
+- unit.conf.json is valid JSON.
+- Initial config has an empty routes list (no vite/backend upstreams).
+- Initial config has a listener on port 80.
+- Initial config has an empty upstreams dict (routes registered dynamically).
 """
 
+import json
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 # ── Path setup ────────────────────────────────────────────────────────────────
@@ -24,92 +22,57 @@ for _p in [str(_service_dir), str(_artifacts_dir)]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import main  # noqa: E402
-import config  # noqa: E402
+_unit_conf_path = _service_dir / "unit.conf.json"
 
 
-# ── _check_upstream ───────────────────────────────────────────────────────────
+# ── Tests ─────────────────────────────────────────────────────────────────────
 
 
-class TestCheckUpstream:
-    """Unit tests for main._check_upstream()."""
+class TestUnitConfJson:
+    """Validate the Nginx Unit initial configuration file."""
 
-    @pytest.mark.asyncio
-    async def test_returns_up_on_success(self):
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=MagicMock(status_code=200))
-        main._http_client = mock_client
+    def test_unit_conf_exists(self):
+        """unit.conf.json must exist for the container to load it."""
+        assert _unit_conf_path.exists(), "unit.conf.json not found in nginx-unity service directory"
 
-        result = await main._check_upstream("centralhub", "centralhub:5051")
-        assert result == "up"
-        mock_client.get.assert_called_once_with("http://centralhub:5051")
+    def test_unit_conf_is_valid_json(self):
+        """unit.conf.json must be parseable JSON."""
+        content = _unit_conf_path.read_text(encoding="utf-8")
+        parsed = json.loads(content)
+        assert isinstance(parsed, dict)
 
-    @pytest.mark.asyncio
-    async def test_returns_down_on_connect_error(self):
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
-        main._http_client = mock_client
+    def test_unit_conf_has_listeners(self):
+        """Nginx Unit requires a 'listeners' section."""
+        config = json.loads(_unit_conf_path.read_text(encoding="utf-8"))
+        assert "listeners" in config
 
-        result = await main._check_upstream("centralhub", "centralhub:5051")
-        assert result == "down"
+    def test_unit_conf_has_port_80_listener(self):
+        """Listener must be on port 80 (or *:80) for HTTP traffic."""
+        config = json.loads(_unit_conf_path.read_text(encoding="utf-8"))
+        listeners = config["listeners"]
+        has_port_80 = any("80" in key for key in listeners)
+        assert has_port_80, f"No port 80 listener found in: {list(listeners.keys())}"
 
-    @pytest.mark.asyncio
-    async def test_returns_down_on_timeout(self):
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
-        main._http_client = mock_client
+    def test_unit_conf_routes_is_empty_list(self):
+        """Routes must start empty – vite/backend registered dynamically."""
+        config = json.loads(_unit_conf_path.read_text(encoding="utf-8"))
+        assert "routes" in config
+        assert config["routes"] == [], "Initial routes must be empty (dynamic registration)"
 
-        result = await main._check_upstream("centralhub", "centralhub:5051")
-        assert result == "down"
+    def test_unit_conf_upstreams_is_empty(self):
+        """Upstreams must start empty – registered dynamically after heartbeat."""
+        config = json.loads(_unit_conf_path.read_text(encoding="utf-8"))
+        assert "upstreams" in config
+        assert config["upstreams"] == {}, "Initial upstreams must be empty (dynamic registration)"
 
-    @pytest.mark.asyncio
-    async def test_returns_down_when_client_is_none(self):
-        main._http_client = None
-        result = await main._check_upstream("frontend", "vite-frontend:5173")
-        assert result == "down"
+    def test_unit_conf_no_vite_upstream(self):
+        """No vite upstream at startup – causes Phase 7 validation failures."""
+        config = json.loads(_unit_conf_path.read_text(encoding="utf-8"))
+        upstreams = config.get("upstreams", {})
+        assert "vite" not in upstreams, "vite upstream must not be in initial config"
 
-    @pytest.mark.asyncio
-    async def test_returns_down_on_generic_exception(self):
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=RuntimeError("unexpected"))
-        main._http_client = mock_client
-
-        result = await main._check_upstream("scarerunner", "scarerunner:5050")
-        assert result == "down"
-
-    @pytest.mark.asyncio
-    async def test_any_http_status_counts_as_up(self):
-        """Even a 404 response means the upstream is reachable."""
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=MagicMock(status_code=404))
-        main._http_client = mock_client
-
-        result = await main._check_upstream("frontend", "vite-frontend:5173")
-        assert result == "up"
-
-
-# ── Config upstream map ───────────────────────────────────────────────────────
-
-
-class TestConfigUpstreams:
-    """Verify the UPSTREAMS dict in config contains expected keys."""
-
-    def test_upstreams_has_centralhub(self):
-        assert "centralhub" in config.UPSTREAMS
-
-    def test_upstreams_has_frontend(self):
-        assert "frontend" in config.UPSTREAMS
-
-    def test_upstreams_has_scarerunner(self):
-        assert "scarerunner" in config.UPSTREAMS
-
-    def test_upstreams_has_gatekeeper(self):
-        assert "gatekeeper" in config.UPSTREAMS
-
-    def test_upstream_values_are_strings(self):
-        for key, value in config.UPSTREAMS.items():
-            assert isinstance(value, str), f"Upstream {key!r} value is not a string: {value!r}"
-
-    def test_upstream_values_contain_port(self):
-        for key, value in config.UPSTREAMS.items():
-            assert ":" in value, f"Upstream {key!r} value missing port: {value!r}"
+    def test_unit_conf_no_backend_upstream(self):
+        """No backend upstream at startup – causes Phase 7 validation failures."""
+        config = json.loads(_unit_conf_path.read_text(encoding="utf-8"))
+        upstreams = config.get("upstreams", {})
+        assert "backend" not in upstreams, "backend upstream must not be in initial config"

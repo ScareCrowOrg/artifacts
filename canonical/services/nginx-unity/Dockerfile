@@ -2,39 +2,46 @@
 # Nginx Unity Service Worker
 # ==============================================================================
 # Two-process container:
-#   1. Nginx reverse proxy   – handles all incoming HTTP routing
-#   2. FastAPI health sidecar – health endpoints + Redis L1 heartbeat
+#   1. Nginx Unit reverse proxy – handles all incoming HTTP routing via HTTP API
+#   2. FastAPI heartbeat sidecar – Redis L1 heartbeat registration
 #
 # entrypoint.sh:
-#   1. Runs envsubst on nginx.conf.template → nginx.conf
-#   2. Validates config (nginx -t)
-#   3. Starts Nginx in background
-#   4. Starts FastAPI sidecar in foreground (keeps container alive)
+#   1. Waits for Nginx Unit API to be ready (port 8080)
+#   2. Starts FastAPI sidecar in foreground (keeps container alive)
+#
+# Routes are registered dynamically via the Nginx Unit HTTP API after services
+# become available (heartbeat-driven via Node.js sidecar).
 # ==============================================================================
 
-FROM nginx:alpine AS nginx-base
+FROM nginx/unit:latest
 
-# Install Python 3, pip, and envsubst (gettext package provides envsubst)
-RUN apk add --no-cache python3 py3-pip gettext curl bash
+# Fix Debian Buster (EOL) apt sources
+RUN sed -i 's|http://deb.debian.org|http://archive.debian.org|g' /etc/apt/sources.list && \
+    sed -i '/debian-security/d' /etc/apt/sources.list
+
+# Install Python 3, pip, and curl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # ── Python dependencies ───────────────────────────────────────────────────────
 COPY requirements.txt .
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    python3 -m pip install --no-cache-dir -r requirements.txt
 
-# ── Nginx config template ─────────────────────────────────────────────────────
-COPY nginx.conf.template /etc/nginx/nginx.conf.template
+# ── Nginx Unit initial config (minimal, no upstreams) ─────────────────────────
+COPY unit.conf.json /docker-entrypoint.d/unit.conf.json
 
 # ── Service code ──────────────────────────────────────────────────────────────
 COPY config.py main.py /app/
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# ── Health check (Nginx /health endpoint) ─────────────────────────────────────
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD curl -f http://localhost:${NGINX_PORT:-80}/health || exit 1
-
-EXPOSE 80 9000
+# ── Expose Nginx Unit HTTP port and Unit API port ─────────────────────────────
+EXPOSE 80 8080
 
 ENTRYPOINT ["/entrypoint.sh"]

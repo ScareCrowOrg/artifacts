@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
-Nginx Unity Service Worker – FastAPI health sidecar.
+Nginx Unity Service Worker – heartbeat sidecar.
 
-This sidecar runs in the foreground alongside an Nginx reverse-proxy process
-(managed by ``entrypoint.sh``) and exposes HTTP health-check endpoints used by
-Launcher and GateKeeper.
+This sidecar runs in the foreground alongside Nginx Unit (managed by
+``entrypoint.sh``) and registers the nginx-unity service in Redis L1 via the
+:class:`BaseService` heartbeat mechanism.
 
-Endpoints:
-    GET /health             – 200 when sidecar is running.
-    GET /health/detailed    – 200 with upstream availability status.
+Routes are registered dynamically by the Node.js orchestrator sidecar via the
+Nginx Unit HTTP API after vite and backend services become available.
 
-On startup the service registers itself in Redis L1 via the :class:`BaseService`
-heartbeat (key ``state:service:nginx-unity:available``).
+On startup the service registers itself in Redis L1:
+    key ``state:service:nginx-unity:available``
 
 On SIGTERM / SIGINT the key is deleted immediately so GateKeeper stops routing
 before the TTL expires.
@@ -20,9 +19,7 @@ before the TTL expires.
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional
 
-import httpx
 import uvicorn
 from fastapi import FastAPI
 
@@ -39,19 +36,17 @@ logger = logging.getLogger(__name__)
 
 # ── Global state ─────────────────────────────────────────────────────────────
 
-_service: Optional[BaseService] = None
-_heartbeat_task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
-_http_client: Optional[httpx.AsyncClient] = None
+_service = None
+_heartbeat_task = None
+
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):  # type: ignore[type-arg]
-    """Start heartbeat and HTTP client on startup; clean up on shutdown."""
-    global _service, _heartbeat_task, _http_client
-
-    _http_client = httpx.AsyncClient(timeout=config.UPSTREAM_CHECK_TIMEOUT)
+    """Start heartbeat on startup; clean up on shutdown."""
+    global _service, _heartbeat_task
 
     _service = BaseService(
         service_name=config.WORKER_ID,
@@ -82,74 +77,17 @@ async def lifespan(application: FastAPI):  # type: ignore[type-arg]
     if _service:
         await _service.cleanup()
 
-    if _http_client:
-        await _http_client.aclose()
-
     logger.info("Nginx Unity sidecar stopped.")
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="Nginx Unity Health Sidecar",
-    description="Health-check sidecar for the Nginx Unity reverse-proxy service worker",
+    title="Nginx Unity Heartbeat Sidecar",
+    description="Heartbeat sidecar for the Nginx Unity reverse-proxy service worker",
     version="1.0.0",
     lifespan=lifespan,
 )
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-async def _check_upstream(name: str, address: str) -> str:
-    """
-    Probe an upstream host and return ``"up"`` or ``"down"``.
-
-    Args:
-        name: Human-readable upstream label (for logging).
-        address: ``host:port`` string (no scheme).
-
-    Returns:
-        ``"up"`` when the upstream responds with any HTTP status;
-        ``"down"`` on connection error or timeout.
-    """
-    if _http_client is None:
-        return "down"
-    try:
-        url = f"http://{address}"
-        await _http_client.get(url)
-        return "up"
-    except Exception as exc:
-        logger.debug("Upstream %s (%s) unreachable: %s", name, address, exc)
-        return "down"
-
-
-# ── Endpoints ─────────────────────────────────────────────────────────────────
-
-
-@app.get("/health")
-async def health() -> Dict[str, str]:
-    """Basic liveness probe – returns 200 when the sidecar is running."""
-    return {"status": "healthy"}
-
-
-@app.get("/health/detailed")
-async def health_detailed() -> Dict[str, Any]:
-    """
-    Detailed health report including upstream availability.
-
-    Probes each configured upstream and returns their individual status.
-
-    Returns:
-        JSON with overall status and per-upstream ``"up"`` / ``"down"`` values.
-    """
-    upstream_status: Dict[str, str] = {}
-    for name, address in config.UPSTREAMS.items():
-        upstream_status[name] = await _check_upstream(name, address)
-
-    return {
-        "status": "healthy",
-        "upstreams": upstream_status,
-    }
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

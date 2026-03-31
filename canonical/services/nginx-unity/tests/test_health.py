@@ -1,12 +1,11 @@
 """
-Unit tests for the Nginx Unity health sidecar endpoints.
+Unit tests for the Nginx Unity heartbeat sidecar.
 
 Validates:
-- GET /health returns 200 with {"status": "healthy"}.
-- GET /health/detailed returns 200 with upstream status dict.
-- /health/detailed probes all configured upstreams.
-- /health/detailed marks individual upstreams as "up" or "down".
-- /health/detailed handles HTTP client not initialized (returns "down").
+- Sidecar starts heartbeat on application startup.
+- Sidecar cleans up heartbeat on application shutdown.
+- BaseService is instantiated with correct config values.
+- App initializes without HTTP health endpoints.
 """
 
 import sys
@@ -14,11 +13,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import httpx
+from fastapi.testclient import TestClient
 
 # ── Path setup ────────────────────────────────────────────────────────────────
 _service_dir = Path(__file__).resolve().parents[1]
-_artifacts_dir = _service_dir.parents[3]
+_artifacts_dir = _service_dir.parents[2]  # artifacts/
 for _p in [str(_service_dir), str(_artifacts_dir)]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -27,100 +26,47 @@ for _p in [str(_service_dir), str(_artifacts_dir)]:
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 
-class TestHealthEndpoint:
-    """Tests for GET /health."""
+class TestSidecarLifecycle:
+    """Tests for heartbeat sidecar startup and shutdown."""
 
-    def test_health_returns_200(self, app_client):
-        response = app_client.get("/health")
-        assert response.status_code == 200
+    def test_heartbeat_started_on_startup(self, mock_base_service):
+        """BaseService.heartbeat() is called during app lifespan startup."""
+        from main import app
 
-    def test_health_returns_healthy_status(self, app_client):
-        response = app_client.get("/health")
-        assert response.json() == {"status": "healthy"}
+        with TestClient(app, raise_server_exceptions=True):
+            mock_base_service.heartbeat.assert_called_once()
 
+    def test_cleanup_called_on_shutdown(self, mock_base_service):
+        """BaseService.cleanup() is called during app lifespan shutdown."""
+        from main import app
 
-class TestHealthDetailedEndpoint:
-    """Tests for GET /health/detailed."""
+        with TestClient(app, raise_server_exceptions=True):
+            pass  # context exit triggers shutdown
 
-    def test_detailed_returns_200(self, app_client):
-        response = app_client.get("/health/detailed")
-        assert response.status_code == 200
+        mock_base_service.cleanup.assert_called_once()
 
-    def test_detailed_has_status_field(self, app_client):
-        data = app_client.get("/health/detailed").json()
-        assert data["status"] == "healthy"
-
-    def test_detailed_has_upstreams_field(self, app_client):
-        data = app_client.get("/health/detailed").json()
-        assert "upstreams" in data
-
-    def test_detailed_reports_all_configured_upstreams(self, app_client):
+    def test_base_service_instantiated_with_worker_id(self, mock_base_service):
+        """BaseService is created with WORKER_ID from config."""
         import config
-        data = app_client.get("/health/detailed").json()
-        upstreams = data["upstreams"]
-        for key in config.UPSTREAMS:
-            assert key in upstreams
+        from main import app
 
-    def test_upstream_marked_up_on_successful_probe(self, app_client):
-        """Upstreams report 'up' when the HTTP client returns a response."""
-        import main
+        with patch("main.BaseService", return_value=mock_base_service) as mock_cls:
+            with TestClient(app, raise_server_exceptions=True):
+                call_kwargs = mock_cls.call_args[1]
+                assert call_kwargs["service_name"] == config.WORKER_ID
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
+    def test_no_health_endpoint(self, mock_base_service):
+        """GET /health is not registered (health is Redis-driven, not HTTP)."""
+        from main import app
 
-        # Override the client that lifespan created
-        main._http_client = mock_client
+        with TestClient(app, raise_server_exceptions=True) as client:
+            response = client.get("/health")
+            assert response.status_code == 404
 
-        data = app_client.get("/health/detailed").json()
+    def test_no_health_detailed_endpoint(self, mock_base_service):
+        """GET /health/detailed is not registered (upstreams are dynamic)."""
+        from main import app
 
-        for upstream_status in data["upstreams"].values():
-            assert upstream_status == "up"
-
-    def test_upstream_marked_down_on_connection_error(self, app_client):
-        """Upstreams report 'down' when the HTTP client raises ConnectError."""
-        import main
-
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
-        main._http_client = mock_client
-
-        data = app_client.get("/health/detailed").json()
-
-        for upstream_status in data["upstreams"].values():
-            assert upstream_status == "down"
-
-    def test_upstream_marked_down_when_client_is_none(self, app_client):
-        """Upstreams report 'down' when _http_client is None."""
-        import main
-
-        main._http_client = None
-
-        data = app_client.get("/health/detailed").json()
-
-        for upstream_status in data["upstreams"].values():
-            assert upstream_status == "down"
-
-    def test_partial_upstream_failure(self, app_client):
-        """One upstream fails; others succeed."""
-        import main
-
-        async def fake_get(url):
-            if "centralhub" in url:
-                raise httpx.ConnectError("refused")
-            return MagicMock(status_code=200)
-
-        mock_client = AsyncMock()
-        mock_client.get = fake_get
-        main._http_client = mock_client
-
-        data = app_client.get("/health/detailed").json()
-        upstreams = data["upstreams"]
-
-        assert upstreams["centralhub"] == "down"
-        for name, status in upstreams.items():
-            if name != "centralhub":
-                assert status == "up", f"Expected {name} to be 'up', got '{status}'"
+        with TestClient(app, raise_server_exceptions=True) as client:
+            response = client.get("/health/detailed")
+            assert response.status_code == 404
