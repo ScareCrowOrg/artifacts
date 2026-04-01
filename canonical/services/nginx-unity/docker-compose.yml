@@ -36,9 +36,7 @@ services:
       SCARERUNNER_UPSTREAM: ${SCARERUNNER_UPSTREAM:-scarerunner:5050}
       GATEKEEPER_UPSTREAM: ${GATEKEEPER_UPSTREAM:-gatekeeper:8000}
 
-      # ── FastAPI heartbeat sidecar ──────────────────────────────────────────
-      SIDECAR_HOST: "0.0.0.0"
-      SIDECAR_PORT: ${SIDECAR_PORT:-9000}
+      # ── Service identification ────────────────────────────────────────────────
       WORKER_ID: ${WORKER_ID:-nginx-unity}
 
       # ── Redis / heartbeat ──────────────────────────────────────────────────
@@ -60,9 +58,6 @@ services:
     # Port 8081 on host maps to Nginx Unit API port 8080 inside container.
     ports:
       - "${NGINX_UNIT_API_PORT:-8081}:8080"
-
-    expose:
-      - "${SIDECAR_PORT:-9000}"
 
     restart: unless-stopped
 

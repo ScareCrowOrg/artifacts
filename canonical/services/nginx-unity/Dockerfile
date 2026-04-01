@@ -1,13 +1,12 @@
 # ==============================================================================
 # Nginx Unity Service Worker
 # ==============================================================================
-# Two-process container:
-#   1. Nginx Unit reverse proxy – handles all incoming HTTP routing via HTTP API
-#   2. FastAPI heartbeat sidecar – Redis L1 heartbeat registration
+# Nginx Unit reverse proxy with heartbeat registration.
 #
 # entrypoint.sh:
 #   1. Waits for Nginx Unit API to be ready (port 8080)
-#   2. Starts FastAPI sidecar in foreground (keeps container alive)
+#   2. Registers initial heartbeat in Redis L1
+#   3. Keeps container alive
 #
 # Routes are registered dynamically via the Nginx Unit HTTP API after services
 # become available (heartbeat-driven via Node.js sidecar).
@@ -37,7 +36,7 @@ RUN python3 -m pip install --upgrade pip setuptools wheel && \
 COPY unit.conf.json /docker-entrypoint.d/unit.conf.json
 
 # ── Service code ──────────────────────────────────────────────────────────────
-COPY config.py main.py /app/
+COPY config.py heartbeat.py /app/
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
