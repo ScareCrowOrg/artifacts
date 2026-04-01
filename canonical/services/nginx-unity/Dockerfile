@@ -18,11 +18,12 @@ FROM nginx/unit:latest
 RUN sed -i 's|http://deb.debian.org|http://archive.debian.org|g' /etc/apt/sources.list && \
     sed -i '/debian-security/d' /etc/apt/sources.list
 
-# Install Python 3, pip, and curl
+# Install Python 3, pip, curl, and socat (for HTTP API proxy)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     curl \
+    socat \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
