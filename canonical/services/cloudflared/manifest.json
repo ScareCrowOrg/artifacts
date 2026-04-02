@@ -5,5 +5,13 @@
   "image": "localhost:5001/scareverse-cloudflared:staging",
   "imageTag": "staging",
   "generate_env_file": false,
-  "totp_seed": false
+  "totp_seed": false,
+  "injected_env_vars": [
+    {
+      "name": "INGRESS_RULES",
+      "source": "config",
+      "required": false,
+      "description": "JSON array of Cloudflare tunnel ingress rules, generated from planet_name (e.g. [{\"hostname\":\"planet.scareverse.net\",\"service\":\"http://nginx-unity:80\"},{\"service\":\"http_status:404\"}])"
+    }
+  ]
 }
