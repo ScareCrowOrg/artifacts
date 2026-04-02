@@ -25,11 +25,8 @@ services:
     container_name: scareverse-cloudflared
 
     environment:
-      # ── Tunnel ───────────────────────────────────────────────────────────
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
-      TUNNEL_NAME: ${TUNNEL_NAME:-scareverse-tunnel}
-
       # ── Ingress Rules (generated from planet_name by ServiceOrchestrator) ──
+      # Tunnel is started separately via Phase 5B create-tunnel handler
       INGRESS_RULES: ${INGRESS_RULES:-}
 
       # ── Redis / heartbeat ─────────────────────────────────────────────────
