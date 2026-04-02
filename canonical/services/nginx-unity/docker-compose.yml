@@ -54,9 +54,11 @@ services:
       # Artifacts (for canonical.shared.services.base_service import)
       - ../../../../artifacts:/app/artifacts:ro
 
-    # Expose Nginx Unit API port for route registration by Node.js orchestrator.
-    # Port 8081 on host maps to Nginx Unit API port 8080 inside container.
+    # Expose Nginx Unit HTTP and API ports.
+    # Port 80 on host maps to Nginx Unit HTTP port 80 inside container (reverse proxy requests).
+    # Port 8081 on host maps to Nginx Unit API port 8080 inside container (route registration).
     ports:
+      - "80:80"
       - "${NGINX_UNIT_API_PORT:-8081}:8080"
 
     restart: unless-stopped
