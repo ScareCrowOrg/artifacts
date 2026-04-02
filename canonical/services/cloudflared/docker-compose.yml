@@ -29,6 +29,9 @@ services:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
       TUNNEL_NAME: ${TUNNEL_NAME:-scareverse-tunnel}
 
+      # ── Ingress Rules (generated from planet_name by ServiceOrchestrator) ──
+      INGRESS_RULES: ${INGRESS_RULES:-}
+
       # ── Redis / heartbeat ─────────────────────────────────────────────────
       REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
       REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
