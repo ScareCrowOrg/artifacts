@@ -406,8 +406,8 @@ const artifactsRewritePlugin = {
 
 // Plugin to handle URL rewriting for /artifacts/* and /viewers/* requests
 // - /artifacts/* URLs → /* for file serving
-// - /viewers/:viewerName → /canonical/viewers/:viewerName/ (SPA serving)
-// - Handles both /viewers/* and /app/viewers/* (depends on base path)
+// - /viewers/:viewerName → /{base}/canonical/viewers/:viewerName/ (SPA serving with base preservation)
+// - Handles both /viewers/* (base: /) and /app/viewers/* (base: /app)
 const urlRewritePlugin = (() => {
   const baseEnv = process.env.VITE_BASE || '/'
   const base = baseEnv.endsWith('/') ? baseEnv.slice(0, -1) : baseEnv
@@ -423,14 +423,14 @@ const urlRewritePlugin = (() => {
           return next()
         }
 
-        // Rewrite /viewers/:viewerName to /canonical/viewers/:viewerName/
-        // This allows Vite to serve the index.html from canonical structure
+        // Rewrite /viewers/:viewerName to /{base}/canonical/viewers/:viewerName/
+        // Preserves base path so index.html asset paths remain correct
         // Support both /viewers/* (base: /) and /app/viewers/* (base: /app)
         const pattern = base ? `^${base}/viewers/([^/?#]+)(/)?(\\?.*)?$` : `^/viewers/([^/?#]+)(/)?(\\?.*)?$`
         const match = req.url?.match(new RegExp(pattern))
         if (match) {
           const viewerName = match[1]
-          req.url = `/canonical/viewers/${viewerName}/`
+          req.url = base ? `${base}/canonical/viewers/${viewerName}/` : `/canonical/viewers/${viewerName}/`
         }
 
         next()
