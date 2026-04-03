@@ -502,6 +502,25 @@ export default defineConfig({
       credentials: true,
     },
 
+    // Allowed hosts - extracted from VITE_CORS_ORIGINS environment variable
+    allowedHosts: (() => {
+      const origins = process.env.VITE_CORS_ORIGINS || ''
+      const originList = typeof origins === 'string' ? origins.split(',').map(o => o.trim()).filter(Boolean) : []
+
+      const hosts = new Set(['localhost', '127.0.0.1'])
+      originList.forEach(origin => {
+        try {
+          const url = new URL(origin)
+          hosts.add(url.hostname)
+        } catch (e) {
+          const match = origin.match(/^([^/:]+)/)
+          if (match) hosts.add(match[1])
+        }
+      })
+
+      return Array.from(hosts)
+    })(),
+
     // HMR (Hot Module Replacement) configuration
     // For local direct access: uses port 5052 directly
     // For proxy scenarios (Nginx on 8000): can override clientPort
