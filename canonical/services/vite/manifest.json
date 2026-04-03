@@ -10,6 +10,12 @@
   "totp_seed": false,
   "injected_env_vars": [
     {
+      "name": "VITE_BASE",
+      "source": "config",
+      "required": false,
+      "description": "Vite base path for asset and route resolution. Resolves from settings.config.vite.base (e.g., '/app' for tunnel, '/' for localhost)."
+    },
+    {
       "name": "TUNNEL_FQDN",
       "source": "config",
       "required": false,

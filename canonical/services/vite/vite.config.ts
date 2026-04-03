@@ -452,6 +452,7 @@ const urlRewritePlugin = {
 
 export default defineConfig({
   root: '/app/artifacts',
+  base: process.env.VITE_BASE || '/',
   plugins: [
     performanceTracingPlugin,  // FIXED: Now uses Map for timing tracking, doesn't interfere with esbuild
     requestLoggerPlugin,       // Logs all HTTP requests (enable with VITE_REQUEST_LOG=true)
