@@ -407,29 +407,37 @@ const artifactsRewritePlugin = {
 // Plugin to handle URL rewriting for /artifacts/* and /viewers/* requests
 // - /artifacts/* URLs → /* for file serving
 // - /viewers/:viewerName → /canonical/viewers/:viewerName/ (SPA serving)
-const urlRewritePlugin = {
-  name: 'url-rewrite',
-  apply: 'serve',
-  configureServer(server) {
-    server.middlewares.use((req, res, next) => {
-      // Rewrite /artifacts/* URLs to /* for file serving
-      if (req.url.startsWith('/artifacts/')) {
-        req.url = req.url.replace('/artifacts', '')
-        return next()
-      }
+// - Handles both /viewers/* and /app/viewers/* (depends on base path)
+const urlRewritePlugin = (() => {
+  const baseEnv = process.env.VITE_BASE || '/'
+  const base = baseEnv.endsWith('/') ? baseEnv.slice(0, -1) : baseEnv
 
-      // Rewrite /viewers/:viewerName to /canonical/viewers/:viewerName/
-      // This allows Vite to serve the index.html from canonical structure
-      const match = req.url?.match(/^\/viewers\/([^/?#]+)(\/)?(\?.*)?$/)
-      if (match) {
-        const viewerName = match[1]
-        req.url = `/canonical/viewers/${viewerName}/`
-      }
+  return {
+    name: 'url-rewrite',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        // Rewrite /artifacts/* URLs to /* for file serving
+        if (req.url.startsWith('/artifacts/')) {
+          req.url = req.url.replace('/artifacts', '')
+          return next()
+        }
 
-      next()
-    })
-  },
-}
+        // Rewrite /viewers/:viewerName to /canonical/viewers/:viewerName/
+        // This allows Vite to serve the index.html from canonical structure
+        // Support both /viewers/* (base: /) and /app/viewers/* (base: /app)
+        const pattern = base ? `^${base}/viewers/([^/?#]+)(/)?(\\?.*)?$` : `^/viewers/([^/?#]+)(/)?(\\?.*)?$`
+        const match = req.url?.match(new RegExp(pattern))
+        if (match) {
+          const viewerName = match[1]
+          req.url = `/canonical/viewers/${viewerName}/`
+        }
+
+        next()
+      })
+    },
+  }
+})()
 
 /**
  * Vite configuration for ScareVerse Artifacts Compilation Service
