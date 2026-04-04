@@ -429,22 +429,28 @@ const urlRewritePlugin = (() => {
         if (match) {
           const viewerName = match[1]
           const indexPath = `/canonical/viewers/${viewerName}/index.html`
+          const fullPath = path.join(__dirname, indexPath)
 
-          // Read and serve index.html with base tag injected
-          fs.readFile(path.join(__dirname, indexPath), 'utf-8', (err, html) => {
-            if (err) {
-              console.error(`[url-rewrite] Failed to read ${indexPath}: ${err.message}`)
-              return next()
-            }
+          console.error(`[url-rewrite] Matched viewer: ${viewerName}`)
+          console.error(`[url-rewrite] Reading from: ${fullPath}`)
+
+          try {
+            // Read and serve index.html with base tag injected (SYNC to avoid async timing issues)
+            const html = fs.readFileSync(fullPath, 'utf-8')
 
             // Inject <base href="{base}/" into <head>
             const baseTag = base ? `<base href="${base}/" />` : `<base href="/" />`
             const modifiedHtml = html.replace('<head>', `<head>\n  ${baseTag}`)
 
+            console.error(`[url-rewrite] Serving index.html for ${viewerName} with base: ${base || '/'}`)
             res.setHeader('Content-Type', 'text/html; charset=utf-8')
             res.end(modifiedHtml)
-          })
-          return
+            return
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            console.error(`[url-rewrite] Failed to read ${fullPath}: ${msg}`)
+            return next()
+          }
         }
 
         next()
