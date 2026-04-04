@@ -406,7 +406,7 @@ const artifactsRewritePlugin = {
 
 // Plugin to handle URL rewriting for /artifacts/* and /viewers/* requests
 // - /artifacts/* URLs → /* for file serving
-// - /viewers/:viewerName → serve index.html with base tag injected dynamically
+// - /viewers/:viewerName → serve index.html
 const urlRewritePlugin = {
   name: 'url-rewrite',
   apply: 'serve',
@@ -426,30 +426,6 @@ const urlRewritePlugin = {
         if (url.startsWith('/artifacts/')) {
           console.error(`[url-rewrite] REWRITING: ${url} → ${url.replace('/artifacts', '')}`)
           req.url = url.replace('/artifacts', '')
-          return next()
-        }
-
-        // Rewrite URLs that don't start with base but should be served within it
-        // e.g., /canonical/* → /app/canonical/* when base: /app
-        // BUT: Don't rewrite backend/system routes
-        if (base && !url.startsWith(base) && !url.startsWith('/@vite')) {
-          // Skip rewriting for backend and system routes
-          const skipRewritePatterns = [
-            /^\/api\//,           // Backend API
-            /^\/health/,          // Health checks
-            /^\/socket\.io/,      // WebSocket
-            /^\/\.well-known/,    // ACME/well-known
-          ]
-
-          const shouldSkip = skipRewritePatterns.some(pattern => pattern.test(url))
-          if (shouldSkip) {
-            console.error(`[url-rewrite] SKIP REWRITE (system route): ${url}`)
-            return next()
-          }
-
-          const rewritten = `${base}${url}`
-          console.error(`[url-rewrite] PREPENDING BASE: ${url} → ${rewritten}`)
-          req.url = rewritten
           return next()
         }
 
@@ -475,7 +451,7 @@ const urlRewritePlugin = {
               return next()
             }
 
-            // Read and serve index.html as-is (no base tag needed - all URLs already at /)
+            // Read and serve index.html
             const html = fs.readFileSync(fullPath, 'utf-8')
             console.error(`[url-rewrite] ✅ FILE READ: ${fullPath.length} bytes`)
             console.error(`[url-rewrite] ✅ SERVING index.html for ${viewerName}`)
@@ -517,7 +493,6 @@ const urlRewritePlugin = {
 
 export default defineConfig({
   root: '/app/artifacts',
-  base: '/',
   plugins: [
     performanceTracingPlugin,  // FIXED: Now uses Map for timing tracking, doesn't interfere with esbuild
     requestLoggerPlugin,       // Logs all HTTP requests (enable with VITE_REQUEST_LOG=true)
