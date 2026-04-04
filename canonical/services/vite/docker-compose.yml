@@ -43,6 +43,10 @@ services:
       # CORS
       - VITE_CORS_ORIGINS=${VITE_CORS_ORIGINS:-http://localhost:8000,http://localhost:5173,http://localhost:5050}
 
+      # Vite base path (injected by orchestration via manifest injected_env_vars)
+      # Resolves from settings.config.vite.base (e.g., '/app' for tunnel, '/' for localhost)
+      - VITE_BASE=${VITE_BASE:-/}
+
       # Tunnel FQDN (injected by orchestration Phase 7 via manifest injected_env_vars)
       # When set, Vite is aware of its public subdomain address.
       - TUNNEL_FQDN=${TUNNEL_FQDN:-}
