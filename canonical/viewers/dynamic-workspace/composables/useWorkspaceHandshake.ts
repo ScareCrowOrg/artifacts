@@ -96,23 +96,25 @@ const VALIDATE_SESSION_URL = (() => {
 
 /**
  * Allowed Cockpit origins. Messages from other origins are silently dropped.
- * Override via VITE_COCKPIT_ORIGINS env var (comma-separated list).
+ * Must be set via VITE_COCKPIT_ORIGINS env var (comma-separated list).
  */
 const EXPECTED_COCKPIT_ORIGINS: string[] = (() => {
-  const origins = typeof import.meta !== 'undefined' ? (import.meta as any).env?.VITE_COCKPIT_ORIGINS : undefined
-  console.log('[useWorkspaceHandshake] VITE_COCKPIT_ORIGINS:', {
+  const env = typeof import.meta !== 'undefined' ? (import.meta as any).env : {}
+  const origins = env.VITE_COCKPIT_ORIGINS
+
+  console.log('[useWorkspaceHandshake] 🔍 VITE_COCKPIT_ORIGINS:', {
     raw: origins,
     type: typeof origins,
-    isString: typeof origins === 'string',
-    length: typeof origins === 'string' ? origins.length : 'N/A',
   })
+
   if (typeof origins === 'string' && origins.length > 0) {
     const parsed = origins.split(',').map((o: string) => o.trim()).filter(Boolean)
-    console.log('[useWorkspaceHandshake] VITE_COCKPIT_ORIGINS parsed:', parsed)
+    console.log('[useWorkspaceHandshake] ✅ VITE_COCKPIT_ORIGINS resolved:', parsed)
     return parsed
   }
+
   const fallback = ['http://localhost:5173', 'http://localhost:8000', 'http://127.0.0.1:5173', 'http://localhost:5052']
-  console.log('[useWorkspaceHandshake] Using fallback COCKPIT_ORIGINS:', fallback)
+  console.log('[useWorkspaceHandshake] ⚠️ VITE_COCKPIT_ORIGINS not set, using fallback:', fallback)
   return fallback
 })()
 
@@ -130,18 +132,42 @@ export function useWorkspaceHandshake() {
     workspaceId: string,
     sessionToken: string,
   ): Promise<{ userId: string }> {
-    const response = await fetch(`${VALIDATE_SESSION_URL}/api/workspace/validate-session`, {
+    const url = `${VALIDATE_SESSION_URL}/api/workspace/validate-session`
+
+    console.log('[useWorkspaceHandshake] 🔐 Starting session validation', {
+      url,
+      workspaceId,
+      tokenPreview: sessionToken.substring(0, 20) + '...',
+      tokenLength: sessionToken.length,
+    })
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspaceId, sessionToken }),
     })
 
+    console.log('[useWorkspaceHandshake] 📡 Backend response', {
+      status: response.status,
+      ok: response.ok,
+      statusText: response.statusText,
+    })
+
     if (!response.ok) {
       const detail = await response.text().catch(() => 'unknown error')
+      console.error('[useWorkspaceHandshake] ❌ Validation failed', {
+        status: response.status,
+        detail,
+      })
       throw new Error(`VALIDATION_FAILED: ${response.status} ${detail}`)
     }
 
-    return response.json()
+    const data = await response.json()
+    console.log('[useWorkspaceHandshake] ✅ Validation succeeded', {
+      userId: data.userId,
+    })
+
+    return data
   }
 
   /**
@@ -195,15 +221,35 @@ export function useWorkspaceHandshake() {
   // ── Message handler ────────────────────────────────────────────────────────
 
   async function handleMessage(event: MessageEvent) {
+    // ⚠️ CRITICAL: Log ALL incoming messages for debugging origin issues
+    console.log('[useWorkspaceHandshake] 📨 postMessage received', {
+      timestamp: new Date().toISOString(),
+      origin: event.origin,
+      dataType: (event.data as any)?.type,
+      expectedOrigins: EXPECTED_COCKPIT_ORIGINS,
+    })
+
     // Security: validate origin FIRST before processing any message content
     if (!EXPECTED_COCKPIT_ORIGINS.includes(event.origin)) {
-      log.warn('[WORKSPACE] Rejected message from unexpected origin', { origin: event.origin })
+      console.error('[useWorkspaceHandshake] ❌ REJECTED - Origin not in whitelist', {
+        origin: event.origin,
+        expectedOrigins: EXPECTED_COCKPIT_ORIGINS,
+        messageType: (event.data as any)?.type,
+        timestamp: new Date().toISOString(),
+      })
+      log.warn('[WORKSPACE] Rejected message from unexpected origin', { origin: event.origin, expected: EXPECTED_COCKPIT_ORIGINS })
       return
     }
+
+    console.log('[useWorkspaceHandshake] ✅ Origin validated, processing message', {
+      origin: event.origin,
+      dataType: (event.data as any)?.type,
+    })
 
     const data = event.data as any
 
     if (!data || !data.type) {
+      console.warn('[useWorkspaceHandshake] ⚠️ Message has no type field', { data })
       return
     }
 
@@ -276,9 +322,47 @@ export function useWorkspaceHandshake() {
       return
     }
 
+    console.log('[useWorkspaceHandshake] 🚀 INIT_WORKSPACE message received', {
+      timestamp: new Date().toISOString(),
+      origin: event.origin,
+      fullData: data,
+    })
+
     log.info('[WORKSPACE] INIT_WORKSPACE received', data)
 
     const { workspaceId, sessionToken, userId, cockpitOrigin } = data.payload ?? {}
+
+    console.log('[useWorkspaceHandshake] 📋 INIT_WORKSPACE payload analysis', {
+      hasWorkspaceId: !!workspaceId,
+      workspaceId,
+      hasSessionToken: !!sessionToken,
+      sessionTokenLength: sessionToken ? sessionToken.length : 0,
+      sessionTokenPreview: sessionToken ? sessionToken.substring(0, 20) + '...' : 'MISSING',
+      hasUserId: !!userId,
+      userId,
+      hasCockpitOrigin: !!cockpitOrigin,
+      cockpitOrigin,
+    })
+
+    // Decode JWT to inspect audience and other claims
+    if (sessionToken) {
+      try {
+        const parts = sessionToken.split('.')
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]))
+          console.log('[useWorkspaceHandshake] 🔐 JWT Claims:', {
+            aud: payload.aud,
+            sub: payload.sub,
+            iat: payload.iat,
+            exp: payload.exp,
+            workspaceId: payload.workspaceId,
+            allClaims: Object.keys(payload),
+          })
+        }
+      } catch (e) {
+        console.warn('[useWorkspaceHandshake] ⚠️ Failed to decode JWT:', e)
+      }
+    }
 
     log.info('[WORKSPACE] INIT_WORKSPACE payload parsed', {
       hasWorkspaceId: !!workspaceId,
@@ -322,11 +406,17 @@ export function useWorkspaceHandshake() {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   onMounted(() => {
+    console.log('[useWorkspaceHandshake] 🎬 Component mounted, registering postMessage listener', {
+      expectedOrigins: EXPECTED_COCKPIT_ORIGINS,
+      windowLocation: window.location.href,
+      timestamp: new Date().toISOString(),
+    })
     window.addEventListener('message', handleMessage)
     log.info('[WORKSPACE] useWorkspaceHandshake mounted – listening for INIT_WORKSPACE')
   })
 
   onUnmounted(() => {
+    console.log('[useWorkspaceHandshake] 🔌 Component unmounted, removing postMessage listener')
     window.removeEventListener('message', handleMessage)
   })
 
