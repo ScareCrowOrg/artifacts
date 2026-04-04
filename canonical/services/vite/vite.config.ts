@@ -270,42 +270,37 @@ const errorInterceptionPlugin = {
 
 // Viewer Warmup Plugin - Pre-compile viewers on startup
 // Automatically discovers and pre-compiles all viewers to avoid cold-start delays
-const viewerWarmupPlugin = (() => {
-  const baseEnv = process.env.VITE_BASE || '/'
-  const base = baseEnv.endsWith('/') ? baseEnv.slice(0, -1) : baseEnv
-  const basePath = base || ''
+const viewerWarmupPlugin = {
+  name: 'viewer-warmup',
+  apply: 'serve',
+  enforce: 'post',
 
-  return {
-    name: 'viewer-warmup',
-    apply: 'serve',
-    enforce: 'post',
+  async configureServer(server) {
+    // Schedule warmup after server is ready
+    setTimeout(async () => {
+      try {
+        const viewersDir = path.resolve(__dirname, 'canonical/viewers')
 
-    async configureServer(server) {
-      // Schedule warmup after server is ready
-      setTimeout(async () => {
-        try {
-          const viewersDir = path.resolve(__dirname, 'canonical/viewers')
+        // Check if viewers directory exists
+        if (!fs.existsSync(viewersDir)) {
+          console.error('❌ [Viewer Warmup] Viewers directory not found:', viewersDir)
+          return
+        }
 
-          // Check if viewers directory exists
-          if (!fs.existsSync(viewersDir)) {
-            console.error('❌ [Viewer Warmup] Viewers directory not found:', viewersDir)
-            return
-          }
+        const viewers = fs.readdirSync(viewersDir).filter(f => {
+          return fs.statSync(path.join(viewersDir, f)).isDirectory()
+        })
 
-          const viewers = fs.readdirSync(viewersDir).filter(f => {
-            return fs.statSync(path.join(viewersDir, f)).isDirectory()
-          })
+        console.error('\n' + '━'.repeat(100))
+        console.error('🔥 VIEWER WARMUP STARTED')
+        console.error(`   Found ${viewers.length} viewers to pre-compile`)
+        console.error('━'.repeat(100) + '\n')
 
-          console.error('\n' + '━'.repeat(100))
-          console.error('🔥 VIEWER WARMUP STARTED')
-          console.error(`   Found ${viewers.length} viewers to pre-compile`)
-          console.error('━'.repeat(100) + '\n')
+        let successCount = 0
+        let failCount = 0
 
-          let successCount = 0
-          let failCount = 0
-
-          for (const viewer of viewers) {
-            const viewerUrl = `http://localhost:5052${basePath}/canonical/viewers/${viewer}/main.ts`
+        for (const viewer of viewers) {
+          const viewerUrl = `http://localhost:5052/viewers/${viewer}/main.ts`
             try {
               const startTime = performance.now()
               const response = await fetch(viewerUrl)
@@ -333,7 +328,6 @@ const viewerWarmupPlugin = (() => {
       }, 2000) // Wait 2s for Vite to initialize
     },
 }
-})()
 
 // Request Logger Plugin - Logs all HTTP requests processed by Vite
 const requestLoggerPlugin = {
@@ -413,19 +407,12 @@ const artifactsRewritePlugin = {
 // Plugin to handle URL rewriting for /artifacts/* and /viewers/* requests
 // - /artifacts/* URLs → /* for file serving
 // - /viewers/:viewerName → serve index.html with base tag injected dynamically
-const urlRewritePlugin = (() => {
-  const baseEnv = process.env.VITE_BASE || '/'
-  const base = baseEnv.endsWith('/') ? baseEnv.slice(0, -1) : baseEnv
-
-  console.error(`[url-rewrite] PLUGIN DEFINITION: baseEnv="${baseEnv}", base="${base}"`)
-
-  return {
-    name: 'url-rewrite',
-    apply: 'serve',
-    configureServer(server) {
-      console.error(`[url-rewrite] MIDDLEWARE INITIALIZED`)
-      console.error(`[url-rewrite] base: "${base}"`)
-      console.error(`[url-rewrite] __dirname: "${__dirname}"`)
+const urlRewritePlugin = {
+  name: 'url-rewrite',
+  apply: 'serve',
+  configureServer(server) {
+    console.error(`[url-rewrite] MIDDLEWARE INITIALIZED`)
+    console.error(`[url-rewrite] __dirname: "${__dirname}"`)
 
       server.middlewares.use((req, res, next) => {
         const url = req.url || '/'
@@ -467,8 +454,7 @@ const urlRewritePlugin = (() => {
         }
 
         // Match /viewers/:viewerName (with optional trailing slash/query)
-        // Support both /viewers/* (base: /) and /app/viewers/* (base: /app)
-        const pattern = base ? `^${base}/viewers/([^/?#]+)(/)?(\\?.*)?$` : `^/viewers/([^/?#]+)(/)?(\\?.*)?$`
+        const pattern = `^/viewers/([^/?#]+)(/)?(\\?.*)?$`
         const regex = new RegExp(pattern)
         console.error(`[url-rewrite] PATTERN: ${pattern}`)
         console.error(`[url-rewrite] TESTING: ${url} against pattern`)
@@ -489,18 +475,12 @@ const urlRewritePlugin = (() => {
               return next()
             }
 
-            // Read and serve index.html with base tag injected (SYNC to avoid async timing issues)
+            // Read and serve index.html as-is (no base tag needed - all URLs already at /)
             const html = fs.readFileSync(fullPath, 'utf-8')
             console.error(`[url-rewrite] ✅ FILE READ: ${fullPath.length} bytes`)
-
-            // Inject <base href="{base}/" into <head>
-            const baseTag = base ? `<base href="${base}/" />` : `<base href="/" />`
-            const modifiedHtml = html.replace('<head>', `<head>\n  ${baseTag}`)
-            console.error(`[url-rewrite] ✅ BASE TAG INJECTED: "${baseTag}"`)
-
-            console.error(`[url-rewrite] ✅ SERVING index.html for ${viewerName} with base: ${base || '/'}`)
+            console.error(`[url-rewrite] ✅ SERVING index.html for ${viewerName}`)
             res.setHeader('Content-Type', 'text/html; charset=utf-8')
-            res.end(modifiedHtml)
+            res.end(html)
             return
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
@@ -514,8 +494,7 @@ const urlRewritePlugin = (() => {
         next()
       })
     },
-  }
-})()
+}
 
 /**
  * Vite configuration for ScareVerse Artifacts Compilation Service
@@ -538,7 +517,7 @@ const urlRewritePlugin = (() => {
 
 export default defineConfig({
   root: '/app/artifacts',
-  base: process.env.VITE_BASE || '/',
+  base: '/',
   plugins: [
     performanceTracingPlugin,  // FIXED: Now uses Map for timing tracking, doesn't interfere with esbuild
     requestLoggerPlugin,       // Logs all HTTP requests (enable with VITE_REQUEST_LOG=true)
