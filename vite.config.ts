@@ -442,6 +442,30 @@ const urlRewritePlugin = (() => {
           return next()
         }
 
+        // Rewrite URLs that don't start with base but should be served within it
+        // e.g., /canonical/* → /app/canonical/* when base: /app
+        // BUT: Don't rewrite backend/system routes
+        if (base && !url.startsWith(base) && !url.startsWith('/@vite')) {
+          // Skip rewriting for backend and system routes
+          const skipRewritePatterns = [
+            /^\/api\//,           // Backend API
+            /^\/health/,          // Health checks
+            /^\/socket\.io/,      // WebSocket
+            /^\/\.well-known/,    // ACME/well-known
+          ]
+
+          const shouldSkip = skipRewritePatterns.some(pattern => pattern.test(url))
+          if (shouldSkip) {
+            console.error(`[url-rewrite] SKIP REWRITE (system route): ${url}`)
+            return next()
+          }
+
+          const rewritten = `${base}${url}`
+          console.error(`[url-rewrite] PREPENDING BASE: ${url} → ${rewritten}`)
+          req.url = rewritten
+          return next()
+        }
+
         // Match /viewers/:viewerName (with optional trailing slash/query)
         // Support both /viewers/* (base: /) and /app/viewers/* (base: /app)
         const pattern = base ? `^${base}/viewers/([^/?#]+)(/)?(\\?.*)?$` : `^/viewers/([^/?#]+)(/)?(\\?.*)?$`
