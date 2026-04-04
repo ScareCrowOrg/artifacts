@@ -406,8 +406,7 @@ const artifactsRewritePlugin = {
 
 // Plugin to handle URL rewriting for /artifacts/* and /viewers/* requests
 // - /artifacts/* URLs → /* for file serving
-// - /viewers/:viewerName → /{base}/canonical/viewers/:viewerName/ (SPA serving with base preservation)
-// - Handles both /viewers/* (base: /) and /app/viewers/* (base: /app)
+// - /viewers/:viewerName → serve index.html with base tag injected dynamically
 const urlRewritePlugin = (() => {
   const baseEnv = process.env.VITE_BASE || '/'
   const base = baseEnv.endsWith('/') ? baseEnv.slice(0, -1) : baseEnv
@@ -423,14 +422,29 @@ const urlRewritePlugin = (() => {
           return next()
         }
 
-        // Rewrite /viewers/:viewerName to /{base}/canonical/viewers/:viewerName/
-        // Preserves base path so index.html asset paths remain correct
+        // Match /viewers/:viewerName (with optional trailing slash/query)
         // Support both /viewers/* (base: /) and /app/viewers/* (base: /app)
         const pattern = base ? `^${base}/viewers/([^/?#]+)(/)?(\\?.*)?$` : `^/viewers/([^/?#]+)(/)?(\\?.*)?$`
         const match = req.url?.match(new RegExp(pattern))
         if (match) {
           const viewerName = match[1]
-          req.url = base ? `${base}/canonical/viewers/${viewerName}/` : `/canonical/viewers/${viewerName}/`
+          const indexPath = `/canonical/viewers/${viewerName}/index.html`
+
+          // Read and serve index.html with base tag injected
+          fs.readFile(path.join(__dirname, indexPath), 'utf-8', (err, html) => {
+            if (err) {
+              console.error(`[url-rewrite] Failed to read ${indexPath}: ${err.message}`)
+              return next()
+            }
+
+            // Inject <base href="{base}/" into <head>
+            const baseTag = base ? `<base href="${base}/" />` : `<base href="/" />`
+            const modifiedHtml = html.replace('<head>', `<head>\n  ${baseTag}`)
+
+            res.setHeader('Content-Type', 'text/html; charset=utf-8')
+            res.end(modifiedHtml)
+          })
+          return
         }
 
         next()
