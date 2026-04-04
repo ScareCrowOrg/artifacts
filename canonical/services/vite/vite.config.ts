@@ -270,64 +270,70 @@ const errorInterceptionPlugin = {
 
 // Viewer Warmup Plugin - Pre-compile viewers on startup
 // Automatically discovers and pre-compiles all viewers to avoid cold-start delays
-const viewerWarmupPlugin = {
-  name: 'viewer-warmup',
-  apply: 'serve',
-  enforce: 'post',
+const viewerWarmupPlugin = (() => {
+  const baseEnv = process.env.VITE_BASE || '/'
+  const base = baseEnv.endsWith('/') ? baseEnv.slice(0, -1) : baseEnv
+  const basePath = base || ''
 
-  async configureServer(server) {
-    // Schedule warmup after server is ready
-    setTimeout(async () => {
-      try {
-        const viewersDir = path.resolve(__dirname, 'canonical/viewers')
+  return {
+    name: 'viewer-warmup',
+    apply: 'serve',
+    enforce: 'post',
 
-        // Check if viewers directory exists
-        if (!fs.existsSync(viewersDir)) {
-          console.error('❌ [Viewer Warmup] Viewers directory not found:', viewersDir)
-          return
-        }
+    async configureServer(server) {
+      // Schedule warmup after server is ready
+      setTimeout(async () => {
+        try {
+          const viewersDir = path.resolve(__dirname, 'canonical/viewers')
 
-        const viewers = fs.readdirSync(viewersDir).filter(f => {
-          return fs.statSync(path.join(viewersDir, f)).isDirectory()
-        })
+          // Check if viewers directory exists
+          if (!fs.existsSync(viewersDir)) {
+            console.error('❌ [Viewer Warmup] Viewers directory not found:', viewersDir)
+            return
+          }
 
-        console.error('\n' + '━'.repeat(100))
-        console.error('🔥 VIEWER WARMUP STARTED')
-        console.error(`   Found ${viewers.length} viewers to pre-compile`)
-        console.error('━'.repeat(100) + '\n')
+          const viewers = fs.readdirSync(viewersDir).filter(f => {
+            return fs.statSync(path.join(viewersDir, f)).isDirectory()
+          })
 
-        let successCount = 0
-        let failCount = 0
+          console.error('\n' + '━'.repeat(100))
+          console.error('🔥 VIEWER WARMUP STARTED')
+          console.error(`   Found ${viewers.length} viewers to pre-compile`)
+          console.error('━'.repeat(100) + '\n')
 
-        for (const viewer of viewers) {
-          const viewerUrl = `http://localhost:5052/canonical/viewers/${viewer}/main.ts`
-          try {
-            const startTime = performance.now()
-            const response = await fetch(viewerUrl)
-            const duration = (performance.now() - startTime).toFixed(2)
+          let successCount = 0
+          let failCount = 0
 
-            if (response.ok) {
-              console.error(`  ✅ ${viewer.padEnd(30)} ${duration.padStart(6)}ms`)
-              successCount++
-            } else {
-              console.error(`  ⚠️  ${viewer.padEnd(30)} HTTP ${response.status}`)
+          for (const viewer of viewers) {
+            const viewerUrl = `http://localhost:5052${basePath}/canonical/viewers/${viewer}/main.ts`
+            try {
+              const startTime = performance.now()
+              const response = await fetch(viewerUrl)
+              const duration = (performance.now() - startTime).toFixed(2)
+
+              if (response.ok) {
+                console.error(`  ✅ ${viewer.padEnd(30)} ${duration.padStart(6)}ms`)
+                successCount++
+              } else {
+                console.error(`  ⚠️  ${viewer.padEnd(30)} HTTP ${response.status}`)
+                failCount++
+              }
+            } catch (error) {
+              console.error(`  ❌ ${viewer.padEnd(30)} ${error.message}`)
               failCount++
             }
-          } catch (error) {
-            console.error(`  ❌ ${viewer.padEnd(30)} ${error.message}`)
-            failCount++
           }
-        }
 
-        console.error('\n' + '─'.repeat(100))
-        console.error(`✅ VIEWER WARMUP COMPLETED: ${successCount}/${viewers.length} pre-compiled`)
-        console.error('─'.repeat(100) + '\n')
-      } catch (error) {
-        console.error('❌ [Viewer Warmup] Error:', error.message)
-      }
-    }, 2000) // Wait 2s for Vite to initialize
-  },
+          console.error('\n' + '─'.repeat(100))
+          console.error(`✅ VIEWER WARMUP COMPLETED: ${successCount}/${viewers.length} pre-compiled`)
+          console.error('─'.repeat(100) + '\n')
+        } catch (error) {
+          console.error('❌ [Viewer Warmup] Error:', error.message)
+        }
+      }, 2000) // Wait 2s for Vite to initialize
+    },
 }
+})()
 
 // Request Logger Plugin - Logs all HTTP requests processed by Vite
 const requestLoggerPlugin = {
