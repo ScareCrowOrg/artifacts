@@ -411,46 +411,74 @@ const urlRewritePlugin = (() => {
   const baseEnv = process.env.VITE_BASE || '/'
   const base = baseEnv.endsWith('/') ? baseEnv.slice(0, -1) : baseEnv
 
+  console.error(`[url-rewrite] PLUGIN DEFINITION: baseEnv="${baseEnv}", base="${base}"`)
+
   return {
     name: 'url-rewrite',
     apply: 'serve',
     configureServer(server) {
+      console.error(`[url-rewrite] MIDDLEWARE INITIALIZED`)
+      console.error(`[url-rewrite] base: "${base}"`)
+      console.error(`[url-rewrite] __dirname: "${__dirname}"`)
+
       server.middlewares.use((req, res, next) => {
+        const url = req.url || '/'
+
+        // Log every request
+        if (!url.includes('.js') && !url.includes('.css') && !url.includes('.json') && !url.includes('/@vite')) {
+          console.error(`[url-rewrite] REQUEST: ${url}`)
+        }
+
         // Rewrite /artifacts/* URLs to /* for file serving
-        if (req.url.startsWith('/artifacts/')) {
-          req.url = req.url.replace('/artifacts', '')
+        if (url.startsWith('/artifacts/')) {
+          console.error(`[url-rewrite] REWRITING: ${url} → ${url.replace('/artifacts', '')}`)
+          req.url = url.replace('/artifacts', '')
           return next()
         }
 
         // Match /viewers/:viewerName (with optional trailing slash/query)
         // Support both /viewers/* (base: /) and /app/viewers/* (base: /app)
         const pattern = base ? `^${base}/viewers/([^/?#]+)(/)?(\\?.*)?$` : `^/viewers/([^/?#]+)(/)?(\\?.*)?$`
-        const match = req.url?.match(new RegExp(pattern))
+        const regex = new RegExp(pattern)
+        console.error(`[url-rewrite] PATTERN: ${pattern}`)
+        console.error(`[url-rewrite] TESTING: ${url} against pattern`)
+
+        const match = url.match(regex)
         if (match) {
           const viewerName = match[1]
           const indexPath = `/canonical/viewers/${viewerName}/index.html`
           const fullPath = path.join(__dirname, indexPath)
 
-          console.error(`[url-rewrite] Matched viewer: ${viewerName}`)
+          console.error(`[url-rewrite] ✅ MATCHED viewer: ${viewerName}`)
           console.error(`[url-rewrite] Reading from: ${fullPath}`)
 
           try {
+            // Check if file exists first
+            if (!fs.existsSync(fullPath)) {
+              console.error(`[url-rewrite] ❌ FILE NOT FOUND: ${fullPath}`)
+              return next()
+            }
+
             // Read and serve index.html with base tag injected (SYNC to avoid async timing issues)
             const html = fs.readFileSync(fullPath, 'utf-8')
+            console.error(`[url-rewrite] ✅ FILE READ: ${fullPath.length} bytes`)
 
             // Inject <base href="{base}/" into <head>
             const baseTag = base ? `<base href="${base}/" />` : `<base href="/" />`
             const modifiedHtml = html.replace('<head>', `<head>\n  ${baseTag}`)
+            console.error(`[url-rewrite] ✅ BASE TAG INJECTED: "${baseTag}"`)
 
-            console.error(`[url-rewrite] Serving index.html for ${viewerName} with base: ${base || '/'}`)
+            console.error(`[url-rewrite] ✅ SERVING index.html for ${viewerName} with base: ${base || '/'}`)
             res.setHeader('Content-Type', 'text/html; charset=utf-8')
             res.end(modifiedHtml)
             return
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
-            console.error(`[url-rewrite] Failed to read ${fullPath}: ${msg}`)
+            console.error(`[url-rewrite] ❌ ERROR: ${msg}`)
             return next()
           }
+        } else {
+          console.error(`[url-rewrite] NO MATCH: ${url}`)
         }
 
         next()
