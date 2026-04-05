@@ -80,6 +80,26 @@ export interface WorkspaceErrorMessage {
   timestamp: number
 }
 
+export interface ValidateSessionRequestMessage {
+  type: 'VALIDATE_SESSION_REQUEST'
+  payload: {
+    workspaceId: string
+    sessionToken: string
+  }
+  timestamp: number
+}
+
+export interface ValidationResultMessage {
+  type: 'VALIDATION_RESULT'
+  payload: {
+    workspaceId: string
+    success: boolean
+    userId?: string
+    error?: string
+  }
+  timestamp: number
+}
+
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const RUNNER_VERSION = 'v2.0.0-phase1'
@@ -123,51 +143,43 @@ const EXPECTED_COCKPIT_ORIGINS: string[] = (() => {
 export function useWorkspaceHandshake() {
   const store = useWorkspaceStore()
 
+  // Track pending validation request to match response with request
+  let pendingValidationRequest: {
+    workspaceId: string
+    cockpitOrigin: string
+    source: MessageEventSource | null
+  } | null = null
+
   // ── Private helpers ────────────────────────────────────────────────────────
 
   /**
-   * Call CentralHub to validate the JWT and workspace ID.
+   * Send VALIDATE_SESSION_REQUEST to Cockpit (parent frame).
+   * Cockpit will perform the actual validation fetch to avoid CORS issues with loopback addresses.
    */
-  async function validateSessionWithBackend(
+  function requestValidation(
     workspaceId: string,
     sessionToken: string,
-  ): Promise<{ userId: string }> {
-    const url = `${VALIDATE_SESSION_URL}/api/workspace/validate-session`
-
-    console.log('[useWorkspaceHandshake] 🔐 Starting session validation', {
-      url,
+    cockpitOrigin: string,
+    source: MessageEventSource | null,
+  ) {
+    const message: ValidateSessionRequestMessage = {
+      type: 'VALIDATE_SESSION_REQUEST',
+      payload: {
+        workspaceId,
+        sessionToken,
+      },
+      timestamp: Date.now(),
+    }
+    console.log('[useWorkspaceHandshake] 📤 Requesting session validation from Cockpit', {
       workspaceId,
       tokenPreview: sessionToken.substring(0, 20) + '...',
-      tokenLength: sessionToken.length,
+      cockpitOrigin,
     })
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workspaceId, sessionToken }),
-    })
-
-    console.log('[useWorkspaceHandshake] 📡 Backend response', {
-      status: response.status,
-      ok: response.ok,
-      statusText: response.statusText,
-    })
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => 'unknown error')
-      console.error('[useWorkspaceHandshake] ❌ Validation failed', {
-        status: response.status,
-        detail,
-      })
-      throw new Error(`VALIDATION_FAILED: ${response.status} ${detail}`)
+    if (source) {
+      ;(source as Window).postMessage(message, cockpitOrigin)
+    } else {
+      window.parent.postMessage(message, cockpitOrigin)
     }
-
-    const data = await response.json()
-    console.log('[useWorkspaceHandshake] ✅ Validation succeeded', {
-      userId: data.userId,
-    })
-
-    return data
   }
 
   /**
@@ -317,6 +329,40 @@ export function useWorkspaceHandshake() {
       return
     }
 
+    // ── Handle VALIDATION_RESULT message (response from Cockpit validation) ──
+    if (data.type === 'VALIDATION_RESULT') {
+      const { workspaceId, success, userId, error } = (data as Partial<ValidationResultMessage>).payload ?? {}
+
+      console.log('[useWorkspaceHandshake] 📥 VALIDATION_RESULT received', {
+        workspaceId,
+        success,
+        userId,
+        error,
+      })
+
+      if (!pendingValidationRequest) {
+        console.warn('[useWorkspaceHandshake] ⚠️ VALIDATION_RESULT received but no pending request')
+        return
+      }
+
+      if (success && userId) {
+        store.setReady()
+        log.info('[WORKSPACE] Session validation succeeded', { workspaceId, userId })
+        console.log('[useWorkspaceHandshake] ✅ Validation succeeded, sending RUNNER_READY')
+        sendReady(workspaceId, pendingValidationRequest.cockpitOrigin, pendingValidationRequest.source)
+      } else {
+        const code = 'VALIDATION_FAILED'
+        const message = error || 'Session validation failed'
+        store.setError(code, message)
+        log.error('[WORKSPACE] Session validation failed', { code, message })
+        console.error('[useWorkspaceHandshake] ❌ Validation failed, sending RUNNER_ERROR', { error })
+        sendError(workspaceId, code, message, pendingValidationRequest.cockpitOrigin, pendingValidationRequest.source)
+      }
+
+      pendingValidationRequest = null
+      return
+    }
+
     // ── Handle INIT_WORKSPACE message ──────────────────────────────────────
     if (data.type !== 'INIT_WORKSPACE') {
       return
@@ -388,19 +434,15 @@ export function useWorkspaceHandshake() {
       storedTokenPreview: store.sessionToken.substring(0, 20) + '...',
     })
 
-    try {
-      await validateSessionWithBackend(workspaceId, sessionToken)
-      store.setReady()
-      log.info('[WORKSPACE] RUNNER_READY – session validated', { workspaceId })
-      sendReady(workspaceId, cockpitOrigin, event.source)
-    } catch (err) {
-      const code = 'VALIDATION_FAILED'
-      const message =
-        err instanceof Error ? err.message : 'Failed to validate session: Backend unreachable'
-      store.setError(code, message)
-      log.error('[WORKSPACE] RUNNER_ERROR', { code, message })
-      sendError(workspaceId, code, message, cockpitOrigin, event.source)
+    // Store pending validation request details for when VALIDATION_RESULT arrives
+    pendingValidationRequest = {
+      workspaceId,
+      cockpitOrigin,
+      source: event.source,
     }
+
+    // Request Cockpit to validate the session (avoids CORS issues with loopback)
+    requestValidation(workspaceId, sessionToken, cockpitOrigin, event.source)
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
