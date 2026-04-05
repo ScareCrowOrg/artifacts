@@ -6,7 +6,10 @@
   "image": "localhost:5001/scareverse-backend:staging",
   "imageTag": "staging",
   "checksum": "sha256:7474f57639e8d654ec71a2b85002956447f56eebf5865c32bb91528dee4dc6ec",
-  "lastBuilt": "2026-03-15T16:44:14.110Z",
+  "lastBuilt": "2026-04-05T17:51:06.981Z",
+  "dependencies": [
+    "backend/"
+  ],
   "generate_env_file": false,
   "totp_seed": true,
   "injected_env_vars": [

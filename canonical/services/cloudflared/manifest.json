@@ -4,6 +4,7 @@
   "build": false,
   "image": "localhost:5001/scareverse-cloudflared:staging",
   "imageTag": "staging",
+  "dependencies": [],
   "generate_env_file": false,
   "totp_seed": false,
   "injected_env_vars": [
@@ -13,5 +14,6 @@
       "required": false,
       "description": "JSON array of Cloudflare tunnel ingress rules, generated from planet_name (e.g. [{\"hostname\":\"planet.scareverse.net\",\"service\":\"http://nginx-unity:80\"},{\"service\":\"http_status:404\"}])"
     }
-  ]
+  ],
+  "lastBuilt": "2026-04-05T17:51:06.982Z"
 }

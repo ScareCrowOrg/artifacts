@@ -5,5 +5,7 @@
   "build": false,
   "image": "localhost:5001/scareverse-node-pty-service:staging",
   "imageTag": "staging",
-  "generate_env_file": false
+  "dependencies": [],
+  "generate_env_file": false,
+  "lastBuilt": "2026-04-05T17:51:06.984Z"
 }
