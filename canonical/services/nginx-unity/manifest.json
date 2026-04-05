@@ -27,5 +27,5 @@
       "description": "Docker service name for the backend API upstream (e.g. backend). Read from config.backend.service_name."
     }
   ],
-  "lastBuilt": "2026-04-05T17:51:06.983Z"
+  "lastBuilt": "2026-04-05T17:56:18.993Z"
 }
