@@ -15,6 +15,12 @@
       "source": "config",
       "required": false,
       "description": "Fully-qualified domain name of the Cloudflare tunnel subdomain. Used for CORS configuration and building public API URLs."
+    },
+    {
+      "name": "VITE_SCARERUNNER_URL",
+      "source": "config",
+      "required": false,
+      "description": "ScareRunner base URL for frontend (translations, cell types, API). Resolved from settings.vite.scarerunner.url"
     }
   ]
 }
