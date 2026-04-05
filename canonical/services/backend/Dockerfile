@@ -22,19 +22,13 @@ ARG BACKEND_SRC_PATH=backend
 
 # System dependencies
 # - curl: health checks
-# - ca-certificates, gnupg: Node.js setup
-# - nodejs: required for @google/gemini-cli
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    ca-certificates \
-    gnupg \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Gemini CLI globally (stays in backend container per architecture decision)
-RUN npm install -g @google/gemini-cli@latest
+# Note: Gemini CLI moved to dedicated service (future issue).
+# Backend focuses solely on FastAPI + uvicorn.
 
 # Create non-root user
 RUN useradd -m -u 1000 -s /bin/bash appuser
