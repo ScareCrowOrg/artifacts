@@ -637,7 +637,7 @@ export default defineConfig({
   
   // Logging
   logLevel: 'debug',  // Enable verbose logging to trace esbuild issues
-  clearScreen: false,  // Don't clear terminal on startup
+  clearScreen: false,  // Don't clear terminal on startup (change detection test 2026-04-05)
   
   // Test configuration
   test: {

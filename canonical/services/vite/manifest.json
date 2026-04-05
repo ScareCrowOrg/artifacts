@@ -5,7 +5,7 @@
   "image": "localhost:5001/scareverse-vite:staging",
   "imageTag": "staging",
   "checksum": "sha256:c4cabc1cddf7ee4e8173bf88ac1c644bb19009ab6a6226d58af9741978e54596",
-  "lastBuilt": "2026-04-05T18:16:34.381Z",
+  "lastBuilt": "2026-04-05T19:44:34.544Z",
   "dependencies": [
     "artifacts/package.json",
     "artifacts/tailwind.config.cjs",
