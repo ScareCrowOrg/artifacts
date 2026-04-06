@@ -6,7 +6,6 @@
   "image": "localhost:5001/scareverse-backend:staging",
   "imageTag": "staging",
   "checksum": "sha256:7474f57639e8d654ec71a2b85002956447f56eebf5865c32bb91528dee4dc6ec",
-  "lastBuilt": "2026-04-05T23:19:24.285Z",
   "dependencies": [
     "backend/"
   ],
@@ -25,5 +24,6 @@
       "required": false,
       "description": "ScareRunner base URL for frontend (translations, cell types, API). Resolved from settings.vite.scarerunner.url"
     }
-  ]
+  ],
+  "lastBuilt": "2026-04-06T01:55:33.289Z"
 }
