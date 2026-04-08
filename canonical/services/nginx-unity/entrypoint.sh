@@ -45,13 +45,15 @@ for i in $(seq 1 60); do
     sleep 1
 done
 
-# ── Register initial heartbeat ────────────────────────────────────────────────
-echo "[entrypoint] Registering initial heartbeat..."
-python3 /app/artifacts/canonical/services/nginx-unity/heartbeat.py || true
+# ── Start heartbeat daemon ────────────────────────────────────────────────────
+echo "[entrypoint] Starting heartbeat daemon..."
+python3 /app/artifacts/canonical/services/nginx-unity/heartbeat.py &
+HEARTBEAT_PID=$!
 
 # ── Signal forwarding ─────────────────────────────────────────────────────────
 _shutdown() {
     echo "[entrypoint] SIGTERM received - shutting down gracefully..."
+    kill $HEARTBEAT_PID 2>/dev/null || true
     kill $SOCAT_PID 2>/dev/null || true
     kill $UNITD_PID 2>/dev/null || true
     exit 0
