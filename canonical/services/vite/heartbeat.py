@@ -32,18 +32,16 @@ def main() -> None:
         logger.warning("BaseService unavailable – heartbeat disabled: %s", exc)
         return
 
-    async def start_heartbeat():
-        """Start heartbeat and exit (task runs in background)."""
+    async def keep_alive():
+        """Start heartbeat and keep it running (continuous renewal)."""
         service = BaseService("vite", logger=logger)
-        # Create background task (fire-and-forget)
-        asyncio.create_task(service.heartbeat())
-        # Give it a moment to initialize
-        await asyncio.sleep(1)
+        # Run heartbeat loop continuously - it will be renewed every heartbeat_interval
+        await service.heartbeat()
 
-    logger.info("Starting heartbeat registration (fire-and-forget)...")
+    logger.info("Starting heartbeat registration...")
     try:
-        asyncio.run(start_heartbeat())
-        logger.info("✅ Heartbeat task started: state:service:vite:available")
+        asyncio.run(keep_alive())
+        logger.info("✅ Heartbeat running continuously: state:service:vite:available")
     except Exception as exc:
         logger.warning("Heartbeat startup failed: %s", exc)
 

@@ -4,9 +4,10 @@
 # 2. Starts uvicorn with optional --reload flag based on UVICORN_RELOAD env var.
 set -e
 
-# Register initial heartbeat before uvicorn starts so the Launcher's heartbeat
-# check succeeds even during a cold start.  Errors are non-fatal (|| true).
-python3 /app/artifacts/canonical/services/backend/heartbeat.py || true
+# Start heartbeat daemon before uvicorn starts so the Launcher's heartbeat
+# check succeeds even during a cold start. Run as background process (&).
+python3 /app/artifacts/canonical/services/backend/heartbeat.py &
+HEARTBEAT_PID=$!
 
 cd /app/backend
 

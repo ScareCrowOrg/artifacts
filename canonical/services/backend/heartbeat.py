@@ -39,16 +39,14 @@ def main() -> None:
         logger.warning("BaseService unavailable – initial heartbeat disabled: %s", exc)
         return
 
-    async def _register() -> None:
+    async def _keep_alive() -> None:
         service = BaseService("backend", logger=logger)
-        asyncio.create_task(service.heartbeat())
-        # Allow the task to complete its first iteration before we exit.
-        await asyncio.sleep(1)
+        await service.heartbeat()
 
     logger.info("Starting initial heartbeat registration (fire-and-forget)...")
     try:
-        asyncio.run(_register())
-        logger.info("✅ Heartbeat registered: state:service:backend:available")
+        asyncio.run(_keep_alive())
+        logger.info("✅ Heartbeat running continuously")
     except Exception as exc:
         logger.warning("Heartbeat startup failed: %s", exc)
 
