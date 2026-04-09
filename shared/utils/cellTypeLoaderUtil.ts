@@ -21,25 +21,23 @@
  */
 
 /**
- * Load cell type JSON from URL, handling both direct JSON and reference files
- * Uses /local endpoint served by Backend (port 5050)
+ * Load cell type JSON from artifacts, handling both direct JSON and reference files
+ * Uses Vite import map to resolve #artifacts/ prefix locally
  *
  * Architecture:
- * - Backend mounts /app/artifacts as /local (main.py lines 359-373)
- * - Frontend fetch('http://localhost:5050/local/canonical/...') → Backend serves from /app/artifacts/canonical/...
- * - This bypasses import map translation issues with fetch()
+ * - Dynamic workspace is now an artifact viewer (served by Vite service)
+ * - Can resolve #artifacts/ paths directly via Vite import map
+ * - No longer needs /local HTTP endpoint (that was old architecture)
+ * - Uses dynamic import() which respects import maps
  *
- * Why /local and not #artifacts:
- * - Import maps only apply to import() statements and <script type="importmap">
- * - fetch() does NOT automatically translate #artifacts aliases
- * - /local is the actual HTTP endpoint available on port 5050
+ * Why #artifacts and not /local:
+ * - Import maps apply to import() statements (fetch() does NOT use them)
+ * - Vite dev server resolves #artifacts/ → /app/artifacts/
+ * - This works in both dev (localhost) and production (all artifacts bundled)
+ * - Eliminates dependency on /local HTTP endpoint from backend
  *
- * Important: Must use FULL URL (http://localhost:5050) not relative path!
- * - fetch('/local/...') would go to http://localhost:5173/local/ (frontend, wrong!)
- * - fetch('http://localhost:5050/local/...') goes to backend (correct!)
- *
- * @param url - URL to load (supports #artifacts or /local prefix)
- * @returns Parsed JSON object or null if not found
+ * @param url - Path to load (supports #artifacts/ or relative path)
+ * @returns Parsed JSON object or resolved content
  * @throws Error if loading fails or reference cannot be resolved
  */
 export async function loadCellTypeJson(url: string, depth: number = 0): Promise<any> {
@@ -51,71 +49,95 @@ export async function loadCellTypeJson(url: string, depth: number = 0): Promise<
   }
 
   try {
-    console.log('📥 [loadCellTypeJson] Fetching URL:', { url, depth })
+    console.log('📥 [loadCellTypeJson] Loading from artifacts:', { url, depth })
 
-    // Backend URL from environment (VITE_SCARERUNNER_URL or default localhost:5050)
-    const backendUrl = import.meta.env.VITE_SCARERUNNER_URL || 'http://localhost:5050'
-
-    // Normalize URL: convert #artifacts to /local and ensure full URL with backend host
-    // #artifacts/canonical/... → http://localhost:5050/local/canonical/...
-    // /local/canonical/... → http://localhost:5050/local/canonical/...
-    let fetchUrl = url
-    if (url.startsWith('#artifacts/')) {
-      fetchUrl = url.replace('#artifacts/', '/local/')
-    }
-
-    // Ensure we have a full URL, not a relative path
-    if (!fetchUrl.startsWith('http://') && !fetchUrl.startsWith('https://')) {
-      if (fetchUrl.startsWith('/')) {
-        fetchUrl = backendUrl + fetchUrl
-      } else {
-        fetchUrl = backendUrl + '/' + fetchUrl
+    // Normalize to #artifacts/ prefix for import map resolution
+    let importPath = url
+    if (!importPath.startsWith('#artifacts/')) {
+      if (importPath.startsWith('/local/')) {
+        // Legacy /local paths → convert to #artifacts/
+        importPath = importPath.replace('/local/', '#artifacts/')
+      } else if (!importPath.startsWith('#artifacts/')) {
+        // Assume it's a relative path, convert to #artifacts/
+        importPath = '#artifacts/' + importPath
       }
     }
 
-    console.log('🔄 [loadCellTypeJson] Resolved URL:', { original: url, resolved: fetchUrl, backendUrl })
+    console.log('🔄 [loadCellTypeJson] Normalized import path:', { original: url, normalized: importPath })
 
-    const response = await fetch(fetchUrl)
+    // Use dynamic import() to load via Vite import map
+    // import(path) respects import maps, whereas fetch() does not
+    let content: any
+    try {
+      // Try to import as a module first (if it's a .json or .ts/js file)
+      const module = await import(importPath)
+      content = module.default || module
+      console.log('✅ [loadCellTypeJson] Loaded as module:', { importPath })
+    } catch (importError) {
+      // If import fails, it might be a text file (reference file)
+      // Fall back to fetch with proper error handling
+      console.log('⚠️ [loadCellTypeJson] Import failed, trying fetch as text:', { importError, importPath })
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      // Convert #artifacts/ to a path that Vite can serve
+      // In dev: #artifacts/... → http://localhost:5052/...
+      // In prod: #artifacts/... is bundled, use import instead
+      const backendUrl = import.meta.env.VITE_SCARERUNNER_URL || 'http://localhost:5050'
+      let fetchUrl = importPath.replace('#artifacts/', '/artifacts/')
+
+      if (!fetchUrl.startsWith('http')) {
+        fetchUrl = backendUrl.replace(/\/$/, '') + fetchUrl
+      }
+
+      console.log('📡 [loadCellTypeJson] Fetching as text:', { fetchUrl })
+      const response = await fetch(fetchUrl)
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      content = await response.text()
     }
 
-    const text = await response.text()
-
     // ⚠️ SAFETY CHECK: Detect HTML responses (error pages)
-    if (text.trim().startsWith('<!doctype') || text.trim().startsWith('<html')) {
+    if (typeof content === 'string' && (content.trim().startsWith('<!doctype') || content.trim().startsWith('<html'))) {
       throw new Error(
-        `Received HTML instead of JSON/reference. URL may not exist or import map not initialized: ${url}`
+        `Received HTML instead of JSON/reference. URL may not exist: ${url}`
       )
     }
 
     // Check if it's JSON or a reference file
-    if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
-      // It's valid JSON
-      console.log('✅ [loadCellTypeJson] Loaded JSON:', { url })
-      return JSON.parse(text)
+    if (typeof content === 'string') {
+      if (content.trim().startsWith('{') || content.trim().startsWith('[')) {
+        // It's valid JSON string
+        console.log('✅ [loadCellTypeJson] Loaded JSON from text:', { url })
+        return JSON.parse(content)
+      }
+
+      // It's a reference file - extract and load the referenced file
+      const refPath = content.trim()
+      console.log('🔗 [loadCellTypeJson] Reference file found:', { refPath, depth })
+
+      const filename = refPath.split('/').pop()
+      if (!filename) {
+        throw new Error(`Invalid reference file format: ${refPath}`)
+      }
+
+      // Load the referenced notebook item type
+      // Convert relative path to #artifacts/ path
+      // ../../notebook_item_types/chat-ia.json → #artifacts/canonical/notebook_item_types/chat-ia.json
+      const notebookItemTypePath = `#artifacts/canonical/notebook_item_types/${filename}`
+      console.log('📥 [loadCellTypeJson] Loading referenced file:', {
+        notebookItemTypePath,
+        nextDepth: depth + 1,
+      })
+
+      // Recursively call to load the referenced file (increment depth)
+      return await loadCellTypeJson(notebookItemTypePath, depth + 1)
     }
 
-    // It's a reference file - extract and load the referenced file
-    const refPath = text.trim()
-    console.log('🔗 [loadCellTypeJson] Reference file found:', { refPath, depth })
-
-    const filename = refPath.split('/').pop()
-    if (!filename) {
-      throw new Error(`Invalid reference file format: ${refPath}`)
-    }
-
-    // Load the referenced notebook item type via /local endpoint
-    // Note: Pass relative path, loadCellTypeJson will resolve to full URL
-    const notebookItemTypePath = `/local/canonical/notebook_item_types/${filename}`
-    console.log('📥 [loadCellTypeJson] Loading referenced file:', {
-      notebookItemTypePath,
-      nextDepth: depth + 1,
-    })
-
-    // Recursively call to load the referenced file (increment depth)
-    return await loadCellTypeJson(notebookItemTypePath, depth + 1)
+    // Already parsed object from import
+    console.log('✅ [loadCellTypeJson] Loaded object:', { url })
+    return content
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
     console.error('❌ [loadCellTypeJson] Failed:', { url, depth, error: errorMsg })

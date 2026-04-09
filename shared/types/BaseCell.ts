@@ -814,8 +814,8 @@ export abstract class BaseCell {
       })
 
       // Use shared utility to load type.json (handles both JSON and reference files)
-      // Uses /local endpoint served by Backend (not #artifacts which fetch() doesn't understand)
-      const typeJsonUrl = `/local/canonical/cell_types/${typeFolder}/type.json`
+      // Uses #artifacts/ import map which Vite resolves to actual artifact paths
+      const typeJsonUrl = `#artifacts/canonical/cell_types/${typeFolder}/type.json`
       const typeDef = await loadCellTypeJson(typeJsonUrl)
 
       console.log('✅ [BaseCell] loadCellTypeFromDiscovery SUCCESS ✅', {

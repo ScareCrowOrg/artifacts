@@ -105,8 +105,8 @@
         {{ saveSuccess }}
       </div>
 
-      <!-- Dev debug overlay -->
-      <pre v-if="isDev" class="fixed top-2 right-2 text-xs bg-black/70 text-green-400 rounded p-2 max-w-xs overflow-auto z-[999]">{{ devInfo }}</pre>
+      <!-- Dev debug overlay (disabled) -->
+      <!-- <pre v-if="isDev" class="fixed top-2 right-2 text-xs bg-black/70 text-green-400 rounded p-2 max-w-xs overflow-auto z-[999]">{{ devInfo }}</pre> -->
     </template>
   </div>
 </template>
