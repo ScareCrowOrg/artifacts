@@ -32,9 +32,9 @@ import type { GridCell } from '../types'
 
 const log = createLogger('composable:cell-i18n-auto')
 
-const SCARERUNNER_URL =
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SCARERUNNER_URL) ||
-  'http://localhost:5050'
+// Note: SCARERUNNER_URL is no longer used for i18n files.
+// Translations are now loaded via Vite's import map (#artifacts/) instead of HTTP.
+// This avoids /local endpoint dependency and works in both dev and production.
 
 /**
  * Normalize locale codes to match translation file naming.
@@ -99,6 +99,9 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
    * Load translations for a cell type and locale.
    * Merges under namespace: cells.{cellTypeName}
    * Tracks loaded state to avoid HTTP request storms.
+   *
+   * Uses dynamic import() to resolve #artifacts/ paths via Vite import map.
+   * Falls back gracefully if translations don't exist (404 is normal for cells without i18n).
    */
   const load = async (cellTypeName: string, locale: string): Promise<void> => {
     // Normalize locale to match translation file naming convention
@@ -114,24 +117,34 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
     }
 
     try {
-      const url = `${SCARERUNNER_URL}/local/canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json`
+      // Use Vite import map to resolve translations from artifacts
+      // Path: #artifacts/canonical/cell_types/{cellTypeName}/frontend/translations/{locale}.json
+      const translationPath = `#artifacts/canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json`
 
-      log.debug('[useAutoLoadCellI18n] Loading translations', { cellTypeName, locale, normalizedLocale, url })
+      log.debug('[useAutoLoadCellI18n] Loading translations', {
+        cellTypeName,
+        locale,
+        normalizedLocale,
+        translationPath,
+      })
 
-      const response = await fetch(url)
-
-      if (!response.ok) {
-        // 404 or error: cell doesn't have translations for this locale
+      // Use dynamic import to load translation file via Vite import map
+      // import() respects import maps, whereas fetch() does not
+      let messages: Record<string, any> | null = null
+      try {
+        const module = await import(translationPath)
+        messages = module.default || module
+      } catch (importError) {
+        // 404 or other error: cell doesn't have translations for this locale
+        // This is normal and expected - not all cells have translations
         log.debug('[useAutoLoadCellI18n] No translations found', {
           cellTypeName,
           normalizedLocale,
-          status: response.status,
+          error: importError instanceof Error ? importError.message : String(importError),
         })
         loadedKeys.add(key) // Mark as attempted to avoid retries
         return
       }
-
-      const messages = await response.json()
 
       if (!messages || Object.keys(messages).length === 0) {
         log.debug('[useAutoLoadCellI18n] Empty translation file', { cellTypeName, normalizedLocale })
@@ -157,7 +170,7 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
         keyCount: totalKeys,
       })
     } catch (err) {
-      // Graceful failure: network error, parse error, etc.
+      // Graceful failure: import error, parse error, etc.
       log.warn('[useAutoLoadCellI18n] Failed to load translations', {
         cellTypeName,
         normalizedLocale,
