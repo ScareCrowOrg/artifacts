@@ -13,9 +13,11 @@
 module.exports = {
   content: [
     './index.html',
-    './canonical/**/*.{vue,js,ts,jsx,tsx}',
-    './shared/**/*.{vue,js,ts,jsx,tsx}',
-    './cells/**/*.{vue,js,ts,jsx,tsx}',
+    // Scan any artifacts runtime (canonical, sandbox, runtime, etc)
+    './**/cell-types/**/*.{vue,jsx,tsx}',
+    './**/viewers/**/*.{vue,jsx,tsx}',
+    './**/book-types/**/*.{vue,jsx,tsx}',
+    './shared/**/*.{vue,jsx,tsx}',
   ],
   theme: {
     extend: {
