@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 REDIS_HOST: str = os.getenv("REDIS_L1_HOST", "localhost")
 REDIS_PORT: int = int(os.getenv("REDIS_L1_PORT", "6380"))
+REDIS_PASSWORD: str = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
 SERVICE_NAME: str = os.getenv("SERVICE_NAME", "backend")
 
 
@@ -62,9 +63,10 @@ class SecretClient:
         self._redis = redis_lib.Redis(
             host=REDIS_HOST,
             port=REDIS_PORT,
+            password=REDIS_PASSWORD,
             decode_responses=False,
         )
-        logger.info(f"[SecretClient] Connected to Redis L1 at {REDIS_HOST}:{REDIS_PORT}")
+        logger.info(f"[SecretClient] Connected to Redis L1 at {REDIS_HOST}:{REDIS_PORT} (with auth)")
 
     def request_secret(self, secret_key: str, timeout: int = 5) -> Optional[str]:
         """
