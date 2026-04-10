@@ -300,7 +300,8 @@ const viewerWarmupPlugin = {
         let failCount = 0
 
         for (const viewer of viewers) {
-          const viewerUrl = `http://localhost:5052/viewers/${viewer}/main.ts`
+          // Fetch viewer root (middleware rewrites to index.html, which uses import maps for main.ts)
+          const viewerUrl = `http://localhost:5052/viewers/${viewer}`
             try {
               const startTime = performance.now()
               const response = await fetch(viewerUrl)
@@ -430,6 +431,8 @@ const urlRewritePlugin = {
         }
 
         // Match /viewers/:viewerName (with optional path segments and query string)
+        // Pattern: /viewers/{viewerName}[/arbitrary/path][?query]
+        // Examples: /viewers/dynamic-workspace, /viewers/dynamic-workspace/main.ts, /viewers/dynamic-workspace?q=1
         const pattern = `^/viewers/([^/?#]+)(/.*)?(\?.*)?$`
         const regex = new RegExp(pattern)
         console.error(`[url-rewrite] PATTERN: ${pattern}`)
