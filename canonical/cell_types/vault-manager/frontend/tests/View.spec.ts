@@ -136,9 +136,9 @@ describe('VaultManagerView', () => {
 
     const executeEvents = wrapper.emitted('execute') as any[]
     expect(executeEvents).toBeTruthy()
-    expect(executeEvents[0][0].action).toBe('create')
-    expect(executeEvents[0][0].payload.secret_key).toBe('my-secret')
-    expect(executeEvents[0][0].payload.value).toBe('my-value')
+    expect(executeEvents[executeEvents.length - 1][0].action).toBe('create')
+    expect(executeEvents[executeEvents.length - 1][0].payload.secret_key).toBe('my-secret')
+    expect(executeEvents[executeEvents.length - 1][0].payload.value).toBe('my-value')
   })
 
   it('shows error when submitting empty create form', async () => {

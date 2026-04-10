@@ -429,8 +429,8 @@ const urlRewritePlugin = {
           return next()
         }
 
-        // Match /viewers/:viewerName (with optional trailing slash/query)
-        const pattern = `^/viewers/([^/?#]+)(/)?(\\?.*)?$`
+        // Match /viewers/:viewerName (with optional path segments and query string)
+        const pattern = `^/viewers/([^/?#]+)(/.*)?(\?.*)?$`
         const regex = new RegExp(pattern)
         console.error(`[url-rewrite] PATTERN: ${pattern}`)
         console.error(`[url-rewrite] TESTING: ${url} against pattern`)
