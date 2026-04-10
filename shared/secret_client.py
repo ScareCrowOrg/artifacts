@@ -85,23 +85,16 @@ class SecretClient:
             timed out or the Launcher rejected it.
         """
         logger.info(f"[SecretClient] Requesting secret: {secret_key} (timeout: {timeout}s)")
-        # Timestamp in milliseconds (matches the Launcher's TypeScript side).
-        timestamp_ms = int(time.time() * 1000)
-        totp_code = self._totp.generate_code(timestamp_ms // 1000)
-        logger.debug(f"[SecretClient] Generated TOTP code for {secret_key}")
 
         request_payload = json.dumps(
             {
                 "service": SERVICE_NAME,
                 "secret_key": secret_key,
-                "timestamp": timestamp_ms,
-                "totp_code": totp_code,
             }
         )
         request_channel = f"request:secret:{SERVICE_NAME}:{secret_key}"
-        # Set with 60-second TTL to prevent stale TOTP codes.
-        # If Launcher doesn't process within 60s, the request expires.
-        # Backend client already times out at this window, so event should too.
+        # Set with 60-second TTL to prevent stale requests.
+        # Launcher will generate TOTP with its own timestamp and return it in response.
         self._redis.setex(request_channel, 60, request_payload)
 
         # Poll for the encrypted response key.
@@ -113,7 +106,7 @@ class SecretClient:
                 try:
                     logger.debug(f"[SecretClient] Found response for {secret_key}")
                     response = json.loads(raw)
-                    plaintext = self._decrypt_response(response, totp_code)
+                    plaintext = self._decrypt_response(response)
                     # Best-effort cleanup – TTL on the key handles the rest.
                     self._redis.delete(response_key)
                     logger.info(f"[SecretClient] Secret '{secret_key}' successfully retrieved and decrypted")
@@ -135,7 +128,7 @@ class SecretClient:
     # Internal helpers
     # -------------------------------------------------------------------------
 
-    def _decrypt_response(self, response: dict, totp_code: str) -> str:
+    def _decrypt_response(self, response: dict) -> str:
         """
         Decrypt an AES-256-GCM encrypted response payload from the Launcher.
 
@@ -144,9 +137,13 @@ class SecretClient:
             iv   = random 12 bytes (base64-encoded in payload)
             aead = AES-256-GCM
 
+        The response includes the timestamp used for TOTP generation on the
+        Launcher side, so this client regenerates the same TOTP using that
+        timestamp and the service's seed.
+
         Args:
             response:  Parsed JSON payload from ``secrets:{service}:{key}``.
-            totp_code: The same 6-digit code used when the request was sent.
+                      Must include ``timestamp`` (ms) used for encryption.
 
         Returns:
             Decrypted plaintext string.
@@ -157,6 +154,14 @@ class SecretClient:
             cryptography.exceptions.InvalidTag: If decryption/authentication fails.
         """
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        # Extract the timestamp used by Launcher for TOTP generation.
+        timestamp_ms = response.get("timestamp")
+        if timestamp_ms is None:
+            raise KeyError("Response missing 'timestamp' field")
+
+        # Regenerate the same TOTP code using the Launcher's timestamp and our seed.
+        totp_code = self._totp.generate_code(timestamp_ms // 1000)
 
         # Derive 256-bit AES key from TOTP code via SHA-256 (mirrors the TS side).
         key_material: bytes = hashlib.sha256(totp_code.encode()).digest()
