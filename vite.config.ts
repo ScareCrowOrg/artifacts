@@ -446,9 +446,8 @@ const urlRewritePlugin = {
         // Match /viewers/:viewerName (with optional path segments and query string)
         // Pattern: /viewers/{viewerName}[/arbitrary/path][?query]
         // Examples: /viewers/dynamic-workspace, /viewers/dynamic-workspace/main.ts, /viewers/dynamic-workspace?q=1
-        const pattern = `^/viewers/([^/?#]+)(/.*)?(\?.*)?$`
-        const regex = new RegExp(pattern)
-        console.error(`[url-rewrite] PATTERN: ${pattern}`)
+        const regex = /^\/viewers\/([^/?#]+)(\/.*)?(\?.*)?$/
+        console.error(`[url-rewrite] PATTERN: ${regex.source}`)
         console.error(`[url-rewrite] TESTING: ${url} against pattern`)
 
         const match = url.match(regex)
