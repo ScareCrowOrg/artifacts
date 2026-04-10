@@ -57,12 +57,14 @@ class SecretClient:
         Args:
             seed: 64-char hex string received via ``TOTP_SEED`` env var.
         """
+        logger.debug(f"[SecretClient] Initializing with seed (length: {len(seed)} chars)")
         self._totp = TOTPValidator(seed)
         self._redis = redis_lib.Redis(
             host=REDIS_HOST,
             port=REDIS_PORT,
             decode_responses=False,
         )
+        logger.info(f"[SecretClient] Connected to Redis L1 at {REDIS_HOST}:{REDIS_PORT}")
 
     def request_secret(self, secret_key: str, timeout: int = 5) -> Optional[str]:
         """
@@ -80,9 +82,11 @@ class SecretClient:
             Decrypted plaintext secret string, or ``None`` if the request
             timed out or the Launcher rejected it.
         """
+        logger.info(f"[SecretClient] Requesting secret: {secret_key} (timeout: {timeout}s)")
         # Timestamp in milliseconds (matches the Launcher's TypeScript side).
         timestamp_ms = int(time.time() * 1000)
         totp_code = self._totp.generate_code(timestamp_ms // 1000)
+        logger.debug(f"[SecretClient] Generated TOTP code for {secret_key}")
 
         request_payload = json.dumps(
             {
@@ -102,10 +106,12 @@ class SecretClient:
             raw = self._redis.get(response_key)
             if raw is not None:
                 try:
+                    logger.debug(f"[SecretClient] Found response for {secret_key}")
                     response = json.loads(raw)
                     plaintext = self._decrypt_response(response, totp_code)
                     # Best-effort cleanup – TTL on the key handles the rest.
                     self._redis.delete(response_key)
+                    logger.info(f"[SecretClient] Secret '{secret_key}' successfully retrieved and decrypted")
                     return plaintext
                 except (json.JSONDecodeError, KeyError, ValueError) as exc:
                     logger.error("Failed to decrypt secret '%s': %s", secret_key, exc)

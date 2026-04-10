@@ -127,7 +127,7 @@ def _get_secret_client():
     """
     seed = os.getenv("TOTP_SEED")
     if not seed:
-        logger.debug("[Config] TOTP_SEED not set – SecretClient unavailable")
+        logger.warning("[Config] TOTP_SEED not set – SecretClient unavailable (will fallback to env vars)")
         return None
     try:
         from .secret_client import SecretClient
