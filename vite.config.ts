@@ -300,25 +300,38 @@ const viewerWarmupPlugin = {
         let failCount = 0
 
         for (const viewer of viewers) {
-          // Fetch viewer root (middleware rewrites to index.html, which uses import maps for main.ts)
-          const viewerUrl = `http://localhost:5052/viewers/${viewer}`
-            try {
-              const startTime = performance.now()
-              const response = await fetch(viewerUrl)
-              const duration = (performance.now() - startTime).toFixed(2)
+          // Pre-compile both index.html and main.ts to avoid cold start delays
+          // - index.html: middleware rewrite caching
+          // - main.ts: TypeScript compilation (avoids 2min delay on first user access)
+          const htmlUrl = `http://localhost:5052/viewers/${viewer}`
+          const tsUrl = `http://localhost:5052/viewers/${viewer}/main.ts`
 
-              if (response.ok) {
-                console.error(`  ✅ ${viewer.padEnd(30)} ${duration.padStart(6)}ms`)
-                successCount++
-              } else {
-                console.error(`  ⚠️  ${viewer.padEnd(30)} HTTP ${response.status}`)
-                failCount++
-              }
-            } catch (error) {
-              console.error(`  ❌ ${viewer.padEnd(30)} ${error.message}`)
+          try {
+            // 1. Load index.html (middleware rewrite)
+            const htmlStart = performance.now()
+            const htmlResponse = await fetch(htmlUrl)
+            const htmlDuration = (performance.now() - htmlStart).toFixed(2)
+
+            // 2. Compile main.ts (Vite on-demand compilation)
+            const tsStart = performance.now()
+            const tsResponse = await fetch(tsUrl)
+            const tsDuration = (performance.now() - tsStart).toFixed(2)
+
+            if (htmlResponse.ok && tsResponse.ok) {
+              const totalDuration = (parseFloat(htmlDuration) + parseFloat(tsDuration)).toFixed(2)
+              console.error(`  ✅ ${viewer.padEnd(30)} HTML: ${htmlDuration.padStart(5)}ms | TS: ${tsDuration.padStart(5)}ms | Total: ${totalDuration.padStart(6)}ms`)
+              successCount++
+            } else {
+              const htmlStatus = htmlResponse.ok ? htmlResponse.status : 'N/A'
+              const tsStatus = tsResponse.ok ? tsResponse.status : 'N/A'
+              console.error(`  ⚠️  ${viewer.padEnd(30)} HTML: ${htmlStatus} | TS: ${tsStatus}`)
               failCount++
             }
+          } catch (error) {
+            console.error(`  ❌ ${viewer.padEnd(30)} ${error.message}`)
+            failCount++
           }
+        }
 
           console.error('\n' + '─'.repeat(100))
           console.error(`✅ VIEWER WARMUP COMPLETED: ${successCount}/${viewers.length} pre-compiled`)
