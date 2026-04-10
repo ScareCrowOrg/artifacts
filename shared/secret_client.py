@@ -99,7 +99,10 @@ class SecretClient:
             }
         )
         request_channel = f"request:secret:{SERVICE_NAME}:{secret_key}"
-        self._redis.set(request_channel, request_payload)
+        # Set with 60-second TTL to prevent stale TOTP codes.
+        # If Launcher doesn't process within 60s, the request expires.
+        # Backend client already times out at this window, so event should too.
+        self._redis.setex(request_channel, 60, request_payload)
 
         # Poll for the encrypted response key.
         response_key = f"secrets:{SERVICE_NAME}:{secret_key}"
