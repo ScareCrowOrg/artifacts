@@ -160,6 +160,10 @@ def get_config(key: str) -> Optional[str]:
 
     Returns:
         The resolved value as a string, or ``None`` when not found anywhere.
+
+    Note: During module initialization, connection errors are logged at DEBUG level
+    to avoid blocking startup. The fallback to env vars allows app to load even
+    if Launcher/Redis are not yet ready.
     """
     logger.debug("[Config] Resolving '%s'...", key)
 
