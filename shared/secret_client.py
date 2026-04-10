@@ -84,8 +84,13 @@ class SecretClient:
             Decrypted plaintext secret string, or ``None`` if the request
             timed out or the Launcher rejected it.
         """
-        logger.info(f"[SecretClient] Requesting secret: {secret_key} (timeout: {timeout}s)")
+        request_id = f"{SERVICE_NAME}:{secret_key}"
+        start_time = time.time()
 
+        logger.info(f"[SecretClient] ▶️ START requesting secret: {request_id} (timeout: {timeout}s)")
+
+        # STEP 1: Publish request to Redis
+        logger.debug(f"[SecretClient] [{request_id}] Step 1: Building request payload")
         request_payload = json.dumps(
             {
                 "service": SERVICE_NAME,
@@ -93,35 +98,106 @@ class SecretClient:
             }
         )
         request_channel = f"request:secret:{SERVICE_NAME}:{secret_key}"
-        # Set with 60-second TTL to prevent stale requests.
-        # Launcher will generate TOTP with its own timestamp and return it in response.
-        self._redis.setex(request_channel, 60, request_payload)
+        logger.debug(f"[SecretClient] [{request_id}] Request payload: {request_payload}")
 
-        # Poll for the encrypted response key.
+        try:
+            logger.debug(f"[SecretClient] [{request_id}] Step 2: Publishing request to Redis at key '{request_channel}'")
+            self._redis.setex(request_channel, 60, request_payload)
+            logger.debug(f"[SecretClient] [{request_id}] ✅ STEP 2 OK: Request published (TTL: 60s)")
+        except Exception as e:
+            logger.error(f"[SecretClient] [{request_id}] ❌ STEP 2 FAILED: Could not publish request to Redis")
+            logger.error(f"[SecretClient] [{request_id}] Error: {type(e).__name__}: {str(e)}")
+            return None
+
+        # STEP 3: Poll for response
+        logger.debug(f"[SecretClient] [{request_id}] Step 3: Starting poll loop (100ms interval)")
         response_key = f"secrets:{SERVICE_NAME}:{secret_key}"
         deadline = time.time() + timeout
-        while time.time() < deadline:
-            raw = self._redis.get(response_key)
-            if raw is not None:
-                try:
-                    logger.debug(f"[SecretClient] Found response for {secret_key}")
-                    response = json.loads(raw)
-                    plaintext = self._decrypt_response(response)
-                    # Best-effort cleanup – TTL on the key handles the rest.
-                    self._redis.delete(response_key)
-                    logger.info(f"[SecretClient] Secret '{secret_key}' successfully retrieved and decrypted")
-                    return plaintext
-                except (json.JSONDecodeError, KeyError, ValueError) as exc:
-                    logger.error("Failed to decrypt secret '%s': %s", secret_key, exc)
-                    return None
-                except Exception as exc:  # pylint: disable=broad-except
-                    logger.error(
-                        "Unexpected error decrypting secret '%s': %s", secret_key, exc
-                    )
-                    return None
-            time.sleep(0.1)
+        poll_count = 0
 
-        logger.warning("Secret request timeout: %s", secret_key)
+        while time.time() < deadline:
+            poll_count += 1
+            remaining = deadline - time.time()
+
+            try:
+                raw = self._redis.get(response_key)
+            except Exception as e:
+                logger.error(f"[SecretClient] [{request_id}] ❌ Poll cycle {poll_count} FAILED: Redis read error")
+                logger.error(f"[SecretClient] [{request_id}] Error: {type(e).__name__}: {str(e)}")
+                return None
+
+            if raw is not None:
+                poll_elapsed = time.time() - start_time
+                logger.debug(f"[SecretClient] [{request_id}] ✅ Response found after {poll_count} polls (~{poll_elapsed:.1f}s)")
+                logger.debug(f"[SecretClient] [{request_id}] Response size: {len(raw)} bytes")
+
+                # STEP 4: Parse response JSON
+                logger.debug(f"[SecretClient] [{request_id}] Step 4: Parsing response JSON")
+                try:
+                    response = json.loads(raw)
+                    logger.debug(f"[SecretClient] [{request_id}] ✅ STEP 4 OK: JSON parsed successfully")
+                    logger.debug(f"[SecretClient] [{request_id}] Response keys: {list(response.keys())}")
+                except json.JSONDecodeError as exc:
+                    logger.error(f"[SecretClient] [{request_id}] ❌ STEP 4 FAILED: Invalid JSON in response")
+                    logger.error(f"[SecretClient] [{request_id}] Raw response: {raw[:200]}...")
+                    logger.error(f"[SecretClient] [{request_id}] JSON Error: {str(exc)}")
+                    return None
+                except Exception as exc:
+                    logger.error(f"[SecretClient] [{request_id}] ❌ STEP 4 FAILED: Unexpected error parsing response")
+                    logger.error(f"[SecretClient] [{request_id}] Error: {type(exc).__name__}: {str(exc)}")
+                    return None
+
+                # STEP 5: Decrypt response
+                logger.debug(f"[SecretClient] [{request_id}] Step 5: Decrypting response with AES-256-GCM")
+                try:
+                    plaintext = self._decrypt_response(response)
+                    logger.debug(f"[SecretClient] [{request_id}] ✅ STEP 5 OK: Decryption successful (plaintext length: {len(plaintext)} chars)")
+                except KeyError as exc:
+                    logger.error(f"[SecretClient] [{request_id}] ❌ STEP 5 FAILED: Missing required field in response")
+                    logger.error(f"[SecretClient] [{request_id}] Missing field: {str(exc)}")
+                    logger.error(f"[SecretClient] [{request_id}] Available fields: {list(response.keys())}")
+                    return None
+                except ValueError as exc:
+                    logger.error(f"[SecretClient] [{request_id}] ❌ STEP 5 FAILED: Invalid base64 encoding in response")
+                    logger.error(f"[SecretClient] [{request_id}] ValueError: {str(exc)}")
+                    return None
+                except Exception as exc:
+                    logger.error(f"[SecretClient] [{request_id}] ❌ STEP 5 FAILED: Decryption error")
+                    logger.error(f"[SecretClient] [{request_id}] Error type: {type(exc).__name__}")
+                    logger.error(f"[SecretClient] [{request_id}] Error message: {str(exc)}")
+                    if hasattr(exc, '__traceback__'):
+                        import traceback
+                        logger.error(f"[SecretClient] [{request_id}] Traceback: {traceback.format_exc()}")
+                    return None
+
+                # STEP 6: Cleanup
+                logger.debug(f"[SecretClient] [{request_id}] Step 6: Cleaning up response key from Redis")
+                try:
+                    self._redis.delete(response_key)
+                    logger.debug(f"[SecretClient] [{request_id}] ✅ STEP 6 OK: Response key deleted")
+                except Exception as e:
+                    logger.warning(f"[SecretClient] [{request_id}] ⚠️ STEP 6 WARNING: Could not delete response key (TTL will handle it)")
+                    logger.warning(f"[SecretClient] [{request_id}] Error: {type(e).__name__}: {str(e)}")
+
+                total_elapsed = time.time() - start_time
+                logger.info(f"[SecretClient] ✅ SUCCESS: Secret '{secret_key}' retrieved and decrypted ({total_elapsed:.2f}s)")
+                logger.info(f"[SecretClient] [{request_id}] Polling took {poll_count} cycles (~{poll_elapsed:.1f}s)")
+                return plaintext
+
+            time.sleep(0.1)
+            if poll_count % 10 == 0:  # Log every 10 polls (every 1s)
+                logger.debug(f"[SecretClient] [{request_id}] Still polling... ({poll_count} polls, {remaining:.1f}s remaining)")
+
+        # Timeout occurred
+        total_elapsed = time.time() - start_time
+        logger.error(f"[SecretClient] ❌ TIMEOUT: No response from Launcher after {timeout}s")
+        logger.error(f"[SecretClient] [{request_id}] Tried {poll_count} polls across {total_elapsed:.2f}s")
+        logger.error(f"[SecretClient] [{request_id}] Expected response key: {response_key}")
+        logger.error(f"[SecretClient] [{request_id}] Possible causes:")
+        logger.error(f"[SecretClient] [{request_id}]   1. Launcher not running or crashed")
+        logger.error(f"[SecretClient] [{request_id}]   2. Orchestrator loop not polling Redis")
+        logger.error(f"[SecretClient] [{request_id}]   3. Service seed not registered")
+        logger.error(f"[SecretClient] [{request_id}]   4. Network/Redis connectivity issues")
         return None
 
     # -------------------------------------------------------------------------
@@ -155,23 +231,95 @@ class SecretClient:
         """
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-        # Extract the timestamp used by Launcher for TOTP generation.
+        decrypt_start = time.time()
+        logger.debug("[SecretClient._decrypt] ▶️ START decryption process")
+
+        # Sub-step 1: Extract timestamp
+        logger.debug("[SecretClient._decrypt] Sub-step 1: Extracting timestamp from response")
         timestamp_ms = response.get("timestamp")
         if timestamp_ms is None:
+            logger.error("[SecretClient._decrypt] ❌ Missing 'timestamp' field in response")
+            logger.error("[SecretClient._decrypt] Available fields: " + ", ".join(response.keys()))
             raise KeyError("Response missing 'timestamp' field")
+        logger.debug(f"[SecretClient._decrypt] ✅ Timestamp extracted: {timestamp_ms} ms")
 
-        # Regenerate the same TOTP code using the Launcher's timestamp and our seed.
-        totp_code = self._totp.generate_code(timestamp_ms // 1000)
+        # Sub-step 2: Regenerate TOTP code
+        logger.debug("[SecretClient._decrypt] Sub-step 2: Regenerating TOTP code from timestamp")
+        try:
+            totp_code = self._totp.generate_code(timestamp_ms // 1000)
+            logger.debug(f"[SecretClient._decrypt] ✅ TOTP code regenerated (length: {len(totp_code)} chars)")
+        except Exception as e:
+            logger.error("[SecretClient._decrypt] ❌ Failed to generate TOTP code")
+            logger.error(f"[SecretClient._decrypt] Error: {type(e).__name__}: {str(e)}")
+            raise
 
-        # Derive 256-bit AES key from TOTP code via SHA-256 (mirrors the TS side).
-        key_material: bytes = hashlib.sha256(totp_code.encode()).digest()
+        # Sub-step 3: Derive AES key
+        logger.debug("[SecretClient._decrypt] Sub-step 3: Deriving AES-256 key from TOTP code")
+        try:
+            key_material: bytes = hashlib.sha256(totp_code.encode()).digest()
+            logger.debug(f"[SecretClient._decrypt] ✅ Key derived (SHA-256, {len(key_material)} bytes)")
+        except Exception as e:
+            logger.error("[SecretClient._decrypt] ❌ Failed to derive key")
+            logger.error(f"[SecretClient._decrypt] Error: {type(e).__name__}: {str(e)}")
+            raise
 
-        # All binary values are base64-encoded by the TypeScript Launcher.
-        iv: bytes = base64.b64decode(response["iv"])
-        ciphertext: bytes = base64.b64decode(response["secret"])
-        auth_tag: bytes = base64.b64decode(response["auth_tag"])
+        # Sub-step 4: Decode base64 components
+        logger.debug("[SecretClient._decrypt] Sub-step 4: Decoding base64-encoded components")
+        try:
+            if "iv" not in response:
+                raise KeyError("Missing 'iv' field")
+            iv: bytes = base64.b64decode(response["iv"])
+            logger.debug(f"[SecretClient._decrypt] ✅ IV decoded ({len(iv)} bytes)")
+        except (ValueError, KeyError) as e:
+            logger.error("[SecretClient._decrypt] ❌ Failed to decode IV")
+            logger.error(f"[SecretClient._decrypt] Error: {type(e).__name__}: {str(e)}")
+            raise
 
-        # The ``cryptography`` AESGCM API expects ciphertext || auth_tag.
-        aesgcm = AESGCM(key_material)
-        plaintext_bytes: bytes = aesgcm.decrypt(iv, ciphertext + auth_tag, None)
-        return plaintext_bytes.decode("utf-8")
+        try:
+            if "secret" not in response:
+                raise KeyError("Missing 'secret' field")
+            ciphertext: bytes = base64.b64decode(response["secret"])
+            logger.debug(f"[SecretClient._decrypt] ✅ Ciphertext decoded ({len(ciphertext)} bytes)")
+        except (ValueError, KeyError) as e:
+            logger.error("[SecretClient._decrypt] ❌ Failed to decode ciphertext")
+            logger.error(f"[SecretClient._decrypt] Error: {type(e).__name__}: {str(e)}")
+            raise
+
+        try:
+            if "auth_tag" not in response:
+                raise KeyError("Missing 'auth_tag' field")
+            auth_tag: bytes = base64.b64decode(response["auth_tag"])
+            logger.debug(f"[SecretClient._decrypt] ✅ Auth tag decoded ({len(auth_tag)} bytes)")
+        except (ValueError, KeyError) as e:
+            logger.error("[SecretClient._decrypt] ❌ Failed to decode auth tag")
+            logger.error(f"[SecretClient._decrypt] Error: {type(e).__name__}: {str(e)}")
+            raise
+
+        # Sub-step 5: Perform AES-256-GCM decryption
+        logger.debug("[SecretClient._decrypt] Sub-step 5: Performing AES-256-GCM decryption")
+        try:
+            aesgcm = AESGCM(key_material)
+            plaintext_bytes: bytes = aesgcm.decrypt(iv, ciphertext + auth_tag, None)
+            logger.debug(f"[SecretClient._decrypt] ✅ Decryption successful ({len(plaintext_bytes)} bytes)")
+        except Exception as e:
+            logger.error("[SecretClient._decrypt] ❌ AES-256-GCM decryption failed")
+            logger.error(f"[SecretClient._decrypt] Error type: {type(e).__name__}")
+            logger.error(f"[SecretClient._decrypt] Error message: {str(e)}")
+            logger.error("[SecretClient._decrypt] Possible causes:")
+            logger.error("[SecretClient._decrypt]   1. TOTP code mismatch (clock skew?)")
+            logger.error("[SecretClient._decrypt]   2. Ciphertext corruption")
+            logger.error("[SecretClient._decrypt]   3. Authentication tag verification failed")
+            raise
+
+        # Sub-step 6: Decode to UTF-8 string
+        logger.debug("[SecretClient._decrypt] Sub-step 6: Decoding plaintext from UTF-8")
+        try:
+            plaintext = plaintext_bytes.decode("utf-8")
+            decrypt_elapsed = time.time() - decrypt_start
+            logger.debug(f"[SecretClient._decrypt] ✅ UTF-8 decode successful ({decrypt_elapsed:.2f}s total)")
+            return plaintext
+        except UnicodeDecodeError as e:
+            logger.error("[SecretClient._decrypt] ❌ Failed to decode plaintext as UTF-8")
+            logger.error(f"[SecretClient._decrypt] Error: {str(e)}")
+            logger.error(f"[SecretClient._decrypt] Plaintext bytes (first 100): {plaintext_bytes[:100]}")
+            raise ValueError(f"Plaintext is not valid UTF-8: {str(e)}")
