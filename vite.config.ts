@@ -300,11 +300,13 @@ const viewerWarmupPlugin = {
         let failCount = 0
 
         for (const viewer of viewers) {
-          // Pre-compile both index.html and main.ts to avoid cold start delays
+          // Pre-compile HTML, TypeScript, and CSS to avoid cold start delays
           // - index.html: middleware rewrite caching
-          // - main.ts: TypeScript compilation (avoids 2min delay on first user access)
+          // - main.ts: TypeScript compilation
+          // - index.css: Tailwind CSS JIT compilation (2+ min delay if skipped!)
           const htmlUrl = `http://localhost:5052/viewers/${viewer}`
           const tsUrl = `http://localhost:5052/viewers/${viewer}/main.ts`
+          const cssUrl = `http://localhost:5052/shared/styles/index.css`
 
           try {
             // 1. Load index.html (middleware rewrite)
@@ -317,14 +319,26 @@ const viewerWarmupPlugin = {
             const tsResponse = await fetch(tsUrl)
             const tsDuration = (performance.now() - tsStart).toFixed(2)
 
-            if (htmlResponse.ok && tsResponse.ok) {
+            // 3. Compile Tailwind CSS (JIT - must run once, very slow first time)
+            // Note: Only fetch once per warmup (shared across viewers)
+            let cssResponse = { ok: true }
+            let cssDuration = '0'
+            if (viewer === viewers[0]) {
+              const cssStart = performance.now()
+              cssResponse = await fetch(cssUrl)
+              cssDuration = (performance.now() - cssStart).toFixed(2)
+              console.error(`\n  🎨 Tailwind CSS compilation: ${cssDuration}ms\n`)
+            }
+
+            if (htmlResponse.ok && tsResponse.ok && cssResponse.ok) {
               const totalDuration = (parseFloat(htmlDuration) + parseFloat(tsDuration)).toFixed(2)
               console.error(`  ✅ ${viewer.padEnd(30)} HTML: ${htmlDuration.padStart(5)}ms | TS: ${tsDuration.padStart(5)}ms | Total: ${totalDuration.padStart(6)}ms`)
               successCount++
             } else {
               const htmlStatus = htmlResponse.ok ? htmlResponse.status : 'N/A'
               const tsStatus = tsResponse.ok ? tsResponse.status : 'N/A'
-              console.error(`  ⚠️  ${viewer.padEnd(30)} HTML: ${htmlStatus} | TS: ${tsStatus}`)
+              const cssStatus = cssResponse.ok ? cssResponse.status : 'N/A'
+              console.error(`  ⚠️  ${viewer.padEnd(30)} HTML: ${htmlStatus} | TS: ${tsStatus} | CSS: ${cssStatus}`)
               failCount++
             }
           } catch (error) {
