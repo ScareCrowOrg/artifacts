@@ -60,13 +60,17 @@ if not REDIS_PASSWORD and os.getenv("ENV") not in (None, "local", "development")
     logger.warning("[Config] REDIS_L1_PASSWORD not set – Redis may reject connections")
 
 # ---------------------------------------------------------------------------
-# In-memory settings cache (non-secrets only)
+# In-memory caches
 # ---------------------------------------------------------------------------
 
+# Settings cache: TTL-based (60 seconds), shared across calls
 _CACHE_TTL_SECONDS: int = 60
-
-# Maps cache key → (value, expiry_timestamp)
 _cache: dict[str, tuple[Any, float]] = {}
+
+# Secrets cache: Lazy per-process (no TTL), persists for lifetime of Backend process.
+# Each secret is cached only after first successful retrieval from Launcher.
+# On Backend restart, cache clears and secrets are re-fetched fresh.
+_secrets_cache: dict[str, str] = {}
 
 
 def _cache_get(key: str) -> tuple[bool, Any]:
@@ -86,9 +90,22 @@ def _cache_set(key: str, value: Any) -> None:
     _cache[key] = (value, time.monotonic() + _CACHE_TTL_SECONDS)
 
 
+def _secrets_cache_get(key: str) -> tuple[bool, Any]:
+    """Return (hit, value) from the lazy secrets cache."""
+    if key in _secrets_cache:
+        return True, _secrets_cache[key]
+    return False, None
+
+
+def _secrets_cache_set(key: str, value: str) -> None:
+    """Store a secret in the lazy per-process cache (no TTL)."""
+    _secrets_cache[key] = value
+
+
 def clear_cache() -> None:
     """Flush the in-memory settings cache (useful in tests)."""
     _cache.clear()
+    _secrets_cache.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -168,10 +185,17 @@ def get_config(key: str) -> Optional[str]:
     logger.debug("[Config] Resolving '%s'...", key)
 
     # ------------------------------------------------------------------
-    # Path 1: vault.* → SecretClient
+    # Path 1: vault.* → Lazy secrets cache or SecretClient
     # ------------------------------------------------------------------
     if key.startswith("vault."):
         secret_name = key[len("vault."):]
+
+        # Check lazy secrets cache first (per-process, no TTL)
+        hit, cached_value = _secrets_cache_get(secret_name)
+        if hit:
+            logger.debug("[Config] Lazy cache hit for secret '%s'. Source: SECRETS_CACHE", secret_name)
+            return cached_value
+
         logger.debug("[Config] Detected vault prefix. Requesting from SecretClient...")
         client = _get_secret_client()
         if client is not None:
@@ -179,6 +203,8 @@ def get_config(key: str) -> Optional[str]:
                 value = client.request_secret(secret_name)
                 if value is not None:
                     logger.debug("[Config] SecretClient: secret retrieved. Source: VAULT")
+                    # Cache on first successful retrieval (lazy cache, no TTL)
+                    _secrets_cache_set(secret_name, value)
                     return value
                 logger.warning("[Config] SecretClient returned None for '%s'", secret_name)
             except (ConnectionError, TimeoutError, OSError) as exc:
@@ -192,6 +218,8 @@ def get_config(key: str) -> Optional[str]:
         env_value = os.getenv(env_key)
         if env_value is not None:
             logger.debug("[Config] Found in env (fallback). Source: ENV key=%s", env_key)
+            # Cache env fallback too (for consistency)
+            _secrets_cache_set(secret_name, env_value)
             return env_value
         logger.debug("[Config] Key '%s' not found anywhere", key)
         return None
