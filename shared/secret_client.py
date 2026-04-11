@@ -182,6 +182,9 @@ class SecretClient:
                 total_elapsed = time.time() - start_time
                 logger.info(f"[SecretClient] ✅ SUCCESS: Secret '{secret_key}' retrieved and decrypted ({total_elapsed:.2f}s)")
                 logger.info(f"[SecretClient] [{request_id}] Polling took {poll_count} cycles (~{poll_elapsed:.1f}s)")
+                # Log first 15 chars of secret for validation (not full value for security)
+                secret_preview = plaintext[:15] if len(plaintext) >= 15 else plaintext
+                logger.info(f"[SecretClient] [{request_id}] Secret preview (first 15 chars): {secret_preview}...")
                 return plaintext
 
             time.sleep(0.1)

@@ -194,6 +194,9 @@ def get_config(key: str) -> Optional[str]:
         hit, cached_value = _secrets_cache_get(secret_name)
         if hit:
             logger.debug("[Config] Lazy cache hit for secret '%s'. Source: SECRETS_CACHE", secret_name)
+            # Log first 15 chars for validation (security: not full value)
+            secret_preview = cached_value[:15] if len(cached_value) >= 15 else cached_value
+            logger.info("[Config] Returning cached secret '%s' (first 15 chars): %s...", secret_name, secret_preview)
             return cached_value
 
         logger.debug("[Config] Detected vault prefix. Requesting from SecretClient...")
@@ -203,6 +206,9 @@ def get_config(key: str) -> Optional[str]:
                 value = client.request_secret(secret_name)
                 if value is not None:
                     logger.debug("[Config] SecretClient: secret retrieved. Source: VAULT")
+                    # Log first 15 chars for validation (security: not full value)
+                    secret_preview = value[:15] if len(value) >= 15 else value
+                    logger.info(f"[Config] Secret '{secret_name}' cached (first 15 chars): {secret_preview}...")
                     # Cache on first successful retrieval (lazy cache, no TTL)
                     _secrets_cache_set(secret_name, value)
                     return value
@@ -218,6 +224,9 @@ def get_config(key: str) -> Optional[str]:
         env_value = os.getenv(env_key)
         if env_value is not None:
             logger.debug("[Config] Found in env (fallback). Source: ENV key=%s", env_key)
+            # Log first 15 chars for validation (security: not full value)
+            secret_preview = env_value[:15] if len(env_value) >= 15 else env_value
+            logger.info("[Config] Secret '%s' from env (first 15 chars): %s...", secret_name, secret_preview)
             # Cache env fallback too (for consistency)
             _secrets_cache_set(secret_name, env_value)
             return env_value
