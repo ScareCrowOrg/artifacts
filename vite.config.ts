@@ -496,6 +496,33 @@ const urlRewritePlugin = {
           console.error(`[url-rewrite] NO MATCH: ${url}`)
         }
 
+        // Fallback: Handle root path (/)
+        if (url === '/' || url === '') {
+          console.error(`[url-rewrite] ROOT REQUEST: Serving fallback`)
+
+          // Try to serve index.html from artifacts root
+          const indexPath = path.join(__dirname, 'index.html')
+
+          if (fs.existsSync(indexPath)) {
+            console.error(`[url-rewrite] ROOT: Found index.html at ${indexPath}`)
+            try {
+              const html = fs.readFileSync(indexPath, 'utf-8')
+              res.setHeader('Content-Type', 'text/html; charset=utf-8')
+              res.end(html)
+              return
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
+              console.error(`[url-rewrite] ROOT: Error reading index.html: ${msg}`)
+            }
+          } else {
+            console.error(`[url-rewrite] ROOT: No index.html found, redirecting to viewer`)
+            // Fallback: redirect to first available viewer
+            res.writeHead(302, { Location: '/viewers/dynamic-workspace' })
+            res.end()
+            return
+          }
+        }
+
         next()
       })
     },
