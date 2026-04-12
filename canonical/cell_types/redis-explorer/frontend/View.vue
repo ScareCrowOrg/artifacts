@@ -334,6 +334,7 @@ const prefixSegments = computed<string[]>(() => {
 
 // Methods
 async function loadRedisInfo(): Promise<void> {
+  console.log('[loadRedisInfo] START')
   try {
     const response = await apiFetch('/api/redis-explorer/info', {
       headers: {
@@ -341,13 +342,22 @@ async function loadRedisInfo(): Promise<void> {
       }
     })
 
+    console.log('[loadRedisInfo] RESPONSE STATUS:', response.status, response.ok)
+
     if (!response.ok) {
       throw new Error('Failed to load Redis info')
     }
-    
-    redisInfo.value = await response.json()
+
+    const data = await response.json()
+    redisInfo.value = data
+    console.log('[loadRedisInfo] SUCCESS:', {
+      version: data.version,
+      total_keys: data.total_keys,
+      used_memory: data.used_memory
+    })
     logger.info('Redis info loaded', { totalKeys: redisInfo.value?.total_keys })
   } catch (err) {
+    console.error('[loadRedisInfo] ERROR:', err)
     logger.error('Failed to load Redis info', err)
     error.value = err instanceof Error ? err.message : 'Unknown error'
   }
@@ -356,36 +366,62 @@ async function loadRedisInfo(): Promise<void> {
 async function scanKeys(): Promise<void> {
   loading.value = true
   error.value = ''
-  
+
+  console.log('[scanKeys] START', {
+    prefix: currentPrefix.value,
+    delimiter: delimiter.value,
+    maxDepth: maxDepth.value
+  })
+
   try {
     logger.debug('Scanning keys', { prefix: currentPrefix.value })
-    
+
+    const reqBody = {
+      prefix: currentPrefix.value,
+      delimiter: delimiter.value,
+      max_depth: maxDepth.value
+    }
+    console.log('[scanKeys] REQUEST BODY:', reqBody)
+
     const response = await apiFetch('/api/redis-explorer/scan', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        prefix: currentPrefix.value,
-        delimiter: delimiter.value,
-        max_depth: maxDepth.value
-      })
+      body: JSON.stringify(reqBody)
     })
-    
+
+    console.log('[scanKeys] RESPONSE STATUS:', response.status, response.ok)
+
     if (!response.ok) {
-      throw new Error('Failed to scan Redis keys')
+      const errorText = await response.text()
+      console.error('[scanKeys] ERROR RESPONSE:', errorText)
+      throw new Error(`Failed to scan Redis keys: ${response.status} ${response.statusText}`)
     }
-    
-    scanResult.value = await response.json()
+
+    const rawData = await response.json()
+    console.log('[scanKeys] RAW RESPONSE:', rawData)
+
+    scanResult.value = rawData
+    console.log('[scanKeys] SCAN RESULT SET:', {
+      nodes: scanResult.value?.nodes,
+      keys: scanResult.value?.keys,
+      total_scanned: scanResult.value?.total_scanned
+    })
+
     logger.info('Keys scanned', {
       nodes: scanResult.value?.nodes.length,
-      keys: scanResult.value?.keys.length
+      keys: scanResult.value?.keys.length,
+      total_scanned: scanResult.value?.total_scanned
     })
   } catch (err) {
+    console.error('[scanKeys] EXCEPTION:', err)
     logger.error('Failed to scan keys', err)
     error.value = err instanceof Error ? err.message : 'Unknown error'
+    console.log('[scanKeys] ERROR STATE:', error.value)
   } finally {
     loading.value = false
+    console.log('[scanKeys] END - loading=false, scanResult exists:', !!scanResult.value)
   }
 }
 
@@ -419,21 +455,26 @@ async function selectKey(key: string): Promise<void> {
 }
 
 function navigateToPrefix(prefix: string): void {
+  console.log('[navigateToPrefix]', { prefix })
   currentPrefix.value = prefix
   selectedKey.value = ''
   keyValue.value = null
   scanKeys()
   updateCell()
+  console.log('[navigateToPrefix] END')
 }
 
 function navigateToNode(node: string): void {
-  const newPrefix = currentPrefix.value 
+  console.log('[navigateToNode]', { node, currentPrefix: currentPrefix.value })
+  const newPrefix = currentPrefix.value
     ? `${currentPrefix.value}${delimiter.value}${node}`
     : node
+  console.log('[navigateToNode] newPrefix:', newPrefix)
   navigateToPrefix(newPrefix)
 }
 
 function navigateToSegment(index: number): void {
+  console.log('[navigateToSegment]', { index })
   const segments = prefixSegments.value.slice(0, index + 1)
   navigateToPrefix(segments.join(delimiter.value))
 }
@@ -573,24 +614,43 @@ function updateCell(): void {
 
 // Watch for prop changes
 watch(() => props.cell.initial_data, (newData) => {
+  console.log('[watch initial_data] triggered', newData)
   if (newData) {
     if (newData.current_prefix !== undefined) {
+      console.log('[watch] Updating currentPrefix:', newData.current_prefix)
       currentPrefix.value = newData.current_prefix
     }
     if (newData.delimiter !== undefined) {
       delimiter.value = newData.delimiter
     }
     if (newData.max_depth !== undefined) {
+      console.log('[watch] Updating maxDepth:', newData.max_depth)
       maxDepth.value = newData.max_depth
     }
   }
 }, { deep: true })
 
+// Watch scanResult changes
+watch(() => scanResult.value, (newResult) => {
+  console.log('[watch scanResult] changed:', {
+    nodes: newResult?.nodes,
+    keys: newResult?.keys,
+    total_scanned: newResult?.total_scanned
+  })
+}, { deep: true })
+
 // Initialize on mount
 onMounted(() => {
+  console.log('[onMounted] Redis Explorer Cell mounted')
+  console.log('[onMounted] State:', {
+    currentPrefix: currentPrefix.value,
+    delimiter: delimiter.value,
+    maxDepth: maxDepth.value
+  })
   logger.info('Redis Explorer Cell mounted')
   loadRedisInfo()
   scanKeys()
+  console.log('[onMounted] END - called loadRedisInfo() and scanKeys()')
 })
 </script>
 
