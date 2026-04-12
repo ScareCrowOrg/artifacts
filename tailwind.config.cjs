@@ -13,10 +13,16 @@
 module.exports = {
   content: [
     './index.html',
-    // Scan any artifacts runtime (canonical, sandbox, runtime, etc)
-    './**/cell-types/**/*.{vue,jsx,tsx}',
-    './**/viewers/**/*.{vue,jsx,tsx}',
-    './**/book-types/**/*.{vue,jsx,tsx}',
+    // OPTIMIZED: Point directly to known directories instead of **/* patterns
+    // This prevents recursive scanning that was causing 4+ minute first-load
+    // Old pattern: './**/cell-types/**/*.vue' scanned recursively
+    // New pattern: './canonical/cell_types/**/*.vue' is direct path
+    './canonical/cell_types/**/*.{vue,jsx,tsx}',
+    './canonical/viewers/**/*.{vue,jsx,tsx}',
+    './canonical/book_types/**/*.{vue,jsx,tsx}',
+    './sandbox/cell_types/**/*.{vue,jsx,tsx}',
+    './sandbox/viewers/**/*.{vue,jsx,tsx}',
+    './runtime/**/*.{vue,jsx,tsx}',
     './shared/**/*.{vue,jsx,tsx}',
   ],
   theme: {
