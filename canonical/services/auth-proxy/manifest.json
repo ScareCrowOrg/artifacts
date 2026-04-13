@@ -1,0 +1,8 @@
+{
+  "version": "0.1",
+  "name": "auth-proxy",
+  "build": false,
+  "image": "localhost:5001/scareverse-auth-proxy:staging",
+  "imageTag": "staging",
+  "lastBuilt": "2026-04-13T23:12:20.388Z"
+}

@@ -220,6 +220,46 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ─── Auth Proxy (Recepção) ─────────────────────────────────────────────────
+  # Intercepts /artifacts/* requests from Nginx Unit, validates SessionID via
+  # Backend's /api/v1/auth/session-check, then proxies to Vite on success.
+  auth-proxy:
+    build:
+      context: auth-proxy
+      dockerfile: Dockerfile
+    image: scareverse/auth-proxy:latest
+    container_name: scareverse-auth-proxy-worker
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5055:5055"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PROXY_PORT=${PROXY_PORT:-5055}
+      - VITE_UPSTREAM=${VITE_UPSTREAM:-http://vite:5052}
+      - BACKEND_AUTH_URL=${BACKEND_AUTH_URL:-http://backend:5050/api/v1/auth/session-check}
+      - REDIS_L1_HOST=${REDIS_L1_HOST:-redis-local}
+      - REDIS_L1_PORT=${REDIS_L1_PORT:-6380}
+      - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
+      - REDIS_L1_DB=${REDIS_L1_DB:-0}
+      - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-20}
+    networks:
+      - scareverse-net
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5055/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    stop_grace_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
   # ─── Vite Dev Server ──────────────────────────────────────────────────────────
   vite:
     container_name: scareverse-vite

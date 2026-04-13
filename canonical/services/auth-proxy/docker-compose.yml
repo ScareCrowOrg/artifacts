@@ -1,0 +1,63 @@
+# Auth Proxy (Recepção) – Docker Compose service definition
+#
+# Intercepts /artifacts/* requests from Nginx Unit, validates SessionID via
+# Backend's /api/v1/auth/session-check, then proxies to Vite on success.
+#
+# Usage (standalone):
+#   docker-compose -f artifacts/canonical/services/auth-proxy/docker-compose.yml up --build
+#
+# Usage (meta-orchestrator):
+#   docker-compose -f artifacts/canonical/services/docker-compose.yml up
+
+version: '3.9'
+
+services:
+  auth-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: localhost:5001/scareverse-auth-proxy:staging
+    container_name: scareverse-auth-proxy-worker
+    restart: unless-stopped
+
+    environment:
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Proxy configuration
+      - PROXY_PORT=${PROXY_PORT:-5055}
+      - VITE_UPSTREAM=${VITE_UPSTREAM:-http://vite:5052}
+      - BACKEND_AUTH_URL=${BACKEND_AUTH_URL:-http://backend:5050/api/v1/auth/session-check}
+
+      # Redis L1 (heartbeat registration)
+      - REDIS_L1_HOST=${REDIS_L1_HOST:-redis-local}
+      - REDIS_L1_PORT=${REDIS_L1_PORT:-6380}
+      - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
+      - REDIS_L1_DB=${REDIS_L1_DB:-0}
+      - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-20}
+
+    ports:
+      - "5055:5055"
+
+    networks:
+      - scareverse-net
+
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5055/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+
+    # Allow 30 seconds for graceful shutdown (matches SIGTERM handler)
+    stop_grace_period: 30s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  scareverse-net:
+    external: true

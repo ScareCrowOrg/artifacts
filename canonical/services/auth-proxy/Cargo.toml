@@ -1,0 +1,38 @@
+[package]
+name = "auth-proxy"
+version = "0.1.0"
+edition = "2021"
+description = "Auth Proxy (Recepção) – validates SessionID before routing /artifacts/* to Vite"
+
+[[bin]]
+name = "auth-proxy"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework
+axum = { version = "0.7", features = ["http2", "macros"] }
+
+# HTTP client for Backend session-check calls (connection pool, streaming)
+# Uses rustls to avoid native OpenSSL system dependency
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "cookies", "rustls-tls"] }
+
+# Redis client for heartbeat registration
+redis = { version = "0.25", features = ["tokio-comp", "connection-manager"] }
+
+# Structured logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# JSON for error responses
+serde_json = "1"
+
+# HTTP types (for response streaming)
+bytes = "1"
+http = "1"
+http-body-util = "0.1"
+
+# Signal handling for graceful shutdown
+tokio-util = { version = "0.7", features = ["io"] }
