@@ -73,6 +73,16 @@ services:
       - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-20}
       - HEARTBEAT_TTL=${HEARTBEAT_TTL:-60}
 
+    labels:
+      # ── Traefik service discovery ─────────────────────────────────────────
+      - "traefik.enable=true"
+      # Catch-all route: matches everything except /api and /artifacts
+      - "traefik.http.routers.vite.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.vite.entrypoints=http"
+      # Lowest priority – vite is the fallback for all unmatched paths
+      - "traefik.http.routers.vite.priority=1"
+      - "traefik.http.services.vite.loadbalancer.server.port=5052"
+
     networks:
       - scareverse-net
 

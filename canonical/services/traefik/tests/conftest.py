@@ -1,5 +1,5 @@
 """
-Shared test fixtures for the nginx-unity service worker tests.
+Shared test fixtures for the Traefik service worker tests.
 """
 
 import sys
@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 # ── Path setup ────────────────────────────────────────────────────────────────
 _service_dir = Path(__file__).resolve().parents[1]
@@ -27,14 +26,5 @@ def mock_base_service():
     mock = MagicMock()
     mock.heartbeat = AsyncMock(return_value=None)
     mock.cleanup = AsyncMock(return_value=None)
-    with patch("main.BaseService", return_value=mock):
+    with patch("heartbeat.BaseService", return_value=mock):
         yield mock
-
-
-@pytest.fixture()
-def app_client(mock_base_service):
-    """Synchronous TestClient with lifespan disabled for simple tests."""
-    from main import app
-
-    with TestClient(app, raise_server_exceptions=True) as client:
-        yield client

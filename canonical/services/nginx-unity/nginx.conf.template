@@ -1,8 +1,0 @@
-# nginx.conf.template is no longer used.
-#
-# Nginx Unit uses JSON configuration (unit.conf.json) instead of nginx.conf
-# templates. Routes are registered dynamically via the Nginx Unit HTTP API
-# after services become available (heartbeat-driven via Node.js sidecar).
-#
-# See: unit.conf.json for the initial Nginx Unit configuration.
-

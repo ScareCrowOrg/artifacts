@@ -12,8 +12,8 @@
       "name": "INGRESS_RULES",
       "source": "config",
       "required": false,
-      "description": "JSON array of Cloudflare tunnel ingress rules, generated from planet_name (e.g. [{\"hostname\":\"planet.scareverse.net\",\"service\":\"http://nginx-unity:80\"},{\"service\":\"http_status:404\"}])"
+      "description": "JSON array of Cloudflare tunnel ingress rules, generated from planet_name (e.g. [{\"hostname\":\"planet.scareverse.net\",\"service\":\"http://traefik:80\"},{\"service\":\"http_status:404\"}])"
     }
   ],
-  "lastBuilt": "2026-04-08T19:27:56.301Z"
+  "lastBuilt": "2026-04-14T05:29:37.164Z"
 }

@@ -1,0 +1,50 @@
+# ==============================================================================
+# Traefik Static Configuration (traefik.yml)
+# ==============================================================================
+# Defines entrypoints, logging, API, and Docker provider for service discovery.
+# This file is loaded at startup and cannot be changed without restarting Traefik.
+#
+# Dynamic configuration (routes, services, middlewares) is derived from
+# Docker labels on containers in the scareverse-net network.
+# ==============================================================================
+
+# ── API & Dashboard ────────────────────────────────────────────────────────────
+api:
+  insecure: true   # Dashboard accessible at http://localhost:8080/dashboard
+  dashboard: true
+
+# ── Ping endpoint (used by healthcheck) ───────────────────────────────────────
+ping: {}
+
+# ── Entrypoints ───────────────────────────────────────────────────────────────
+entryPoints:
+  http:
+    address: ":80"
+
+  traefik:
+    address: ":8080"
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+log:
+  filePath: /app/logs/traefik.log
+  level: INFO
+  format: json
+
+accessLog:
+  filePath: /app/logs/access.log
+  format: json
+  fields:
+    defaultMode: keep
+    headers:
+      defaultMode: keep
+
+# ── Providers: Docker (auto-discovery via labels) ─────────────────────────────
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    # Only expose containers that explicitly set traefik.enable=true
+    exposedByDefault: false
+    # Only discover services on the scareverse network
+    network: scareverse-net
+    # Poll Docker for label changes (no manual registration needed)
+    watch: true

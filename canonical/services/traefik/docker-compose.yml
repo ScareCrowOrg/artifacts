@@ -1,0 +1,83 @@
+version: "3.9"
+
+# ==============================================================================
+# Traefik Service Worker – Standalone docker-compose
+# ==============================================================================
+# Traefik v3.1.0 reverse proxy with Docker-native service discovery.
+# Routes are auto-discovered via Docker labels on vite, backend, and auth-proxy.
+# No manual route registration is required (replaces Nginx-Unit + NginxUnitRouter).
+#
+# Prerequisites:
+#   docker network create scareverse-net
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs -f
+#   docker-compose down
+# ==============================================================================
+
+services:
+  traefik:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: localhost:5001/scareverse-traefik:staging
+    container_name: scareverse-traefik-worker
+
+    environment:
+      # ── Logging ────────────────────────────────────────────────────────────
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # ── Service identification ────────────────────────────────────────────
+      WORKER_ID: ${WORKER_ID:-traefik}
+
+      # ── Redis / heartbeat ──────────────────────────────────────────────────
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
+      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
+      REDIS_L1_DB: ${REDIS_L1_DB:-0}
+      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-20}
+      HEARTBEAT_TTL: ${HEARTBEAT_TTL:-60}
+
+      # ── Python path (BaseService import) ─────────────────────────────────
+      PYTHONPATH: /app/artifacts
+
+    volumes:
+      # Docker daemon socket (Traefik watches Docker labels for service discovery)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # Static configuration
+      - ./traefik.yml:/app/traefik.yml:ro
+
+      # Artifacts (for canonical.shared.services.base_service import)
+      - ../../../../artifacts:/app/artifacts:ro
+
+    # Port 80: HTTP reverse proxy (public, replaces nginx-unity:80)
+    # Port 8080: Traefik dashboard / API (internal, accessible at /dashboard)
+    ports:
+      - "80:80"
+      - "8080:8080"
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/ping"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+
+    stop_grace_period: 30s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    networks:
+      - scareverse-net
+
+networks:
+  scareverse-net:
+    external: true

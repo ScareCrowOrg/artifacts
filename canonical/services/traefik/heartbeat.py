@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Nginx Unity heartbeat registration (fire-and-forget).
+Traefik heartbeat registration (fire-and-forget).
 
 Starts a BaseService heartbeat task and exits immediately.
-The task registers ``state:service:nginx-unity:available`` in Redis L1.
+The task registers ``state:service:traefik:available`` in Redis L1.
 
 Called by ``entrypoint.sh`` before the container waits::
 
-    python3 /app/artifacts/canonical/services/nginx-unity/heartbeat.py || true
+    python3 /app/artifacts/canonical/services/traefik/heartbeat.py || true
 """
 
 import asyncio
@@ -18,7 +18,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("nginx-unity-heartbeat")
+logger = logging.getLogger("traefik-heartbeat")
 
 
 def main() -> None:
@@ -34,7 +34,7 @@ def main() -> None:
         return
 
     async def _keep_alive() -> None:
-        service = BaseService("nginx-unity", logger=logger)
+        service = BaseService("traefik", logger=logger)
         await service.heartbeat()
 
     logger.info("Starting initial heartbeat registration (fire-and-forget)...")

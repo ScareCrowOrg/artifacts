@@ -41,7 +41,7 @@ Auth Proxy (Recepção)
 
 | Key | TTL | Description |
 |---|---|---|
-| `state:service:auth-proxy:available` | `HEARTBEAT_INTERVAL * 3` | Readiness signal for NginxUnitRouter. TTL is 3× the interval so the key survives up to 2 missed heartbeats before expiring. |
+| `state:service:auth-proxy:available` | `HEARTBEAT_INTERVAL * 3` | Readiness signal for Traefik service discovery and Launcher orchestration. TTL is 3× the interval so the key survives up to 2 missed heartbeats before expiring. |
 
 ## Deployment
 

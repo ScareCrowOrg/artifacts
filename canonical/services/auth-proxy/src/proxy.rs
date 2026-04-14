@@ -28,7 +28,7 @@ pub const HEARTBEAT_KEY: &str = "state:service:auth-proxy:available";
 
 /// Health check handler — always returns 200 OK.
 ///
-/// Used by docker-compose `healthcheck` and by `NginxUnitRouter.waitForService`.
+/// Used by docker-compose `healthcheck` and by Traefik service discovery.
 pub async fn health_handler() -> impl IntoResponse {
     (StatusCode::OK, "OK")
 }
@@ -52,7 +52,7 @@ pub async fn artifact_handler(
 
     info!("[AuthProxy] → {} {}", method, full_path);
 
-    // Debug: Log all headers to diagnose nginx-unit passthrough
+    // Debug: Log all headers to diagnose Traefik passthrough
     debug!("[AuthProxy] Headers: {:?}", req.headers());
 
     // Step 1 – extract Cookie header from the request.
@@ -67,7 +67,7 @@ pub async fn artifact_handler(
     if let Some(ref cookie) = cookie_header {
         debug!("[AuthProxy] Extracted cookie: {}", cookie);
     } else {
-        warn!("[AuthProxy] NO Cookie header received from nginx-unit!");
+        warn!("[AuthProxy] NO Cookie header received from Traefik!");
     }
     let auth_result = check_session(&state, &cookie_header, &path).await;
 

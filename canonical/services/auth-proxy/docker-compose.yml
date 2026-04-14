@@ -39,6 +39,16 @@ services:
     ports:
       - "5055:5055"
 
+    labels:
+      # ── Traefik service discovery ─────────────────────────────────────────
+      - "traefik.enable=true"
+      # Route: /artifacts paths go to auth-proxy (validates SessionID)
+      - "traefik.http.routers.auth-proxy.rule=PathPrefix(`/artifacts`)"
+      - "traefik.http.routers.auth-proxy.entrypoints=http"
+      # Highest priority – auth-proxy must be matched before vite catch-all
+      - "traefik.http.routers.auth-proxy.priority=100"
+      - "traefik.http.services.auth-proxy.loadbalancer.server.port=5055"
+
     networks:
       - scareverse-net
 

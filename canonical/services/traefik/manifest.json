@@ -1,0 +1,19 @@
+{
+  "version": "0.1",
+  "name": "traefik",
+  "build": false,
+  "image": "localhost:5001/scareverse-traefik:staging",
+  "imageTag": "staging",
+  "dependencies": [],
+  "generate_env_file": false,
+  "totp_seed": false,
+  "injected_env_vars": [
+    {
+      "name": "TUNNEL_FQDN",
+      "source": "config",
+      "required": false,
+      "description": "Fully-qualified domain name of the Cloudflare tunnel subdomain (e.g. planet.scareverse.net). Informational only – Traefik routes are configured via Docker labels."
+    }
+  ],
+  "lastBuilt": "2026-04-14T05:29:37.165Z"
+}

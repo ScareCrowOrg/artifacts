@@ -3,8 +3,7 @@
 //! Starts an Axum web server that:
 //!   - Validates SessionID via Backend for every `/artifacts/*` request.
 //!   - Proxies validated requests to Vite (transparent streaming).
-//!   - Registers a Redis heartbeat so `NginxUnitRouter.waitForService` can
-//!     detect readiness before routing traffic.
+//!   - Registers a Redis heartbeat so Traefik can detect readiness before routing traffic.
 //!   - Handles SIGTERM/SIGINT for graceful shutdown (30-second grace period).
 
 mod config;
@@ -76,7 +75,7 @@ async fn main() {
     // Build Axum router.
     let state_clone = Arc::clone(&state);
     let app = Router::new()
-        // Health endpoint – used by docker-compose healthcheck and NginxUnitRouter
+        // Health endpoint – used by docker-compose healthcheck and Traefik
         .route("/health", any(proxy::health_handler))
         // Artifact proxy – all methods, all sub-paths
         .route(

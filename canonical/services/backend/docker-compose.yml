@@ -195,6 +195,15 @@ services:
       - HUB_URL=${HUB_URL:-}
       - ANONYMIZED_TELEMETRY=${ANONYMIZED_TELEMETRY:-false}
 
+    labels:
+      # ── Traefik service discovery ─────────────────────────────────────────
+      - "traefik.enable=true"
+      # Route: /api paths go to backend
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=http"
+      - "traefik.http.routers.backend.priority=10"
+      - "traefik.http.services.backend.loadbalancer.server.port=5050"
+
     networks:
       - scareverse-net
 
