@@ -60,13 +60,6 @@ services:
 
     restart: unless-stopped
 
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/ping"]
-      interval: 30s
-      timeout: 10s
-      start_period: 15s
-      retries: 3
-
     stop_grace_period: 30s
 
     logging:
