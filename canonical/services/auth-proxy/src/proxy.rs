@@ -52,6 +52,9 @@ pub async fn artifact_handler(
 
     info!("[AuthProxy] → {} {}", method, full_path);
 
+    // Debug: Log all headers to diagnose nginx-unit passthrough
+    debug!("[AuthProxy] Headers: {:?}", req.headers());
+
     // Step 1 – extract Cookie header from the request.
     let cookie_header = req
         .headers()
@@ -61,6 +64,11 @@ pub async fn artifact_handler(
 
     // Step 2 – validate session via Backend.
     let has_cookie = cookie_header.is_some();
+    if let Some(ref cookie) = cookie_header {
+        debug!("[AuthProxy] Extracted cookie: {}", cookie);
+    } else {
+        warn!("[AuthProxy] NO Cookie header received from nginx-unit!");
+    }
     let auth_result = check_session(&state, &cookie_header, &path).await;
 
     match auth_result {
