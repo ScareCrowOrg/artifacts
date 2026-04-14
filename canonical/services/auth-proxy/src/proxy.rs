@@ -48,8 +48,9 @@ pub async fn artifact_handler(
         .map(|q| format!("?{q}"))
         .unwrap_or_default();
     let full_path = format!("{path}{query}");
+    let method = req.method().to_string();
 
-    debug!("[AuthProxy] Incoming: {}", full_path);
+    info!("[AuthProxy] → {} {}", method, full_path);
 
     // Step 1 – extract Cookie header from the request.
     let cookie_header = req
@@ -59,19 +60,20 @@ pub async fn artifact_handler(
         .map(str::to_owned);
 
     // Step 2 – validate session via Backend.
+    let has_cookie = cookie_header.is_some();
     let auth_result = check_session(&state, &cookie_header, &path).await;
 
     match auth_result {
         Ok(()) => {
             // Session valid → proxy to Vite.
-            debug!("[AuthProxy] Auth OK for {}, proxying to Vite", path);
+            debug!("[AuthProxy] Auth OK for {} (SessionID={}), proxying to Vite", path, has_cookie);
             proxy_to_vite(state, req, &full_path).await
         }
         Err(status) => {
             if status == StatusCode::FORBIDDEN {
-                warn!("[AuthProxy] Auth denied for {} (403)", path);
+                warn!("[AuthProxy] Auth DENIED for {} (403) | SessionID present: {}", path, has_cookie);
             } else {
-                error!("[AuthProxy] Auth error for {} ({})", path, status);
+                error!("[AuthProxy] Auth ERROR for {} ({}) | SessionID present: {}", path, status, has_cookie);
             }
             build_error_response(status)
         }
@@ -101,18 +103,27 @@ async fn check_session(
     // Forward the Cookie header so Backend can read `sessionId`.
     if let Some(cookie) = cookie_header {
         req_builder = req_builder.header(header::COOKIE, cookie);
+        debug!("[AuthProxy] Checking auth: {} (with SessionID)", auth_url);
+    } else {
+        debug!("[AuthProxy] Checking auth: {} (NO SessionID)", auth_url);
     }
 
     let response = req_builder.send().await.map_err(|e| {
-        error!("[AuthProxy] Backend request failed: {}", e);
+        error!("[AuthProxy] Backend request failed: {} (URL: {})", e, auth_url);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     match response.status().as_u16() {
-        200 => Ok(()),
-        403 => Err(StatusCode::FORBIDDEN),
+        200 => {
+            debug!("[AuthProxy] Backend returned 200 OK for {}", uri);
+            Ok(())
+        }
+        403 => {
+            debug!("[AuthProxy] Backend returned 403 FORBIDDEN for {}", uri);
+            Err(StatusCode::FORBIDDEN)
+        }
         code => {
-            error!("[AuthProxy] Unexpected Backend status: {}", code);
+            error!("[AuthProxy] Unexpected Backend status {} for {}", code, uri);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
