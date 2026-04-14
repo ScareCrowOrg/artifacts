@@ -19,8 +19,8 @@ version: "3.9"
 services:
   traefik:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../../../..
+      dockerfile: artifacts/canonical/services/traefik/Dockerfile
     image: localhost:5001/scareverse-traefik:staging
     container_name: scareverse-traefik-worker
 
