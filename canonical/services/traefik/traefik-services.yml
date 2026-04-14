@@ -1,0 +1,20 @@
+# ==============================================================================
+# Traefik Dynamic Configuration (traefik-services.yml)
+# ==============================================================================
+# This file is managed by service-discovery.py.
+# It is automatically rewritten when services register/deregister via Redis L1.
+#
+# Do NOT edit manually – changes will be overwritten by service-discovery.py.
+#
+# Structure:
+#   http.routers  – URL routing rules per service
+#   http.services – Backend server addresses per service
+#
+# service-discovery.py only writes this file when routes change (idempotent).
+# Traefik hot-reloads routes automatically when this file is updated.
+# ==============================================================================
+
+# Initial empty config – populated by service-discovery.py after first cycle.
+http:
+  routers: {}
+  services: {}

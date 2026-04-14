@@ -1,9 +1,10 @@
 # ==============================================================================
 # Traefik Service Worker – Standalone docker-compose
 # ==============================================================================
-# Traefik v3.1.0 reverse proxy with Docker-native service discovery.
-# Routes are auto-discovered via Docker labels on vite, backend, and auth-proxy.
-# No manual route registration is required (replaces Nginx-Unit + NginxUnitRouter).
+# Traefik v3.1.0 reverse proxy with Redis L1-based service discovery.
+# Routes are auto-discovered via service-discovery.py reading Redis L1 heartbeat
+# keys (state:service:*:available) and writing traefik-services.yml.
+# No docker.sock access required (Windows + security compatible).
 #
 # Prerequisites:
 #   docker network create scareverse-net
@@ -37,15 +38,20 @@ services:
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-20}
       HEARTBEAT_TTL: ${HEARTBEAT_TTL:-60}
 
+      # ── Service discovery ─────────────────────────────────────────────────
+      # Polling interval for Redis L1 service scan (seconds).
+      # Development: 5s  |  Production: 15s  |  Conservative: 30s
+      SERVICE_DISCOVERY_INTERVAL: ${SERVICE_DISCOVERY_INTERVAL:-15}
+
       # ── Python path (BaseService import) ─────────────────────────────────
       PYTHONPATH: /app/artifacts
 
     volumes:
-      # Docker daemon socket (Traefik watches Docker labels for service discovery)
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-
-      # Static configuration
+      # Static configuration (read-only)
       - ./traefik.yml:/app/traefik.yml:ro
+
+      # Dynamic configuration (service-discovery.py writes this file)
+      - ./traefik-services.yml:/app/traefik-services.yml:rw
 
       # Artifacts (for canonical.shared.services.base_service import)
       - ../../../../artifacts:/app/artifacts:ro

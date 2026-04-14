@@ -17,7 +17,7 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import redis.asyncio as aioredis
 from redis.asyncio import Redis
@@ -191,6 +191,34 @@ def _reset_job_type_map() -> None:
 # ---------------------------------------------------------------------------
 # Service availability helpers
 # ---------------------------------------------------------------------------
+
+
+async def scan_services_async(redis_client: Redis) -> Set[str]:
+    """
+    Scan Redis L1 for all services that have registered a heartbeat key.
+
+    Iterates over keys matching ``state:service:*:available`` and extracts
+    the service names.  Traefik itself is excluded from the results since it
+    is the consumer of this information, not a routable upstream service.
+
+    Args:
+        redis_client: Connected async Redis L1 client.
+
+    Returns:
+        ``Set[str]`` of service names (e.g. ``{"backend", "vite"}``).
+    """
+    services: Set[str] = set()
+    async for key in redis_client.scan_iter(
+        match="state:service:*:available", count=100
+    ):
+        key_str = key if isinstance(key, str) else key.decode()
+        parts = key_str.split(":")
+        # Expected format: state:service:{name}:available → parts[2]
+        if len(parts) >= 4:
+            service_name = parts[2]
+            if service_name != "traefik":  # Skip Traefik itself
+                services.add(service_name)
+    return services
 
 
 async def _all_services_available(

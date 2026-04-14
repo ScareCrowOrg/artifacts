@@ -3,7 +3,7 @@
 BaseService: Reusable Redis heartbeat registration for ScareVerse services.
 
 Provides self-registration of service availability keys in Redis L1 so that
-GateKeeper can detect running services without probing HTTP endpoints.
+GateKeeper and service-discovery.py can detect running services.
 
 Usage (fire-and-forget pattern)::
 
@@ -15,17 +15,27 @@ Usage (fire-and-forget pattern)::
 
     @app.on_event("startup")
     async def startup():
-        service = BaseService("ollama")
+        service = BaseService("backend", service_port=5050)
         asyncio.create_task(service.heartbeat())
 
 Redis key written::
 
-    state:service:{service_name}:available  →  "1"  (TTL = key_ttl seconds)
+    state:service:{service_name}:available  →  JSON  (TTL = key_ttl seconds)
+
+Heartbeat value format::
+
+    {"port_opened": true|false|null, "timestamp": 1713085200.123}
+
+    - ``port_opened: true``  – HTTP GET /health returned 200 (service healthy)
+    - ``port_opened: false`` – Port not responding or health check failed
+    - ``port_opened: null``  – No port configured (cannot verify health)
 """
 
 import asyncio
+import json
 import logging
 import os
+import time
 from typing import Optional
 
 __all__ = ["BaseService"]
@@ -40,30 +50,44 @@ class BaseService:
     It writes ``state:service:{service_name}:available`` every
     ``heartbeat_interval`` seconds with ``key_ttl`` as the Redis TTL.
 
+    The heartbeat value is a JSON object::
+
+        {"port_opened": true|false|null, "timestamp": <unix_float>}
+
+    ``port_opened`` reflects whether an HTTP GET to ``http://localhost:{service_port}/health``
+    returned 200.  It is ``null`` when no port is configured.
+
+    Only services with ``port_opened: true`` are included in Traefik routes
+    by ``service-discovery.py``.
+
     If Redis is unavailable the loop logs a warning and retries on the next
     iteration without raising; if ``redis-py`` is not installed the loop
     exits gracefully after logging a warning.
 
     Args:
-        service_name: Logical service identifier (e.g. ``"ollama"``).
-        redis_host: Redis L1 host.  Defaults to ``REDIS_L1_HOST`` env var or
-            ``"redis-local"``.
-        redis_port: Redis L1 port.  Defaults to ``REDIS_L1_PORT`` env var or
-            ``6380``.
-        redis_db: Redis L1 database index.  Defaults to ``REDIS_L1_DB`` env
-            var or ``0``.
+        service_name:   Logical service identifier (e.g. ``"backend"``).
+        service_port:   Port the service listens on for HTTP health checks.
+                        Defaults to ``WORKER_PORT`` env var or ``None``.
+                        When ``None``, ``port_opened`` is always ``null``.
+        redis_host:     Redis L1 host.  Defaults to ``REDIS_L1_HOST`` env var or
+                        ``"redis-local"``.
+        redis_port:     Redis L1 port.  Defaults to ``REDIS_L1_PORT`` env var or
+                        ``6380``.
+        redis_db:       Redis L1 database index.  Defaults to ``REDIS_L1_DB`` env
+                        var or ``0``.
         redis_password: Redis password.  Defaults to ``REDIS_L1_PASSWORD``
-            env var or ``"scarerunner"``.  Pass ``None`` to disable auth.
+                        env var or ``"scarerunner"``.  Pass ``None`` to disable auth.
         heartbeat_interval: Seconds between key refreshes.  Defaults to
-            ``HEARTBEAT_INTERVAL`` (Launcher-injected) or ``REDIS_HEARTBEAT_INTERVAL`` env var or ``60``.
-        key_ttl: Redis TTL in seconds for the availability key.  Defaults to
-            ``HEARTBEAT_TTL`` (Launcher-injected) or ``heartbeat_interval * 3`` when ``None``.
-        logger: Optional logger.  Defaults to the module logger.
+                        ``HEARTBEAT_INTERVAL`` (Launcher-injected) or ``REDIS_HEARTBEAT_INTERVAL`` env var or ``60``.
+        key_ttl:        Redis TTL in seconds for the availability key.  Defaults to
+                        ``HEARTBEAT_TTL`` (Launcher-injected) or ``heartbeat_interval * 3`` when ``None``.
+        logger:         Optional logger.  Defaults to the module logger.
     """
 
     def __init__(
         self,
         service_name: str,
+        service_port: Optional[int] = None,
         redis_host: Optional[str] = None,
         redis_port: Optional[int] = None,
         redis_db: Optional[int] = None,
@@ -73,6 +97,13 @@ class BaseService:
         logger: Optional[logging.Logger] = None,
     ) -> None:
         self.service_name = service_name
+
+        # Resolve service port: explicit arg → WORKER_PORT env var → None
+        if service_port is not None:
+            self._service_port: Optional[int] = service_port
+        else:
+            worker_port_env = os.getenv("WORKER_PORT")
+            self._service_port = int(worker_port_env) if worker_port_env else None
 
         self._redis_host = redis_host or os.getenv("REDIS_L1_HOST", "redis-local")
         self._redis_port = redis_port if redis_port is not None else int(
@@ -105,6 +136,41 @@ class BaseService:
     # Public API
     # ------------------------------------------------------------------
 
+    async def _check_port_health(self) -> Optional[bool]:
+        """
+        Perform an HTTP GET to ``http://localhost:{service_port}/health``.
+
+        Returns:
+            ``True``  – port responded with HTTP 200.
+            ``False`` – port not responding, connection refused, or timeout (2s).
+            ``None``  – no port configured (``service_port`` not set).
+        """
+        if self._service_port is None:
+            return None
+
+        try:
+            import httpx  # type: ignore[import]
+        except ImportError:
+            self._logger.warning(
+                "httpx not installed – port health check disabled for '%s'",
+                self.service_name,
+            )
+            return None
+
+        url = f"http://localhost:{self._service_port}/health"
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                response = await client.get(url)
+                return response.status_code == 200
+        except Exception as exc:
+            self._logger.debug(
+                "Port health check failed for '%s' on port %d: %s",
+                self.service_name,
+                self._service_port,
+                exc,
+            )
+            return False
+
     async def heartbeat(self) -> None:
         """
         Infinite heartbeat loop – refresh the availability key in Redis L1.
@@ -115,9 +181,15 @@ class BaseService:
 
         The loop:
         1. Connects to Redis L1 (lazy, reconnects on failure).
-        2. Sets ``state:service:{name}:available`` = ``"1"`` with TTL.
-        3. Sleeps for ``heartbeat_interval`` seconds.
-        4. On any Redis error: logs a warning, resets client, retries next cycle.
+        2. Checks port health via HTTP GET /health (if port is configured).
+        3. Sets ``state:service:{name}:available`` = JSON with ``port_opened``
+           and ``timestamp`` with TTL.
+        4. Sleeps for ``heartbeat_interval`` seconds.
+        5. On any Redis error: logs a warning, resets client, retries next cycle.
+
+        Heartbeat value format::
+
+            {"port_opened": true|false|null, "timestamp": 1713085200.123}
 
         Returns immediately (without looping) if ``redis-py`` is not installed.
         """
@@ -144,22 +216,29 @@ class BaseService:
         client = None  # aioredis.Redis instance, recreated on connection failure
 
         self._logger.info(
-            "Heartbeat starting for service '%s' (interval=%ds, ttl=%ds, key=%s)",
+            "Heartbeat starting for service '%s' (interval=%ds, ttl=%ds, key=%s, port=%s)",
             self.service_name,
             self._heartbeat_interval,
             self._key_ttl,
             self._availability_key,
+            self._service_port,
         )
 
         while True:
             try:
                 if client is None:
                     client = aioredis.Redis(**connect_kwargs)
-                await client.set(self._availability_key, "1", ex=self._key_ttl)
+
+                port_opened = await self._check_port_health()
+                value = json.dumps(
+                    {"port_opened": port_opened, "timestamp": time.time()}
+                )
+                await client.set(self._availability_key, value, ex=self._key_ttl)
                 self._logger.debug(
-                    "Heartbeat: %s refreshed (TTL %ds)",
+                    "Heartbeat: %s refreshed (TTL %ds, port_opened=%s)",
                     self._availability_key,
                     self._key_ttl,
+                    port_opened,
                 )
             except Exception as exc:
                 self._logger.warning(

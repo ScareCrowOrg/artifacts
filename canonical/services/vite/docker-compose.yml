@@ -72,6 +72,8 @@ services:
       # Heartbeat (Launcher-injected for service availability tracking)
       - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-20}
       - HEARTBEAT_TTL=${HEARTBEAT_TTL:-60}
+      # Worker port (read by BaseService for port health check → port_opened in Redis)
+      - WORKER_PORT=5052
 
     labels:
       # ── Traefik service discovery ─────────────────────────────────────────

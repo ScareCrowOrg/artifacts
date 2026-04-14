@@ -3,6 +3,7 @@ Unit tests for BaseService – Redis heartbeat registration.
 
 Validates:
 - heartbeat() sets the correct Redis key with the correct TTL.
+- heartbeat() stores a JSON value with port_opened and timestamp fields.
 - heartbeat() loops (calls set multiple times).
 - heartbeat() handles Redis connection failure gracefully (logs, retries).
 - heartbeat() handles Redis command error gracefully (logs, continues).
@@ -10,9 +11,12 @@ Validates:
 - Redis key format: state:service:{name}:available.
 - Default TTL is 3× heartbeat_interval.
 - Custom redis config and heartbeat_interval / key_ttl are respected.
+- _check_port_health() returns True/False/None based on port availability.
+- service_port parameter and WORKER_PORT env var are respected.
 """
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -79,16 +83,43 @@ async def _run_heartbeat_iterations(service: BaseService, mock_redis: Any, itera
 
 class TestBaseServiceHeartbeat:
     @pytest.mark.asyncio
-    async def test_sets_correct_key_and_value(self):
-        """heartbeat() sets state:service:{name}:available = '1'."""
+    async def test_sets_correct_key_with_ttl(self):
+        """heartbeat() sets state:service:{name}:available with correct TTL."""
         mock_redis = AsyncMock()
         service = _make_service("ollama")
 
         await _run_heartbeat_iterations(service, mock_redis, iterations=1)
 
-        mock_redis.set.assert_called_once_with(
-            "state:service:ollama:available", "1", ex=3
-        )
+        assert mock_redis.set.call_count == 1
+        args, kwargs = mock_redis.set.call_args
+        assert args[0] == "state:service:ollama:available"
+        assert kwargs["ex"] == 3
+
+    @pytest.mark.asyncio
+    async def test_value_is_json_with_port_opened(self):
+        """heartbeat() stores JSON value with port_opened and timestamp fields."""
+        mock_redis = AsyncMock()
+        service = _make_service("ollama")
+
+        await _run_heartbeat_iterations(service, mock_redis, iterations=1)
+
+        args, _ = mock_redis.set.call_args
+        value = json.loads(args[1])
+        assert "port_opened" in value
+        assert "timestamp" in value
+        assert isinstance(value["timestamp"], float)
+
+    @pytest.mark.asyncio
+    async def test_port_opened_null_when_no_port_configured(self):
+        """port_opened is null when service_port is not configured."""
+        mock_redis = AsyncMock()
+        service = _make_service("ollama")  # no service_port
+
+        await _run_heartbeat_iterations(service, mock_redis, iterations=1)
+
+        args, _ = mock_redis.set.call_args
+        value = json.loads(args[1])
+        assert value["port_opened"] is None
 
     @pytest.mark.asyncio
     async def test_uses_correct_ttl(self):
@@ -129,15 +160,120 @@ class TestBaseServiceHeartbeat:
         assert args[0] == "state:service:instantmesh:available"
 
     @pytest.mark.asyncio
-    async def test_value_is_one(self):
-        """Value stored in Redis must be '1'."""
+    async def test_port_opened_true_when_health_check_succeeds(self):
+        """port_opened is True when HTTP /health returns 200."""
         mock_redis = AsyncMock()
-        service = _make_service("stable-diffusion")
+        service = _make_service("backend", service_port=5050)
 
-        await _run_heartbeat_iterations(service, mock_redis, iterations=1)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("services.base_service.asyncio.sleep", side_effect=asyncio.CancelledError):
+            with patch("redis.asyncio.Redis", return_value=mock_redis):
+                with patch("httpx.AsyncClient", return_value=mock_client):
+                    try:
+                        await service.heartbeat()
+                    except asyncio.CancelledError:
+                        pass
 
         args, _ = mock_redis.set.call_args
-        assert args[1] == "1"
+        value = json.loads(args[1])
+        assert value["port_opened"] is True
+
+    @pytest.mark.asyncio
+    async def test_port_opened_false_when_health_check_fails(self):
+        """port_opened is False when HTTP /health fails or times out."""
+        mock_redis = AsyncMock()
+        service = _make_service("backend", service_port=5050)
+
+        with patch("services.base_service.asyncio.sleep", side_effect=asyncio.CancelledError):
+            with patch("redis.asyncio.Redis", return_value=mock_redis):
+                with patch("httpx.AsyncClient") as mock_client_cls:
+                    mock_client_cls.return_value.__aenter__ = AsyncMock(
+                        side_effect=Exception("Connection refused")
+                    )
+                    try:
+                        await service.heartbeat()
+                    except asyncio.CancelledError:
+                        pass
+
+        args, _ = mock_redis.set.call_args
+        value = json.loads(args[1])
+        assert value["port_opened"] is False
+
+
+# ---------------------------------------------------------------------------
+# Tests – port health check
+# ---------------------------------------------------------------------------
+
+
+class TestCheckPortHealth:
+    @pytest.mark.asyncio
+    async def test_returns_none_when_no_port(self):
+        """_check_port_health() returns None when service_port is not set."""
+        service = BaseService("svc")
+        result = await service._check_port_health()
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_true_on_200(self):
+        """_check_port_health() returns True when /health responds 200."""
+        service = BaseService("svc", service_port=5050)
+        mock_response = MagicMock(status_code=200)
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await service._check_port_health()
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_returns_false_on_non_200(self):
+        """_check_port_health() returns False when /health responds non-200."""
+        service = BaseService("svc", service_port=5050)
+        mock_response = MagicMock(status_code=503)
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await service._check_port_health()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_returns_false_on_connection_error(self):
+        """_check_port_health() returns False when port is not reachable."""
+        service = BaseService("svc", service_port=5050)
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(
+                side_effect=Exception("Connection refused")
+            )
+            result = await service._check_port_health()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_does_not_raise_on_timeout(self):
+        """_check_port_health() swallows timeout exceptions and returns False."""
+        service = BaseService("svc", service_port=5050)
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(
+                side_effect=Exception("Timeout")
+            )
+            result = await service._check_port_health()  # must not raise
+
+        assert result is False
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +414,24 @@ class TestBaseServiceConfiguration:
         custom_logger = logging.getLogger("custom")
         service = BaseService("svc", logger=custom_logger)
         assert service._logger is custom_logger
+
+    def test_service_port_explicit(self):
+        """Explicit service_port is stored correctly."""
+        service = BaseService("backend", service_port=5050)
+        assert service._service_port == 5050
+
+    def test_service_port_none_by_default(self):
+        """When service_port is not set and WORKER_PORT is not in env, _service_port is None."""
+        import os
+        os.environ.pop("WORKER_PORT", None)
+        service = BaseService("svc")
+        assert service._service_port is None
+
+    def test_service_port_from_worker_port_env(self, monkeypatch):
+        """WORKER_PORT env var is used when service_port is not explicitly provided."""
+        monkeypatch.setenv("WORKER_PORT", "5052")
+        service = BaseService("vite")
+        assert service._service_port == 5052
 
 
 # ---------------------------------------------------------------------------

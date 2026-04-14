@@ -35,6 +35,8 @@ services:
       - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
       - REDIS_L1_DB=${REDIS_L1_DB:-0}
       - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-20}
+      # Worker port (read by BaseService for port health check → port_opened in Redis)
+      - WORKER_PORT=5055
 
     ports:
       - "5055:5055"
