@@ -13,10 +13,10 @@ RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 COPY traefik.yml /app/traefik.yml
 
 # ── Service code ──────────────────────────────────────────────────────────────
-COPY config.py heartbeat.py /app/
+COPY ./config.py ./heartbeat.py /app/
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
-COPY entrypoint.sh /app/entrypoint.sh
+COPY ./entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # ── Log directory ─────────────────────────────────────────────────────────────
