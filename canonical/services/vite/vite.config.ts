@@ -637,6 +637,7 @@ export default defineConfig({
       allow: [
         '/app/artifacts',           // Artifacts root (for all cell types)
         '/app/node_modules',        // Dependencies (Vue, etc)
+        '/app',                     // Allow /canonical/* served from monorepo root
       ],
       strict: true,
     },
