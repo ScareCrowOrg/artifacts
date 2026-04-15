@@ -86,7 +86,7 @@ SERVICE_PORT_MAPPING: Dict[str, int] = {
 # ---------------------------------------------------------------------------
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # DEBUG to show all trace logs
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("service-discovery")
