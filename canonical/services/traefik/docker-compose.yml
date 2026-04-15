@@ -50,9 +50,6 @@ services:
       # Static configuration (read-only)
       - ./traefik.yml:/app/traefik.yml:ro
 
-      # Dynamic configuration (service-discovery.py writes this file)
-      - ./traefik-services.yml:/app/traefik-services.yml:rw
-
       # Artifacts (for canonical.shared.services.base_service import)
       - ../../../../artifacts:/app/artifacts:ro
 
