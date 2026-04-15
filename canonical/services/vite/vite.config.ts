@@ -633,16 +633,18 @@ export default defineConfig({
 
     // Serve files from artifacts root
     fs: {
-      // Allow Vite to resolve files from these directories (strict for security)
-      // Critical: Use absolute paths for container compatibility
-      // 🔒 Paranoia: Only allow /artifacts and dependencies
-      // Auth-Proxy handles path rewriting (/canonical/* → /artifacts/canonical/*)
-      // Backend validates RBAC (who can access /runtime, /sandbox, etc)
+      // Auth-Proxy is the ingress controller:
+      // - Validates session (who is authenticated)
+      // - Validates RBAC (who can access /runtime, /sandbox, /canonical)
+      // - Only authenticated + authorized requests reach Vite
+      //
+      // So Vite can trust that any request it gets has already been validated.
+      // No need for fs.strict paranoia — the gateway handles security.
       allow: [
         '/app/artifacts',           // Artifacts root (for all cell types)
         '/app/node_modules',        // Dependencies (Vue, etc)
       ],
-      strict: true,
+      strict: false,  // Trust Auth-Proxy to do its job
     },
   },
   
