@@ -26,9 +26,15 @@ COPY traefik.yml /app/traefik.yml
 COPY heartbeat.py /app/heartbeat.py
 RUN chmod +x /app/heartbeat.py
 
+COPY service_discovery.py /app/service_discovery.py
+RUN chmod +x /app/service_discovery.py
+
 # ── Entrypoint ─────────────────────────────────────────────────────────────────
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
+# ── Traefik dynamic configuration template ────────────────────────────────────
+COPY traefik-services.yml /app/traefik-services.yml
 
 # ── Log directory ──────────────────────────────────────────────────────────────
 RUN mkdir -p /app/logs
