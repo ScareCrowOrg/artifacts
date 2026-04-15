@@ -109,6 +109,7 @@ def _build_traefik_config(healthy_services: Set[str]) -> dict:
     Returns:
         Dict suitable for ``yaml.dump()`` as a Traefik File provider config.
     """
+    logger.debug("🔨 Building config for %d healthy services", len(healthy_services))
     routers: dict = {}
     services: dict = {}
 
@@ -116,10 +117,17 @@ def _build_traefik_config(healthy_services: Set[str]) -> dict:
         route_cfg = SERVICE_ROUTES.get(name)
         if route_cfg is None:
             logger.warning(
-                "No route config for service '%s' – skipping route generation", name
+                "  ⚠️  No route config for service '%s' – skipping", name
             )
             continue
 
+        logger.debug(
+            "  ➕ Adding route for %s: rule=%s, port=%d, priority=%d",
+            name,
+            route_cfg["rule"],
+            route_cfg["port"],
+            route_cfg["priority"],
+        )
         routers[name] = {
             "rule": route_cfg["rule"],
             "service": name,
@@ -132,6 +140,7 @@ def _build_traefik_config(healthy_services: Set[str]) -> dict:
             }
         }
 
+    logger.debug("✓ Config built with %d routers", len(routers))
     return {"http": {"routers": routers, "services": services}}
 
 
@@ -153,32 +162,39 @@ def _write_config_atomic(config: dict, path: str, max_retries: int = 20) -> None
     import time
 
     dir_path = os.path.dirname(os.path.abspath(path))
+    logger.debug("💾 Starting atomic write to %s (max_retries=%d)", path, max_retries)
 
     for attempt in range(max_retries):
         try:
+            logger.debug("  [attempt %d/%d] Creating temp file...", attempt + 1, max_retries)
             with tempfile.NamedTemporaryFile(
                 mode="w", dir=dir_path, suffix=".tmp", delete=False
             ) as fh:
+                logger.debug("  [attempt %d] Writing YAML to %s", attempt + 1, fh.name)
                 yaml.dump(config, fh, default_flow_style=False, allow_unicode=True)
                 tmp_path = fh.name
+                logger.debug("  [attempt %d] YAML written (%d bytes)", attempt + 1, fh.tell())
+
+            logger.debug("  [attempt %d] Renaming %s → %s", attempt + 1, tmp_path, path)
             os.replace(tmp_path, path)
+            logger.debug("✅ Config written successfully on attempt %d/%d", attempt + 1, max_retries)
             return  # Success
         except OSError as exc:
             # EBUSY (errno 16) = device or resource busy (file locking contention)
             if exc.errno == 16 and attempt < max_retries - 1:
                 backoff = 0.05 * (2 ** attempt)  # 0.05s, 0.1s, 0.2s, 0.4s, 0.8s, ...
                 logger.debug(
-                    "Config write retry %d/%d (resource busy, waiting %.2fs)...",
+                    "  [attempt %d] 🔄 Resource busy (EBUSY), retrying in %.2fs...",
                     attempt + 1,
-                    max_retries,
                     backoff,
                 )
                 time.sleep(backoff)
                 continue
             # Other errors or final retry exhausted
             logger.error(
-                "Config write failed after %d retries: %s",
-                max_retries,
+                "❌ Config write FAILED after %d attempts: errno=%s, %s",
+                attempt + 1,
+                exc.errno,
                 exc,
             )
             raise
@@ -196,17 +212,22 @@ def _load_current_services(path: str) -> Set[str]:
     Returns:
         Set of service/router names defined in the config.
     """
+    logger.debug("📂 Loading current config from %s...", path)
     try:
         with open(path, encoding="utf-8") as fh:
             content = yaml.safe_load(fh)
         if not content or "http" not in content:
+            logger.debug("  📄 File exists but empty or no 'http' section")
             return set()
         routers = content.get("http", {}).get("routers") or {}
-        return set(routers.keys())
+        current = set(routers.keys())
+        logger.debug("  ✓ Loaded %d current routes: %s", len(current), sorted(current))
+        return current
     except FileNotFoundError:
+        logger.debug("  📄 File not found (first run?)")
         return set()
     except (yaml.YAMLError, AttributeError) as exc:
-        logger.warning("Cannot parse current config %s: %s", path, exc)
+        logger.warning("  ⚠️  Cannot parse current config %s: %s", path, exc)
         return set()
 
 
@@ -232,6 +253,8 @@ async def scan_healthy_services(redis_client) -> Set[str]:
         Set of service names whose port health check passed.
     """
     healthy_services: Set[str] = set()
+    logger.debug("🔍 Scanning Redis for state:service:*:available keys...")
+
     async for key in redis_client.scan_iter(
         match="state:service:*:available", count=100
     ):
@@ -239,27 +262,41 @@ async def scan_healthy_services(redis_client) -> Set[str]:
         parts = key_str.split(":")
         # Expected: ['state', 'service', '{name}', 'available']
         if len(parts) < 4:
+            logger.debug("  ⚠️  Invalid key format: %s", key_str)
             continue
         service_name = parts[2]
         if service_name == "traefik":
+            logger.debug("  ⏭️  Skipping traefik (doesn't discover itself)")
             continue  # Traefik discovers others, not itself
 
         value = await redis_client.get(key)
         if value is None:
+            logger.debug("  ❌ %s: no value in Redis", service_name)
             continue
 
         try:
             data = json.loads(value)
             port_opened = data.get("port_opened")
-        except (json.JSONDecodeError, AttributeError):
+            timestamp = data.get("timestamp", "?")
             logger.debug(
-                "Service '%s' has non-JSON heartbeat value – skipping", service_name
+                "  📌 %s: port_opened=%s (timestamp=%.1f)",
+                service_name,
+                port_opened,
+                timestamp if isinstance(timestamp, (int, float)) else 0,
+            )
+        except (json.JSONDecodeError, AttributeError) as e:
+            logger.debug(
+                "  ❌ %s: invalid JSON – %s", service_name, e
             )
             continue
 
         if port_opened is True:
+            logger.debug("  ✅ %s: HEALTHY (will route)", service_name)
             healthy_services.add(service_name)
+        else:
+            logger.debug("  ❌ %s: unhealthy (port_opened=%s)", service_name, port_opened)
 
+    logger.debug("✓ Scan complete: found %d healthy services", len(healthy_services))
     return healthy_services
 
 
@@ -299,16 +336,21 @@ async def discovery_loop() -> None:
     )
 
     redis_client = None
+    cycle = 0
 
     while True:
+        cycle += 1
+        logger.debug("=" * 80)
+        logger.debug("🔄 DISCOVERY CYCLE #%d (every %ds)", cycle, SERVICE_DISCOVERY_INTERVAL)
+        logger.debug("=" * 80)
+
         try:
             if redis_client is None:
+                logger.debug("📡 Connecting to Redis L1 (%s:%d)...", REDIS_L1_HOST, REDIS_L1_PORT)
                 redis_client = aioredis.Redis(**connect_kwargs)
-                logger.debug("Redis connection established")
+                logger.debug("✓ Redis connection established")
 
-            logger.debug("Scanning Redis for healthy services...")
             healthy_services = await scan_healthy_services(redis_client)
-            logger.debug("Found healthy services: %s", sorted(healthy_services))
 
             current_services = _load_current_services(TRAEFIK_CONFIG_PATH)
             logger.debug("Current config routes: %s", sorted(current_services))
@@ -321,7 +363,9 @@ async def discovery_loop() -> None:
                     sorted(added),
                     sorted(removed),
                 )
+                logger.debug("Building config for services: %s", sorted(healthy_services))
                 config = _build_traefik_config(healthy_services)
+                logger.debug("Config built, attempting atomic write to %s", TRAEFIK_CONFIG_PATH)
                 try:
                     _write_config_atomic(config, TRAEFIK_CONFIG_PATH)
                     logger.info(
@@ -330,10 +374,12 @@ async def discovery_loop() -> None:
                     )
                 except Exception as exc:
                     logger.error(
-                        "❌ Config write failed (will retry): %s",
+                        "❌ Config write FAILED (exception): %s",
                         exc,
                         exc_info=True,
                     )
+                    # Don't re-raise - continue to next cycle
+                    continue
             else:
                 logger.debug(
                     "No route changes (services: %s)", sorted(healthy_services)
@@ -341,12 +387,13 @@ async def discovery_loop() -> None:
 
         except Exception as exc:
             logger.warning(
-                "Discovery cycle failed: %s – retrying in %ds",
+                "⚠️  Discovery cycle #%d failed: %s – retrying in %ds",
+                cycle,
                 exc,
-                SERVICE_DISCOVERY_INTERVAL,
             )
             redis_client = None  # force reconnect on next cycle
 
+        logger.debug("⏳ Sleeping %ds until next cycle...", SERVICE_DISCOVERY_INTERVAL)
         await asyncio.sleep(SERVICE_DISCOVERY_INTERVAL)
 
 
