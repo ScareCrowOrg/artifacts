@@ -135,19 +135,20 @@ def _build_traefik_config(healthy_services: Set[str]) -> dict:
     return {"http": {"routers": routers, "services": services}}
 
 
-def _write_config_atomic(config: dict, path: str, max_retries: int = 5) -> None:
+def _write_config_atomic(config: dict, path: str, max_retries: int = 20) -> None:
     """
     Write *config* as YAML to *path* using an atomic temp→rename pattern.
 
     This prevents Traefik from reading a partially-written file.
 
     Retries on EBUSY (file locking contention with Traefik File Provider)
-    with exponential backoff.
+    with exponential backoff. When mounted as volume from host, file locking
+    can be severe; higher retry count needed.
 
     Args:
         config: Dict to serialise as YAML.
         path:   Destination file path (e.g. ``/app/traefik-services.yml``).
-        max_retries: Max attempts before giving up.
+        max_retries: Max attempts before giving up (default 20 for volume mounts).
     """
     import time
 
@@ -165,9 +166,9 @@ def _write_config_atomic(config: dict, path: str, max_retries: int = 5) -> None:
         except OSError as exc:
             # EBUSY (errno 16) = device or resource busy (file locking contention)
             if exc.errno == 16 and attempt < max_retries - 1:
-                backoff = 0.1 * (2 ** attempt)  # 0.1s, 0.2s, 0.4s, 0.8s, ...
+                backoff = 0.05 * (2 ** attempt)  # 0.05s, 0.1s, 0.2s, 0.4s, 0.8s, ...
                 logger.debug(
-                    "Config write retry %d/%d (resource busy, waiting %fs)...",
+                    "Config write retry %d/%d (resource busy, waiting %.2fs)...",
                     attempt + 1,
                     max_retries,
                     backoff,
@@ -175,6 +176,11 @@ def _write_config_atomic(config: dict, path: str, max_retries: int = 5) -> None:
                 time.sleep(backoff)
                 continue
             # Other errors or final retry exhausted
+            logger.error(
+                "Config write failed after %d retries: %s",
+                max_retries,
+                exc,
+            )
             raise
 
 
