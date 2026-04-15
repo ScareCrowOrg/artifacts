@@ -135,23 +135,47 @@ def _build_traefik_config(healthy_services: Set[str]) -> dict:
     return {"http": {"routers": routers, "services": services}}
 
 
-def _write_config_atomic(config: dict, path: str) -> None:
+def _write_config_atomic(config: dict, path: str, max_retries: int = 5) -> None:
     """
     Write *config* as YAML to *path* using an atomic temp→rename pattern.
 
     This prevents Traefik from reading a partially-written file.
 
+    Retries on EBUSY (file locking contention with Traefik File Provider)
+    with exponential backoff.
+
     Args:
         config: Dict to serialise as YAML.
         path:   Destination file path (e.g. ``/app/traefik-services.yml``).
+        max_retries: Max attempts before giving up.
     """
+    import time
+
     dir_path = os.path.dirname(os.path.abspath(path))
-    with tempfile.NamedTemporaryFile(
-        mode="w", dir=dir_path, suffix=".tmp", delete=False
-    ) as fh:
-        yaml.dump(config, fh, default_flow_style=False, allow_unicode=True)
-        tmp_path = fh.name
-    os.replace(tmp_path, path)
+
+    for attempt in range(max_retries):
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", dir=dir_path, suffix=".tmp", delete=False
+            ) as fh:
+                yaml.dump(config, fh, default_flow_style=False, allow_unicode=True)
+                tmp_path = fh.name
+            os.replace(tmp_path, path)
+            return  # Success
+        except OSError as exc:
+            # EBUSY (errno 16) = device or resource busy (file locking contention)
+            if exc.errno == 16 and attempt < max_retries - 1:
+                backoff = 0.1 * (2 ** attempt)  # 0.1s, 0.2s, 0.4s, 0.8s, ...
+                logger.debug(
+                    "Config write retry %d/%d (resource busy, waiting %fs)...",
+                    attempt + 1,
+                    max_retries,
+                    backoff,
+                )
+                time.sleep(backoff)
+                continue
+            # Other errors or final retry exhausted
+            raise
 
 
 def _load_current_services(path: str) -> Set[str]:

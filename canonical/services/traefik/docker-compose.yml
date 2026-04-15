@@ -18,8 +18,8 @@
 services:
   traefik:
     build:
-      context: ../../../..
-      dockerfile: artifacts/canonical/services/traefik/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     image: localhost:5001/scareverse-traefik:staging
     container_name: scareverse-traefik-worker
 
