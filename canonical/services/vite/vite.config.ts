@@ -450,12 +450,10 @@ const urlRewritePlugin = {
           console.error(`[url-rewrite] REQUEST: ${url}`)
         }
 
-        // Rewrite /artifacts/* URLs to /* for file serving
-        if (url.startsWith('/artifacts/')) {
-          console.error(`[url-rewrite] REWRITING: ${url} → ${url.replace('/artifacts', '')}`)
-          req.url = url.replace('/artifacts', '')
-          return next()
-        }
+        // NOTE: /artifacts/* rewriting is now handled by Auth-Proxy gateway
+        // Auth-proxy rewrites /canonical/*, /sandbox/*, /runtime/* → /artifacts/...
+        // Vite receives absolute artifact paths and serves them directly.
+        // This rewrite was removed to avoid double-rewriting paths.
 
         // Match /viewers/:viewerName (with optional path segments and query string)
         // Pattern: /viewers/{viewerName}[/arbitrary/path][?query]
@@ -635,12 +633,14 @@ export default defineConfig({
 
     // Serve files from artifacts root
     fs: {
-      // Allow Vite to resolve files from these directories
+      // Allow Vite to resolve files from these directories (strict for security)
       // Critical: Use absolute paths for container compatibility
+      // 🔒 Paranoia: Only allow /artifacts and dependencies
+      // Auth-Proxy handles path rewriting (/canonical/* → /artifacts/canonical/*)
+      // Backend validates RBAC (who can access /runtime, /sandbox, etc)
       allow: [
         '/app/artifacts',           // Artifacts root (for all cell types)
         '/app/node_modules',        // Dependencies (Vue, etc)
-        '/app',                     // Allow /canonical/* served from monorepo root
       ],
       strict: true,
     },
