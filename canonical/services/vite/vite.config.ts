@@ -445,9 +445,12 @@ const urlRewritePlugin = {
       server.middlewares.use((req, res, next) => {
         const url = req.url || '/'
 
-        // Log every request
+        // Log every request (especially artifact paths)
         if (!url.includes('.js') && !url.includes('.css') && !url.includes('.json') && !url.includes('/@vite')) {
           console.error(`[url-rewrite] REQUEST: ${url}`)
+          if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime')) {
+            console.error(`[url-rewrite] 📍 ARTIFACT PATH DETECTED: ${url}`)
+          }
         }
 
 
@@ -488,10 +491,23 @@ const urlRewritePlugin = {
           }
         } else {
           console.error(`[url-rewrite] NO MATCH: ${url}`)
-          console.error(`[url-rewrite] → Passing to next middleware (will try to serve as static file)`)
-          console.error(`[url-rewrite] → fs.allow: ${JSON.stringify(server.config.server.fs.allow)}`)
-          console.error(`[url-rewrite] → fs.strict: ${server.config.server.fs.strict}`)
-          console.error(`[url-rewrite] ⚠️  If you see 403 after this, it's coming from another middleware/vite core, not urlRewrite`)
+
+          // For artifact paths, show what Vite will try to access
+          if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime')) {
+            const attemptedPath = path.join(__dirname, url)
+            console.error(`[url-rewrite] 📍 ARTIFACT PATH DETAILS:`)
+            console.error(`[url-rewrite]   URL: ${url}`)
+            console.error(`[url-rewrite]   Vite will attempt: ${attemptedPath}`)
+            console.error(`[url-rewrite]   File exists: ${fs.existsSync(attemptedPath)}`)
+            console.error(`[url-rewrite]   fs.allow: ${JSON.stringify(server.config.server.fs.allow)}`)
+            console.error(`[url-rewrite]   fs.strict: ${server.config.server.fs.strict}`)
+          } else {
+            console.error(`[url-rewrite] → Passing to next middleware (will try to serve as static file)`)
+            console.error(`[url-rewrite] → fs.allow: ${JSON.stringify(server.config.server.fs.allow)}`)
+            console.error(`[url-rewrite] → fs.strict: ${server.config.server.fs.strict}`)
+          }
+
+          console.error(`[url-rewrite] ⚠️  If you see 403 after this, check if path is in fs.allow`)
         }
 
         // Fallback: Handle root path (/)
@@ -637,17 +653,20 @@ export default defineConfig({
       //
       // So Vite can trust that any request it gets has already been validated.
       // No need for fs.strict paranoia — the gateway handles security.
-      //
-      // Note: Even with strict:false, Vite validates absolute paths (starting with /)
-      // against allow list. After urlRewritePlugin strips /artifacts, paths like
-      // /canonical/viewers/* need to be in the allow list.
       allow: [
-        '/app/artifacts',           // Artifacts root (for all cell types)
-        '/app/node_modules',        // Dependencies (Vue, etc)
-        '/canonical',               // Artifact grouper: cells, viewers
-        '/sandbox',                 // Artifact grouper: sandbox environment
-        '/runtime',                 // Artifact grouper: runtime assets (owner-only via Backend RBAC)
-        '/shared',                  // Shared infrastructure (utils, services, components)
+        // Absolute paths (as they exist in filesystem)
+        '/app/artifacts',           // Vite root
+        '/app/artifacts/canonical', // Cells, viewers, dynamic components
+        '/app/artifacts/sandbox',   // Sandbox environment artifacts
+        '/app/artifacts/runtime',   // Runtime assets (protected by Backend RBAC)
+        '/app/artifacts/shared',    // Shared infrastructure (utils, services, components)
+        '/app/node_modules',        // Dependencies
+
+        // Relative paths (as seen by Vite when validating)
+        'canonical',
+        'sandbox',
+        'runtime',
+        'shared',
       ],
       strict: false,  // Trust Auth-Proxy to do its job
     },
