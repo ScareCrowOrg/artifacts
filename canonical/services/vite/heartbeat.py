@@ -22,6 +22,17 @@ logger = logging.getLogger("vite-heartbeat")
 
 def main() -> None:
     """Start heartbeat as background task and exit."""
+    # Log env vars for debugging
+    import os
+    logger.info("=== Vite Heartbeat Env Vars ===")
+    logger.info(f"PYTHONPATH: {os.getenv('PYTHONPATH', 'NOT SET')}")
+    logger.info(f"WORKER_PORT: {os.getenv('WORKER_PORT', 'NOT SET')}")
+    logger.info(f"HEARTBEAT_INTERVAL: {os.getenv('HEARTBEAT_INTERVAL', 'NOT SET')}")
+    logger.info(f"HEARTBEAT_TTL: {os.getenv('HEARTBEAT_TTL', 'NOT SET')}")
+    logger.info(f"REDIS_L1_HOST: {os.getenv('REDIS_L1_HOST', 'NOT SET')}")
+    logger.info(f"REDIS_L1_PORT: {os.getenv('REDIS_L1_PORT', 'NOT SET')}")
+    logger.info("================================")
+
     # Ensure artifacts is in path for canonical.shared imports
     if "/app/artifacts" not in sys.path:
         sys.path.insert(0, "/app/artifacts")

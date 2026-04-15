@@ -29,6 +29,17 @@ logger = logging.getLogger("backend-heartbeat")
 
 def main() -> None:
     """Start heartbeat as a fire-and-forget task and exit."""
+    # Log env vars for debugging
+    import os
+    logger.info("=== Backend Heartbeat Env Vars ===")
+    logger.info(f"PYTHONPATH: {os.getenv('PYTHONPATH', 'NOT SET')}")
+    logger.info(f"WORKER_PORT: {os.getenv('WORKER_PORT', 'NOT SET')}")
+    logger.info(f"HEARTBEAT_INTERVAL: {os.getenv('HEARTBEAT_INTERVAL', 'NOT SET')}")
+    logger.info(f"HEARTBEAT_TTL: {os.getenv('HEARTBEAT_TTL', 'NOT SET')}")
+    logger.info(f"REDIS_L1_HOST: {os.getenv('REDIS_L1_HOST', 'NOT SET')}")
+    logger.info(f"REDIS_L1_PORT: {os.getenv('REDIS_L1_PORT', 'NOT SET')}")
+    logger.info("===================================")
+
     # Ensure artifacts root is on the module path so canonical.shared resolves.
     if "/app/artifacts" not in sys.path:
         sys.path.insert(0, "/app/artifacts")
