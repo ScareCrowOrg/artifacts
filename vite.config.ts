@@ -453,10 +453,12 @@ const urlRewritePlugin = {
         // Rewrite /artifacts/* URLs to /* for file serving
         // Needed because Vite root is /app/artifacts:
         // - Path /artifacts/canonical/viewers/X → remove /artifacts → /canonical/viewers/X
+        // - Vite then validates /canonical against fs.allow (must be in allow list)
         // - Vite resolves as: /app/artifacts + /canonical/viewers/X = /app/artifacts/canonical/viewers/X ✅
         if (url.startsWith('/artifacts/')) {
           const rewritten = url.replace('/artifacts', '')
           console.error(`[url-rewrite] STRIPPING /artifacts prefix: ${url} → ${rewritten}`)
+          console.error(`[url-rewrite] ⚠️  After rewrite, Vite MUST allow path "${rewritten.split('/')[1]}" in fs.allow`)
           req.url = rewritten
           return next()
         }
@@ -647,9 +649,17 @@ export default defineConfig({
       //
       // So Vite can trust that any request it gets has already been validated.
       // No need for fs.strict paranoia — the gateway handles security.
+      //
+      // Note: Even with strict:false, Vite validates absolute paths (starting with /)
+      // against allow list. After urlRewritePlugin strips /artifacts, paths like
+      // /canonical/viewers/* need to be in the allow list.
       allow: [
         '/app/artifacts',           // Artifacts root (for all cell types)
         '/app/node_modules',        // Dependencies (Vue, etc)
+        '/canonical',               // Artifact grouper: cells, viewers
+        '/sandbox',                 // Artifact grouper: sandbox environment
+        '/runtime',                 // Artifact grouper: runtime assets (owner-only via Backend RBAC)
+        '/shared',                  // Shared infrastructure (utils, services, components)
       ],
       strict: false,  // Trust Auth-Proxy to do its job
     },
