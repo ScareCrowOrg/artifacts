@@ -16,6 +16,9 @@ pub struct Config {
     /// default: `http://backend:5050/api/v1/auth/session-check`).
     pub backend_auth_url: String,
 
+    /// Backend upstream base URL (env: `BACKEND_UPSTREAM`, default: `http://backend:5050`).
+    pub backend_upstream: String,
+
     /// Redis L1 host for heartbeat registration (env: `REDIS_L1_HOST`, default: `redis-local`).
     pub redis_host: String,
 
@@ -45,6 +48,7 @@ impl Config {
                 "BACKEND_AUTH_URL",
                 "http://backend:5050/api/v1/auth/session-check",
             ),
+            backend_upstream: env_str("BACKEND_UPSTREAM", "http://backend:5050"),
             redis_host: env_str("REDIS_L1_HOST", "redis-local"),
             redis_port: env_u16("REDIS_L1_PORT", 6380),
             redis_password: env_str("REDIS_L1_PASSWORD", "scarerunner"),
@@ -90,11 +94,13 @@ mod tests {
         std::env::remove_var("PROXY_PORT");
         std::env::remove_var("VITE_UPSTREAM");
         std::env::remove_var("BACKEND_AUTH_URL");
+        std::env::remove_var("BACKEND_UPSTREAM");
 
         let cfg = Config::from_env();
         assert_eq!(cfg.port, 5055);
         assert_eq!(cfg.vite_upstream, "http://vite:5052");
         assert!(cfg.backend_auth_url.contains("session-check"));
+        assert_eq!(cfg.backend_upstream, "http://backend:5050");
         assert_eq!(cfg.heartbeat_interval, 20);
     }
 

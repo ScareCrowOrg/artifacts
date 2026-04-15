@@ -1,16 +1,19 @@
-//! Core proxy logic – validates SessionID via Backend then tunnels to Vite.
+//! Core proxy logic – universal ingress guard for API and Vite traffic.
 //!
 //! # Flow
-//! 1. Extract `sessionId` cookie from the incoming request.
-//! 2. `POST /api/v1/auth/session-check?uri=<path>` → Backend (passes cookie).
-//! 3. **200 OK** → proxy request to Vite, stream response transparently.
-//! 4. **403 Forbidden** → return 403 immediately (no Vite forwarding).
+//! 1. Classify request path:
+//!    - `/api/v1/auth/session-bind` → bypass auth, proxy to Backend.
+//!    - `/api/*` or `/viewers*` or `/` → require valid `sessionId`.
+//!    - anything else → 403.
+//! 2. For protected paths, call Backend session-check endpoint.
+//! 3. **200 OK** → proxy to Backend or Vite depending on path.
+//! 4. **403 Forbidden** → return 403 immediately.
 //! 5. **Other** → return 500 Internal Server Error.
 //!
-//! # Host Header Rewriting (Critical)
-//! The incoming `Host` header carries the public FQDN (e.g. `scare.scareverse.net`).
-//! Vite expects the internal Docker DNS name (`vite:5052`).  We rewrite `Host`
-//! before forwarding to avoid Vite rejecting the request.
+//! # Host Header Handling
+//! - Vite traffic rewrites `Host` to the Vite upstream host (`vite:5052`).
+//! - Backend traffic preserves incoming `Host` when present so Backend can keep
+//!   FQDN-sensitive logic (CORS/JWT validations), otherwise uses upstream host.
 
 use axum::{
     body::Body,
@@ -33,14 +36,28 @@ pub async fn health_handler() -> impl IntoResponse {
     (StatusCode::OK, "OK")
 }
 
-/// Main artifact proxy handler.
-///
-/// Intercepts every `GET /artifacts/*` request, validates the session via
-/// Backend, and streams the Vite response on success.
-pub async fn artifact_handler(
-    State(state): State<AppState>,
-    req: Request,
-) -> Response {
+#[derive(Debug, Clone, Copy)]
+enum RouteDecision {
+    BackendBypass,
+    BackendProtected,
+    ViteProtected,
+    Deny,
+}
+
+fn classify_route(path: &str) -> RouteDecision {
+    if path == "/api/v1/auth/session-bind" {
+        RouteDecision::BackendBypass
+    } else if path.starts_with("/api/") {
+        RouteDecision::BackendProtected
+    } else if path == "/" || path.starts_with("/viewers") {
+        RouteDecision::ViteProtected
+    } else {
+        RouteDecision::Deny
+    }
+}
+
+/// Universal ingress handler.
+pub async fn request_handler(State(state): State<AppState>, req: Request) -> Response {
     let path = req.uri().path().to_owned();
     let query = req
         .uri()
@@ -50,10 +67,20 @@ pub async fn artifact_handler(
     let full_path = format!("{path}{query}");
     let method = req.method().to_string();
 
-    info!("[AuthProxy] → {} {}", method, full_path);
+    let decision = classify_route(&path);
+    info!("[AuthProxy] → {} {} ({:?})", method, full_path, decision);
+
+    if matches!(decision, RouteDecision::Deny) {
+        warn!("[AuthProxy] Request denied by route policy: {}", path);
+        return build_error_response(StatusCode::FORBIDDEN);
+    }
 
     // Debug: Log all headers to diagnose Traefik passthrough
     debug!("[AuthProxy] Headers: {:?}", req.headers());
+
+    if matches!(decision, RouteDecision::BackendBypass) {
+        return proxy_to_backend(state, req, &full_path, true).await;
+    }
 
     // Step 1 – extract Cookie header from the request.
     let cookie_header = req
@@ -72,16 +99,40 @@ pub async fn artifact_handler(
     let auth_result = check_session(&state, &cookie_header, &path).await;
 
     match auth_result {
-        Ok(()) => {
-            // Session valid → proxy to Vite.
-            debug!("[AuthProxy] Auth OK for {} (SessionID={}), proxying to Vite", path, has_cookie);
-            proxy_to_vite(state, req, &full_path).await
-        }
+        Ok(()) => match decision {
+            RouteDecision::BackendProtected => {
+                debug!(
+                    "[AuthProxy] Auth OK for {} (SessionID={}), proxying to Backend",
+                    path, has_cookie
+                );
+                proxy_to_backend(state, req, &full_path, false).await
+            }
+            RouteDecision::ViteProtected => {
+                debug!(
+                    "[AuthProxy] Auth OK for {} (SessionID={}), proxying to Vite",
+                    path, has_cookie
+                );
+                proxy_to_vite(state, req, &full_path).await
+            }
+            RouteDecision::BackendBypass | RouteDecision::Deny => {
+                error!(
+                    "[AuthProxy] Internal routing inconsistency: authenticated flow reached unexpected decision {:?} for path {}",
+                    decision, path
+                );
+                build_error_response(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        },
         Err(status) => {
             if status == StatusCode::FORBIDDEN {
-                warn!("[AuthProxy] Auth DENIED for {} (403) | SessionID present: {}", path, has_cookie);
+                warn!(
+                    "[AuthProxy] Auth DENIED for {} (403) | SessionID present: {}",
+                    path, has_cookie
+                );
             } else {
-                error!("[AuthProxy] Auth ERROR for {} ({}) | SessionID present: {}", path, status, has_cookie);
+                error!(
+                    "[AuthProxy] Auth ERROR for {} ({}) | SessionID present: {}",
+                    path, status, has_cookie
+                );
             }
             build_error_response(status)
         }
@@ -117,7 +168,10 @@ async fn check_session(
     }
 
     let response = req_builder.send().await.map_err(|e| {
-        error!("[AuthProxy] Backend request failed: {} (URL: {})", e, auth_url);
+        error!(
+            "[AuthProxy] Backend request failed: {} (URL: {})",
+            e, auth_url
+        );
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -141,26 +195,23 @@ async fn check_session(
 ///
 /// **Host header is rewritten** to the Vite internal DNS name so that Vite
 /// processes the request correctly (Vite dev server is host-aware).
-async fn proxy_to_vite(state: AppState, orig_req: Request, full_path: &str) -> Response {
-    // Build the target URL at Vite.
-    let vite_url = format!("{}{}", state.vite_upstream, full_path);
-
-    debug!("[AuthProxy] Forwarding to Vite: {}", vite_url);
-
-    // Extract Vite host for the Host header rewrite (strip http:// prefix).
-    let vite_host = state
-        .vite_upstream
-        .trim_start_matches("http://")
-        .trim_start_matches("https://");
+async fn proxy_to_upstream(
+    state: &AppState,
+    orig_req: Request,
+    full_path: &str,
+    upstream_base: &str,
+    host_override: Option<&str>,
+) -> Response {
+    let target_url = format!("{upstream_base}{full_path}");
+    debug!("[AuthProxy] Forwarding upstream: {}", target_url);
 
     let method = orig_req.method().clone();
 
-    // Forward a safe subset of original headers.  Exclude headers that must
-    // not be forwarded (connection management, encoding) and rewrite Host.
+    // Forward a safe subset of original headers. Exclude hop-by-hop headers.
     let mut fwd_headers = reqwest::header::HeaderMap::new();
     for (name, value) in orig_req.headers() {
         let name_str = name.as_str();
-        // Skip hop-by-hop headers and Host (we set it explicitly below).
+        // Skip hop-by-hop headers and Host (set explicitly below when needed).
         if matches!(
             name_str,
             "host"
@@ -182,9 +233,10 @@ async fn proxy_to_vite(state: AppState, orig_req: Request, full_path: &str) -> R
         }
     }
 
-    // Rewrite Host header – Vite expects the internal Docker DNS name.
-    if let Ok(host_val) = reqwest::header::HeaderValue::from_str(vite_host) {
-        fwd_headers.insert(reqwest::header::HOST, host_val);
+    if let Some(host) = host_override {
+        if let Ok(host_val) = reqwest::header::HeaderValue::from_str(host) {
+            fwd_headers.insert(reqwest::header::HOST, host_val);
+        }
     }
 
     // Stream the request body to Vite.
@@ -196,31 +248,38 @@ async fn proxy_to_vite(state: AppState, orig_req: Request, full_path: &str) -> R
         }
     };
 
-    let vite_req = state
+    let req_method = match reqwest::Method::from_bytes(method.as_str().as_bytes()) {
+        Ok(parsed) => parsed,
+        Err(_) => {
+            warn!(
+                "[AuthProxy] Unsupported method '{}', returning 405 for {}",
+                method, full_path
+            );
+            return build_error_response(StatusCode::METHOD_NOT_ALLOWED);
+        }
+    };
+
+    let upstream_req = state
         .http_client
-        .request(
-            reqwest::Method::from_bytes(method.as_str().as_bytes())
-                .unwrap_or(reqwest::Method::GET),
-            &vite_url,
-        )
+        .request(req_method, &target_url)
         .headers(fwd_headers)
         .body(body_bytes);
 
-    let vite_resp = match vite_req.send().await {
+    let upstream_resp = match upstream_req.send().await {
         Ok(r) => r,
         Err(e) => {
-            error!("[AuthProxy] Vite upstream error: {}", e);
+            error!("[AuthProxy] Upstream request error: {}", e);
             return build_error_response(StatusCode::BAD_GATEWAY);
         }
     };
 
     // Convert reqwest response status + headers to axum response.
-    let status = StatusCode::from_u16(vite_resp.status().as_u16())
+    let status = StatusCode::from_u16(upstream_resp.status().as_u16())
         .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
     let mut resp_headers = HeaderMap::new();
-    for (name, value) in vite_resp.headers() {
-        // Skip hop-by-hop headers from Vite's response.
+    for (name, value) in upstream_resp.headers() {
+        // Skip hop-by-hop headers from upstream response.
         if matches!(
             name.as_str(),
             "connection" | "transfer-encoding" | "keep-alive" | "trailer" | "upgrade"
@@ -235,15 +294,64 @@ async fn proxy_to_vite(state: AppState, orig_req: Request, full_path: &str) -> R
         }
     }
 
-    // Stream the Vite response body back to the client.
-    let body_stream = vite_resp.bytes_stream();
+    // Stream the upstream response body back to the client.
+    let body_stream = upstream_resp.bytes_stream();
     let stream_body = Body::from_stream(body_stream);
 
     let mut response = Response::new(stream_body);
     *response.status_mut() = status;
     *response.headers_mut() = resp_headers;
 
-    info!("[AuthProxy] Proxied {} → Vite ({})", full_path, status);
+    info!("[AuthProxy] Proxied {} → upstream ({})", full_path, status);
+    response
+}
+
+fn extract_host(url: &str) -> &str {
+    url.trim_start_matches("http://")
+        .trim_start_matches("https://")
+}
+
+/// Proxy request to Vite upstream with host header rewrite.
+async fn proxy_to_vite(state: AppState, orig_req: Request, full_path: &str) -> Response {
+    let vite_host = extract_host(&state.vite_upstream).to_string();
+    proxy_to_upstream(
+        &state,
+        orig_req,
+        full_path,
+        &state.vite_upstream,
+        Some(&vite_host),
+    )
+    .await
+}
+
+/// Proxy request to Backend upstream.
+/// - For bypass route, no auth is required.
+/// - For protected API routes, auth was already checked.
+async fn proxy_to_backend(
+    state: AppState,
+    orig_req: Request,
+    full_path: &str,
+    bypass: bool,
+) -> Response {
+    let host_override = orig_req
+        .headers()
+        .get(header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned)
+        .unwrap_or_else(|| extract_host(&state.backend_upstream).to_owned());
+
+    let response = proxy_to_upstream(
+        &state,
+        orig_req,
+        full_path,
+        &state.backend_upstream,
+        Some(&host_override),
+    )
+    .await;
+
+    if bypass {
+        info!("[AuthProxy] Bypass proxy route served for {}", full_path);
+    }
     response
 }
 
@@ -265,10 +373,7 @@ fn build_error_response(status: StatusCode) -> Response {
 ///
 /// Uses a fixed TTL of `interval * 3` seconds and refreshes every `interval`
 /// seconds, matching the BaseService pattern used by Backend and Vite.
-pub async fn run_heartbeat(
-    redis_url: String,
-    interval_secs: u64,
-) {
+pub async fn run_heartbeat(redis_url: String, interval_secs: u64) {
     let ttl = interval_secs * 3;
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
 
@@ -317,8 +422,17 @@ mod urlencoding {
         let mut encoded = String::with_capacity(s.len());
         for byte in s.bytes() {
             match byte {
-                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~'
-                | b'/' | b'=' | b'?' | b'&' => encoded.push(byte as char),
+                b'A'..=b'Z'
+                | b'a'..=b'z'
+                | b'0'..=b'9'
+                | b'-'
+                | b'_'
+                | b'.'
+                | b'~'
+                | b'/'
+                | b'='
+                | b'?'
+                | b'&' => encoded.push(byte as char),
                 b => encoded.push_str(&format!("%{b:02X}")),
             }
         }
@@ -348,5 +462,31 @@ mod tests {
         let path = "/artifacts/a/b/c";
         let encoded = urlencoding::encode(path);
         assert!(encoded.contains("/artifacts/a/b/c"));
+    }
+
+    #[test]
+    fn test_classify_route_backend_bypass() {
+        assert!(matches!(
+            classify_route("/api/v1/auth/session-bind"),
+            RouteDecision::BackendBypass
+        ));
+    }
+
+    #[test]
+    fn test_classify_route_protected_paths() {
+        assert!(matches!(
+            classify_route("/api/v1/models"),
+            RouteDecision::BackendProtected
+        ));
+        assert!(matches!(
+            classify_route("/viewers/dynamic-workspace"),
+            RouteDecision::ViteProtected
+        ));
+        assert!(matches!(classify_route("/"), RouteDecision::ViteProtected));
+    }
+
+    #[test]
+    fn test_classify_route_denies_unknown_path() {
+        assert!(matches!(classify_route("/metrics"), RouteDecision::Deny));
     }
 }

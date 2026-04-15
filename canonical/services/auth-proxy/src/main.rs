@@ -25,6 +25,8 @@ pub struct AppState {
     pub vite_upstream: String,
     /// Backend session-check URL (e.g. `http://backend:5050/api/v1/auth/session-check`).
     pub backend_auth_url: String,
+    /// Backend upstream base URL (e.g. `http://backend:5050`).
+    pub backend_upstream: String,
 }
 
 #[tokio::main]
@@ -42,8 +44,8 @@ async fn main() {
         .init();
 
     info!(
-        "[AuthProxy] Starting on port {} | Vite: {} | Backend: {}",
-        cfg.port, cfg.vite_upstream, cfg.backend_auth_url
+        "[AuthProxy] Starting on port {} | Vite: {} | Backend auth: {} | Backend upstream: {}",
+        cfg.port, cfg.vite_upstream, cfg.backend_auth_url, cfg.backend_upstream
     );
 
     // Build a shared HTTP client with connection pooling.
@@ -57,6 +59,7 @@ async fn main() {
         http_client,
         vite_upstream: cfg.vite_upstream.clone(),
         backend_auth_url: cfg.backend_auth_url.clone(),
+        backend_upstream: cfg.backend_upstream.clone(),
     });
 
     // Note: Redis heartbeat registration is now handled by heartbeat.py
@@ -64,16 +67,24 @@ async fn main() {
     // See: artifacts/canonical/services/auth-proxy/heartbeat.py
 
     // Build Axum router.
-    let state_clone = Arc::clone(&state);
+    let state_root = Arc::clone(&state);
+    let state_wildcard = Arc::clone(&state);
     let app = Router::new()
         // Health endpoint – used by docker-compose healthcheck and Traefik
         .route("/health", any(proxy::health_handler))
-        // Artifact proxy – all methods, all sub-paths
+        // Universal proxy – all methods, all paths (except /health)
         .route(
-            "/artifacts/*path",
+            "/",
             any(move |req: Request| {
-                let s = Arc::clone(&state_clone);
-                async move { proxy::artifact_handler(axum::extract::State((*s).clone()), req).await }
+                let s = Arc::clone(&state_root);
+                async move { proxy::request_handler(axum::extract::State((*s).clone()), req).await }
+            }),
+        )
+        .route(
+            "/*path",
+            any(move |req: Request| {
+                let s = Arc::clone(&state_wildcard);
+                async move { proxy::request_handler(axum::extract::State((*s).clone()), req).await }
             }),
         );
 

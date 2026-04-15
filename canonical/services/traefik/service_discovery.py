@@ -59,19 +59,13 @@ REDIS_L1_PASSWORD: Optional[str] = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
 # Phase 2: Could read from env var SERVICE_ROUTES_JSON or Redis values.
 
 SERVICE_ROUTES: Dict[str, Dict] = {
-    "backend": {
-        "port": 5050,
-        "rule": "PathPrefix(`/api`)",
-        "priority": 50,
-    },
-    "vite": {
-        "port": 5052,
-        "rule": "PathPrefix(`/`)",
-        "priority": 1,
-    },
+    # Auth Proxy is the universal ingress gatekeeper.
+    # All traffic goes through it (catch-all), then auth-proxy decides:
+    # - /api/v1/auth/session-bind: bypass to backend
+    # - /api/*, /viewers/*, /: require sessionId
     "auth-proxy": {
         "port": 5055,
-        "rule": "PathPrefix(`/artifacts`)",
+        "rule": "PathPrefix(`/`)",
         "priority": 100,
     },
 }

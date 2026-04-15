@@ -174,35 +174,31 @@ class TestScanHealthyServices:
 class TestBuildTraefikConfig:
     def test_builds_router_for_known_service(self):
         """Config includes router with correct rule for a known service."""
-        config = sd._build_traefik_config({"backend"})
+        config = sd._build_traefik_config({"auth-proxy"})
         routers = config["http"]["routers"]
-        assert "backend" in routers
-        assert "PathPrefix(`/api`)" in routers["backend"]["rule"]
-        assert routers["backend"]["service"] == "backend"
+        assert "auth-proxy" in routers
+        assert "PathPrefix(`/`)" in routers["auth-proxy"]["rule"]
+        assert routers["auth-proxy"]["service"] == "auth-proxy"
 
     def test_builds_service_with_correct_url(self):
         """Config includes service with correct loadBalancer URL."""
-        config = sd._build_traefik_config({"backend"})
+        config = sd._build_traefik_config({"auth-proxy"})
         services = config["http"]["services"]
-        assert "backend" in services
-        servers = services["backend"]["loadBalancer"]["servers"]
-        assert any(s["url"] == "http://backend:5050" for s in servers)
+        assert "auth-proxy" in services
+        servers = services["auth-proxy"]["loadBalancer"]["servers"]
+        assert any(s["url"] == "http://auth-proxy:5055" for s in servers)
 
     def test_correct_port_per_service(self):
         """Each service uses its mapped port."""
-        config = sd._build_traefik_config({"vite", "auth-proxy"})
+        config = sd._build_traefik_config({"auth-proxy"})
         services = config["http"]["services"]
-        vite_url = services["vite"]["loadBalancer"]["servers"][0]["url"]
         proxy_url = services["auth-proxy"]["loadBalancer"]["servers"][0]["url"]
-        assert "5052" in vite_url
         assert "5055" in proxy_url
 
     def test_correct_priority_per_service(self):
         """Each service router has the correct priority."""
-        config = sd._build_traefik_config({"backend", "vite", "auth-proxy"})
+        config = sd._build_traefik_config({"auth-proxy"})
         routers = config["http"]["routers"]
-        assert routers["vite"]["priority"] == 1
-        assert routers["backend"]["priority"] == 50
         assert routers["auth-proxy"]["priority"] == 100
 
     def test_empty_services_returns_empty_config(self):
@@ -218,8 +214,8 @@ class TestBuildTraefikConfig:
 
     def test_entrypoints_include_http(self):
         """All routers include the 'http' entrypoint."""
-        config = sd._build_traefik_config({"backend"})
-        assert "http" in config["http"]["routers"]["backend"]["entryPoints"]
+        config = sd._build_traefik_config({"auth-proxy"})
+        assert "http" in config["http"]["routers"]["auth-proxy"]["entryPoints"]
 
 
 # ---------------------------------------------------------------------------
@@ -243,10 +239,10 @@ class TestConfigFileIO:
     def test_load_returns_router_names(self, tmp_path):
         """Config file with routers → correct set of names."""
         config_file = tmp_path / "traefik-services.yml"
-        config = sd._build_traefik_config({"backend", "vite"})
+        config = sd._build_traefik_config({"auth-proxy"})
         config_file.write_text(yaml.dump(config))
         result = sd._load_current_services(str(config_file))
-        assert result == {"backend", "vite"}
+        assert result == {"auth-proxy"}
 
     def test_write_config_creates_file(self, tmp_path):
         """_write_config_atomic creates the config file."""
@@ -258,16 +254,16 @@ class TestConfigFileIO:
     def test_write_config_is_valid_yaml(self, tmp_path):
         """Written config is valid YAML."""
         path = str(tmp_path / "traefik-services.yml")
-        config = sd._build_traefik_config({"backend", "vite"})
+        config = sd._build_traefik_config({"auth-proxy"})
         sd._write_config_atomic(config, path)
         with open(path) as fh:
             loaded = yaml.safe_load(fh)
-        assert loaded["http"]["routers"]["backend"]["rule"] == "PathPrefix(`/api`)"
+        assert loaded["http"]["routers"]["auth-proxy"]["rule"] == "PathPrefix(`/`)"
 
     def test_write_config_round_trip(self, tmp_path):
         """Writing then loading config returns same service names."""
         path = str(tmp_path / "traefik-services.yml")
-        expected = {"backend", "vite", "auth-proxy"}
+        expected = {"auth-proxy"}
         sd._write_config_atomic(sd._build_traefik_config(expected), path)
         result = sd._load_current_services(path)
         assert result == expected
@@ -282,10 +278,10 @@ class TestConfigFileIO:
     def test_write_config_overwrites_existing(self, tmp_path):
         """Subsequent writes overwrite previous content."""
         path = str(tmp_path / "traefik-services.yml")
-        sd._write_config_atomic(sd._build_traefik_config({"backend"}), path)
-        sd._write_config_atomic(sd._build_traefik_config({"vite"}), path)
+        sd._write_config_atomic(sd._build_traefik_config({"auth-proxy"}), path)
+        sd._write_config_atomic(sd._build_traefik_config(set()), path)
         result = sd._load_current_services(path)
-        assert result == {"vite"}
+        assert result == set()
 
 
 # ---------------------------------------------------------------------------
@@ -299,12 +295,12 @@ class TestDiscoveryLoopIdempotency:
         """Config file is NOT rewritten when routes are already correct."""
         config_path = str(tmp_path / "traefik-services.yml")
 
-        # Pre-populate config with backend
-        sd._write_config_atomic(sd._build_traefik_config({"backend"}), config_path)
+        # Pre-populate config with auth-proxy
+        sd._write_config_atomic(sd._build_traefik_config({"auth-proxy"}), config_path)
         mtime_before = os.path.getmtime(config_path)
 
         redis = _make_redis_mock({
-            "state:service:backend:available": {"port_opened": True, "timestamp": 1.0},
+            "state:service:auth-proxy:available": {"port_opened": True, "timestamp": 1.0},
         })
 
         # Patch paths so discovery uses tmp config
@@ -327,15 +323,14 @@ class TestDiscoveryLoopIdempotency:
 
     @pytest.mark.asyncio
     async def test_writes_when_new_service_discovered(self, tmp_path):
-        """Config file IS written when a new service appears."""
+        """Config file IS written when auth-proxy appears."""
         config_path = str(tmp_path / "traefik-services.yml")
 
-        # Pre-populate with backend only
-        sd._write_config_atomic(sd._build_traefik_config({"backend"}), config_path)
+        # Pre-populate with no routes
+        sd._write_config_atomic(sd._build_traefik_config(set()), config_path)
 
         redis = _make_redis_mock({
-            "state:service:backend:available": {"port_opened": True, "timestamp": 1.0},
-            "state:service:vite:available": {"port_opened": True, "timestamp": 1.0},
+            "state:service:auth-proxy:available": {"port_opened": True, "timestamp": 1.0},
         })
 
         healthy = await sd.scan_healthy_services(redis)
@@ -343,15 +338,15 @@ class TestDiscoveryLoopIdempotency:
 
         assert healthy != current  # diff → write should happen
         sd._write_config_atomic(sd._build_traefik_config(healthy), config_path)
-        assert sd._load_current_services(config_path) == {"backend", "vite"}
+        assert sd._load_current_services(config_path) == {"auth-proxy"}
 
     @pytest.mark.asyncio
     async def test_writes_when_service_removed(self, tmp_path):
         """Config file IS written when a service disappears from Redis."""
         config_path = str(tmp_path / "traefik-services.yml")
-        sd._write_config_atomic(sd._build_traefik_config({"backend", "vite"}), config_path)
+        sd._write_config_atomic(sd._build_traefik_config({"auth-proxy"}), config_path)
 
-        # Only backend still healthy
+        # auth-proxy no longer healthy
         redis = _make_redis_mock({
             "state:service:backend:available": {"port_opened": True, "timestamp": 1.0},
         })
@@ -361,4 +356,4 @@ class TestDiscoveryLoopIdempotency:
 
         assert healthy != current
         sd._write_config_atomic(sd._build_traefik_config(healthy), config_path)
-        assert sd._load_current_services(config_path) == {"backend"}
+        assert sd._load_current_services(config_path) == set()

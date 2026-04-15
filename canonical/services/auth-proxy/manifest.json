@@ -4,5 +4,5 @@
   "build": false,
   "image": "localhost:5001/scareverse-auth-proxy:staging",
   "imageTag": "staging",
-  "lastBuilt": "2026-04-15T02:53:14.504Z"
+  "lastBuilt": "2026-04-15T08:30:08.791Z"
 }

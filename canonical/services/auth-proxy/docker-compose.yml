@@ -35,6 +35,7 @@ services:
       # Proxy configuration
       - PROXY_PORT=${PROXY_PORT:-5055}
       - VITE_UPSTREAM=${VITE_UPSTREAM:-http://vite:5052}
+      - BACKEND_UPSTREAM=${BACKEND_UPSTREAM:-http://backend:5050}
       - BACKEND_AUTH_URL=${BACKEND_AUTH_URL:-http://backend:5050/api/v1/auth/session-check}
 
       # Redis L1 (heartbeat registration)
@@ -53,8 +54,8 @@ services:
     labels:
       # ── Traefik service discovery ─────────────────────────────────────────
       - "traefik.enable=true"
-      # Route: /artifacts paths go to auth-proxy (validates SessionID)
-      - "traefik.http.routers.auth-proxy.rule=PathPrefix(`/artifacts`)"
+      # Route: all paths go to auth-proxy (universal ingress gatekeeper)
+      - "traefik.http.routers.auth-proxy.rule=PathPrefix(`/`)"
       - "traefik.http.routers.auth-proxy.entrypoints=http"
       # Highest priority – auth-proxy must be matched before vite catch-all
       - "traefik.http.routers.auth-proxy.priority=100"
