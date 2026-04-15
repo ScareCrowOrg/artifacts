@@ -494,6 +494,9 @@ const urlRewritePlugin = {
           }
         } else {
           console.error(`[url-rewrite] NO MATCH: ${url}`)
+          console.error(`[url-rewrite] → Passing to next middleware (will try to serve as static file)`)
+          console.error(`[url-rewrite] → fs.allow: ${JSON.stringify(server.config.server.fs.allow)}`)
+          console.error(`[url-rewrite] → fs.strict: ${server.config.server.fs.strict}`)
         }
 
         // Fallback: Handle root path (/)
