@@ -56,25 +56,6 @@ fn classify_route(path: &str) -> RouteDecision {
     }
 }
 
-/// Rewrite artifact grouper paths to absolute artifact paths for Vite.
-///
-/// Vite root is `/app/artifacts`, so requests must be rewritten:
-/// - `/canonical/viewers/X/main.ts` → `/artifacts/canonical/viewers/X/main.ts`
-/// - `/sandbox/...` → `/artifacts/sandbox/...`
-/// - `/runtime/...` → `/artifacts/runtime/...`
-///
-/// This centralizes path routing logic in the gateway (Auth-Proxy) rather than
-/// relying on Vite's fragile middleware.
-fn rewrite_artifacts_path(path: &str) -> String {
-    let groupers = ["canonical", "sandbox", "runtime"];
-    for grouper in &groupers {
-        let prefix = format!("/{}/", grouper);
-        if path.starts_with(&prefix) {
-            return format!("/artifacts{}", path);
-        }
-    }
-    path.to_string()
-}
 
 /// Universal ingress handler.
 pub async fn request_handler(State(state): State<AppState>, req: Request) -> Response {
@@ -110,20 +91,13 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
         .map(str::to_owned);
 
     // Step 2 – validate session via Backend.
-    // ⚠️ CRITICAL: Rewrite path BEFORE Backend validation!
-    // Backend's RBAC rules expect paths like /artifacts/canonical/*, not /canonical/*
-    let path_for_backend = match decision {
-        RouteDecision::ViteProtected => rewrite_artifacts_path(&full_path),
-        _ => full_path.clone(),
-    };
-
     let has_cookie = cookie_header.is_some();
     if let Some(ref cookie) = cookie_header {
         debug!("[AuthProxy] Extracted cookie: {}", cookie);
     } else {
         warn!("[AuthProxy] NO Cookie header received from Traefik!");
     }
-    let auth_result = check_session(&state, &cookie_header, &path_for_backend).await;
+    let auth_result = check_session(&state, &cookie_header, &path).await;
 
     match auth_result {
         Ok(()) => match decision {
@@ -139,10 +113,7 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                     "[AuthProxy] Auth OK for {} (SessionID={}), proxying to Vite",
                     path, has_cookie
                 );
-                if path_for_backend != full_path {
-                    info!("[AuthProxy] Rewriting path: {} → {}", full_path, path_for_backend);
-                }
-                proxy_to_vite(state, req, &path_for_backend).await
+                proxy_to_vite(state, req, &full_path).await
             }
             RouteDecision::BackendBypass | RouteDecision::Deny => {
                 error!(

@@ -450,18 +450,6 @@ const urlRewritePlugin = {
           console.error(`[url-rewrite] REQUEST: ${url}`)
         }
 
-        // Rewrite /artifacts/* URLs to /* for file serving
-        // Needed because Vite root is /app/artifacts:
-        // - Path /artifacts/canonical/viewers/X → remove /artifacts → /canonical/viewers/X
-        // - Vite then validates /canonical against fs.allow (must be in allow list)
-        // - Vite resolves as: /app/artifacts + /canonical/viewers/X = /app/artifacts/canonical/viewers/X ✅
-        if (url.startsWith('/artifacts/')) {
-          const rewritten = url.replace('/artifacts', '')
-          console.error(`[url-rewrite] STRIPPING /artifacts prefix: ${url} → ${rewritten}`)
-          console.error(`[url-rewrite] ⚠️  After rewrite, Vite MUST allow path "${rewritten.split('/')[1]}" in fs.allow`)
-          req.url = rewritten
-          return next()
-        }
 
         // Match /viewers/:viewerName (with optional path segments and query string)
         // Pattern: /viewers/{viewerName}[/arbitrary/path][?query]
