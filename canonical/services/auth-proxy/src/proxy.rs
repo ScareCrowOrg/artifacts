@@ -49,10 +49,9 @@ fn classify_route(path: &str) -> RouteDecision {
         RouteDecision::BackendBypass
     } else if path.starts_with("/api/") {
         RouteDecision::BackendProtected
-    } else if path == "/" || path.starts_with("/viewers") {
-        RouteDecision::ViteProtected
     } else {
-        RouteDecision::Deny
+        // Everything else → Vite (/, /viewers*, /canonical/*, etc.)
+        RouteDecision::ViteProtected
     }
 }
 
