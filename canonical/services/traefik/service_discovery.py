@@ -304,9 +304,14 @@ async def discovery_loop() -> None:
         try:
             if redis_client is None:
                 redis_client = aioredis.Redis(**connect_kwargs)
+                logger.debug("Redis connection established")
 
+            logger.debug("Scanning Redis for healthy services...")
             healthy_services = await scan_healthy_services(redis_client)
+            logger.debug("Found healthy services: %s", sorted(healthy_services))
+
             current_services = _load_current_services(TRAEFIK_CONFIG_PATH)
+            logger.debug("Current config routes: %s", sorted(current_services))
 
             if healthy_services != current_services:
                 added = healthy_services - current_services
@@ -317,11 +322,18 @@ async def discovery_loop() -> None:
                     sorted(removed),
                 )
                 config = _build_traefik_config(healthy_services)
-                _write_config_atomic(config, TRAEFIK_CONFIG_PATH)
-                logger.info(
-                    "Config updated: active routes = %s",
-                    sorted(healthy_services & set(SERVICE_PORT_MAPPING)),
-                )
+                try:
+                    _write_config_atomic(config, TRAEFIK_CONFIG_PATH)
+                    logger.info(
+                        "✅ Config updated: active routes = %s",
+                        sorted(healthy_services & set(SERVICE_PORT_MAPPING)),
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "❌ Config write failed (will retry): %s",
+                        exc,
+                        exc_info=True,
+                    )
             else:
                 logger.debug(
                     "No route changes (services: %s)", sorted(healthy_services)
