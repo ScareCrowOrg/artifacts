@@ -450,10 +450,16 @@ const urlRewritePlugin = {
           console.error(`[url-rewrite] REQUEST: ${url}`)
         }
 
-        // NOTE: /artifacts/* rewriting is now handled by Auth-Proxy gateway
-        // Auth-proxy rewrites /canonical/*, /sandbox/*, /runtime/* → /artifacts/...
-        // Vite receives absolute artifact paths and serves them directly.
-        // This rewrite was removed to avoid double-rewriting paths.
+        // Rewrite /artifacts/* URLs to /* for file serving
+        // Needed because Vite root is /app/artifacts:
+        // - Path /artifacts/canonical/viewers/X → remove /artifacts → /canonical/viewers/X
+        // - Vite resolves as: /app/artifacts + /canonical/viewers/X = /app/artifacts/canonical/viewers/X ✅
+        if (url.startsWith('/artifacts/')) {
+          const rewritten = url.replace('/artifacts', '')
+          console.error(`[url-rewrite] STRIPPING /artifacts prefix: ${url} → ${rewritten}`)
+          req.url = rewritten
+          return next()
+        }
 
         // Match /viewers/:viewerName (with optional path segments and query string)
         // Pattern: /viewers/{viewerName}[/arbitrary/path][?query]
@@ -495,6 +501,7 @@ const urlRewritePlugin = {
           console.error(`[url-rewrite] → Passing to next middleware (will try to serve as static file)`)
           console.error(`[url-rewrite] → fs.allow: ${JSON.stringify(server.config.server.fs.allow)}`)
           console.error(`[url-rewrite] → fs.strict: ${server.config.server.fs.strict}`)
+          console.error(`[url-rewrite] ⚠️  If you see 403 after this, it's coming from another middleware/vite core, not urlRewrite`)
         }
 
         // Fallback: Handle root path (/)
