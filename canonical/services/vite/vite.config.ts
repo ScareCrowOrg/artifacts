@@ -442,6 +442,20 @@ const urlRewritePlugin = {
     console.error(`[url-rewrite] MIDDLEWARE INITIALIZED`)
     console.error(`[url-rewrite] __dirname: "${__dirname}"`)
 
+      // Debug middleware: Capture headers for artifact paths
+      server.middlewares.use((req, res, next) => {
+        if (req.url.includes('/canonical') || req.url.includes('/sandbox') || req.url.includes('/runtime')) {
+          console.error(`[DEBUG-HEADERS] Request URL: ${req.url}`)
+          console.error(`[DEBUG-HEADERS] Host: ${req.headers.host}`)
+          console.error(`[DEBUG-HEADERS] X-Forwarded-Host: ${req.headers['x-forwarded-host'] || 'NOT SET'}`)
+          console.error(`[DEBUG-HEADERS] X-Forwarded-Proto: ${req.headers['x-forwarded-proto'] || 'NOT SET'}`)
+          console.error(`[DEBUG-HEADERS] Origin: ${req.headers.origin || 'NOT SET'}`)
+          console.error(`[DEBUG-HEADERS] Referer: ${req.headers.referer || 'NOT SET'}`)
+          console.error(`[DEBUG-HEADERS] All headers:`, req.headers)
+        }
+        next()
+      })
+
       server.middlewares.use((req, res, next) => {
         const url = req.url || '/'
 
