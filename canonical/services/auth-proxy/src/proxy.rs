@@ -14,6 +14,7 @@
 //! - Vite traffic rewrites `Host` to the Vite upstream host (`vite:5052`).
 //! - Backend traffic preserves incoming `Host` when present so Backend can keep
 //!   FQDN-sensitive logic (CORS/JWT validations), otherwise uses upstream host.
+//! para rebuild
 
 use axum::{
     body::Body,
