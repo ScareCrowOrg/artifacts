@@ -35,8 +35,8 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps for BaseService heartbeat
-RUN pip install --no-cache-dir --break-system-packages redis
+# Install Python deps for BaseService heartbeat and canonical.shared imports
+RUN pip install --no-cache-dir --break-system-packages redis httpx
 
 # Copy compiled binary from builder
 COPY --from=builder /app/target/release/auth-proxy /app/auth-proxy

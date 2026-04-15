@@ -59,18 +59,9 @@ async fn main() {
         backend_auth_url: cfg.backend_auth_url.clone(),
     });
 
-    // Build Redis URL for heartbeat.
-    let redis_url = format!(
-        "redis://:{}@{}:{}/{}",
-        cfg.redis_password, cfg.redis_host, cfg.redis_port, cfg.redis_db
-    );
-
-    // Spawn heartbeat task (non-critical – failures are logged, not fatal).
-    let heartbeat_url = redis_url.clone();
-    let heartbeat_interval = cfg.heartbeat_interval;
-    tokio::spawn(async move {
-        proxy::run_heartbeat(heartbeat_url, heartbeat_interval).await;
-    });
+    // Note: Redis heartbeat registration is now handled by heartbeat.py
+    // (called via entrypoint.sh before this binary starts).
+    // See: artifacts/canonical/services/auth-proxy/heartbeat.py
 
     // Build Axum router.
     let state_clone = Arc::clone(&state);
