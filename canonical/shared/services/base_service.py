@@ -138,33 +138,27 @@ class BaseService:
 
     async def _check_port_health(self) -> Optional[bool]:
         """
-        Perform an HTTP GET to ``http://localhost:{service_port}/health``.
+        Perform a TCP port connectivity check.
 
         Returns:
-            ``True``  – port responded with HTTP 200.
-            ``False`` – port not responding, connection refused, or timeout (2s).
+            ``True``  – port is open and accepting connections.
+            ``False`` – port is closed, connection refused, or timeout (2s).
             ``None``  – no port configured (``service_port`` not set).
         """
         if self._service_port is None:
             return None
 
         try:
-            import httpx  # type: ignore[import]
-        except ImportError:
-            self._logger.warning(
-                "httpx not installed – port health check disabled for '%s'",
-                self.service_name,
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection("localhost", self._service_port),
+                timeout=2.0,
             )
-            return None
-
-        url = f"http://localhost:{self._service_port}/health"
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                response = await client.get(url)
-                return response.status_code == 200
+            writer.close()
+            await writer.wait_closed()
+            return True
         except Exception as exc:
             self._logger.debug(
-                "Port health check failed for '%s' on port %d: %s",
+                "Port check failed for '%s' on port %d: %s",
                 self.service_name,
                 self._service_port,
                 exc,

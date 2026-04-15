@@ -20,7 +20,15 @@ services:
     container_name: scareverse-auth-proxy-worker
     restart: unless-stopped
 
+    volumes:
+      # Artifacts directories (for BaseService heartbeat imports)
+      - ../../../../artifacts/canonical:/app/artifacts/canonical:ro
+      - ../../../../artifacts/shared:/app/artifacts/shared:ro
+
     environment:
+      # Python path (for canonical.shared imports in heartbeat.py)
+      - PYTHONPATH=/app/artifacts
+
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
@@ -35,6 +43,7 @@ services:
       - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
       - REDIS_L1_DB=${REDIS_L1_DB:-0}
       - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-20}
+      - HEARTBEAT_TTL=${HEARTBEAT_TTL:-60}
       # Worker port (read by BaseService for port health check → port_opened in Redis)
       - WORKER_PORT=5055
 

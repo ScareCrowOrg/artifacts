@@ -28,18 +28,26 @@ FROM debian:bookworm-slim AS runtime
 
 WORKDIR /app
 
-# Install curl for healthcheck
+# Install Python 3 + pip (for heartbeat.py), ca-certificates (for HTTPS)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    curl \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps for BaseService heartbeat
+RUN pip install --no-cache-dir --break-system-packages redis
 
 # Copy compiled binary from builder
 COPY --from=builder /app/target/release/auth-proxy /app/auth-proxy
 
-RUN chmod +x /app/auth-proxy
+# Copy entrypoint script and heartbeat registration
+COPY entrypoint.sh /app/entrypoint.sh
+COPY heartbeat.py /app/heartbeat.py
+
+RUN chmod +x /app/auth-proxy /app/entrypoint.sh /app/heartbeat.py
 
 # Expose default proxy port
 EXPOSE 5055
 
-CMD ["/app/auth-proxy"]
+CMD ["/app/entrypoint.sh"]

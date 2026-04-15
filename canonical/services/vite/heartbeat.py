@@ -45,7 +45,7 @@ def main() -> None:
 
     async def keep_alive():
         """Start heartbeat and keep it running (continuous renewal)."""
-        service = BaseService("vite", logger=logger)
+        service = BaseService("vite", service_port=5052, logger=logger)
         # Run heartbeat loop continuously - it will be renewed every heartbeat_interval
         await service.heartbeat()
 

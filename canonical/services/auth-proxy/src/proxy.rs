@@ -294,9 +294,16 @@ async fn register_heartbeat_once(redis_url: &str, ttl: u64) -> Result<(), String
         .await
         .map_err(|e| e.to_string())?;
 
+    // Build heartbeat value in JSON format: {"port_opened": true, "timestamp": <unix_float>}
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs_f64();
+    let heartbeat_value = format!(r#"{{"port_opened": true, "timestamp": {}}}"#, timestamp);
+
     redis::cmd("SET")
         .arg(HEARTBEAT_KEY)
-        .arg("1")
+        .arg(heartbeat_value)
         .arg("EX")
         .arg(ttl)
         .query_async::<_, ()>(&mut conn)
