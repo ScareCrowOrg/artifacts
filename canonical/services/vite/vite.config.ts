@@ -454,17 +454,20 @@ const urlRewritePlugin = {
           console.error(`[DEBUG-HEADERS] All headers:`, req.headers)
         }
 
-        // Intercept response to catch 403
-        const originalSend = res.send
-        res.send = function(data) {
+        // Intercept response to catch 403 (using res.end which is always called)
+        const originalEnd = res.end
+        res.end = function(chunk, encoding, callback) {
           if (req.url.includes('/canonical') || req.url.includes('/sandbox') || req.url.includes('/runtime')) {
             console.error(`[DEBUG-403] Status: ${res.statusCode} for ${req.url}`)
             if (res.statusCode === 403) {
-              console.error(`[DEBUG-403] 403 DETECTED! This is where the block is happening`)
-              console.error(`[DEBUG-403] Response body:`, data ? data.toString().slice(0, 200) : 'empty')
+              console.error(`[DEBUG-403] 403 DETECTED!`)
+              console.error(`[DEBUG-403] Chunk type: ${typeof chunk}`)
+              if (chunk) {
+                console.error(`[DEBUG-403] Response body (first 500 chars):`, chunk.toString().slice(0, 500))
+              }
             }
           }
-          return originalSend.call(this, data)
+          return originalEnd.call(this, chunk, encoding, callback)
         }
 
         next()
@@ -472,6 +475,19 @@ const urlRewritePlugin = {
 
       server.middlewares.use((req, res, next) => {
         const url = req.url || '/'
+
+        // 403-HUNT: Debug logs to check URL path and root mismatch
+        if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime') || url.includes('/artifacts')) {
+          console.error(`[403-HUNT] URL Original: ${url}`)
+          console.error(`[403-HUNT] Root do Vite: ${server.config.root}`)
+          console.error(`[403-HUNT] __dirname: ${__dirname}`)
+          // Check for nested artifacts problem
+          if (url.includes('/artifacts/') && server.config.root.includes('/artifacts')) {
+            console.error(`[403-HUNT] ⚠️  POTENTIAL DOUBLE ARTIFACTS!`)
+            console.error(`[403-HUNT]   URL has /artifacts/, root also ends with /artifacts`)
+            console.error(`[403-HUNT]   This would resolve to: /app/artifacts/artifacts/...`)
+          }
+        }
 
         // Log every request (especially artifact paths)
         if (!url.includes('.js') && !url.includes('.css') && !url.includes('.json') && !url.includes('/@vite')) {
@@ -665,22 +681,8 @@ export default defineConfig({
       // - Only authenticated + authorized requests reach Vite
       //
       // So Vite can trust that any request it gets has already been validated.
-      // No need for fs.strict paranoia — the gateway handles security.
-      allow: [
-        // Absolute paths (as they exist in filesystem)
-        '/app/artifacts',           // Vite root
-        '/app/artifacts/canonical', // Cells, viewers, dynamic components
-        '/app/artifacts/sandbox',   // Sandbox environment artifacts
-        '/app/artifacts/runtime',   // Runtime assets (protected by Backend RBAC)
-        '/app/artifacts/shared',    // Shared infrastructure (utils, services, components)
-        '/app/node_modules',        // Dependencies
-
-        // Relative paths (as seen by Vite when validating)
-        'canonical',
-        'sandbox',
-        'runtime',
-        'shared',
-      ],
+      // TEMPORARY TEST: Allow all paths to identify if fs.allow is the culprit
+      allow: ['/'],  // Bypass all filesystem restrictions for debugging
       strict: false,  // Trust Auth-Proxy to do its job
     },
   },
