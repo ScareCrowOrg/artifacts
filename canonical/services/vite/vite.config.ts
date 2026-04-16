@@ -645,7 +645,9 @@ export default defineConfig({
         }
       })
 
-      return Array.from(hosts)
+      const allowedArray = Array.from(hosts)
+      console.error(`[VITE CONFIG] allowedHosts loaded: ${JSON.stringify(allowedArray)}`)
+      return allowedArray
     })(),
 
     // HMR (Hot Module Replacement) configuration
