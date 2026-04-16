@@ -657,9 +657,18 @@ export default defineConfig({
       credentials: true,
     },
 
-    // TEMPORARY DEBUG: Disable Host validation completely
-    // to identify if 403 is from Host Header validation or elsewhere
-    allowedHosts: 'all',
+    // Host validation: Allow internal Docker service name + external hosts
+    // Vite validates Host header against this list
+    allowedHosts: [
+      'all',           // Supposedly disables validation, but test shows it doesn't work
+      'vite',          // Docker service name (internal)
+      'vite:5052',     // With port
+      'localhost',
+      '127.0.0.1',
+      'scare.scareverse.net',
+      'hub-staging.scareverse.net',
+      'hub.scareverse.net',
+    ],
 
     // HMR (Hot Module Replacement) configuration
     // For local direct access: uses port 5052 directly
