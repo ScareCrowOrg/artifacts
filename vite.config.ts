@@ -453,6 +453,20 @@ const urlRewritePlugin = {
           console.error(`[DEBUG-HEADERS] Referer: ${req.headers.referer || 'NOT SET'}`)
           console.error(`[DEBUG-HEADERS] All headers:`, req.headers)
         }
+
+        // Intercept response to catch 403
+        const originalSend = res.send
+        res.send = function(data) {
+          if (req.url.includes('/canonical') || req.url.includes('/sandbox') || req.url.includes('/runtime')) {
+            console.error(`[DEBUG-403] Status: ${res.statusCode} for ${req.url}`)
+            if (res.statusCode === 403) {
+              console.error(`[DEBUG-403] 403 DETECTED! This is where the block is happening`)
+              console.error(`[DEBUG-403] Response body:`, data ? data.toString().slice(0, 200) : 'empty')
+            }
+          }
+          return originalSend.call(this, data)
+        }
+
         next()
       })
 
