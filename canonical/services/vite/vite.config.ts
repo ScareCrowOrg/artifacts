@@ -628,11 +628,13 @@ export default defineConfig({
     },
 
     // Allowed hosts - extracted from VITE_CORS_ORIGINS environment variable
+    // Also includes 'vite:5052' for internal Docker service resolution
+    // (Host Header Validation prevents 403 errors from internal proxying)
     allowedHosts: (() => {
       const origins = process.env.VITE_CORS_ORIGINS || ''
       const originList = typeof origins === 'string' ? origins.split(',').map(o => o.trim()).filter(Boolean) : []
 
-      const hosts = new Set(['localhost', '127.0.0.1'])
+      const hosts = new Set(['localhost', '127.0.0.1', 'vite:5052'])
       originList.forEach(origin => {
         try {
           const url = new URL(origin)
