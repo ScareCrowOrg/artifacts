@@ -442,6 +442,36 @@ const urlRewritePlugin = {
     console.error(`[url-rewrite] MIDDLEWARE INITIALIZED`)
     console.error(`[url-rewrite] __dirname: "${__dirname}"`)
 
+      // Error boundary middleware: Catch and report any errors in downstream middleware
+      server.middlewares.use((req, res, next) => {
+        const originalNext = next
+        const wrappedNext = (err) => {
+          if (err) {
+            console.error(`[ERROR-BOUNDARY] Error from downstream middleware:`)
+            console.error(`[ERROR-BOUNDARY] URL: ${req.url}`)
+            console.error(`[ERROR-BOUNDARY] Stack: ${err.stack}`)
+            if (res.headersSent === false && res.statusCode === 200) {
+              res.statusCode = 500
+            }
+            res.end(`Error: ${err.message}`)
+          } else {
+            originalNext()
+          }
+        }
+        try {
+          originalNext(wrappedNext)
+        } catch (err) {
+          console.error(`[ERROR-BOUNDARY] Synchronous error in middleware:`)
+          console.error(`[ERROR-BOUNDARY] URL: ${req.url}`)
+          console.error(`[ERROR-BOUNDARY] Error: ${err}`)
+          console.error(`[ERROR-BOUNDARY] Stack: ${err instanceof Error ? err.stack : 'N/A'}`)
+          if (!res.headersSent) {
+            res.statusCode = 500
+            res.end(`Error: ${err instanceof Error ? err.message : String(err)}`)
+          }
+        }
+      })
+
       // Debug middleware: Capture headers for artifact paths
       server.middlewares.use((req, res, next) => {
         if (req.url.includes('/canonical') || req.url.includes('/sandbox') || req.url.includes('/runtime')) {
@@ -534,10 +564,18 @@ const urlRewritePlugin = {
             console.error(`[url-rewrite] ✅ SERVING index.html for ${viewerName}`)
 
             // Transform HTML through Vite pipeline to inject HMR client
-            const transformedHtml = await server.transformIndexHtml(req.url, html)
-
-            res.setHeader('Content-Type', 'text/html; charset=utf-8')
-            res.end(transformedHtml)
+            try {
+              const transformedHtml = await server.transformIndexHtml(req.url, html)
+              console.error(`[url-rewrite] ✅ transformIndexHtml succeeded for ${viewerName}`)
+              res.setHeader('Content-Type', 'text/html; charset=utf-8')
+              res.end(transformedHtml)
+            } catch (transformErr) {
+              console.error(`[url-rewrite] ❌ transformIndexHtml FAILED for ${viewerName}`)
+              console.error(`[url-rewrite] Error: ${transformErr}`)
+              console.error(`[url-rewrite] Stack: ${transformErr instanceof Error ? transformErr.stack : 'N/A'}`)
+              res.setHeader('Content-Type', 'text/html; charset=utf-8')
+              res.end(html)  // Fallback: send raw HTML without transformation
+            }
             return
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
@@ -578,10 +616,18 @@ const urlRewritePlugin = {
               const html = fs.readFileSync(indexPath, 'utf-8')
 
               // Transform HTML through Vite pipeline to inject HMR client
-              const transformedHtml = await server.transformIndexHtml(req.url, html)
-
-              res.setHeader('Content-Type', 'text/html; charset=utf-8')
-              res.end(transformedHtml)
+              try {
+                const transformedHtml = await server.transformIndexHtml(req.url, html)
+                console.error(`[url-rewrite] ✅ transformIndexHtml succeeded for root /`)
+                res.setHeader('Content-Type', 'text/html; charset=utf-8')
+                res.end(transformedHtml)
+              } catch (transformErr) {
+                console.error(`[url-rewrite] ❌ transformIndexHtml FAILED for root /`)
+                console.error(`[url-rewrite] Error: ${transformErr}`)
+                console.error(`[url-rewrite] Stack: ${transformErr instanceof Error ? transformErr.stack : 'N/A'}`)
+                res.setHeader('Content-Type', 'text/html; charset=utf-8')
+                res.end(html)  // Fallback: send raw HTML without transformation
+              }
               return
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
