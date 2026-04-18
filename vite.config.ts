@@ -617,16 +617,15 @@ console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-18T16:50 - ALL MIDDLE
 export default defineConfig({
   root: '/app/artifacts',
   plugins: [
-    // DISABLED FOR TESTING: All custom middlewares removed to test pure Vite behavior
-    // performanceTracingPlugin,  // FIXED: Now uses Map for timing tracking, doesn't interfere with esbuild
-    // requestLoggerPlugin,       // Logs all HTTP requests (enable with VITE_REQUEST_LOG=true)
-    // rebuildObservabilityPlugin,
-    // fileProcessingTracker,
-    // errorInterceptionPlugin,
-    // viewerWarmupPlugin,
-    // migrationWarningPlugin,
-    // urlRewritePlugin,  // THIS WAS BREAKING WEBSOCKET - now disabled for test
-    // artifactsRewritePlugin,
+    performanceTracingPlugin,  // FIXED: Now uses Map for timing tracking, doesn't interfere with esbuild
+    requestLoggerPlugin,       // Logs all HTTP requests (enable with VITE_REQUEST_LOG=true)
+    rebuildObservabilityPlugin,
+    fileProcessingTracker,
+    errorInterceptionPlugin,
+    viewerWarmupPlugin,
+    migrationWarningPlugin,
+    urlRewritePlugin,  // THIS WAS BREAKING WEBSOCKET - now disabled for test
+    artifactsRewritePlugin,
     vue({
       include: [/\.vue$/],
     })
