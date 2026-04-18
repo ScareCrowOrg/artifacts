@@ -21,6 +21,8 @@ ping: {}
 entryPoints:
   http:
     address: ":80"
+    forwardedHeaders:
+      insecure: true  # Trust headers from Cloudflare (in dev; restrict in prod)
 
   traefik:
     address: ":8080"

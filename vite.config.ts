@@ -688,7 +688,7 @@ export default defineConfig({
       host: process.env.VITE_HMR_HOST,
       port: parseInt(process.env.VITE_HMR_PORT || '443'),
       protocol: process.env.VITE_HMR_PROTOCOL || 'wss',
-      // Let Vite handle WebSocket at the native endpoint (typically /)
+      path: '/vite-hmr/',  // Traefik routes by PathPrefix(/vite-hmr), not header
       ...(process.env.VITE_HMR_CLIENT_PORT && {
         clientPort: parseInt(process.env.VITE_HMR_CLIENT_PORT),
       }),
