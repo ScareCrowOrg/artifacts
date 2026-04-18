@@ -36,3 +36,9 @@ http-body-util = "0.1"
 
 # Signal handling for graceful shutdown
 tokio-util = { version = "0.7", features = ["io"] }
+
+# WebSocket proxy support
+# hyper: HTTP upgrade protocol (OnUpgrade extension for WebSocket tunneling)
+hyper = { version = "1", features = ["http1"] }
+# hyper-util: TokioIo wrapper to bridge hyper::upgrade::Upgraded ↔ tokio AsyncRead/AsyncWrite
+hyper-util = { version = "0.1", features = ["tokio"] }

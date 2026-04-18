@@ -8,6 +8,7 @@
 
 mod config;
 mod proxy;
+mod ws_proxy;
 
 use axum::{extract::Request, routing::any, Router};
 use reqwest::ClientBuilder;

@@ -90,6 +90,64 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
     // Debug: Log all headers to diagnose Traefik passthrough
     debug!("[AuthProxy] Headers: {:?}", req.headers());
 
+    // ── WebSocket upgrade bifurcation ────────────────────────────────────────
+    // Must happen BEFORE body buffering inside proxy_to_upstream().
+    // Session validation happens HERE (before HTTP 101) so we can return 403
+    // if the session is invalid — it is impossible to send 403 after 101.
+    if crate::ws_proxy::is_websocket_upgrade_request(&req) {
+        // BackendBypass routes need no session validation.
+        if matches!(decision, RouteDecision::BackendBypass) {
+            info!("[WS] BackendBypass WebSocket upgrade for path={}", path);
+            return crate::ws_proxy::proxy_ws_to_upstream(req, &state.backend_upstream).await;
+        }
+
+        let upstream_base = match decision {
+            RouteDecision::BackendProtected => state.backend_upstream.as_str(),
+            RouteDecision::ViteProtected => state.vite_upstream.as_str(),
+            // Deny is already rejected above; BackendBypass is handled above.
+            // This arm is a safety net in case new variants are added.
+            RouteDecision::Deny => {
+                warn!("[WS] Deny decision reached WebSocket bifurcation — rejecting");
+                return build_error_response(StatusCode::FORBIDDEN);
+            }
+            RouteDecision::BackendBypass => {
+                error!("[WS] BackendBypass decision reached protected WebSocket branch — internal inconsistency");
+                return build_error_response(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
+
+        // Extract session cookie for validation before upgrade.
+        let cookie_header = req
+            .headers()
+            .get(header::COOKIE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+
+        let has_cookie = cookie_header.is_some();
+        info!(
+            "[WS] Session validation: path={} (SessionID={})",
+            path, has_cookie
+        );
+
+        return match check_session(&state, &cookie_header, &path).await {
+            Ok(()) => {
+                info!(
+                    "[WS] Session valid, proceeding with WebSocket upgrade for {}",
+                    path
+                );
+                crate::ws_proxy::proxy_ws_to_upstream(req, upstream_base).await
+            }
+            Err(status) => {
+                warn!(
+                    "[WS] Session denied ({}) for {}, rejecting WebSocket upgrade",
+                    status, path
+                );
+                build_error_response(status)
+            }
+        };
+    }
+    // ── End WebSocket bifurcation ─────────────────────────────────────────────
+
     if matches!(decision, RouteDecision::BackendBypass) {
         return proxy_to_backend(state, req, &full_path, true).await;
     }
@@ -529,7 +587,7 @@ mod tests {
     #[test]
     fn test_classify_route_backend_bypass() {
         assert!(matches!(
-            classify_route("/api/v1/auth/session-bind", false),
+            classify_route("/api/v1/auth/session-bind"),
             RouteDecision::BackendBypass
         ));
     }
@@ -548,7 +606,15 @@ mod tests {
     }
 
     #[test]
-    fn test_classify_route_denies_unknown_path() {
-        assert!(matches!(classify_route("/metrics"), RouteDecision::Deny));
+    fn test_classify_route_vite_catch_all() {
+        // Paths that are not /api/* are caught by the Vite catch-all and routed to ViteProtected.
+        assert!(matches!(
+            classify_route("/metrics"),
+            RouteDecision::ViteProtected
+        ));
+        assert!(matches!(
+            classify_route("/sandbox/test"),
+            RouteDecision::ViteProtected
+        ));
     }
 }
