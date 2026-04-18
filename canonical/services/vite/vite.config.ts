@@ -473,7 +473,7 @@ const urlRewritePlugin = {
         next()
       })
 
-      server.middlewares.use((req, res, next) => {
+      server.middlewares.use(async (req, res, next) => {
         const url = req.url || '/'
 
         // CRITICAL: Allow WebSocket upgrades to pass through without rewrite
@@ -532,8 +532,12 @@ const urlRewritePlugin = {
             const html = fs.readFileSync(fullPath, 'utf-8')
             console.error(`[url-rewrite] ✅ FILE READ: ${fullPath.length} bytes`)
             console.error(`[url-rewrite] ✅ SERVING index.html for ${viewerName}`)
+
+            // Transform HTML through Vite pipeline to inject HMR client
+            const transformedHtml = await server.transformIndexHtml(req.url, html)
+
             res.setHeader('Content-Type', 'text/html; charset=utf-8')
-            res.end(html)
+            res.end(transformedHtml)
             return
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
@@ -572,8 +576,12 @@ const urlRewritePlugin = {
             console.error(`[url-rewrite] ROOT: Found index.html at ${indexPath}`)
             try {
               const html = fs.readFileSync(indexPath, 'utf-8')
+
+              // Transform HTML through Vite pipeline to inject HMR client
+              const transformedHtml = await server.transformIndexHtml(req.url, html)
+
               res.setHeader('Content-Type', 'text/html; charset=utf-8')
-              res.end(html)
+              res.end(transformedHtml)
               return
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)

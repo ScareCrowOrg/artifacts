@@ -15,5 +15,5 @@
       "description": "Fully-qualified domain name of the Cloudflare tunnel subdomain (e.g. planet.scareverse.net). Informational only – Traefik routes are configured via Docker labels."
     }
   ],
-  "lastBuilt": "2026-04-18T21:43:08.795Z"
+  "lastBuilt": "2026-04-18T22:19:44.273Z"
 }
