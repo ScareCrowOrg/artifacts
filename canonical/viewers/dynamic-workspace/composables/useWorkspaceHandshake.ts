@@ -233,33 +233,44 @@ export function useWorkspaceHandshake() {
   // ── Message handler ────────────────────────────────────────────────────────
 
   async function handleMessage(event: MessageEvent) {
-    // ⚠️ CRITICAL: Log ALL incoming messages for debugging origin issues
     const msgTimestamp = new Date().toISOString()
     const msgType = (event.data as any)?.type
     const msgOrigin = event.origin
     const fullData = event.data
+    const msgTarget = (event.data as any)?.target
 
-    console.log('[useWorkspaceHandshake] 📨 postMessage received - FULL MESSAGE DUMP', {
-      timestamp: msgTimestamp,
-      origin: msgOrigin,
-      dataType: msgType,
-      fullMessage: JSON.stringify(fullData, null, 2),
-      expectedOrigins: EXPECTED_COCKPIT_ORIGINS,
-      windowLocation: window.location.href,
-      eventSource: event.source ? 'Window reference' : 'null',
-      isSelfReference: event.source === window ? 'YES - SELF REFERENCE!' : 'no',
-    })
+    // Filter out browser extensions & noise (e.g., MetaMask, Brave Wallet)
+    // Only log/process if: has workspace-relevant type OR origin is trusted
+    const isExtensionMessage = msgTarget === 'metamask-inpage' || msgTarget === 'brave-wallet'
+    const isRelevantType = ['INIT_WORKSPACE', 'SWITCH_THEME', 'SWITCH_LOCALE', 'SYNC_CONFIG', 'VALIDATION_RESULT'].includes(msgType)
+    const isTrustedOrigin = EXPECTED_COCKPIT_ORIGINS.includes(msgOrigin)
+
+    // Only log if it's relevant to workspace handshake
+    if (isRelevantType || isTrustedOrigin) {
+      console.log('[useWorkspaceHandshake] 📨 postMessage received - RELEVANT MESSAGE', {
+        timestamp: msgTimestamp,
+        origin: msgOrigin,
+        dataType: msgType,
+        fullMessage: JSON.stringify(fullData, null, 2),
+        expectedOrigins: EXPECTED_COCKPIT_ORIGINS,
+        windowLocation: window.location.href,
+        eventSource: event.source ? 'Window reference' : 'null',
+      })
+    }
 
     // Security: validate origin FIRST before processing any message content
-    if (!EXPECTED_COCKPIT_ORIGINS.includes(msgOrigin)) {
-      console.error('[useWorkspaceHandshake] ❌ REJECTED - Origin not in whitelist', {
-        origin: msgOrigin,
-        expectedOrigins: EXPECTED_COCKPIT_ORIGINS,
-        messageType: msgType,
-        timestamp: msgTimestamp,
-        fullMessage: JSON.stringify(fullData, null, 2),
-        source: 'handleMessage @ line 245',
-      })
+    if (!isTrustedOrigin) {
+      // Only log if not an extension (reduces noise)
+      if (!isExtensionMessage && isRelevantType) {
+        console.error('[useWorkspaceHandshake] ❌ REJECTED - Origin not in whitelist', {
+          origin: msgOrigin,
+          expectedOrigins: EXPECTED_COCKPIT_ORIGINS,
+          messageType: msgType,
+          timestamp: msgTimestamp,
+          fullMessage: JSON.stringify(fullData, null, 2),
+          source: 'handleMessage @ line 255',
+        })
+      }
       log.warn('[WORKSPACE] Rejected message from unexpected origin', { origin: event.origin, expected: EXPECTED_COCKPIT_ORIGINS })
       return
     }
