@@ -60,11 +60,11 @@ REDIS_L1_PASSWORD: Optional[str] = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
 
 SERVICE_ROUTES: Dict[str, Dict] = {
     # Vite HMR WebSocket via dedicated path (/vite-hmr).
-    # Traefik v3 File Provider doesn't support WebSocket upgrade natively.
-    # Using specific path avoids Traefik WebSocket limitation and keeps clean routing.
+    # Rule matches both HTTP polling and WebSocket upgrades on /vite-hmr path.
+    # OR fallback to / with Upgrade header for backward compatibility if Vite retries.
     "vite": {
         "port": 5052,
-        "rule": "PathPrefix(`/vite-hmr`)",
+        "rule": "PathPrefix(`/vite-hmr`) || (Path(`/`) && Header(`Upgrade`, `websocket`))",
         "priority": 110,
     },
     # Auth Proxy is the universal ingress gatekeeper (fallback).
