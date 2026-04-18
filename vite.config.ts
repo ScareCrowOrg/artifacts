@@ -673,10 +673,12 @@ export default defineConfig({
     // HMR (Hot Module Replacement) configuration
     // For local direct access: uses port 5052 directly
     // For proxy scenarios (Nginx on 8000): can override clientPort
+    // path: '/vite-hmr' routes WebSocket through Traefik to dedicated path (avoids Traefik WebSocket upgrade limitation)
     hmr: {
       host: process.env.VITE_HMR_HOST || 'localhost',
       port: parseInt(process.env.VITE_HMR_PORT || '5052'),
       protocol: process.env.VITE_HMR_PROTOCOL || 'ws',
+      path: '/vite-hmr',
       ...(process.env.VITE_HMR_CLIENT_PORT && {
         clientPort: parseInt(process.env.VITE_HMR_CLIENT_PORT),
       }),

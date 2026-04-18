@@ -59,13 +59,12 @@ REDIS_L1_PASSWORD: Optional[str] = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
 # Phase 2: Could read from env var SERVICE_ROUTES_JSON or Redis values.
 
 SERVICE_ROUTES: Dict[str, Dict] = {
-    # Vite HMR WebSocket – bypass auth entirely for HMR traffic.
-    # HMR is development-only, serves public code (no auth needed).
-    # Rule: GET / with WebSocket upgrade + Method(GET) ensures OPTIONS preflight falls through to auth-proxy.
-    # Method(GET) prevents CORS OPTIONS requests (which are Method=OPTIONS) from matching this route.
+    # Vite HMR WebSocket via dedicated path (/vite-hmr).
+    # Traefik v3 File Provider doesn't support WebSocket upgrade natively.
+    # Using specific path avoids Traefik WebSocket limitation and keeps clean routing.
     "vite": {
         "port": 5052,
-        "rule": "Path(`/`) && Header(`Upgrade`, `websocket`) && Method(`GET`)",
+        "rule": "PathPrefix(`/vite-hmr`)",
         "priority": 110,
     },
     # Auth Proxy is the universal ingress gatekeeper (fallback).
@@ -137,6 +136,7 @@ def _build_traefik_config(healthy_services: Set[str]) -> dict:
             "entryPoints": ["http"],
             "priority": route_cfg["priority"],
         }
+
         services[name] = {
             "loadBalancer": {
                 "servers": [{"url": f"http://{name}:{route_cfg['port']}"}]
