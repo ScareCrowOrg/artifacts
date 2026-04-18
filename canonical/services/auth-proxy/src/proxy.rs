@@ -71,6 +71,12 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
     let decision = classify_route(&path);
     info!("[AuthProxy] → {} {} ({:?})", method, full_path, decision);
 
+    // Handle CORS preflight OPTIONS requests immediately (no auth required)
+    if method == "OPTIONS" {
+        info!("[AuthProxy] CORS preflight OPTIONS for {}", path);
+        return build_cors_response(StatusCode::OK);
+    }
+
     if matches!(decision, RouteDecision::Deny) {
         warn!("[AuthProxy] Request denied by route policy: {}", path);
         return build_error_response(StatusCode::FORBIDDEN);
@@ -368,6 +374,44 @@ fn build_error_response(status: StatusCode) -> Response {
         axum::http::header::CONTENT_TYPE,
         HeaderValue::from_static("application/json"),
     );
+    resp
+}
+
+/// Build a CORS preflight response (OPTIONS) with appropriate Access-Control headers.
+fn build_cors_response(status: StatusCode) -> Response {
+    let mut resp = Response::new(Body::empty());
+    *resp.status_mut() = status;
+
+    // Allow all origins for CORS preflight
+    resp.headers_mut().insert(
+        HeaderName::from_static("access-control-allow-origin"),
+        HeaderValue::from_static("*"),
+    );
+
+    // Allow common HTTP methods
+    resp.headers_mut().insert(
+        HeaderName::from_static("access-control-allow-methods"),
+        HeaderValue::from_static("GET, POST, PUT, DELETE, PATCH, OPTIONS"),
+    );
+
+    // Allow common headers
+    resp.headers_mut().insert(
+        HeaderName::from_static("access-control-allow-headers"),
+        HeaderValue::from_static("Content-Type, Authorization, Cookie"),
+    );
+
+    // Allow credentials (cookies)
+    resp.headers_mut().insert(
+        HeaderName::from_static("access-control-allow-credentials"),
+        HeaderValue::from_static("true"),
+    );
+
+    // Cache preflight for 1 hour
+    resp.headers_mut().insert(
+        HeaderName::from_static("access-control-max-age"),
+        HeaderValue::from_static("3600"),
+    );
+
     resp
 }
 
