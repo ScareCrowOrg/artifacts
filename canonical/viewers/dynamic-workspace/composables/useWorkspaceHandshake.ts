@@ -234,20 +234,31 @@ export function useWorkspaceHandshake() {
 
   async function handleMessage(event: MessageEvent) {
     // ⚠️ CRITICAL: Log ALL incoming messages for debugging origin issues
-    console.log('[useWorkspaceHandshake] 📨 postMessage received', {
-      timestamp: new Date().toISOString(),
-      origin: event.origin,
-      dataType: (event.data as any)?.type,
+    const msgTimestamp = new Date().toISOString()
+    const msgType = (event.data as any)?.type
+    const msgOrigin = event.origin
+    const fullData = event.data
+
+    console.log('[useWorkspaceHandshake] 📨 postMessage received - FULL MESSAGE DUMP', {
+      timestamp: msgTimestamp,
+      origin: msgOrigin,
+      dataType: msgType,
+      fullMessage: JSON.stringify(fullData, null, 2),
       expectedOrigins: EXPECTED_COCKPIT_ORIGINS,
+      windowLocation: window.location.href,
+      eventSource: event.source ? 'Window reference' : 'null',
+      isSelfReference: event.source === window ? 'YES - SELF REFERENCE!' : 'no',
     })
 
     // Security: validate origin FIRST before processing any message content
-    if (!EXPECTED_COCKPIT_ORIGINS.includes(event.origin)) {
+    if (!EXPECTED_COCKPIT_ORIGINS.includes(msgOrigin)) {
       console.error('[useWorkspaceHandshake] ❌ REJECTED - Origin not in whitelist', {
-        origin: event.origin,
+        origin: msgOrigin,
         expectedOrigins: EXPECTED_COCKPIT_ORIGINS,
-        messageType: (event.data as any)?.type,
-        timestamp: new Date().toISOString(),
+        messageType: msgType,
+        timestamp: msgTimestamp,
+        fullMessage: JSON.stringify(fullData, null, 2),
+        source: 'handleMessage @ line 245',
       })
       log.warn('[WORKSPACE] Rejected message from unexpected origin', { origin: event.origin, expected: EXPECTED_COCKPIT_ORIGINS })
       return
