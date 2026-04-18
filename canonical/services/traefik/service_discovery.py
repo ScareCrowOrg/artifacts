@@ -59,14 +59,16 @@ REDIS_L1_PASSWORD: Optional[str] = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
 # Phase 2: Could read from env var SERVICE_ROUTES_JSON or Redis values.
 
 SERVICE_ROUTES: Dict[str, Dict] = {
-    # Vite HMR (WebSocket on /) – direct route with higher priority to avoid auth-proxy
-    # Vite handles WebSocket upgrade natively, auth-proxy cannot.
+    # Vite HMR WebSocket – bypass auth entirely for HMR traffic.
+    # HMR is development-only, serves public code (no auth needed).
+    # Rule: GET / with WebSocket upgrade + Method(GET) ensures OPTIONS preflight falls through to auth-proxy.
+    # Method(GET) prevents CORS OPTIONS requests (which are Method=OPTIONS) from matching this route.
     "vite": {
         "port": 5052,
-        "rule": "Path(`/`) && Header(`Upgrade`, `websocket`)",
-        "priority": 101,
+        "rule": "Path(`/`) && Header(`Upgrade`, `websocket`) && Method(`GET`)",
+        "priority": 110,
     },
-    # Auth Proxy is the universal ingress gatekeeper.
+    # Auth Proxy is the universal ingress gatekeeper (fallback).
     # All traffic goes through it (catch-all), then auth-proxy decides:
     # - /api/v1/auth/session-bind: bypass to backend
     # - /api/*, /viewers/*, /: require sessionId
