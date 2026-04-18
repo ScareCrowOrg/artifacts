@@ -42,16 +42,31 @@ enum RouteDecision {
     BackendBypass,
     BackendProtected,
     ViteProtected,
+    ViteBypass,
     Deny,
 }
 
-fn classify_route(path: &str) -> RouteDecision {
+fn is_websocket_upgrade(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::UPGRADE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.to_lowercase().contains("websocket"))
+        .unwrap_or(false)
+}
+
+fn classify_route(path: &str, is_ws: bool) -> RouteDecision {
     if path == "/api/v1/auth/session-bind" {
         RouteDecision::BackendBypass
     } else if path.starts_with("/api/") {
         RouteDecision::BackendProtected
+    } else if path == "/" && is_ws {
+        // Root path with WebSocket upgrade (HMR) → bypass auth, proxy to Vite
+        RouteDecision::ViteBypass
+    } else if path == "/" {
+        // Root path without WebSocket → normal page, requires auth
+        RouteDecision::ViteProtected
     } else {
-        // Everything else → Vite (/, /viewers*, /canonical/*, /sandbox/*, /runtime/*, etc.)
+        // Everything else → Vite (/viewers*, /canonical/*, /sandbox/*, /runtime/*, etc.)
         RouteDecision::ViteProtected
     }
 }
@@ -68,8 +83,9 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
     let full_path = format!("{path}{query}");
     let method = req.method().to_string();
 
-    let decision = classify_route(&path);
-    info!("[AuthProxy] → {} {} ({:?})", method, full_path, decision);
+    let is_ws = is_websocket_upgrade(req.headers());
+    let decision = classify_route(&path, is_ws);
+    info!("[AuthProxy] → {} {} ({:?}) [WebSocket: {}]", method, full_path, decision, is_ws);
 
     if matches!(decision, RouteDecision::Deny) {
         warn!("[AuthProxy] Request denied by route policy: {}", path);
@@ -81,6 +97,11 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
 
     if matches!(decision, RouteDecision::BackendBypass) {
         return proxy_to_backend(state, req, &full_path, true).await;
+    }
+
+    if matches!(decision, RouteDecision::ViteBypass) {
+        debug!("[AuthProxy] Bypassing auth for Vite HMR/WebSocket on path {}", path);
+        return proxy_to_vite(state, req, &full_path).await;
     }
 
     // Step 1 – extract Cookie header from the request.
@@ -115,7 +136,7 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                 );
                 proxy_to_vite(state, req, &full_path).await
             }
-            RouteDecision::BackendBypass | RouteDecision::Deny => {
+            RouteDecision::BackendBypass | RouteDecision::ViteBypass | RouteDecision::Deny => {
                 error!(
                     "[AuthProxy] Internal routing inconsistency: authenticated flow reached unexpected decision {:?} for path {}",
                     decision, path
@@ -469,7 +490,7 @@ mod tests {
     #[test]
     fn test_classify_route_backend_bypass() {
         assert!(matches!(
-            classify_route("/api/v1/auth/session-bind"),
+            classify_route("/api/v1/auth/session-bind", false),
             RouteDecision::BackendBypass
         ));
     }
@@ -477,18 +498,27 @@ mod tests {
     #[test]
     fn test_classify_route_protected_paths() {
         assert!(matches!(
-            classify_route("/api/v1/models"),
+            classify_route("/api/v1/models", false),
             RouteDecision::BackendProtected
         ));
         assert!(matches!(
-            classify_route("/viewers/dynamic-workspace"),
+            classify_route("/viewers/dynamic-workspace", false),
             RouteDecision::ViteProtected
         ));
-        assert!(matches!(classify_route("/"), RouteDecision::ViteProtected));
+    }
+
+    #[test]
+    fn test_classify_route_vite_bypass_websocket_hmr() {
+        assert!(matches!(classify_route("/", true), RouteDecision::ViteBypass));
+    }
+
+    #[test]
+    fn test_classify_route_vite_protected_root_without_websocket() {
+        assert!(matches!(classify_route("/", false), RouteDecision::ViteProtected));
     }
 
     #[test]
     fn test_classify_route_denies_unknown_path() {
-        assert!(matches!(classify_route("/metrics"), RouteDecision::Deny));
+        assert!(matches!(classify_route("/metrics", false), RouteDecision::Deny));
     }
 }
