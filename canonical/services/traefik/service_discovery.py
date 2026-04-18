@@ -133,7 +133,7 @@ def _build_traefik_config(healthy_services: Set[str]) -> dict:
         routers[name] = {
             "rule": route_cfg["rule"],
             "service": name,
-            "entryPoints": ["http"],
+            "entryPoints": ["http", "websecure"],  # Listen on both HTTP and HTTPS
             "priority": route_cfg["priority"],
         }
 
