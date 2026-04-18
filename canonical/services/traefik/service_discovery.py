@@ -59,18 +59,12 @@ REDIS_L1_PASSWORD: Optional[str] = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
 # Phase 2: Could read from env var SERVICE_ROUTES_JSON or Redis values.
 
 SERVICE_ROUTES: Dict[str, Dict] = {
-    # Vite HMR WebSocket – routing by Upgrade header only.
-    # Vite only supports WebSocket on root path (/) natively.
-    # Use Upgrade header as sole matcher with high priority to beat auth-proxy.
-    "vite": {
-        "port": 5052,
-        "rule": "Host(`scare.scareverse.net`) && Header(`Upgrade`, `websocket`)",
-        "priority": 1000,  # Extremely high: guaranteed to match before auth-proxy (100)
-    },
-    # Auth Proxy is the universal ingress gatekeeper (fallback).
-    # All traffic goes through it (catch-all), then auth-proxy decides:
-    # - /api/v1/auth/session-bind: bypass to backend
+    # Auth Proxy is the universal ingress gatekeeper.
+    # All traffic (HTTP and WebSocket) goes through it, then auth-proxy decides:
+    # - WebSocket with valid session → tunnel to vite:5052 or backend:5050
+    # - /api/v1/auth/session-bind: bypass to backend (no auth required)
     # - /api/*, /viewers/*, /: require sessionId
+    # - Deny unknown paths
     "auth-proxy": {
         "port": 5055,
         "rule": "PathPrefix(`/`)",
