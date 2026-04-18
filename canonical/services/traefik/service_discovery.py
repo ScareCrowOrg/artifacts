@@ -59,13 +59,13 @@ REDIS_L1_PASSWORD: Optional[str] = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
 # Phase 2: Could read from env var SERVICE_ROUTES_JSON or Redis values.
 
 SERVICE_ROUTES: Dict[str, Dict] = {
-    # Vite HMR WebSocket – routing by PathPrefix + Upgrade header fallback.
-    # Traefik drops Upgrade header from Cloudflare, so use PathPrefix as primary matcher.
-    # If Upgrade header survives, also match it for redundancy.
+    # Vite HMR WebSocket – routing by Upgrade header only.
+    # Vite only supports WebSocket on root path (/) natively.
+    # Use Upgrade header as sole matcher with high priority to beat auth-proxy.
     "vite": {
         "port": 5052,
-        "rule": "Host(`scare.scareverse.net`) && (PathPrefix(`/vite-hmr`) || Header(`Upgrade`, `websocket`))",
-        "priority": 500,  # High priority: evaluate before auth-proxy (100)
+        "rule": "Host(`scare.scareverse.net`) && Header(`Upgrade`, `websocket`)",
+        "priority": 1000,  # Extremely high: guaranteed to match before auth-proxy (100)
     },
     # Auth Proxy is the universal ingress gatekeeper (fallback).
     # All traffic goes through it (catch-all), then auth-proxy decides:

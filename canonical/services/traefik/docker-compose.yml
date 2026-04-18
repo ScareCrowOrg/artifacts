@@ -54,9 +54,11 @@ services:
       - ../../../../artifacts:/app/artifacts:ro
 
     # Port 80: HTTP reverse proxy (public, replaces nginx-unity:80)
+    # Port 443: HTTPS reverse proxy (public, from Cloudflare)
     # Port 8080: Traefik dashboard / API (internal, accessible at /dashboard)
     ports:
       - "80:80"
+      - "443:443"
       - "8080:8080"
 
     restart: unless-stopped
