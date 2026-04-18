@@ -73,8 +73,13 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
 
     // Handle CORS preflight OPTIONS requests immediately (no auth required)
     if method == "OPTIONS" {
-        info!("[AuthProxy] CORS preflight OPTIONS for {}", path);
-        return build_cors_response(StatusCode::OK);
+        let origin = req
+            .headers()
+            .get(header::ORIGIN)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("*");
+        info!("[AuthProxy] CORS preflight OPTIONS for {} (origin: {})", path, origin);
+        return build_cors_response(StatusCode::OK, origin);
     }
 
     if matches!(decision, RouteDecision::Deny) {
@@ -378,15 +383,24 @@ fn build_error_response(status: StatusCode) -> Response {
 }
 
 /// Build a CORS preflight response (OPTIONS) with appropriate Access-Control headers.
-fn build_cors_response(status: StatusCode) -> Response {
+/// Uses the requesting origin to avoid incompatibility with credentials (can't use * with credentials).
+fn build_cors_response(status: StatusCode, origin: &str) -> Response {
     let mut resp = Response::new(Body::empty());
     *resp.status_mut() = status;
 
-    // Allow all origins for CORS preflight
-    resp.headers_mut().insert(
-        HeaderName::from_static("access-control-allow-origin"),
-        HeaderValue::from_static("*"),
-    );
+    // Echo back the origin if provided; otherwise allow all
+    // Note: When credentials are involved, must specify explicit origin (not *)
+    if let Ok(origin_val) = HeaderValue::from_str(origin) {
+        resp.headers_mut().insert(
+            HeaderName::from_static("access-control-allow-origin"),
+            origin_val,
+        );
+    } else {
+        resp.headers_mut().insert(
+            HeaderName::from_static("access-control-allow-origin"),
+            HeaderValue::from_static("*"),
+        );
+    }
 
     // Allow common HTTP methods
     resp.headers_mut().insert(
@@ -400,11 +414,13 @@ fn build_cors_response(status: StatusCode) -> Response {
         HeaderValue::from_static("Content-Type, Authorization, Cookie"),
     );
 
-    // Allow credentials (cookies)
-    resp.headers_mut().insert(
-        HeaderName::from_static("access-control-allow-credentials"),
-        HeaderValue::from_static("true"),
-    );
+    // Allow credentials (cookies) when origin is specified
+    if origin != "*" {
+        resp.headers_mut().insert(
+            HeaderName::from_static("access-control-allow-credentials"),
+            HeaderValue::from_static("true"),
+        );
+    }
 
     // Cache preflight for 1 hour
     resp.headers_mut().insert(
