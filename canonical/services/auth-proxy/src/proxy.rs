@@ -209,18 +209,18 @@ async fn proxy_to_upstream(
     let method = orig_req.method().clone();
 
     // Forward a safe subset of original headers. Exclude hop-by-hop headers.
+    // **CRITICAL**: Allow 'upgrade' and 'connection' headers for WebSocket support (HMR, future Backend WS endpoints)
     let mut fwd_headers = reqwest::header::HeaderMap::new();
     for (name, value) in orig_req.headers() {
         let name_str = name.as_str();
         // Skip hop-by-hop headers and Host (set explicitly below when needed).
+        // NOTE: 'upgrade' and 'connection' are allowed through for WebSocket (Vite HMR, future Backend WS)
         if matches!(
             name_str,
             "host"
-                | "connection"
                 | "transfer-encoding"
                 | "te"
                 | "trailer"
-                | "upgrade"
                 | "keep-alive"
                 | "proxy-authorization"
                 | "proxy-authenticate"
@@ -281,9 +281,10 @@ async fn proxy_to_upstream(
     let mut resp_headers = HeaderMap::new();
     for (name, value) in upstream_resp.headers() {
         // Skip hop-by-hop headers from upstream response.
+        // **CRITICAL**: Allow 'upgrade' and 'connection' headers for WebSocket support (HMR, future Backend WS)
         if matches!(
             name.as_str(),
-            "connection" | "transfer-encoding" | "keep-alive" | "trailer" | "upgrade"
+            "transfer-encoding" | "keep-alive" | "trailer"
         ) {
             continue;
         }
