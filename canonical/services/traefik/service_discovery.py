@@ -59,13 +59,13 @@ REDIS_L1_PASSWORD: Optional[str] = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
 # Phase 2: Could read from env var SERVICE_ROUTES_JSON or Redis values.
 
 SERVICE_ROUTES: Dict[str, Dict] = {
-    # Vite HMR WebSocket via dedicated path (/vite-hmr).
-    # Rule matches both HTTP polling and WebSocket upgrades on /vite-hmr path.
-    # OR fallback to / with Upgrade header for backward compatibility if Vite retries.
+    # Vite HMR WebSocket – simplified routing by protocol, not path.
+    # Vite listens on / for HMR; Traefik identifies WebSocket by Upgrade header.
+    # This avoids Vite's path-based WebSocket rejection (404 bug in middleware).
     "vite": {
         "port": 5052,
-        "rule": "PathPrefix(`/vite-hmr`) || (Path(`/`) && Header(`Upgrade`, `websocket`))",
-        "priority": 110,
+        "rule": "Host(`scare.scareverse.net`) && Header(`Upgrade`, `websocket`)",
+        "priority": 200,  # Higher than auth-proxy to intercept WebSocket first
     },
     # Auth Proxy is the universal ingress gatekeeper (fallback).
     # All traffic goes through it (catch-all), then auth-proxy decides:
