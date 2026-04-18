@@ -476,6 +476,13 @@ const urlRewritePlugin = {
       server.middlewares.use((req, res, next) => {
         const url = req.url || '/'
 
+        // CRITICAL: Allow WebSocket upgrades to pass through without rewrite
+        // HMR client needs raw WebSocket, not HTML redirects
+        if (req.headers.upgrade === 'websocket' || req.headers.connection?.includes('Upgrade')) {
+          console.error(`[url-rewrite] WebSocket upgrade detected, passing through: ${url}`)
+          return next()
+        }
+
         // 403-HUNT: Debug logs to check URL path and root mismatch
         if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime') || url.includes('/artifacts')) {
           console.error(`[403-HUNT] URL Original: ${url}`)
