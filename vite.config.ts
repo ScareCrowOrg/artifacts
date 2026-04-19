@@ -631,6 +631,31 @@ export default defineConfig({
     // - artifactsRewritePlugin
 
     {
+      name: 'html-transformer',
+      apply: 'serve',
+      configureServer(server) {
+        // Minimal: transform .html files to inject HMR client
+        server.middlewares.use(async (req, res, next) => {
+          if (req.url?.endsWith('.html') && req.method === 'GET') {
+            try {
+              const filePath = path.join(__dirname, req.url)
+              if (fs.existsSync(filePath)) {
+                const html = fs.readFileSync(filePath, 'utf-8')
+                const transformed = await server.transformIndexHtml(req.url, html)
+                res.setHeader('Content-Type', 'text/html; charset=utf-8')
+                res.end(transformed)
+                return
+              }
+            } catch (err) {
+              console.error(`[html-transformer] Error: ${err.message}`)
+            }
+          }
+          next()
+        })
+      },
+    },
+
+    {
       name: 'hmr-logging-only',
       apply: 'serve',
       configureServer(server) {
