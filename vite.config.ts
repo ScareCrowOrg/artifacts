@@ -738,14 +738,11 @@ export default defineConfig({
     ],
 
     // HMR (Hot Module Replacement) configuration
+    // Let Vite handle it natively - don't override path
     hmr: process.env.VITE_HMR_HOST ? {
       host: process.env.VITE_HMR_HOST,
       port: parseInt(process.env.VITE_HMR_PORT || '443'),
       protocol: process.env.VITE_HMR_PROTOCOL || 'wss',
-      path: '/__vite_hmr',
-      ...(process.env.VITE_HMR_CLIENT_PORT && {
-        clientPort: parseInt(process.env.VITE_HMR_CLIENT_PORT),
-      }),
     } : true,  // Use auto if HMR_HOST not set
 
     // Serve files from artifacts root
