@@ -268,8 +268,8 @@ const errorInterceptionPlugin = {
   },
 }
 
-// Viewer Warmup Plugin - Pre-compile viewers on startup
-// Automatically discovers and pre-compiles all viewers to avoid cold-start delays
+// Viewer Warmup Plugin - Pre-compile viewer sources on startup
+// Automatically discovers viewers and pre-compiles main.ts to avoid cold-start delays
 const viewerWarmupPlugin = {
   name: 'viewer-warmup',
   apply: 'serve',
@@ -293,52 +293,27 @@ const viewerWarmupPlugin = {
 
         console.error('\n' + '━'.repeat(100))
         console.error('🔥 VIEWER WARMUP STARTED')
-        console.error(`   Found ${viewers.length} viewers to pre-compile`)
+        console.error(`   Found ${viewers.length} viewers to pre-compile main.ts`)
         console.error('━'.repeat(100) + '\n')
 
         let successCount = 0
         let failCount = 0
 
         for (const viewer of viewers) {
-          // Pre-compile HTML, TypeScript, and CSS to avoid cold start delays
-          // - index.html: middleware rewrite caching
-          // - main.ts: TypeScript compilation
-          // - index.css: Tailwind CSS JIT compilation (2+ min delay if skipped!)
-          const htmlUrl = `http://localhost:5052/viewers/${viewer}`
-          const tsUrl = `http://localhost:5052/viewers/${viewer}/main.ts`
-          const cssUrl = `http://localhost:5052/shared/styles/index.css`
+          // Pre-compile main.ts (TypeScript compilation)
+          // This triggers: TS → Vue template processing → CSS compilation (JIT)
+          const mainTsUrl = `http://localhost:5052/canonical/viewers/${viewer}/main.ts`
 
           try {
-            // 1. Load index.html (middleware rewrite)
-            const htmlStart = performance.now()
-            const htmlResponse = await fetch(htmlUrl)
-            const htmlDuration = (performance.now() - htmlStart).toFixed(2)
+            const start = performance.now()
+            const response = await fetch(mainTsUrl)
+            const duration = (performance.now() - start).toFixed(2)
 
-            // 2. Compile main.ts (Vite on-demand compilation)
-            const tsStart = performance.now()
-            const tsResponse = await fetch(tsUrl)
-            const tsDuration = (performance.now() - tsStart).toFixed(2)
-
-            // 3. Compile Tailwind CSS (JIT - must run once, very slow first time)
-            // Note: Only fetch once per warmup (shared across viewers)
-            let cssResponse = { ok: true }
-            let cssDuration = '0'
-            if (viewer === viewers[0]) {
-              const cssStart = performance.now()
-              cssResponse = await fetch(cssUrl)
-              cssDuration = (performance.now() - cssStart).toFixed(2)
-              console.error(`\n  🎨 Tailwind CSS compilation: ${cssDuration}ms\n`)
-            }
-
-            if (htmlResponse.ok && tsResponse.ok && cssResponse.ok) {
-              const totalDuration = (parseFloat(htmlDuration) + parseFloat(tsDuration)).toFixed(2)
-              console.error(`  ✅ ${viewer.padEnd(30)} HTML: ${htmlDuration.padStart(5)}ms | TS: ${tsDuration.padStart(5)}ms | Total: ${totalDuration.padStart(6)}ms`)
+            if (response.ok) {
+              console.error(`  ✅ ${viewer.padEnd(30)} main.ts compiled in ${duration.padStart(5)}ms`)
               successCount++
             } else {
-              const htmlStatus = htmlResponse.ok ? htmlResponse.status : 'N/A'
-              const tsStatus = tsResponse.ok ? tsResponse.status : 'N/A'
-              const cssStatus = cssResponse.ok ? cssResponse.status : 'N/A'
-              console.error(`  ⚠️  ${viewer.padEnd(30)} HTML: ${htmlStatus} | TS: ${tsStatus} | CSS: ${cssStatus}`)
+              console.error(`  ⚠️  ${viewer.padEnd(30)} main.ts returned HTTP ${response.status}`)
               failCount++
             }
           } catch (error) {
@@ -347,14 +322,14 @@ const viewerWarmupPlugin = {
           }
         }
 
-          console.error('\n' + '─'.repeat(100))
-          console.error(`✅ VIEWER WARMUP COMPLETED: ${successCount}/${viewers.length} pre-compiled`)
-          console.error('─'.repeat(100) + '\n')
-        } catch (error) {
-          console.error('❌ [Viewer Warmup] Error:', error.message)
-        }
-      }, 2000) // Wait 2s for Vite to initialize
-    },
+        console.error('\n' + '─'.repeat(100))
+        console.error(`✅ VIEWER WARMUP COMPLETED: ${successCount}/${viewers.length} pre-compiled`)
+        console.error('─'.repeat(100) + '\n')
+      } catch (error) {
+        console.error('❌ [Viewer Warmup] Error:', error.message)
+      }
+    }, 2000) // Wait 2s for Vite to initialize
+  },
 }
 
 // Request Logger Plugin - Logs all HTTP requests processed by Vite
@@ -612,24 +587,12 @@ const urlRewritePlugin = {
  * - Allow TypeScript features (generics, decorators, etc)
  */
 
-console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-18T16:50 - CUSTOM MIDDLEWARES DISABLED (NATIVE HMR HANDLER ACTIVE)\n')
+console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-19T18:30 - ALL MIDDLEWARES RE-ENABLED (HMR WORKING)\n')
 
 export default defineConfig({
   root: '/app/artifacts',
   plugins: [
-    // HMR TEST MODE: Only HMR logging middleware active
-    // All other complex middleware disabled to isolate HMR issues
-    // Original plugins preserved below for future re-enablement:
-    // - performanceTracingPlugin
-    // - requestLoggerPlugin
-    // - rebuildObservabilityPlugin
-    // - fileProcessingTracker
-    // - errorInterceptionPlugin
-    // - viewerWarmupPlugin
-    // - migrationWarningPlugin
-    // - urlRewritePlugin
-    // - artifactsRewritePlugin
-
+    // HMR Debug plugin - auto-enable HMR logging in browser
     {
       name: 'auto-hmr-debug',
       apply: 'serve',
@@ -646,31 +609,96 @@ export default defineConfig({
       }
     },
 
+    // Performance tracing (development profiling)
+    performanceTracingPlugin,
+
+    // Request logging (detailed HTTP activity)
+    requestLoggerPlugin,
+
+    // Rebuild observability (file change tracking)
+    rebuildObservabilityPlugin,
+
+    // File processing tracker (module resolution chain)
+    fileProcessingTracker,
+
+    // Error interception (full stack traces)
+    errorInterceptionPlugin,
+
+    // Viewer pre-compilation warmup
+    viewerWarmupPlugin,
+
+    // URL rewrite middleware (SIMPLIFIED: viewer index.html handled by host shell)
     {
-      name: 'html-transformer',
-      apply: 'serve',
+      ...urlRewritePlugin,
       configureServer(server) {
-        // Minimal: transform .html files to inject HMR client
-        server.middlewares.use(async (req, res, next) => {
-          if (req.url?.endsWith('.html') && req.method === 'GET') {
-            try {
-              const filePath = path.join(__dirname, req.url)
-              if (fs.existsSync(filePath)) {
-                const html = fs.readFileSync(filePath, 'utf-8')
-                const transformed = await server.transformIndexHtml(req.url, html)
-                res.setHeader('Content-Type', 'text/html; charset=utf-8')
-                res.end(transformed)
-                return
+        console.error(`[url-rewrite] MIDDLEWARE INITIALIZED`)
+        console.error(`[url-rewrite] __dirname: "${__dirname}"`)
+
+        // Debug middleware: Capture headers for artifact paths
+        server.middlewares.use((req, res, next) => {
+          if (req.url.includes('/canonical') || req.url.includes('/sandbox') || req.url.includes('/runtime')) {
+            console.error(`[DEBUG-HEADERS] Request URL: ${req.url}`)
+            console.error(`[DEBUG-HEADERS] Host: ${req.headers.host}`)
+            console.error(`[DEBUG-HEADERS] X-Forwarded-Host: ${req.headers['x-forwarded-host'] || 'NOT SET'}`)
+            console.error(`[DEBUG-HEADERS] X-Forwarded-Proto: ${req.headers['x-forwarded-proto'] || 'NOT SET'}`)
+          }
+
+          // Intercept response to catch 403
+          const originalEnd = res.end
+          res.end = function(chunk, encoding, callback) {
+            if (req.url.includes('/canonical') || req.url.includes('/sandbox') || req.url.includes('/runtime')) {
+              if (res.statusCode === 403) {
+                console.error(`[DEBUG-403] 403 DETECTED for ${req.url}`)
               }
-            } catch (err) {
-              console.error(`[html-transformer] Error: ${err.message}`)
+            }
+            return originalEnd.call(this, chunk, encoding, callback)
+          }
+
+          next()
+        })
+
+        server.middlewares.use((req, res, next) => {
+          const url = req.url || '/'
+
+          // CRITICAL: Allow WebSocket upgrades to pass through without rewrite
+          if (req.headers.upgrade === 'websocket' || req.headers.connection?.includes('Upgrade')) {
+            console.error(`[url-rewrite] WebSocket upgrade detected, passing through: ${url}`)
+            return next()
+          }
+
+          // Log artifact paths
+          if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime') || url.includes('/artifacts')) {
+            console.error(`[url-rewrite] ARTIFACT PATH: ${url}`)
+          }
+
+          // NOTE: Viewer index.html serving moved to host shell
+          // No more need to intercept /viewers/:viewerName routes
+          // Requests now come directly as /canonical/viewers/{viewerName}/index.html
+
+          // Fallback: Handle root path (/)
+          if (url === '/' || url === '') {
+            console.error(`[url-rewrite] ROOT REQUEST: Serving fallback`)
+            const indexPath = path.join(__dirname, 'index.html')
+
+            if (fs.existsSync(indexPath)) {
+              try {
+                const html = fs.readFileSync(indexPath, 'utf-8')
+                res.setHeader('Content-Type', 'text/html; charset=utf-8')
+                res.end(html)
+                return
+              } catch (err) {
+                console.error(`[url-rewrite] Error reading index.html: ${err.message}`)
+              }
             }
           }
+
           next()
         })
       },
     },
 
+    // Artifacts path rewriting
+    artifactsRewritePlugin,
 
     vue({
       include: [/\.vue$/],
