@@ -751,7 +751,7 @@ export default defineConfig({
       console.error(`   Full URL: ${hmrConfig.protocol}://${hmrConfig.host}:${hmrConfig.port}/__vite_hmr`)
       console.error(`${'═'.repeat(100)}\n`)
       return hmrConfig
-    })()
+    })(),
 
     // Serve files from artifacts root
     fs: {
