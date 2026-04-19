@@ -726,14 +726,13 @@ export default defineConfig({
     ],
 
     // HMR (Hot Module Replacement) configuration
-    // Simplified: Remove path customization that breaks WebSocket upgrade.
-    // Vite listens on root (/) for HMR; Traefik filters by Upgrade header.
-    // This avoids 404 when Vite doesn't recognize custom HMR paths in WebSocket.
+    // Connect client to external FQDN but use Vite's default WebSocket path (__vite_hmr)
+    // where the server actually listens for HMR connections.
     hmr: process.env.VITE_HMR_HOST ? {
       host: process.env.VITE_HMR_HOST,
       port: parseInt(process.env.VITE_HMR_PORT || '443'),
       protocol: process.env.VITE_HMR_PROTOCOL || 'wss',
-      path: '/',  // Vite only supports WebSocket on root path natively
+      // path defaults to /__vite_hmr when omitted - this is where Vite's WS server listens
       ...(process.env.VITE_HMR_CLIENT_PORT && {
         clientPort: parseInt(process.env.VITE_HMR_CLIENT_PORT),
       }),
