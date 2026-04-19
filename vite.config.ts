@@ -728,15 +728,30 @@ export default defineConfig({
     // HMR (Hot Module Replacement) configuration
     // Connect client to external FQDN but use Vite's default WebSocket path (__vite_hmr)
     // where the server actually listens for HMR connections.
-    hmr: process.env.VITE_HMR_HOST ? {
-      host: process.env.VITE_HMR_HOST,
-      port: parseInt(process.env.VITE_HMR_PORT || '443'),
-      protocol: process.env.VITE_HMR_PROTOCOL || 'wss',
-      // path defaults to /__vite_hmr when omitted - this is where Vite's WS server listens
-      ...(process.env.VITE_HMR_CLIENT_PORT && {
-        clientPort: parseInt(process.env.VITE_HMR_CLIENT_PORT),
-      }),
-    } : true,  // Use auto if HMR_HOST not set
+    hmr: (() => {
+      if (!process.env.VITE_HMR_HOST) {
+        console.error(`\n⚠️  [HMR CONFIG] VITE_HMR_HOST not set - using auto-detection`)
+        return true
+      }
+      const hmrConfig = {
+        host: process.env.VITE_HMR_HOST,
+        port: parseInt(process.env.VITE_HMR_PORT || '443'),
+        protocol: process.env.VITE_HMR_PROTOCOL || 'wss',
+        // path defaults to /__vite_hmr when omitted - this is where Vite's WS server listens
+        ...(process.env.VITE_HMR_CLIENT_PORT && {
+          clientPort: parseInt(process.env.VITE_HMR_CLIENT_PORT),
+        }),
+      }
+      console.error(`\n${'═'.repeat(100)}`)
+      console.error(`🔥 [HMR CONFIG] Vite HMR will use:`)
+      console.error(`   Host: ${hmrConfig.host}`)
+      console.error(`   Port: ${hmrConfig.port}`)
+      console.error(`   Protocol: ${hmrConfig.protocol}`)
+      console.error(`   Path: /__vite_hmr (default - server listens here)`)
+      console.error(`   Full URL: ${hmrConfig.protocol}://${hmrConfig.host}:${hmrConfig.port}/__vite_hmr`)
+      console.error(`${'═'.repeat(100)}\n`)
+      return hmrConfig
+    })()
 
     // Serve files from artifacts root
     fs: {
