@@ -631,6 +631,22 @@ export default defineConfig({
     // - artifactsRewritePlugin
 
     {
+      name: 'auto-hmr-debug',
+      apply: 'serve',
+      transformIndexHtml(html) {
+        return html.replace(
+          '<head>',
+          `<head>
+      <script>
+        // Auto-enable HMR debug logging for troubleshooting
+        localStorage.setItem('debug', 'vite:hmr');
+        console.log('%c[VITE-HMR] Debug mode activated automatically', 'color: #00cc66; font-weight: bold; font-size: 12px;');
+      </script>`
+        )
+      }
+    },
+
+    {
       name: 'html-transformer',
       apply: 'serve',
       configureServer(server) {
@@ -655,33 +671,6 @@ export default defineConfig({
       },
     },
 
-    {
-      name: 'hmr-websocket-debug',
-      apply: 'serve',
-      configureServer(server) {
-        console.error(`\n${'═'.repeat(100)}`)
-        console.error(`[HMR MODE] WebSocket upgrade listener active (non-blocking)`)
-        console.error(`${'═'.repeat(100)}\n`)
-
-        // Listen to HTTP Upgrade events (WebSocket handshake) instead of middlewares
-        // This doesn't interfere with Vite's internal WebSocket handler
-        server.httpServer?.on('upgrade', (req, socket, head) => {
-          if (req.url?.includes('/__vite_hmr')) {
-            const timestamp = getTimestamp()
-            console.error(`\n${'╔'.repeat(100)}`)
-            console.error(`║ [${timestamp}] 🔥 HMR WEBSOCKET UPGRADE RECEIVED`)
-            console.error(`║ Path: ${req.url}`)
-            console.error(`║ Method: ${req.method}`)
-            console.error(`║ Upgrade: ${req.headers.upgrade || 'none'}`)
-            console.error(`║ Connection: ${req.headers.connection || 'none'}`)
-            console.error(`║ Host: ${req.headers.host}`)
-            console.error(`║ Sec-WebSocket-Key: ${req.headers['sec-websocket-key']?.substring(0, 10)}...`)
-            console.error(`║ NOTE: Vite's native HMR handler will now process this upgrade`)
-            console.error(`${'╚'.repeat(100)}\n`)
-          }
-        })
-      },
-    },
 
     vue({
       include: [/\.vue$/],

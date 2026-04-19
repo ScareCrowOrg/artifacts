@@ -631,6 +631,22 @@ export default defineConfig({
     // - artifactsRewritePlugin
 
     {
+      name: 'auto-hmr-debug',
+      apply: 'serve',
+      transformIndexHtml(html) {
+        return html.replace(
+          '<head>',
+          `<head>
+      <script>
+        // Auto-enable HMR debug logging for troubleshooting
+        localStorage.setItem('debug', 'vite:hmr');
+        console.log('%c[VITE-HMR] Debug mode activated automatically', 'color: #00cc66; font-weight: bold; font-size: 12px;');
+      </script>`
+        )
+      }
+    },
+
+    {
       name: 'html-transformer',
       apply: 'serve',
       configureServer(server) {
