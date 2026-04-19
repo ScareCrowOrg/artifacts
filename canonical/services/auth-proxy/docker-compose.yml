@@ -54,11 +54,15 @@ services:
     labels:
       # ── Traefik service discovery ─────────────────────────────────────────
       - "traefik.enable=true"
-      # Route: all paths go to auth-proxy (universal ingress gatekeeper)
+      # HTTP route: all paths go to auth-proxy (universal ingress gatekeeper)
       - "traefik.http.routers.auth-proxy.rule=PathPrefix(`/`)"
       - "traefik.http.routers.auth-proxy.entrypoints=http"
-      # Highest priority – auth-proxy must be matched before vite catch-all
+      # HTTPS route: same rule for encrypted traffic (WebSocket, etc)
+      - "traefik.http.routers.auth-proxy-https.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.auth-proxy-https.entrypoints=websecure"
+      # Highest priority – auth-proxy must be matched before catch-all
       - "traefik.http.routers.auth-proxy.priority=100"
+      - "traefik.http.routers.auth-proxy-https.priority=100"
       - "traefik.http.services.auth-proxy.loadbalancer.server.port=5055"
 
     networks:
