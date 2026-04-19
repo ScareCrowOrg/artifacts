@@ -155,6 +155,12 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                         }
                         handshake.push_str("\r\n");
 
+                        // Log the exact handshake being sent to upstream for debugging
+                        info!(
+                            "[WS] Sending WebSocket upgrade to upstream:\n{}\n[END HANDSHAKE]",
+                            handshake.trim()
+                        );
+
                         if let Err(e) = upstream_stream.write_all(handshake.as_bytes()).await {
                             error!(
                                 "[WS] Failed to send upgrade request to upstream {}: {}",
@@ -166,13 +172,16 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                         // Read and validate upstream's 101 response before tunneling.
                         match read_http_status(&mut upstream_stream).await {
                             Ok(101) => {
-                                info!("[WS] Upstream responded 101, starting tunnel");
+                                info!("[WS] ✅ Upstream responded with HTTP 101 Switching Protocols → tunnel established");
                             }
                             Ok(status) => {
                                 error!(
-                                    "[WS] Upstream returned status {} (expected 101), aborting tunnel",
+                                    "[WS] ❌ Upstream returned HTTP {} (expected 101), aborting tunnel. \
+                                    This usually means upstream HMR handler not found or token validation failed.",
                                     status
                                 );
+                                error!("[WS] Handshake sent: GET {} HTTP/1.1", full_path);
+                                error!("[WS] Host header: {}", original_host);
                                 return;
                             }
                             Err(e) => {
