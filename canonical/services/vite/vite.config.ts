@@ -489,8 +489,7 @@ console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-18T17:00 - HMR LOGGIN
 export default defineConfig({
   root: '/app/artifacts',
   plugins: [
-    // MINIMAL TEST: Only essential plugins, disabled complex middleware
-    // performanceTracingPlugin,  // DISABLED: Complex tracing
+    performanceTracingPlugin,  // Minimal tracer - needed for proper middleware initialization
     // requestLoggerPlugin,       // DISABLED: Too much logging noise
     // rebuildObservabilityPlugin, // DISABLED: Not needed for HMR test
     // fileProcessingTracker,     // DISABLED: Complex tracking
