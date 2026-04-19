@@ -506,6 +506,15 @@ const urlRewritePlugin = {
       server.middlewares.use(async (req, res, next) => {
         const url = req.url || '/'
 
+        // ⚡ ULTRA-LOG: Force logging on every request to debug middleware chain
+        if (url === '/' || url.includes('/viewers/')) {
+          console.error(`\n${'='.repeat(100)}`)
+          console.error(`⚡ [MIDDLEWARE-CHAIN] URL: ${url}`)
+          console.error(`⚡ [MIDDLEWARE-CHAIN] Method: ${req.method}`)
+          console.error(`⚡ [MIDDLEWARE-CHAIN] Headers.upgrade: ${req.headers.upgrade || 'undefined'}`)
+          console.error(`${'='.repeat(100)}\n`)
+        }
+
         // CRITICAL: Allow WebSocket upgrades to pass through without rewrite
         // HMR client needs raw WebSocket, not HTML redirects
         if (req.headers.upgrade === 'websocket' || req.headers.connection?.includes('Upgrade')) {
@@ -548,31 +557,38 @@ const urlRewritePlugin = {
           const indexPath = `/canonical/viewers/${viewerName}/index.html`
           const fullPath = path.join(__dirname, indexPath)
 
-          console.error(`[url-rewrite] ✅ MATCHED viewer: ${viewerName}`)
-          console.error(`[url-rewrite] Reading from: ${fullPath}`)
+          console.error(`\n${'█'.repeat(100)}`)
+          console.error(`█ [VIEWER-HANDLER] MATCHED: ${viewerName}`)
+          console.error(`█ [VIEWER-HANDLER] Reading from: ${fullPath}`)
+          console.error(`${'█'.repeat(100)}\n`)
 
           try {
             // Check if file exists first
             if (!fs.existsSync(fullPath)) {
-              console.error(`[url-rewrite] ❌ FILE NOT FOUND: ${fullPath}`)
+              console.error(`█ [VIEWER-HANDLER] FILE NOT FOUND: ${fullPath}`)
               return next()
             }
 
             // Read and serve index.html
             const html = fs.readFileSync(fullPath, 'utf-8')
-            console.error(`[url-rewrite] ✅ FILE READ: ${fullPath.length} bytes`)
-            console.error(`[url-rewrite] ✅ SERVING index.html for ${viewerName}`)
+            console.error(`█ [VIEWER-HANDLER] FILE READ: ${html.length} bytes`)
+            console.error(`█ [VIEWER-HANDLER] About to call transformIndexHtml...`)
 
             // Transform HTML through Vite pipeline to inject HMR client
             try {
+              console.error(`█ [VIEWER-HANDLER] Calling server.transformIndexHtml(${req.url}, html)`)
               const transformedHtml = await server.transformIndexHtml(req.url, html)
-              console.error(`[url-rewrite] ✅ transformIndexHtml succeeded for ${viewerName}`)
+              console.error(`█ [VIEWER-HANDLER] ✅ transformIndexHtml SUCCEEDED`)
+              console.error(`█ [VIEWER-HANDLER] Transformed HTML length: ${transformedHtml.length} bytes`)
               res.setHeader('Content-Type', 'text/html; charset=utf-8')
               res.end(transformedHtml)
             } catch (transformErr) {
-              console.error(`[url-rewrite] ❌ transformIndexHtml FAILED for ${viewerName}`)
-              console.error(`[url-rewrite] Error: ${transformErr}`)
-              console.error(`[url-rewrite] Stack: ${transformErr instanceof Error ? transformErr.stack : 'N/A'}`)
+              console.error(`\n${'❌'.repeat(50)}`)
+              console.error(`❌ [VIEWER-HANDLER] transformIndexHtml FAILED for ${viewerName}`)
+              console.error(`❌ [VIEWER-HANDLER] Error type: ${transformErr?.constructor?.name}`)
+              console.error(`❌ [VIEWER-HANDLER] Error message: ${transformErr}`)
+              console.error(`❌ [VIEWER-HANDLER] Stack: ${transformErr instanceof Error ? transformErr.stack : 'N/A'}`)
+              console.error(`${'❌'.repeat(50)}\n`)
               res.setHeader('Content-Type', 'text/html; charset=utf-8')
               res.end(html)  // Fallback: send raw HTML without transformation
             }
@@ -605,26 +621,32 @@ const urlRewritePlugin = {
 
         // Fallback: Handle root path (/)
         if (url === '/' || url === '') {
-          console.error(`[url-rewrite] ROOT REQUEST: Serving fallback`)
+          console.error(`\n${'█'.repeat(100)}`)
+          console.error(`█ [ROOT-HANDLER] ROOT REQUEST: ${url}`)
+          console.error(`${'█'.repeat(100)}\n`)
 
           // Try to serve index.html from artifacts root
           const indexPath = path.join(__dirname, 'index.html')
 
           if (fs.existsSync(indexPath)) {
-            console.error(`[url-rewrite] ROOT: Found index.html at ${indexPath}`)
+            console.error(`█ [ROOT-HANDLER] Found index.html at ${indexPath}`)
             try {
               const html = fs.readFileSync(indexPath, 'utf-8')
+              console.error(`█ [ROOT-HANDLER] Read ${html.length} bytes`)
 
               // Transform HTML through Vite pipeline to inject HMR client
               try {
+                console.error(`█ [ROOT-HANDLER] Calling transformIndexHtml for root...`)
                 const transformedHtml = await server.transformIndexHtml(req.url, html)
-                console.error(`[url-rewrite] ✅ transformIndexHtml succeeded for root /`)
+                console.error(`█ [ROOT-HANDLER] ✅ transformIndexHtml SUCCEEDED`)
                 res.setHeader('Content-Type', 'text/html; charset=utf-8')
                 res.end(transformedHtml)
               } catch (transformErr) {
-                console.error(`[url-rewrite] ❌ transformIndexHtml FAILED for root /`)
-                console.error(`[url-rewrite] Error: ${transformErr}`)
-                console.error(`[url-rewrite] Stack: ${transformErr instanceof Error ? transformErr.stack : 'N/A'}`)
+                console.error(`\n${'❌'.repeat(50)}`)
+                console.error(`❌ [ROOT-HANDLER] transformIndexHtml FAILED`)
+                console.error(`❌ [ROOT-HANDLER] Error: ${transformErr}`)
+                console.error(`❌ [ROOT-HANDLER] Stack: ${transformErr instanceof Error ? transformErr.stack : 'N/A'}`)
+                console.error(`${'❌'.repeat(50)}\n`)
                 res.setHeader('Content-Type', 'text/html; charset=utf-8')
                 res.end(html)  // Fallback: send raw HTML without transformation
               }
