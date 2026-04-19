@@ -5,66 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HMR Test - Minimal</title>
   <style>
-    body {
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
       font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100vh;
-      margin: 0;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-    .container {
-      background: white;
-      padding: 40px;
-      border-radius: 10px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-      text-align: center;
-      max-width: 500px;
-    }
-    h1 {
-      color: #333;
-      margin: 0 0 10px 0;
-    }
-    p {
-      color: #666;
-      margin: 0;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    .status {
-      margin-top: 20px;
-      padding: 10px;
-      background: #f0f0f0;
-      border-radius: 5px;
-      font-family: monospace;
-      font-size: 12px;
-      color: #333;
-      text-align: left;
-    }
-    .error {
-      color: #d32f2f;
-      background: #ffebee;
-      border-left: 4px solid #d32f2f;
-    }
-    .success {
-      color: #388e3c;
-      background: #e8f5e9;
-      border-left: 4px solid #388e3c;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🔥 HMR Test Viewer</h1>
-    <p>Minimal viewer with session validation</p>
-    <p style="margin-top: 20px; color: #999; font-size: 12px;">Waiting for handshake...</p>
-    <div class="status" id="status">
-      <p id="status-text">Status: Initializing...</p>
-      <p id="status-detail"></p>
-    </div>
-  </div>
-
+  <div id="app"></div>
   <script type="module" src="./main.ts"></script>
 </body>
 </html>
