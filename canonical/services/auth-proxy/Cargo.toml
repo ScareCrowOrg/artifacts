@@ -42,3 +42,9 @@ tokio-util = { version = "0.7", features = ["io"] }
 hyper = { version = "1", features = ["http1"] }
 # hyper-util: TokioIo wrapper to bridge hyper::upgrade::Upgraded ↔ tokio AsyncRead/AsyncWrite
 hyper-util = { version = "0.1", features = ["tokio"] }
+
+# RFC 6455 WebSocket handshake validation
+# sha1: Calculate Sec-WebSocket-Accept header (required by RFC 6455 § 4.2.2)
+sha1 = "0.10"
+# base64: Encode SHA-1 digest for Sec-WebSocket-Accept header
+base64 = "0.22"

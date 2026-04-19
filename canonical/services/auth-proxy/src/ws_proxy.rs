@@ -19,11 +19,31 @@ use axum::{
     http::{header, HeaderValue, StatusCode},
     response::Response,
 };
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 use tracing::{error, info, warn};
+use sha1::{Sha1, Digest};
+use base64::Engine;
 
 /// Maximum byte size accepted for upstream HTTP response headers during upgrade.
 const MAX_HTTP_HEADER_SIZE: usize = 65_536;
+
+/// RFC 6455 § 1.3: GUID for Sec-WebSocket-Accept calculation
+const WEBSOCKET_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+/// Calculate the Sec-WebSocket-Accept header value as required by RFC 6455.
+///
+/// Formula: base64(SHA-1(Sec-WebSocket-Key + GUID))
+///
+/// This proves to the browser that the server understands WebSocket and
+/// validates the handshake. Without this header, the browser rejects the
+/// HTTP 101 response and closes the connection.
+fn calculate_websocket_accept(sec_websocket_key: &str) -> String {
+    let mut hasher = Sha1::new();
+    hasher.update(sec_websocket_key.as_bytes());
+    hasher.update(WEBSOCKET_GUID.as_bytes());
+    let digest = hasher.finalize();
+    base64::engine::general_purpose::STANDARD.encode(&digest[..])
+}
 
 /// Detect whether an incoming HTTP request is a WebSocket upgrade request.
 ///
@@ -139,6 +159,10 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
         if full_path.contains('?') { "PRESERVED ✅" } else { "NONE" }
     );
 
+    // Clone values needed after spawn for header calculation
+    let ws_key_for_spawn = ws_key.clone();
+    let ws_protocol_for_spawn = ws_protocol.clone();
+
     // Spawn the tunnel task *before* returning 101 so that hyper can
     // start draining the upgraded connection as soon as the response is sent.
     tokio::spawn(async move {
@@ -166,10 +190,10 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                              Sec-WebSocket-Version: {version}\r\n",
                             full_path = full_path,
                             host = original_host,
-                            key = ws_key,
+                            key = ws_key_for_spawn,
                             version = ws_version,
                         );
-                        if let Some(ref proto) = ws_protocol {
+                        if let Some(ref proto) = ws_protocol_for_spawn {
                             handshake.push_str(&format!("Sec-WebSocket-Protocol: {proto}\r\n"));
                         }
                         if let Some(ref orig) = origin {
@@ -210,7 +234,7 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                                     }
                                 }
 
-                                if !has_protocol && ws_protocol.is_some() {
+                                if !has_protocol && ws_protocol_for_spawn.is_some() {
                                     warn!("[WS-DEBUG] ⚠️ Client sent Sec-WebSocket-Protocol but Vite did NOT echo it back!");
                                     warn!("[WS-DEBUG] This may cause the browser to reject the connection (RFC 6455)");
                                 }
@@ -280,10 +304,14 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
     });
 
     // Return HTTP 101 Switching Protocols immediately.
-    // The tunneling task above will receive the upgraded connection once this
-    // response has been flushed to the browser by hyper.
+    // RFC 6455 § 4.2.2 requires these headers for browser validation:
+    // - Sec-WebSocket-Accept: proves server understands WebSocket (calculated from Sec-WebSocket-Key)
+    // - Sec-WebSocket-Protocol: echo back if client requested a sub-protocol
+    // Without these, browser rejects the 101 response as invalid.
+
     let mut response = Response::new(Body::empty());
     *response.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
+
     response
         .headers_mut()
         .insert(header::UPGRADE, HeaderValue::from_static("websocket"));
@@ -291,6 +319,26 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
         header::CONNECTION,
         HeaderValue::from_static("upgrade"),
     );
+
+    // ✅ CRITICAL: Calculate and add Sec-WebSocket-Accept header
+    // RFC 6455 § 4.2.2: Server MUST return SHA-1(key + GUID) encoded in base64
+    // This proves to the browser that the server correctly implements WebSocket protocol
+    let accept_value = calculate_websocket_accept(&ws_key);
+    if let Ok(accept_header) = HeaderValue::from_str(&accept_value) {
+        response.headers_mut().insert("sec-websocket-accept", accept_header);
+        info!("[WS] ✅ Sec-WebSocket-Accept header added: {}", accept_value);
+    }
+
+    // ✅ Add Sec-WebSocket-Protocol if client requested one
+    // RFC 6455 § 4.2.2: Server MUST echo back the sub-protocol if it accepts it
+    if let Some(ref proto) = ws_protocol {
+        if let Ok(proto_value) = HeaderValue::from_str(proto) {
+            response.headers_mut().insert("sec-websocket-protocol", proto_value);
+            info!("[WS] ✅ Sec-WebSocket-Protocol header added: {}", proto);
+        }
+    }
+
+    info!("[WS] ✅ HTTP 101 response prepared with RFC 6455 required headers");
     response
 }
 
