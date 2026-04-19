@@ -50,12 +50,12 @@ pub fn is_websocket_upgrade_request(req: &Request) -> bool {
 /// - HTTP 502 Bad Gateway — cannot connect to upstream TCP address.
 pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Response {
     let path = req.uri().path().to_owned();
-    let query = req
+    let path_and_query = req
         .uri()
-        .query()
-        .map(|q| format!("?{q}"))
-        .unwrap_or_default();
-    let full_path = format!("{path}{query}");
+        .path_and_query()
+        .map(|pq| pq.as_str().to_owned())
+        .unwrap_or_else(|| path.clone());
+    let full_path = path_and_query.clone();
 
     info!("[WS] Upgrade request detected for path={}", full_path);
 

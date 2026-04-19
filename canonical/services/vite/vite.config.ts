@@ -664,8 +664,7 @@ export default defineConfig({
         console.error(`${'═'.repeat(100)}\n`)
 
         server.middlewares.use((req, res, next) => {
-          const isHmrRequest = (req.headers.upgrade === 'websocket' && req.url === '/__vite_hmr') ||
-                                req.url.includes('/__vite_hmr')
+          const isHmrRequest = (req.headers.upgrade === 'websocket' && req.url?.startsWith('/__vite_hmr'))
 
           if (isHmrRequest) {
             const timestamp = getTimestamp()
@@ -738,12 +737,12 @@ export default defineConfig({
     ],
 
     // HMR (Hot Module Replacement) configuration
-    // Let Vite handle it natively - don't override path
     hmr: process.env.VITE_HMR_HOST ? {
       host: process.env.VITE_HMR_HOST,
       port: parseInt(process.env.VITE_HMR_PORT || '443'),
       protocol: process.env.VITE_HMR_PROTOCOL || 'wss',
-    } : true,  // Use auto if HMR_HOST not set
+      path: '/__vite_hmr',
+    } : true,
 
     // Serve files from artifacts root
     fs: {
