@@ -35,6 +35,9 @@ services:
       # PYTHONPATH enables entrypoint.py to import canonical.shared.services.base_service
       - PYTHONPATH=/app/artifacts
 
+      # Debug logging for Vite HMR troubleshooting
+      - DEBUG=vite:hmr
+
       # Vite HMR (Hot Module Replacement)
       - VITE_HMR_HOST=${VITE_HMR_HOST:-localhost}
       - VITE_HMR_PORT=${VITE_HMR_PORT:-5052}

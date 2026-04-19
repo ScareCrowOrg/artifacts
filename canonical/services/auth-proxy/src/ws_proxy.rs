@@ -150,7 +150,11 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
 
                 match TcpStream::connect(&upstream_addr).await {
                     Ok(mut upstream_stream) => {
-                        info!("[WS] Tunneling to upstream: url={}", upstream_addr);
+                        if let Some(peer_addr) = upstream_stream.peer_addr().ok() {
+                            info!("[WS] ✅ TCP CONNECTED to upstream: {} (resolved IP: {})", upstream_addr, peer_addr);
+                        } else {
+                            info!("[WS] Tunneling to upstream: url={}", upstream_addr);
+                        }
 
                         // Build the HTTP/1.1 WebSocket upgrade request for upstream.
                         let mut handshake = format!(
@@ -188,18 +192,37 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                             return;
                         }
 
-                        // Read and validate upstream's 101 response before tunneling.
-                        match read_http_status(&mut upstream_stream).await {
-                            Ok(101) => {
+                        // Read and validate upstream's 101 response (with full headers for debugging).
+                        match read_http_response(&mut upstream_stream).await {
+                            Ok((101, headers_text)) => {
                                 info!("[WS] 🎉 VITE ACCEPTED UPGRADE!");
                                 info!("[WS] ✅ HTTP 101 Switching Protocols received");
+
+                                // Log response headers for diagnostic purposes
+                                info!("[WS-DEBUG] Vite Response Headers:\n{}", headers_text);
+
+                                // Check for sub-protocol echo (RFC 6455 requirement)
+                                let mut has_protocol = false;
+                                for line in headers_text.lines() {
+                                    if line.to_lowercase().starts_with("sec-websocket-protocol:") {
+                                        has_protocol = true;
+                                        info!("[WS-DEBUG] ✅ Sec-WebSocket-Protocol echo found: {}", line);
+                                    }
+                                }
+
+                                if !has_protocol && ws_protocol.is_some() {
+                                    warn!("[WS-DEBUG] ⚠️ Client sent Sec-WebSocket-Protocol but Vite did NOT echo it back!");
+                                    warn!("[WS-DEBUG] This may cause the browser to reject the connection (RFC 6455)");
+                                }
+
                                 info!("[WS] 🌐 WebSocket tunnel established with Vite");
                             }
-                            Ok(status) => {
+                            Ok((status, headers_text)) => {
                                 error!(
                                     "[WS] 🚨 VITE REJECTED UPGRADE - Got HTTP {} instead of 101",
                                     status
                                 );
+                                error!("[WS] Response headers from Vite:\n{}", headers_text);
                                 error!("[WS] This means:");
                                 error!("[WS]   - Token validation failed? Check token format");
                                 error!("[WS]   - Vite HMR handler not found? Check path: {}", full_path);
@@ -230,6 +253,16 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                                     "[WS] Tunnel closed: {} bytes to upstream, {} bytes from upstream",
                                     to_upstream, from_upstream
                                 );
+
+                                // If Vite sent a small amount of data (< 30 bytes), it was likely a close frame.
+                                // Log this for diagnosis of unexpected closures.
+                                if from_upstream > 0 && from_upstream < 30 {
+                                    warn!("[WS-DEBUG] ⚠️ Vite sent small close frame ({} bytes - likely WebSocket close frame)", from_upstream);
+                                    warn!("[WS-DEBUG] This typically indicates:");
+                                    warn!("[WS-DEBUG]   - Protocol negotiation failed (missing Sec-WebSocket-Protocol echo?)");
+                                    warn!("[WS-DEBUG]   - Security policy rejection (Host, Origin, or other validation)");
+                                    warn!("[WS-DEBUG]   - WebSocket handshake error (incomplete upgrade)");
+                                }
                             }
                             Err(e) => {
                                 info!("[WS] Tunnel closed: reason={}", e);
@@ -285,13 +318,13 @@ fn extract_tcp_addr(url: &str) -> String {
 }
 
 /// Read bytes from a TCP stream until the end-of-headers sentinel (`\r\n\r\n`)
-/// and return the HTTP status code from the first response line.
+/// and return the HTTP status code and full headers text.
 ///
 /// This is used to confirm that the upstream responded with 101 before starting
-/// the bidirectional tunnel.
-async fn read_http_status(
+/// the bidirectional tunnel. Returns both status and headers for diagnostic logging.
+async fn read_http_response(
     stream: &mut TcpStream,
-) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(u16, String), Box<dyn std::error::Error + Send + Sync>> {
     use tokio::io::AsyncReadExt;
 
     let mut response_buf: Vec<u8> = Vec::with_capacity(256);
@@ -323,7 +356,14 @@ async fn read_http_status(
         .ok_or("HTTP response missing status code")?;
     let status = status_str.parse::<u16>()?;
 
-    Ok(status)
+    Ok((status, header_text.to_owned()))
+}
+
+/// Backward compatibility wrapper for code that only needs status.
+async fn read_http_status(
+    stream: &mut TcpStream,
+) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
+    read_http_response(stream).await.map(|(status, _)| status)
 }
 
 /// Build a minimal JSON error response for WebSocket upgrade failures.
