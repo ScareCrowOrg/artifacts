@@ -103,6 +103,11 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_owned();
+    let origin = req
+        .headers()
+        .get("origin")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
 
     // Extract the OnUpgrade future that hyper inserts when it receives an upgrade request.
     // This MUST be extracted before we construct and return the 101 response; the future
@@ -162,6 +167,9 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                         );
                         if let Some(ref proto) = ws_protocol {
                             handshake.push_str(&format!("Sec-WebSocket-Protocol: {proto}\r\n"));
+                        }
+                        if let Some(ref orig) = origin {
+                            handshake.push_str(&format!("Origin: {orig}\r\n"));
                         }
                         handshake.push_str("\r\n");
 

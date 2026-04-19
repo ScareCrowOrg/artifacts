@@ -612,7 +612,7 @@ const urlRewritePlugin = {
  * - Allow TypeScript features (generics, decorators, etc)
  */
 
-console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-18T16:50 - ALL MIDDLEWARES DISABLED FOR TESTING\n')
+console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-18T16:50 - CUSTOM MIDDLEWARES DISABLED (NATIVE HMR HANDLER ACTIVE)\n')
 
 export default defineConfig({
   root: '/app/artifacts',
