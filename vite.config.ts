@@ -432,211 +432,37 @@ const artifactsRewritePlugin = {
   },
 }
 
-// Plugin to handle URL rewriting for /artifacts/* and /viewers/* requests
-// - /artifacts/* URLs → /* for file serving
-// - /viewers/:viewerName → serve index.html
+// Plugin with minimal middleware - ONLY HMR logging
+// All complex viewer/artifact rewriting disabled for HMR isolation test
 const urlRewritePlugin = {
   name: 'url-rewrite',
   apply: 'serve',
   configureServer(server) {
-    console.error(`[url-rewrite] MIDDLEWARE INITIALIZED`)
-    console.error(`[url-rewrite] __dirname: "${__dirname}"`)
+    console.error(`\n${'═'.repeat(100)}`)
+    console.error(`[MINIMAL MODE] HMR ISOLATION TEST - Complex middleware disabled`)
+    console.error(`[MINIMAL MODE] Only HMR logging middleware active`)
+    console.error(`${'═'.repeat(100)}\n`)
 
-      // Debug middleware: Capture headers for artifact paths
-      server.middlewares.use((req, res, next) => {
-        if (req.url.includes('/canonical') || req.url.includes('/sandbox') || req.url.includes('/runtime')) {
-          console.error(`[DEBUG-HEADERS] Request URL: ${req.url}`)
-          console.error(`[DEBUG-HEADERS] Host: ${req.headers.host}`)
-          console.error(`[DEBUG-HEADERS] X-Forwarded-Host: ${req.headers['x-forwarded-host'] || 'NOT SET'}`)
-          console.error(`[DEBUG-HEADERS] X-Forwarded-Proto: ${req.headers['x-forwarded-proto'] || 'NOT SET'}`)
-          console.error(`[DEBUG-HEADERS] Origin: ${req.headers.origin || 'NOT SET'}`)
-          console.error(`[DEBUG-HEADERS] Referer: ${req.headers.referer || 'NOT SET'}`)
-          console.error(`[DEBUG-HEADERS] All headers:`, req.headers)
-        }
+    // HMR WebSocket logging middleware - ONLY middleware in minimal mode
+    server.middlewares.use((req, res, next) => {
+      const isHmrRequest = (req.headers.upgrade === 'websocket' && req.url === '/__vite_hmr') ||
+                            req.url.includes('/__vite_hmr')
 
-        // Intercept response to catch 403 (using res.end which is always called)
-        const originalEnd = res.end
-        res.end = function(chunk, encoding, callback) {
-          if (req.url.includes('/canonical') || req.url.includes('/sandbox') || req.url.includes('/runtime')) {
-            console.error(`[DEBUG-403] Status: ${res.statusCode} for ${req.url}`)
-            if (res.statusCode === 403) {
-              console.error(`[DEBUG-403] 403 DETECTED!`)
-              console.error(`[DEBUG-403] Chunk type: ${typeof chunk}`)
-              if (chunk) {
-                console.error(`[DEBUG-403] Response body (first 500 chars):`, chunk.toString().slice(0, 500))
-              }
-            }
-          }
-          return originalEnd.call(this, chunk, encoding, callback)
-        }
-
-        next()
-      })
-
-      server.middlewares.use(async (req, res, next) => {
-        const url = req.url || '/'
-
-        // ⚡ ULTRA-LOG: Force logging on every request to debug middleware chain
-        if (url === '/' || url.includes('/viewers/')) {
-          console.error(`\n${'='.repeat(100)}`)
-          console.error(`⚡ [MIDDLEWARE-CHAIN] URL: ${url}`)
-          console.error(`⚡ [MIDDLEWARE-CHAIN] Method: ${req.method}`)
-          console.error(`⚡ [MIDDLEWARE-CHAIN] Headers.upgrade: ${req.headers.upgrade || 'undefined'}`)
-          console.error(`${'='.repeat(100)}\n`)
-        }
-
-        // CRITICAL: Allow WebSocket upgrades to pass through without rewrite
-        // HMR client needs raw WebSocket, not HTML redirects
-        if (req.headers.upgrade === 'websocket' || req.headers.connection?.includes('Upgrade')) {
-          console.error(`[url-rewrite] WebSocket upgrade detected, passing through: ${url}`)
-          return next()
-        }
-
-        // 403-HUNT: Debug logs to check URL path and root mismatch
-        if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime') || url.includes('/artifacts')) {
-          console.error(`[403-HUNT] URL Original: ${url}`)
-          console.error(`[403-HUNT] Root do Vite: ${server.config.root}`)
-          console.error(`[403-HUNT] __dirname: ${__dirname}`)
-          // Check for nested artifacts problem
-          if (url.includes('/artifacts/') && server.config.root.includes('/artifacts')) {
-            console.error(`[403-HUNT] ⚠️  POTENTIAL DOUBLE ARTIFACTS!`)
-            console.error(`[403-HUNT]   URL has /artifacts/, root also ends with /artifacts`)
-            console.error(`[403-HUNT]   This would resolve to: /app/artifacts/artifacts/...`)
-          }
-        }
-
-        // Log every request (especially artifact paths)
-        if (!url.includes('.js') && !url.includes('.css') && !url.includes('.json') && !url.includes('/@vite')) {
-          console.error(`[url-rewrite] REQUEST: ${url}`)
-          if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime')) {
-            console.error(`[url-rewrite] 📍 ARTIFACT PATH DETECTED: ${url}`)
-          }
-        }
-
-
-        // Match /viewers/:viewerName (with optional path segments and query string)
-        // Pattern: /viewers/{viewerName}[/arbitrary/path][?query]
-        // Examples: /viewers/dynamic-workspace, /viewers/dynamic-workspace/main.ts, /viewers/dynamic-workspace?q=1
-        const regex = /^\/viewers\/([^/?#]+)(\/.*)?(\?.*)?$/
-        console.error(`[url-rewrite] PATTERN: ${regex.source}`)
-        console.error(`[url-rewrite] TESTING: ${url} against pattern`)
-
-        const match = url.match(regex)
-        if (match) {
-          const viewerName = match[1]
-          const indexPath = `/canonical/viewers/${viewerName}/index.html`
-          const fullPath = path.join(__dirname, indexPath)
-
-          console.error(`\n${'█'.repeat(100)}`)
-          console.error(`█ [VIEWER-HANDLER] MATCHED: ${viewerName}`)
-          console.error(`█ [VIEWER-HANDLER] Reading from: ${fullPath}`)
-          console.error(`${'█'.repeat(100)}\n`)
-
-          try {
-            // Check if file exists first
-            if (!fs.existsSync(fullPath)) {
-              console.error(`█ [VIEWER-HANDLER] FILE NOT FOUND: ${fullPath}`)
-              return next()
-            }
-
-            // Read and serve index.html
-            const html = fs.readFileSync(fullPath, 'utf-8')
-            console.error(`█ [VIEWER-HANDLER] FILE READ: ${html.length} bytes`)
-            console.error(`█ [VIEWER-HANDLER] About to call transformIndexHtml...`)
-
-            // Transform HTML through Vite pipeline to inject HMR client
-            try {
-              console.error(`█ [VIEWER-HANDLER] Calling server.transformIndexHtml(${req.url}, html)`)
-              const transformedHtml = await server.transformIndexHtml(req.url, html)
-              console.error(`█ [VIEWER-HANDLER] ✅ transformIndexHtml SUCCEEDED`)
-              console.error(`█ [VIEWER-HANDLER] Transformed HTML length: ${transformedHtml.length} bytes`)
-              res.setHeader('Content-Type', 'text/html; charset=utf-8')
-              res.end(transformedHtml)
-            } catch (transformErr) {
-              console.error(`\n${'❌'.repeat(50)}`)
-              console.error(`❌ [VIEWER-HANDLER] transformIndexHtml FAILED for ${viewerName}`)
-              console.error(`❌ [VIEWER-HANDLER] Error type: ${transformErr?.constructor?.name}`)
-              console.error(`❌ [VIEWER-HANDLER] Error message: ${transformErr}`)
-              console.error(`❌ [VIEWER-HANDLER] Stack: ${transformErr instanceof Error ? transformErr.stack : 'N/A'}`)
-              console.error(`${'❌'.repeat(50)}\n`)
-              res.setHeader('Content-Type', 'text/html; charset=utf-8')
-              res.end(html)  // Fallback: send raw HTML without transformation
-            }
-            return
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err)
-            console.error(`[url-rewrite] ❌ ERROR: ${msg}`)
-            return next()
-          }
-        } else {
-          console.error(`[url-rewrite] NO MATCH: ${url}`)
-
-          // For artifact paths, show what Vite will try to access
-          if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime')) {
-            const attemptedPath = path.join(__dirname, url)
-            console.error(`[url-rewrite] 📍 ARTIFACT PATH DETAILS:`)
-            console.error(`[url-rewrite]   URL: ${url}`)
-            console.error(`[url-rewrite]   Vite will attempt: ${attemptedPath}`)
-            console.error(`[url-rewrite]   File exists: ${fs.existsSync(attemptedPath)}`)
-            console.error(`[url-rewrite]   fs.allow: ${JSON.stringify(server.config.server.fs.allow)}`)
-            console.error(`[url-rewrite]   fs.strict: ${server.config.server.fs.strict}`)
-          } else {
-            console.error(`[url-rewrite] → Passing to next middleware (will try to serve as static file)`)
-            console.error(`[url-rewrite] → fs.allow: ${JSON.stringify(server.config.server.fs.allow)}`)
-            console.error(`[url-rewrite] → fs.strict: ${server.config.server.fs.strict}`)
-          }
-
-          console.error(`[url-rewrite] ⚠️  If you see 403 after this, check if path is in fs.allow`)
-        }
-
-        // Fallback: Handle root path (/)
-        if (url === '/' || url === '') {
-          console.error(`\n${'█'.repeat(100)}`)
-          console.error(`█ [ROOT-HANDLER] ROOT REQUEST: ${url}`)
-          console.error(`${'█'.repeat(100)}\n`)
-
-          // Try to serve index.html from artifacts root
-          const indexPath = path.join(__dirname, 'index.html')
-
-          if (fs.existsSync(indexPath)) {
-            console.error(`█ [ROOT-HANDLER] Found index.html at ${indexPath}`)
-            try {
-              const html = fs.readFileSync(indexPath, 'utf-8')
-              console.error(`█ [ROOT-HANDLER] Read ${html.length} bytes`)
-
-              // Transform HTML through Vite pipeline to inject HMR client
-              try {
-                console.error(`█ [ROOT-HANDLER] Calling transformIndexHtml for root...`)
-                const transformedHtml = await server.transformIndexHtml(req.url, html)
-                console.error(`█ [ROOT-HANDLER] ✅ transformIndexHtml SUCCEEDED`)
-                res.setHeader('Content-Type', 'text/html; charset=utf-8')
-                res.end(transformedHtml)
-              } catch (transformErr) {
-                console.error(`\n${'❌'.repeat(50)}`)
-                console.error(`❌ [ROOT-HANDLER] transformIndexHtml FAILED`)
-                console.error(`❌ [ROOT-HANDLER] Error: ${transformErr}`)
-                console.error(`❌ [ROOT-HANDLER] Stack: ${transformErr instanceof Error ? transformErr.stack : 'N/A'}`)
-                console.error(`${'❌'.repeat(50)}\n`)
-                res.setHeader('Content-Type', 'text/html; charset=utf-8')
-                res.end(html)  // Fallback: send raw HTML without transformation
-              }
-              return
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err)
-              console.error(`[url-rewrite] ROOT: Error reading index.html: ${msg}`)
-            }
-          } else {
-            console.error(`[url-rewrite] ROOT: No index.html found, redirecting to viewer`)
-            // Fallback: redirect to first available viewer
-            res.writeHead(302, { Location: '/viewers/dynamic-workspace' })
-            res.end()
-            return
-          }
-        }
-
-        next()
-      })
-    },
+      if (isHmrRequest) {
+        const timestamp = getTimestamp()
+        console.error(`\n${'╔'.repeat(100)}`)
+        console.error(`║ [${timestamp}] 🔥 HMR WEBSOCKET REQUEST`)
+        console.error(`║ Path: ${req.url}`)
+        console.error(`║ Method: ${req.method}`)
+        console.error(`║ Upgrade: ${req.headers.upgrade || 'none'}`)
+        console.error(`║ Connection: ${req.headers.connection || 'none'}`)
+        console.error(`║ Host: ${req.headers.host}`)
+        console.error(`║ Origin: ${req.headers.origin || 'none'}`)
+        console.error(`${'╚'.repeat(100)}\n`)
+      }
+      next()
+    })
+  },
 }
 
 /**
@@ -658,20 +484,21 @@ const urlRewritePlugin = {
  * - Allow TypeScript features (generics, decorators, etc)
  */
 
-console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-18T16:50 - ALL MIDDLEWARES DISABLED FOR TESTING\n')
+console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-18T17:00 - HMR LOGGING MIDDLEWARE ENABLED\n')
 
 export default defineConfig({
   root: '/app/artifacts',
   plugins: [
-    performanceTracingPlugin,  // FIXED: Now uses Map for timing tracking, doesn't interfere with esbuild
-    requestLoggerPlugin,       // Logs all HTTP requests (enable with VITE_REQUEST_LOG=true)
-    rebuildObservabilityPlugin,
-    fileProcessingTracker,
-    errorInterceptionPlugin,
-    viewerWarmupPlugin,
-    migrationWarningPlugin,
-    urlRewritePlugin,  // THIS WAS BREAKING WEBSOCKET - now disabled for test
-    artifactsRewritePlugin,
+    // MINIMAL TEST: Only essential plugins, disabled complex middleware
+    // performanceTracingPlugin,  // DISABLED: Complex tracing
+    // requestLoggerPlugin,       // DISABLED: Too much logging noise
+    // rebuildObservabilityPlugin, // DISABLED: Not needed for HMR test
+    // fileProcessingTracker,     // DISABLED: Complex tracking
+    // errorInterceptionPlugin,   // DISABLED: Error wrapping might interfere
+    // viewerWarmupPlugin,        // DISABLED: Warms up viewers on startup
+    // migrationWarningPlugin,    // DISABLED: Not needed
+    urlRewritePlugin,  // KEEP: Contains HMR logging middleware (minimal mode)
+    // artifactsRewritePlugin,    // DISABLED: Complex artifact handling
     vue({
       include: [/\.vue$/],
     })
@@ -726,7 +553,7 @@ export default defineConfig({
     ],
 
     // HMR (Hot Module Replacement) configuration
-    // Connect client to external FQDN but use Vite's default WebSocket path (__vite_hmr)
+    // Connect client to external FQDN on explicit WebSocket path (__vite_hmr)
     // where the server actually listens for HMR connections.
     hmr: (() => {
       if (!process.env.VITE_HMR_HOST) {
@@ -737,7 +564,7 @@ export default defineConfig({
         host: process.env.VITE_HMR_HOST,
         port: parseInt(process.env.VITE_HMR_PORT || '443'),
         protocol: process.env.VITE_HMR_PROTOCOL || 'wss',
-        // path defaults to /__vite_hmr when omitted - this is where Vite's WS server listens
+        path: '/__vite_hmr',  // EXPLICIT: Do not omit - Vite's WebSocket server listens here
         ...(process.env.VITE_HMR_CLIENT_PORT && {
           clientPort: parseInt(process.env.VITE_HMR_CLIENT_PORT),
         }),
@@ -747,8 +574,8 @@ export default defineConfig({
       console.error(`   Host: ${hmrConfig.host}`)
       console.error(`   Port: ${hmrConfig.port}`)
       console.error(`   Protocol: ${hmrConfig.protocol}`)
-      console.error(`   Path: /__vite_hmr (default - server listens here)`)
-      console.error(`   Full URL: ${hmrConfig.protocol}://${hmrConfig.host}:${hmrConfig.port}/__vite_hmr`)
+      console.error(`   Path: ${hmrConfig.path} (EXPLICIT)`)
+      console.error(`   Full URL: ${hmrConfig.protocol}://${hmrConfig.host}:${hmrConfig.port}${hmrConfig.path}`)
       console.error(`${'═'.repeat(100)}\n`)
       return hmrConfig
     })(),

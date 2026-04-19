@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HMR Test - Minimal</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      text-align: center;
+    }
+    h1 {
+      color: #333;
+      margin: 0 0 10px 0;
+    }
+    p {
+      color: #666;
+      margin: 0;
+      font-size: 14px;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f0f0f0;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔥 HMR Test - Minimal Viewer</h1>
+    <p>Edit this file and save. If HMR works, the page should update without refresh.</p>
+    <div class="status">
+      <p>Last update: <span id="timestamp">Waiting for changes...</span></p>
+      <p>HMR: <span id="hmr-status" style="color: red;">Not connected</span></p>
+    </div>
+  </div>
+
+  <script>
+    // Minimal HMR test - just update timestamp on each load
+    document.getElementById('timestamp').textContent = new Date().toLocaleTimeString();
+
+    // Detect if HMR client script is injected
+    const scriptTags = document.querySelectorAll('script');
+    let hmrFound = false;
+    scriptTags.forEach(script => {
+      if (script.src && script.src.includes('@vite/client')) {
+        hmrFound = true;
+        console.log('✅ HMR client script found:', script.src);
+      }
+    });
+
+    if (hmrFound) {
+      document.getElementById('hmr-status').textContent = 'Client loaded';
+      document.getElementById('hmr-status').style.color = 'green';
+    } else {
+      console.warn('❌ HMR client script NOT injected');
+    }
+  </script>
+</body>
+</html>
