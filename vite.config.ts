@@ -656,29 +656,29 @@ export default defineConfig({
     },
 
     {
-      name: 'hmr-logging-only',
+      name: 'hmr-websocket-debug',
       apply: 'serve',
       configureServer(server) {
         console.error(`\n${'═'.repeat(100)}`)
-        console.error(`[HMR TEST MODE] Only HMR WebSocket logging active`)
+        console.error(`[HMR MODE] WebSocket upgrade listener active (non-blocking)`)
         console.error(`${'═'.repeat(100)}\n`)
 
-        server.middlewares.use((req, res, next) => {
-          const isHmrRequest = (req.headers.upgrade === 'websocket' && req.url?.startsWith('/__vite_hmr'))
-
-          if (isHmrRequest) {
+        // Listen to HTTP Upgrade events (WebSocket handshake) instead of middlewares
+        // This doesn't interfere with Vite's internal WebSocket handler
+        server.httpServer?.on('upgrade', (req, socket, head) => {
+          if (req.url?.includes('/__vite_hmr')) {
             const timestamp = getTimestamp()
             console.error(`\n${'╔'.repeat(100)}`)
-            console.error(`║ [${timestamp}] 🔥 HMR WEBSOCKET REQUEST`)
+            console.error(`║ [${timestamp}] 🔥 HMR WEBSOCKET UPGRADE RECEIVED`)
             console.error(`║ Path: ${req.url}`)
             console.error(`║ Method: ${req.method}`)
             console.error(`║ Upgrade: ${req.headers.upgrade || 'none'}`)
             console.error(`║ Connection: ${req.headers.connection || 'none'}`)
             console.error(`║ Host: ${req.headers.host}`)
-            console.error(`║ Origin: ${req.headers.origin || 'none'}`)
+            console.error(`║ Sec-WebSocket-Key: ${req.headers['sec-websocket-key']?.substring(0, 10)}...`)
+            console.error(`║ NOTE: Vite's native HMR handler will now process this upgrade`)
             console.error(`${'╚'.repeat(100)}\n`)
           }
-          next()
         })
       },
     },
@@ -737,11 +737,14 @@ export default defineConfig({
     ],
 
     // HMR (Hot Module Replacement) configuration
+    // CRITICAL: clientPort (what browser sees) != server port (internal)
+    // Browser connects to external host:443, Vite listens on internal 5052
     hmr: process.env.VITE_HMR_HOST ? {
       host: process.env.VITE_HMR_HOST,
-      port: parseInt(process.env.VITE_HMR_PORT || '443'),
       protocol: process.env.VITE_HMR_PROTOCOL || 'wss',
+      clientPort: parseInt(process.env.VITE_HMR_PORT || '443'),
       path: '/__vite_hmr',
+      // DO NOT set 'port' — let Vite use its internal server (5052)
     } : true,
 
     // Serve files from artifacts root
