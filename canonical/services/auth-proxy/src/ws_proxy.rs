@@ -241,52 +241,9 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                             }
                         }
 
-                        // Try to capture first bytes from Vite (likely close frame) with short timeout
-                        let mut close_frame_buf = vec![0u8; 30];
-                        match tokio::time::timeout(
-                            std::time::Duration::from_millis(100),
-                            upstream_stream.read(&mut close_frame_buf)
-                        ).await {
-                            Ok(Ok(n)) if n > 0 => {
-                                warn!("[WS-HEX-DUMP] 🔍 VITE SENT {} bytes immediately after 101:", n);
-                                warn!("[WS-HEX-DUMP] Hex: {:02x?}", &close_frame_buf[..n]);
-
-                                // Try to interpret as text
-                                if let Ok(text) = std::str::from_utf8(&close_frame_buf[..n]) {
-                                    warn!("[WS-HEX-DUMP] Text: '{}'", text);
-                                }
-
-                                // Analyze as WebSocket close frame (opcode 0x88)
-                                if n >= 4 && close_frame_buf[0] == 0x88 {
-                                    let close_code = u16::from_be_bytes([close_frame_buf[2], close_frame_buf[3]]);
-                                    warn!("[WS-HEX-DUMP] WebSocket CLOSE FRAME detected!");
-                                    warn!("[WS-HEX-DUMP] Close Code: {} (0x{:04x})", close_code, close_code);
-                                    if n > 4 {
-                                        if let Ok(reason) = std::str::from_utf8(&close_frame_buf[4..n]) {
-                                            warn!("[WS-HEX-DUMP] Close Reason: '{}'", reason);
-                                        }
-                                    }
-                                    // Translate close codes
-                                    match close_code {
-                                        1000 => warn!("[WS-HEX-DUMP] → Normal Closure"),
-                                        1001 => warn!("[WS-HEX-DUMP] → Going Away"),
-                                        1002 => warn!("[WS-HEX-DUMP] → Protocol Error (likely Vite validation failed)"),
-                                        1003 => warn!("[WS-HEX-DUMP] → Unsupported Data"),
-                                        1006 => warn!("[WS-HEX-DUMP] → Abnormal Closure (connection reset)"),
-                                        1008 => warn!("[WS-HEX-DUMP] → Policy Violation (security rejection)"),
-                                        1009 => warn!("[WS-HEX-DUMP] → Message Too Big"),
-                                        1010 => warn!("[WS-HEX-DUMP] → Mandatory Extension"),
-                                        1011 => warn!("[WS-HEX-DUMP] → Server Error"),
-                                        _ => warn!("[WS-HEX-DUMP] → Unknown close code"),
-                                    }
-                                }
-                            }
-                            _ => {
-                                info!("[WS-HEX-DUMP] No immediate data from Vite (timeout or EOF)");
-                            }
-                        }
-
                         // Bidirectional byte-level tunnel: browser ↔ upstream.
+                        // Note: Do NOT read from upstream_stream before copy_bidirectional!
+                        // Vite sends {"type":"connected"} immediately after 101, which MUST reach the browser.
                         match tokio::io::copy_bidirectional(
                             &mut browser_io,
                             &mut upstream_stream,
