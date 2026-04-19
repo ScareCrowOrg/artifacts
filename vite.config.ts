@@ -737,14 +737,11 @@ export default defineConfig({
     ],
 
     // HMR (Hot Module Replacement) configuration
-    // CRITICAL: clientPort (what browser sees) != server port (internal)
-    // Browser connects to external host:443, Vite listens on internal 5052
+    // Browser connects to external host:port, Vite listens internally on 5052
     hmr: process.env.VITE_HMR_HOST ? {
       host: process.env.VITE_HMR_HOST,
       protocol: process.env.VITE_HMR_PROTOCOL || 'wss',
-      clientPort: parseInt(process.env.VITE_HMR_PORT || '443'),
       path: '/__vite_hmr',
-      // DO NOT set 'port' — let Vite use its internal server (5052)
     } : true,
 
     // Serve files from artifacts root

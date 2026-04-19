@@ -57,7 +57,10 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
         .unwrap_or_else(|| path.clone());
     let full_path = path_and_query.clone();
 
-    info!("[WS] Upgrade request detected for path={}", full_path);
+    info!("[WS] 🚀 UPGRADE REQUEST DETECTED");
+    info!("[WS] Path only: {}", path);
+    info!("[WS] Path + Query: {}", full_path);
+    info!("[WS] Token present in URL: {}", full_path.contains("?token="));
 
     // Validate required WebSocket handshake headers FIRST (RFC 6455 §4.1).
     // These must be present in any valid WebSocket upgrade request.
@@ -120,8 +123,15 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
     let upstream_addr = extract_tcp_addr(upstream_base);
 
     info!(
-        "[WS] Session validation: path={} → accepted; tunneling to {}",
-        full_path, upstream_addr
+        "[WS] ✅ SESSION VALIDATION PASSED"
+    );
+    info!(
+        "[WS] 🔗 ROUTING WEBSOCKET → {}", upstream_addr
+    );
+    info!(
+        "[WS] REQUEST PATH: {} (query string {})",
+        full_path,
+        if full_path.contains('?') { "PRESERVED ✅" } else { "NONE" }
     );
 
     // Spawn the tunnel task *before* returning 101 so that hyper can
@@ -157,9 +167,10 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
 
                         // Log the exact handshake being sent to upstream for debugging
                         info!(
-                            "[WS] Sending WebSocket upgrade to upstream:\n{}\n[END HANDSHAKE]",
+                            "[WS] 📤 SENDING UPGRADE TO VITE:\n{}\n[END HANDSHAKE]",
                             handshake.trim()
                         );
+                        info!("[WS] Token in handshake: {}", handshake.contains("token="));
 
                         if let Err(e) = upstream_stream.write_all(handshake.as_bytes()).await {
                             error!(
@@ -172,23 +183,29 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                         // Read and validate upstream's 101 response before tunneling.
                         match read_http_status(&mut upstream_stream).await {
                             Ok(101) => {
-                                info!("[WS] ✅ Upstream responded with HTTP 101 Switching Protocols → tunnel established");
+                                info!("[WS] 🎉 VITE ACCEPTED UPGRADE!");
+                                info!("[WS] ✅ HTTP 101 Switching Protocols received");
+                                info!("[WS] 🌐 WebSocket tunnel established with Vite");
                             }
                             Ok(status) => {
                                 error!(
-                                    "[WS] ❌ Upstream returned HTTP {} (expected 101), aborting tunnel. \
-                                    This usually means upstream HMR handler not found or token validation failed.",
+                                    "[WS] 🚨 VITE REJECTED UPGRADE - Got HTTP {} instead of 101",
                                     status
                                 );
+                                error!("[WS] This means:");
+                                error!("[WS]   - Token validation failed? Check token format");
+                                error!("[WS]   - Vite HMR handler not found? Check path: {}", full_path);
+                                error!("[WS]   - Host mismatch? Expected 'vite:5052', got Host: {}", original_host);
                                 error!("[WS] Handshake sent: GET {} HTTP/1.1", full_path);
                                 error!("[WS] Host header: {}", original_host);
                                 return;
                             }
                             Err(e) => {
                                 error!(
-                                    "[WS] Failed to read upstream HTTP response from {}: {}",
+                                    "[WS] 🚨 Failed to read upstream HTTP response from {}: {}",
                                     upstream_addr, e
                                 );
+                                error!("[WS] Possible causes: Vite not listening, network issue, timeout");
                                 return;
                             }
                         }
