@@ -29,6 +29,14 @@ from typing import Any, Dict, Optional
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Log environment at startup
+logger.info("[Config] ========== GATEKEEPER CONFIG STARTUP ==========")
+logger.info(f"[Config] SERVICE_NAME: {os.getenv('SERVICE_NAME', 'NOT SET (will use default: gatekeeper)')}")
+logger.info(f"[Config] TOTP_SEED: {os.getenv('TOTP_SEED', 'NOT SET (SecretClient will fail)')[:32]}..." if os.getenv('TOTP_SEED') else "[Config] TOTP_SEED: NOT SET (SecretClient will fail)")
+logger.info(f"[Config] REDIS_L1_HOST: {os.getenv('REDIS_L1_HOST', 'NOT SET')}")
+logger.info(f"[Config] REDIS_L1_PORT: {os.getenv('REDIS_L1_PORT', 'NOT SET')}")
+logger.info("[Config] ======================================================")
+
 # Lazy configuration resolution via config_manager
 # Falls back gracefully when Redis / SecretClient are unavailable
 try:
@@ -143,7 +151,14 @@ class RedisL1Config:
     @staticmethod
     def password() -> str:
         """Resolve from vault.redis:admin:password (secret)."""
-        return _get_config("vault.redis:admin:password") or "scarerunner"
+        logger.debug("[RedisL1Config] ▶️ Requesting vault.redis:admin:password...")
+        password = _get_config("vault.redis:admin:password")
+        if password:
+            logger.debug(f"[RedisL1Config] ✅ vault.redis:admin:password resolved (length: {len(password)} chars)")
+            return password
+        else:
+            logger.warning("[RedisL1Config] ⚠️ vault.redis:admin:password returned None, using fallback: scarerunner")
+            return "scarerunner"
 
     @staticmethod
     def db() -> int:
@@ -165,14 +180,23 @@ class CentralHubConfig:
     @staticmethod
     def service_token() -> str:
         """Resolve from vault.centralhub:service:token (secret in vault.json)."""
-        logger.info("[CentralHubConfig] ▶️ Requesting vault.centralhub:service:token...")
+        logger.info("[CentralHubConfig] ▶️ STEP 1: Requesting vault.centralhub:service:token...")
+        logger.debug(f"[CentralHubConfig] SERVICE_NAME from env: {os.getenv('SERVICE_NAME', 'NOT SET')}")
+        logger.debug(f"[CentralHubConfig] TOTP_SEED from env: {os.getenv('TOTP_SEED', 'NOT SET')[:20]}..." if os.getenv('TOTP_SEED') else "[CentralHubConfig] TOTP_SEED from env: NOT SET")
+
         token = _get_config("vault.centralhub:service:token")
+
         if token:
             preview = token[:15] if len(token) >= 15 else token
-            logger.info(f"[CentralHubConfig] ✅ vault.centralhub_pat resolved (first 15 chars): {preview}...")
+            logger.info(f"[CentralHubConfig] ✅ STEP 2: SUCCESS - vault.centralhub:service:token resolved from vault")
+            logger.info(f"[CentralHubConfig]    Token preview (first 15 chars): {preview}...")
+            logger.info(f"[CentralHubConfig]    Token length: {len(token)} chars")
             return token
         else:
-            logger.warning("[CentralHubConfig] ⚠️ vault.centralhub_pat returned None, using fallback: internal-gatekeeper-token")
+            logger.error("[CentralHubConfig] ❌ STEP 2: FAILED - vault.centralhub:service:token returned None")
+            logger.error("[CentralHubConfig]    Reason: SecretClient timeout or Launcher not responding")
+            logger.warning("[CentralHubConfig] ⚠️ STEP 3: Using fallback: internal-gatekeeper-token")
+            logger.warning("[CentralHubConfig]    This means CentralHub will reject requests (invalid token)")
             return "internal-gatekeeper-token"
 
 

@@ -463,11 +463,26 @@ async def main() -> None:
         config.REDIS_L1_PASSWORD,
         config.REDIS_L1_DB,
     )
+    # Initialize CentralHub L2 client with resolved token
+    logger.info("[main] ▶️ Initializing CentralHubRedisClient...")
+    logger.info(f"[main]    URL: {config.CENTRALHUB_URL}")
+
+    token = config.CENTRALHUB_SERVICE_TOKEN
+    token_preview = token[:15] if len(token) >= 15 else token
+    token_source = "vault" if token != "internal-gatekeeper-token" else "FALLBACK ENV"
+    logger.info(f"[main]    Token source: {token_source}")
+    logger.info(f"[main]    Token preview (first 15 chars): {token_preview}...")
+    logger.info(f"[main]    Token length: {len(token)} chars")
+
+    if token == "internal-gatekeeper-token":
+        logger.error("[main] ⚠️ WARNING: Using fallback token - CentralHub will reject requests with 401!")
+
     redis_l2_client = CentralHubRedisClient(
-        auth_token=config.CENTRALHUB_SERVICE_TOKEN,
+        auth_token=token,
         base_url=config.CENTRALHUB_URL,
         timeout=float(config.BRPOP_L2_TIMEOUT) + 10,
     )
+    logger.info("[main] ✅ CentralHubRedisClient initialized")
 
     async with httpx.AsyncClient() as http_client:
         gatekeeper = GateKeeper(redis_l1, redis_l2_client, http_client)
