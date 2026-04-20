@@ -21,6 +21,7 @@ Each job type includes an ``execution_model`` field:
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -34,11 +35,18 @@ try:
     from artifacts.shared.config_manager import get_config as _get_config
     logger.info("[Config] ✅ config_manager imported successfully")
 except ImportError as e:
-    logger.warning(f"[Config] ⚠️ config_manager import failed: {e} - using env fallback")
-    # Fallback: resolve directly from environment when artifacts not on path
-    def _get_config(key: str) -> Optional[str]:  # type: ignore[misc]
-        env_key = key.replace("vault.", "").upper().replace(":", "_").replace(".", "_").replace("-", "_")
-        return os.getenv(env_key)
+    logger.warning(f"[Config] ⚠️ config_manager import failed: {e} - fixing path and retrying...")
+    # Fallback: add shared path and retry (same as main.py does)
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'shared'))
+        from config_manager import get_config as _get_config
+        logger.info("[Config] ✅ config_manager imported successfully (via path fix)")
+    except ImportError as e2:
+        logger.error(f"[Config] ❌ config_manager import failed even with path fix: {e2} - using env fallback only")
+        # Fallback: resolve directly from environment when artifacts not on path
+        def _get_config(key: str) -> Optional[str]:  # type: ignore[misc]
+            env_key = key.replace("vault.", "").upper().replace(":", "_").replace(".", "_").replace("-", "_")
+            return os.getenv(env_key)
 
 # ============================================================================
 # Base Paths
