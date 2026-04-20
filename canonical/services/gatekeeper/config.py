@@ -87,8 +87,8 @@ class CentralHubConfig:
 
     @staticmethod
     def service_token() -> str:
-        """Resolve from vault.centralhub_service_token (secret)."""
-        return _get_config("vault.centralhub_service_token") or "internal-gatekeeper-token"
+        """Resolve from vault.centralhub_pat (secret)."""
+        return _get_config("vault.centralhub_pat") or "internal-gatekeeper-token"
 
 
 class QueueConfig:

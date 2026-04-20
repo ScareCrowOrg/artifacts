@@ -48,6 +48,10 @@ services:
       REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
 
+      # TOTP Seed – Injected by Launcher during service:start
+      # Required for SecretClient to request encrypted vault secrets (vault.centralhub_pat)
+      TOTP_SEED: ${TOTP_SEED}
+
       # CentralHub (L2 access via HTTP) – uses external FQDN for global connectivity
       CENTRALHUB_URL: ${CENTRALHUB_URL:-https://hub-staging.scareverse.net}
       CENTRALHUB_SERVICE_TOKEN: ${CENTRALHUB_SERVICE_TOKEN:-internal-gatekeeper-token}
