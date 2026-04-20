@@ -142,8 +142,8 @@ class RedisL1Config:
 
     @staticmethod
     def password() -> str:
-        """Resolve from vault.redis_password (secret)."""
-        return _get_config("vault.redis_password") or "scarerunner"
+        """Resolve from vault.redis:admin:password (secret)."""
+        return _get_config("vault.redis:admin:password") or "scarerunner"
 
     @staticmethod
     def db() -> int:
@@ -164,9 +164,9 @@ class CentralHubConfig:
 
     @staticmethod
     def service_token() -> str:
-        """Resolve from vault.centralhub_pat (secret)."""
-        logger.info("[CentralHubConfig] ▶️ Requesting vault.centralhub_pat...")
-        token = _get_config("vault.centralhub_pat")
+        """Resolve from vault.centralhub:service:token (secret in vault.json)."""
+        logger.info("[CentralHubConfig] ▶️ Requesting vault.centralhub:service:token...")
+        token = _get_config("vault.centralhub:service:token")
         if token:
             preview = token[:15] if len(token) >= 15 else token
             logger.info(f"[CentralHubConfig] ✅ vault.centralhub_pat resolved (first 15 chars): {preview}...")
