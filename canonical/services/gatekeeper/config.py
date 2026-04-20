@@ -24,13 +24,17 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+# Configure logging EARLY (before importing config_manager) so all loggers work
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Lazy configuration resolution via config_manager
 # Falls back gracefully when Redis / SecretClient are unavailable
 try:
     from artifacts.shared.config_manager import get_config as _get_config
-except ImportError:
+    logger.info("[Config] ✅ config_manager imported successfully")
+except ImportError as e:
+    logger.warning(f"[Config] ⚠️ config_manager import failed: {e} - using env fallback")
     # Fallback: resolve directly from environment when artifacts not on path
     def _get_config(key: str) -> Optional[str]:  # type: ignore[misc]
         env_key = key.replace("vault.", "").upper().replace(":", "_").replace(".", "_").replace("-", "_")
