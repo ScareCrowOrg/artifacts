@@ -48,11 +48,28 @@ except ImportError as e:
         logger.debug(f"[Config] Added to sys.path: {shared_path}")
         logger.debug(f"[Config] Added to sys.path: {crypto_path}")
 
-        # Setup sys.modules so relative imports work (make 'shared' package-like)
+        # Setup sys.modules so relative imports work
         import types
+        import importlib.util
+
+        # Create shared package
         shared_module = types.ModuleType('shared')
         shared_module.__path__ = [shared_path]
         sys.modules['shared'] = shared_module
+
+        # Pre-import secret_client and crypto modules so relative imports work
+        spec = importlib.util.spec_from_file_location("secret_client", os.path.join(shared_path, "secret_client.py"))
+        secret_client_module = importlib.util.module_from_spec(spec)
+        sys.modules['shared.secret_client'] = secret_client_module
+        spec.loader.exec_module(secret_client_module)
+        logger.debug(f"[Config] Executed shared.secret_client module")
+
+        spec_crypto = importlib.util.spec_from_file_location("shared.crypto", crypto_path)
+        crypto_module = importlib.util.module_from_spec(spec_crypto)
+        crypto_module.__path__ = [crypto_path]
+        sys.modules['shared.crypto'] = crypto_module
+        spec_crypto.loader.exec_module(crypto_module)
+        logger.debug(f"[Config] Executed shared.crypto module")
 
         # Now import config_manager which has relative imports
         import config_manager
@@ -117,7 +134,15 @@ class CentralHubConfig:
     @staticmethod
     def service_token() -> str:
         """Resolve from vault.centralhub_pat (secret)."""
-        return _get_config("vault.centralhub_pat") or "internal-gatekeeper-token"
+        logger.info("[CentralHubConfig] ▶️ Requesting vault.centralhub_pat...")
+        token = _get_config("vault.centralhub_pat")
+        if token:
+            preview = token[:15] if len(token) >= 15 else token
+            logger.info(f"[CentralHubConfig] ✅ vault.centralhub_pat resolved (first 15 chars): {preview}...")
+            return token
+        else:
+            logger.warning("[CentralHubConfig] ⚠️ vault.centralhub_pat returned None, using fallback: internal-gatekeeper-token")
+            return "internal-gatekeeper-token"
 
 
 class QueueConfig:
