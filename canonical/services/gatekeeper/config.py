@@ -36,14 +36,28 @@ try:
     logger.info("[Config] ✅ config_manager imported successfully")
 except ImportError as e:
     logger.warning(f"[Config] ⚠️ config_manager import failed: {e} - trying relative path...")
-    # Fallback: add relative path to shared (Dockerfile copies gatekeeper to /app/gatekeeper/)
+    # Fallback: add relative path to shared + setup sys.modules for relative imports
     # From /app/gatekeeper/ → ../artifacts/shared/
     try:
         shared_path = os.path.join(os.path.dirname(__file__), '..', 'artifacts', 'shared')
+        crypto_path = os.path.join(shared_path, 'crypto')
+
         sys.path.insert(0, shared_path)
+        sys.path.insert(0, crypto_path)
+
         logger.debug(f"[Config] Added to sys.path: {shared_path}")
-        from config_manager import get_config as _get_config
-        logger.info("[Config] ✅ config_manager imported successfully (via relative path)")
+        logger.debug(f"[Config] Added to sys.path: {crypto_path}")
+
+        # Setup sys.modules so relative imports work (make 'shared' package-like)
+        import types
+        shared_module = types.ModuleType('shared')
+        shared_module.__path__ = [shared_path]
+        sys.modules['shared'] = shared_module
+
+        # Now import config_manager which has relative imports
+        import config_manager
+        _get_config = config_manager.get_config
+        logger.info("[Config] ✅ config_manager imported successfully (via relative path + sys.modules setup)")
     except ImportError as e2:
         logger.error(f"[Config] ❌ config_manager import failed even with relative path: {e2} - using env fallback only")
         # Fallback: resolve directly from environment when artifacts not on path
