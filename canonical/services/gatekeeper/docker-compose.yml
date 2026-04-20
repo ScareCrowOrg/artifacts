@@ -52,6 +52,10 @@ services:
       # Required for SecretClient to request encrypted vault secrets (vault.centralhub_pat)
       TOTP_SEED: ${TOTP_SEED}
 
+      # Service Name – Used by SecretClient to identify itself to Launcher
+      # Must match the service name registered with Launcher's TOTP seed
+      SERVICE_NAME: ${SERVICE_NAME:-gatekeeper}
+
       # CentralHub (L2 access via HTTP) – uses external FQDN for global connectivity
       CENTRALHUB_URL: ${CENTRALHUB_URL:-https://hub-staging.scareverse.net}
       CENTRALHUB_SERVICE_TOKEN: ${CENTRALHUB_SERVICE_TOKEN:-internal-gatekeeper-token}
