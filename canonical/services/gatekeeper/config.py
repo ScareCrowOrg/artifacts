@@ -36,9 +36,14 @@ try:
     logger.info("[Config] ✅ config_manager imported successfully")
 except ImportError as e:
     logger.warning(f"[Config] ⚠️ config_manager import failed: {e} - fixing path and retrying...")
-    # Fallback: add shared path and retry (same as main.py does)
+    # Fallback: add shared path and retry
+    # config.py is at: /app/artifacts/canonical/services/gatekeeper/config.py
+    # shared is at: /app/artifacts/shared/
+    # Path: ../../.. → /app/artifacts/shared
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'shared'))
+        shared_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'shared')
+        sys.path.insert(0, shared_path)
+        logger.debug(f"[Config] Added to sys.path: {shared_path}")
         from config_manager import get_config as _get_config
         logger.info("[Config] ✅ config_manager imported successfully (via path fix)")
     except ImportError as e2:
