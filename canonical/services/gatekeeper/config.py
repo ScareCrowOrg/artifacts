@@ -42,6 +42,13 @@ except ImportError as e:
         shared_path = os.path.join(os.path.dirname(__file__), '..', 'artifacts', 'shared')
         crypto_path = os.path.join(shared_path, 'crypto')
 
+        # Resolve to absolute paths and verify they exist
+        shared_path = os.path.abspath(shared_path)
+        crypto_path = os.path.abspath(crypto_path)
+
+        logger.info(f"[Config] Resolved paths: shared={shared_path}, crypto={crypto_path}")
+        logger.info(f"[Config] shared exists: {os.path.exists(shared_path)}, crypto exists: {os.path.exists(crypto_path)}")
+
         sys.path.insert(0, shared_path)
         sys.path.insert(0, crypto_path)
 
@@ -58,7 +65,16 @@ except ImportError as e:
         sys.modules['shared'] = shared_module
 
         # CRITICAL: Execute crypto module FIRST (because secret_client depends on it)
-        spec_crypto = importlib.util.spec_from_file_location("shared.crypto", crypto_path)
+        # Crypto is a package (directory), so point to its __init__.py
+        crypto_init_path = os.path.join(crypto_path, "__init__.py")
+        spec_crypto = importlib.util.spec_from_file_location(
+            "shared.crypto",
+            crypto_init_path,
+            submodule_search_locations=[crypto_path]
+        )
+        if spec_crypto is None:
+            logger.error(f"[Config] ❌ Cannot load crypto from {crypto_init_path}")
+            raise ImportError(f"Cannot load shared.crypto from {crypto_init_path}")
         crypto_module = importlib.util.module_from_spec(spec_crypto)
         crypto_module.__path__ = [crypto_path]
         sys.modules['shared.crypto'] = crypto_module
@@ -66,7 +82,11 @@ except ImportError as e:
         logger.debug(f"[Config] Executed shared.crypto module")
 
         # THEN execute secret_client (which imports from crypto)
-        spec = importlib.util.spec_from_file_location("shared.secret_client", os.path.join(shared_path, "secret_client.py"))
+        secret_client_path = os.path.join(shared_path, "secret_client.py")
+        spec = importlib.util.spec_from_file_location("shared.secret_client", secret_client_path)
+        if spec is None:
+            logger.error(f"[Config] ❌ Cannot load secret_client from {secret_client_path}")
+            raise ImportError(f"Cannot load shared.secret_client from {secret_client_path}")
         secret_client_module = importlib.util.module_from_spec(spec)
         sys.modules['shared.secret_client'] = secret_client_module
         spec.loader.exec_module(secret_client_module)
