@@ -93,11 +93,19 @@ except ImportError as e:
         logger.debug(f"[Config] Executed shared.secret_client module")
 
         # Now import config_manager which has relative imports
-        logger.debug("[Config] About to import config_manager...")
-        import config_manager
-        _get_config = config_manager.get_config
+        # CRITICAL: Import as 'shared.config_manager' so relative imports work inside it
+        logger.debug("[Config] About to import config_manager as shared.config_manager...")
+        config_manager_path = os.path.join(shared_path, "config_manager.py")
+        spec_cm = importlib.util.spec_from_file_location("shared.config_manager", config_manager_path)
+        if spec_cm is None:
+            logger.error(f"[Config] ❌ Cannot load config_manager from {config_manager_path}")
+            raise ImportError(f"Cannot load shared.config_manager from {config_manager_path}")
+        config_manager_module = importlib.util.module_from_spec(spec_cm)
+        sys.modules['shared.config_manager'] = config_manager_module
+        spec_cm.loader.exec_module(config_manager_module)
+        _get_config = config_manager_module.get_config
         logger.info("[Config] ✅ config_manager imported successfully (via relative path + sys.modules setup)")
-        logger.info("[Config] ✅ sys.modules ready: shared, shared.crypto, shared.secret_client, config_manager")
+        logger.info("[Config] ✅ sys.modules ready: shared, shared.crypto, shared.secret_client, shared.config_manager")
     except ImportError as e2:
         logger.error(f"[Config] ❌ config_manager import failed even with relative path: {e2} - using env fallback only")
         # Fallback: resolve directly from environment when artifacts not on path
