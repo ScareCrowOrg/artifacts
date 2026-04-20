@@ -57,13 +57,7 @@ except ImportError as e:
         shared_module.__path__ = [shared_path]
         sys.modules['shared'] = shared_module
 
-        # Pre-import secret_client and crypto modules so relative imports work
-        spec = importlib.util.spec_from_file_location("secret_client", os.path.join(shared_path, "secret_client.py"))
-        secret_client_module = importlib.util.module_from_spec(spec)
-        sys.modules['shared.secret_client'] = secret_client_module
-        spec.loader.exec_module(secret_client_module)
-        logger.debug(f"[Config] Executed shared.secret_client module")
-
+        # CRITICAL: Execute crypto module FIRST (because secret_client depends on it)
         spec_crypto = importlib.util.spec_from_file_location("shared.crypto", crypto_path)
         crypto_module = importlib.util.module_from_spec(spec_crypto)
         crypto_module.__path__ = [crypto_path]
@@ -71,10 +65,19 @@ except ImportError as e:
         spec_crypto.loader.exec_module(crypto_module)
         logger.debug(f"[Config] Executed shared.crypto module")
 
+        # THEN execute secret_client (which imports from crypto)
+        spec = importlib.util.spec_from_file_location("shared.secret_client", os.path.join(shared_path, "secret_client.py"))
+        secret_client_module = importlib.util.module_from_spec(spec)
+        sys.modules['shared.secret_client'] = secret_client_module
+        spec.loader.exec_module(secret_client_module)
+        logger.debug(f"[Config] Executed shared.secret_client module")
+
         # Now import config_manager which has relative imports
+        logger.debug("[Config] About to import config_manager...")
         import config_manager
         _get_config = config_manager.get_config
         logger.info("[Config] ✅ config_manager imported successfully (via relative path + sys.modules setup)")
+        logger.info("[Config] ✅ sys.modules ready: shared, shared.crypto, shared.secret_client, config_manager")
     except ImportError as e2:
         logger.error(f"[Config] ❌ config_manager import failed even with relative path: {e2} - using env fallback only")
         # Fallback: resolve directly from environment when artifacts not on path
