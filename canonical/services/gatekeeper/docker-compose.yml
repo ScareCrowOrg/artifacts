@@ -48,8 +48,8 @@ services:
       REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
 
-      # CentralHub (L2 access via HTTP)
-      CENTRALHUB_URL: ${CENTRALHUB_URL:-http://centralhub:8080}
+      # CentralHub (L2 access via HTTP) – uses external FQDN for global connectivity
+      CENTRALHUB_URL: ${CENTRALHUB_URL:-https://hub-staging.scareverse.net}
       CENTRALHUB_SERVICE_TOKEN: ${CENTRALHUB_SERVICE_TOKEN:-internal-gatekeeper-token}
 
       # Service worker endpoint overrides (optional – default to JSON definitions)
