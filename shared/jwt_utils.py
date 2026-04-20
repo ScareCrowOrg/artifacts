@@ -117,38 +117,61 @@ def verify_jwt(
     """
     import jwt as pyjwt
 
+    # Anonymize token for logging (show only first 50 chars + "...")
+    token_preview = token[:50] + "..." if len(token) > 50 else token
+
     try:
         header = pyjwt.get_unverified_header(token)
+        logger.debug(f"[verify_jwt] ✓ Decoded JWT header: {header}")
     except pyjwt.DecodeError as exc:
-        logger.warning("JWT header decode error: %s", exc)
+        logger.warning(f"[verify_jwt] ✗ JWT header decode error: {exc} (token: {token_preview})")
         return None
 
     kid = header.get("kid")
+    alg = header.get("alg")
+    typ = header.get("typ")
+
+    logger.info(f"[verify_jwt] Token header: kid='{kid}', alg='{alg}', typ='{typ}'")
+
     if not kid:
-        logger.warning("JWT is missing 'kid' in header")
+        logger.warning("[verify_jwt] ✗ JWT is missing 'kid' in header")
         return None
+
+    logger.info(f"[verify_jwt] Looking for kid='{kid}' (available keys: {sorted(public_keys.keys())})")
 
     pub_key = public_keys.get(kid)
     if pub_key is None:
-        logger.warning(
-            "Unknown JWT kid '%s' (available: %s)", kid, sorted(public_keys.keys())
+        logger.error(
+            f"[verify_jwt] ✗ Unknown JWT kid='{kid}' (available: {sorted(public_keys.keys())})"
         )
         return None
+
+    logger.debug(f"[verify_jwt] ✓ Found public key for kid='{kid}'")
 
     try:
         payload: Dict[str, Any] = pyjwt.decode(
             token, pub_key, algorithms=["EdDSA"]
         )
+        exp = payload.get("exp")
+        iat = payload.get("iat")
+        sub = payload.get("sub")
+        logger.info(f"[verify_jwt] ✓ JWT signature valid: sub='{sub}', iat={iat}, exp={exp}")
         return payload
     except pyjwt.ExpiredSignatureError as exc:
-        logger.warning("JWT expired: %s", exc)
+        exp = None
+        try:
+            unverified_payload = pyjwt.decode(token, options={"verify_signature": False})
+            exp = unverified_payload.get("exp")
+        except:
+            pass
+        logger.warning(f"[verify_jwt] ✗ JWT expired (exp={exp}): {exc}")
         return None
     except pyjwt.InvalidSignatureError as exc:
-        logger.warning("JWT invalid signature: %s", exc)
+        logger.error(f"[verify_jwt] ✗ JWT invalid signature (kid='{kid}'): {exc}")
         return None
     except pyjwt.DecodeError as exc:
-        logger.warning("JWT decode error: %s", exc)
+        logger.warning(f"[verify_jwt] ✗ JWT decode error (kid='{kid}'): {exc}")
         return None
     except Exception as exc:
-        logger.error("Unexpected JWT verification error: %s", exc)
+        logger.error(f"[verify_jwt] ✗ Unexpected JWT verification error (kid='{kid}'): {exc}")
         return None
