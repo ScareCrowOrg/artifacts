@@ -68,7 +68,7 @@ class SecretClient:
         )
         logger.info(f"[SecretClient] Connected to Redis L1 at {REDIS_HOST}:{REDIS_PORT} (with auth)")
 
-    def request_secret(self, secret_key: str, timeout: int = 5) -> Optional[str]:
+    def request_secret(self, secret_key: str, timeout: int = 10) -> Optional[str]:
         """
         Request a secret from the Launcher.
 
@@ -78,7 +78,7 @@ class SecretClient:
 
         Args:
             secret_key: Logical name of the secret (e.g. ``"redis-password"``).
-            timeout:    Maximum seconds to wait for the Launcher's response.
+            timeout:    Maximum seconds to wait for the Launcher's response (default: 10s).
 
         Returns:
             Decrypted plaintext secret string, or ``None`` if the request
