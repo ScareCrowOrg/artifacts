@@ -119,7 +119,8 @@ class CentralHubRedisClient:
 
         for i, queue_name in enumerate(queue_names):
             # Non-blocking for all but the last queue; last queue gets full timeout
-            check_timeout = timeout if i == len(queue_names) - 1 else 0
+            # CentralHub requires timeout >= 1, so use 1s minimum for non-blocking checks
+            check_timeout = timeout if i == len(queue_names) - 1 else 1
             try:
                 response = await self.client.post(
                     "/api/redis/jobs/dequeue",
