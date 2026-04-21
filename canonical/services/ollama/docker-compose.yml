@@ -31,11 +31,11 @@ volumes:
 
 services:
 
-  ollama-raw:
+  ollama:
     build:
       context: .
       dockerfile: Dockerfile
-    image: scareverse-ollama:latest
+    image: localhost:5001/scareverse-ollama:staging20260421T233048
     container_name: scareverse-ollama-raw
     runtime: nvidia
     environment:
