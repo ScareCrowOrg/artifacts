@@ -48,7 +48,10 @@ class ServiceExecutor:
         Raises:
             Exception: After max retries are exhausted or on permanent failure.
         """
-        endpoint = f"{job_type_config['endpoint']}/process"
+        # Build endpoint: base URL + optional path suffix (default: /process)
+        base_endpoint = job_type_config['endpoint']
+        endpoint_path = job_type_config.get('endpoint_path', '/process')
+        endpoint = f"{base_endpoint}{endpoint_path}"
         timeout = job_type_config.get("timeout", config.HTTP_REQUEST_TIMEOUT)
         retries = 0
 

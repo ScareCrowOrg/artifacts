@@ -5,12 +5,13 @@
 
   "queue_type": "gpu",
 
-  "execution_model": "service",
+  "execution_model": "subprocess",
 
-  "service": {
-    "name": "stable-diffusion",
-    "endpoint": "http://scareverse-sd-service:9090",
-    "health_path": "/health"
+  "worker": {
+    "type": "job",
+    "path": "artifacts/canonical/workers/stable-diffusion-wrapper",
+    "entry_point": "worker.py",
+    "python_version": "3.11+"
   },
 
   "configuration": {
