@@ -10,7 +10,7 @@
   "worker": {
     "type": "job",
     "path": "artifacts/canonical/workers/ollama-wrapper",
-    "entry_point": "worker.py",
+    "entry_point": "main.py",
     "python_version": "3.11+"
   },
 
