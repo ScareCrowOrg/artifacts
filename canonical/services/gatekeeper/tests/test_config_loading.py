@@ -285,11 +285,15 @@ class TestJobTypesConfigModuleInit:
 
     def test_all_queues_l1_derived_from_config(self):
         assert len(config.ALL_QUEUES_L1) > 0
-        assert "scareverse:cpu-jobs:queue" in config.ALL_QUEUES_L1
+        # Verify worker-specific queues are present after queue name fix
+        assert "scareverse:rembg-jobs:queue" in config.ALL_QUEUES_L1
+        assert "scareverse:ollama-jobs:queue" in config.ALL_QUEUES_L1
 
     def test_all_queues_l2_derived_from_config(self):
         assert len(config.ALL_QUEUES_L2) > 0
-        assert "scareverse:cpu-jobs:queue" in config.ALL_QUEUES_L2
+        # Verify worker-specific queues are present after queue name fix
+        assert "scareverse:rembg-jobs:queue" in config.ALL_QUEUES_L2
+        assert "scareverse:ollama-jobs:queue" in config.ALL_QUEUES_L2
 
     def test_sd_generate_has_stable_diffusion_dependency(self):
         """sd_generate declares a dependency on stable-diffusion service."""
@@ -385,3 +389,119 @@ class TestJobTypesConfigModuleInit:
         )
         result = _build_job_types_config(tmp_path)
         assert result["default_health_svc"]["health_path"] == "/health"
+
+
+# ---------------------------------------------------------------------------
+# queue_type field
+# ---------------------------------------------------------------------------
+
+
+class TestQueueTypeField:
+    """Tests for the new queue_type field added to job-type routing config."""
+
+    def test_queue_type_extracted_for_service_worker(self, tmp_path):
+        """queue_type from JSON is propagated into the routing config entry."""
+        _write_json(
+            tmp_path,
+            "sd_generate.json",
+            {
+                "name": "sd_generate",
+                "execution_model": "service",
+                "queue_type": "gpu",
+                "service": {"name": "stable-diffusion", "endpoint": "http://sd:9090"},
+                "queue_l1": "scareverse:sd-jobs:queue",
+                "queue_l2": "scareverse:sd-jobs:queue",
+                "timeout": 300,
+            },
+        )
+        result = _build_job_types_config(tmp_path)
+        assert result["sd_generate"]["queue_type"] == "gpu"
+
+    def test_queue_type_extracted_for_subprocess_worker(self, tmp_path):
+        """queue_type is preserved for subprocess workers too."""
+        _write_json(
+            tmp_path,
+            "rembg.json",
+            {
+                "name": "rembg_removebackground",
+                "execution_model": "subprocess",
+                "queue_type": "cpu",
+                "worker": {"path": "artifacts/canonical/workers/rembg", "entry_point": "main.py"},
+                "configuration": {"timeout_seconds": 60},
+                "queue_l1": "scareverse:rembg-jobs:queue",
+                "queue_l2": "scareverse:rembg-jobs:queue",
+                "result_storage": "rpush_l1",
+                "result_key_prefix": "scareverse:rembg-results",
+                "result_key_ttl": 120,
+                "aliases": ["rembg_removebackground"],
+            },
+        )
+        result = _build_job_types_config(tmp_path)
+        assert result["rembg_removebackground"]["queue_type"] == "cpu"
+
+    def test_queue_type_defaults_to_cpu_when_absent(self, tmp_path):
+        """Missing queue_type defaults to 'cpu' (safe fallback)."""
+        _write_json(
+            tmp_path,
+            "no_queue_type.json",
+            {
+                "name": "legacy_worker",
+                "execution_model": "service",
+                "service": {"name": "legacy", "endpoint": "http://legacy:9000"},
+                "queue_l1": "scareverse:cpu-jobs:queue",
+                "queue_l2": "scareverse:cpu-jobs:queue",
+                "timeout": 60,
+            },
+        )
+        result = _build_job_types_config(tmp_path)
+        assert result["legacy_worker"]["queue_type"] == "cpu"
+
+    # --- Module-level assertions against actual loaded job-types ---
+
+    def test_sd_generate_has_gpu_queue_type(self):
+        """sd_generate declares queue_type=gpu (uses GPU for image generation)."""
+        entry = config.JOB_TYPES_CONFIG["sd_generate"]
+        assert entry["queue_type"] == "gpu"
+
+    def test_instantmesh_has_gpu_queue_type(self):
+        """instantmesh declares queue_type=gpu (uses GPU for 3D generation)."""
+        entry = config.JOB_TYPES_CONFIG["instantmesh"]
+        assert entry["queue_type"] == "gpu"
+
+    def test_ollama_generate_has_cpu_queue_type(self):
+        """ollama_generate declares queue_type=cpu."""
+        entry = config.JOB_TYPES_CONFIG["ollama_generate"]
+        assert entry["queue_type"] == "cpu"
+
+    def test_ollama_chat_has_cpu_queue_type(self):
+        """ollama_chat declares queue_type=cpu."""
+        entry = config.JOB_TYPES_CONFIG["ollama_chat"]
+        assert entry["queue_type"] == "cpu"
+
+    def test_rembg_has_cpu_queue_type(self):
+        """rembg_removebackground declares queue_type=cpu (subprocess, no GPU)."""
+        entry = config.JOB_TYPES_CONFIG["rembg_removebackground"]
+        assert entry["queue_type"] == "cpu"
+
+    def test_sd_generate_queue_is_sd_jobs(self):
+        """sd_generate queue_l1 matches the backend-enqueued sd-jobs queue."""
+        entry = config.JOB_TYPES_CONFIG["sd_generate"]
+        assert entry["queue_l1"] == "scareverse:sd-jobs:queue"
+
+    def test_ollama_queues_are_ollama_jobs(self):
+        """ollama_generate and ollama_chat use the dedicated ollama-jobs queue."""
+        assert config.JOB_TYPES_CONFIG["ollama_generate"]["queue_l1"] == "scareverse:ollama-jobs:queue"
+        assert config.JOB_TYPES_CONFIG["ollama_chat"]["queue_l1"] == "scareverse:ollama-jobs:queue"
+
+    def test_rembg_queue_is_rembg_jobs(self):
+        """rembg_removebackground uses the dedicated rembg-jobs queue."""
+        entry = config.JOB_TYPES_CONFIG["rembg_removebackground"]
+        assert entry["queue_l1"] == "scareverse:rembg-jobs:queue"
+
+    def test_all_job_types_have_queue_type_field(self):
+        """Every entry in JOB_TYPES_CONFIG exposes a queue_type field."""
+        for name, entry in config.JOB_TYPES_CONFIG.items():
+            assert "queue_type" in entry, f"Missing queue_type for job-type: {name}"
+            assert entry["queue_type"] in ("cpu", "gpu"), (
+                f"Invalid queue_type '{entry['queue_type']}' for job-type: {name}"
+            )

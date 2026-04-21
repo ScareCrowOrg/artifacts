@@ -3,6 +3,8 @@
   "version": "2.1.0",
   "description": "Image generation via Stable Diffusion service",
 
+  "queue_type": "gpu",
+
   "execution_model": "service",
 
   "service": {
@@ -15,9 +17,9 @@
     "timeout_seconds": 300
   },
 
-  "queue": "scareverse:cpu-jobs:queue",
-  "queue_l1": "scareverse:cpu-jobs:queue",
-  "queue_l2": "scareverse:cpu-jobs:queue",
+  "queue": "scareverse:sd-jobs:queue",
+  "queue_l1": "scareverse:sd-jobs:queue",
+  "queue_l2": "scareverse:sd-jobs:queue",
   "result_storage": "rpush_l1",
   "result_key_prefix": "scareverse:sd-results",
   "result_key_ttl": 120,

@@ -3,6 +3,8 @@
   "version": "2.1.0",
   "description": "LLM chat inference via Ollama service",
 
+  "queue_type": "cpu",
+
   "execution_model": "service",
 
   "service": {
@@ -15,9 +17,9 @@
     "timeout_seconds": 120
   },
 
-  "queue": "scareverse:cpu-jobs:queue",
-  "queue_l1": "scareverse:cpu-jobs:queue",
-  "queue_l2": "scareverse:cpu-jobs:queue",
+  "queue": "scareverse:ollama-jobs:queue",
+  "queue_l1": "scareverse:ollama-jobs:queue",
+  "queue_l2": "scareverse:ollama-jobs:queue",
   "result_storage": "rpush_l1",
   "result_key_prefix": "scareverse:ollama-results",
   "result_key_ttl": 60,

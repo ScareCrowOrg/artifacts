@@ -507,9 +507,14 @@ def _build_job_types_config(
     for name, job_type in loaded.items():
         execution_model = job_type.get("execution_model", "service")
 
+        # queue_type declares whether this job needs GPU or CPU resources.
+        # Defaults to "cpu" if not specified (safe fallback for CPU workers).
+        queue_type = job_type.get("queue_type", "cpu")
+
         if execution_model == "subprocess":
             entry: Dict[str, Any] = {
                 "execution_model": "subprocess",
+                "queue_type": queue_type,
                 "worker_name": Path(job_type.get("worker", {}).get("path", name)).name,
                 "worker": job_type.get("worker", {}),
                 "configuration": job_type.get("configuration", {}),
@@ -527,6 +532,7 @@ def _build_job_types_config(
             endpoint = service_cfg.get("endpoint") or job_type.get("endpoint")
             entry = {
                 "execution_model": "service",
+                "queue_type": queue_type,
                 "worker_name": job_type.get("worker_type", name),
                 "service_name": service_cfg.get("name", ""),
                 "endpoint": endpoint,

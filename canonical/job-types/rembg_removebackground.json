@@ -3,6 +3,8 @@
   "version": "2.1.0",
   "description": "Background removal via rembg subprocess worker",
 
+  "queue_type": "cpu",
+
   "execution_model": "subprocess",
 
   "worker": {
@@ -19,9 +21,9 @@
     "requires_internet": false
   },
 
-  "queue": "scareverse:cpu-jobs:queue",
-  "queue_l1": "scareverse:cpu-jobs:queue",
-  "queue_l2": "scareverse:cpu-jobs:queue",
+  "queue": "scareverse:rembg-jobs:queue",
+  "queue_l1": "scareverse:rembg-jobs:queue",
+  "queue_l2": "scareverse:rembg-jobs:queue",
   "result_storage": "rpush_l1",
   "result_key_prefix": "scareverse:rembg-results",
   "result_key_ttl": 120,

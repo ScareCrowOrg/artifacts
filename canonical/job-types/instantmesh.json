@@ -3,6 +3,8 @@
   "version": "2.1.0",
   "description": "3D mesh generation via InstantMesh service",
 
+  "queue_type": "gpu",
+
   "execution_model": "service",
 
   "service": {
