@@ -34,7 +34,7 @@ services:
   ollama-raw:
     build:
       context: .
-      dockerfile: Dockerfile.raw
+      dockerfile: Dockerfile
     image: scareverse-ollama:latest
     container_name: scareverse-ollama-raw
     runtime: nvidia

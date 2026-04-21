@@ -6,11 +6,11 @@
   "imageTag": "staging",
   "checksum": "sha256:ded44d1012f9e7c1e39a7c3192c583c21c3438e0ec6dff1fe840bb88a7095fae",
   "dependencies": [
-    "Dockerfile.raw",
+    "Dockerfile",
     "heartbeat.py",
     "entrypoint-raw.sh"
   ],
   "generate_env_file": false,
   "totp_seed": false,
-  "lastBuilt": "2026-04-21T20:43:44.085Z"
+  "lastBuilt": "2026-04-21T20:50:34.988Z"
 }

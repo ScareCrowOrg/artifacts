@@ -1,30 +1,31 @@
 # ==============================================================================
-# Ollama FastAPI Wrapper Service
+# Ollama Service with Model Pre-loading and Heartbeat
 # ==============================================================================
-# HTTP proxy to raw Ollama container with Redis L1 heartbeat registration.
+# Extends official Ollama image with:
+# 1. entrypoint-raw.sh: pre-pulls models, starts heartbeat, runs Ollama
+# 2. heartbeat.py: registers state:service:ollama:available in Redis L1
 #
 
-FROM python:3.11-slim
+FROM ollama/ollama:latest
 
-WORKDIR /app
+# Install curl + python3 (for heartbeat)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-RUN pip install --no-cache-dir \
-    fastapi==0.104.1 \
-    uvicorn[standard]==0.24.0 \
-    httpx==0.25.1 \
-    pydantic==2.4.2 \
-    redis==5.0.1
+# Install Python dependencies for heartbeat
+RUN pip3 install --no-cache-dir --break-system-packages redis httpx
 
-# Copy service code
-COPY main.py .
+# Copy heartbeat script and entrypoint
+COPY heartbeat.py /app/heartbeat.py
+COPY entrypoint-raw.sh /entrypoint.sh
 
-# Expose port
-EXPOSE 11434
+RUN chmod +x /app/heartbeat.py /entrypoint.sh
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:11434/health', timeout=5).raise_for_status()" || exit 1
+# Set Python path for imports (artifacts mounted via docker-compose volume)
+ENV PYTHONPATH=/app/artifacts
 
-# Run service
-CMD ["python", "main.py"]
+# Override the default CMD with our entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
