@@ -76,7 +76,14 @@ class WorkerExecutor:
         worker_dir = self.workers_path / worker_name
         entry_point = worker_dir / worker_config["worker"].get("entry_point", "main.py")
 
-        logger.info("[%s] Launching subprocess worker: %s", job_id, worker_name)
+        logger.info(
+            "[%s] Launching subprocess worker: %s (timeout=%ds, entry=%s)",
+            job_id,
+            worker_name,
+            timeout,
+            entry_point.name,
+        )
+        logger.debug("[%s] Worker input data: %s", job_id, json.dumps(worker_input)[:500])
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -89,15 +96,20 @@ class WorkerExecutor:
             )
 
             stdin_bytes = json.dumps(worker_input).encode()
+            logger.debug("[%s] Sending %d bytes to worker stdin", job_id, len(stdin_bytes))
+
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 proc.communicate(stdin_bytes),
                 timeout=float(timeout),
             )
 
             if stderr_bytes:
-                logger.debug("[%s] Worker stderr: %s", job_id, stderr_bytes.decode()[:2000])
+                stderr_text = stderr_bytes.decode()
+                logger.info("[%s] Worker stderr (%d bytes): %s", job_id, len(stderr_bytes), stderr_text[:1500])
 
             raw_output = stdout_bytes.decode().strip()
+            logger.debug("[%s] Worker stdout (%d bytes): %s", job_id, len(stdout_bytes), raw_output[:500])
+
             if not raw_output:
                 raise ValueError(
                     f"Worker {worker_name} produced no stdout output. "
@@ -112,10 +124,16 @@ class WorkerExecutor:
                 ) from exc
 
             if output.get("success"):
-                logger.info("[%s] Worker %s completed successfully", job_id, worker_name)
+                logger.info(
+                    "[%s] Worker %s completed successfully with result: %s",
+                    job_id,
+                    worker_name,
+                    json.dumps(output.get("result", {}))[:300],
+                )
                 return output.get("result", {})
 
             error_msg = output.get("error", "Unknown worker error")
+            logger.error("[%s] Worker %s reported failure: %s", job_id, worker_name, error_msg)
             raise ValueError(f"Worker {worker_name} reported failure: {error_msg}")
 
         except asyncio.TimeoutError as exc:
@@ -141,6 +159,7 @@ class WorkerExecutor:
         and installing requirements if it doesn't already exist.
         """
         if worker_name in self._venv_ready:
+            logger.debug("Venv cache hit for worker: %s", worker_name)
             return self._venv_ready[worker_name]
 
         worker_dir = self.workers_path / worker_name
@@ -148,20 +167,33 @@ class WorkerExecutor:
         python_exe = venv_dir / "bin" / "python"
 
         if python_exe.exists():
+            logger.info("Venv already exists for worker %s at %s", worker_name, venv_dir)
             self._venv_ready[worker_name] = python_exe
             return python_exe
 
-        logger.info("Creating .venv for worker: %s", worker_name)
-        await self._run_command([sys.executable, "-m", "venv", str(venv_dir)])
+        logger.info("Creating .venv for worker: %s (path=%s)", worker_name, venv_dir)
+        try:
+            await self._run_command([sys.executable, "-m", "venv", str(venv_dir)])
+            logger.info("Venv created successfully for worker: %s", worker_name)
+        except RuntimeError as exc:
+            logger.error("Failed to create venv for worker %s: %s", worker_name, exc)
+            raise
 
         requirements = worker_dir / "requirements.txt"
         if requirements.exists():
-            logger.info("Installing requirements for worker: %s", worker_name)
-            await self._run_command(
-                [str(python_exe), "-m", "pip", "install", "--quiet", "-r", str(requirements)]
-            )
+            logger.info("Installing requirements for worker: %s (file=%s)", worker_name, requirements)
+            try:
+                await self._run_command(
+                    [str(python_exe), "-m", "pip", "install", "--quiet", "-r", str(requirements)]
+                )
+                logger.info("Requirements installed successfully for worker: %s", worker_name)
+            except RuntimeError as exc:
+                logger.error("Failed to install requirements for worker %s: %s", worker_name, exc)
+                raise
+        else:
+            logger.debug("No requirements.txt found for worker: %s", worker_name)
 
-        logger.info("Venv ready for worker: %s", worker_name)
+        logger.info("Venv ready for worker: %s, python=%s", worker_name, python_exe)
         self._venv_ready[worker_name] = python_exe
         return python_exe
 

@@ -182,7 +182,6 @@ def get_config(key: str) -> Optional[str]:
     to avoid blocking startup. The fallback to env vars allows app to load even
     if Launcher/Redis are not yet ready.
     """
-    logger.debug("[Config] Resolving '%s'...", key)
 
     # ------------------------------------------------------------------
     # Path 1: vault.* → Lazy secrets cache or SecretClient
@@ -193,22 +192,13 @@ def get_config(key: str) -> Optional[str]:
         # Check lazy secrets cache first (per-process, no TTL)
         hit, cached_value = _secrets_cache_get(secret_name)
         if hit:
-            logger.debug("[Config] Lazy cache hit for secret '%s'. Source: SECRETS_CACHE", secret_name)
-            # Log first 15 chars for validation (security: not full value)
-            secret_preview = cached_value[:15] if len(cached_value) >= 15 else cached_value
-            logger.info("[Config] Returning cached secret '%s' (first 15 chars): %s...", secret_name, secret_preview)
             return cached_value
 
-        logger.debug("[Config] Detected vault prefix. Requesting from SecretClient...")
         client = _get_secret_client()
         if client is not None:
             try:
                 value = client.request_secret(secret_name)
                 if value is not None:
-                    logger.debug("[Config] SecretClient: secret retrieved. Source: VAULT")
-                    # Log first 15 chars for validation (security: not full value)
-                    secret_preview = value[:15] if len(value) >= 15 else value
-                    logger.info(f"[Config] Secret '{secret_name}' cached (first 15 chars): {secret_preview}...")
                     # Cache on first successful retrieval (lazy cache, no TTL)
                     _secrets_cache_set(secret_name, value)
                     return value
@@ -223,14 +213,9 @@ def get_config(key: str) -> Optional[str]:
         env_key = secret_name.upper().replace(":", "_").replace(".", "_").replace("-", "_")
         env_value = os.getenv(env_key)
         if env_value is not None:
-            logger.debug("[Config] Found in env (fallback). Source: ENV key=%s", env_key)
-            # Log first 15 chars for validation (security: not full value)
-            secret_preview = env_value[:15] if len(env_value) >= 15 else env_value
-            logger.info("[Config] Secret '%s' from env (first 15 chars): %s...", secret_name, secret_preview)
             # Cache env fallback too (for consistency)
             _secrets_cache_set(secret_name, env_value)
             return env_value
-        logger.debug("[Config] Key '%s' not found anywhere", key)
         return None
 
     # ------------------------------------------------------------------
@@ -240,7 +225,6 @@ def get_config(key: str) -> Optional[str]:
     # Check in-memory cache first.
     hit, cached_value = _cache_get(key)
     if hit:
-        logger.debug("[Config] Cache hit for '%s'. Source: CACHE", key)
         return cached_value
 
     # Try Redis L1.
@@ -257,9 +241,6 @@ def get_config(key: str) -> Optional[str]:
                         value = str(value)
                 except (json.JSONDecodeError, ValueError):
                     value = raw
-                logger.debug(
-                    "[Config] Found in Redis (%s). Source: REDIS_L1", redis_key
-                )
                 _cache_set(key, value)
                 return value
         except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as exc:
@@ -271,9 +252,7 @@ def get_config(key: str) -> Optional[str]:
     env_key = key.upper().replace(":", "_").replace(".", "_").replace("-", "_")
     env_value = os.getenv(env_key)
     if env_value is not None:
-        logger.debug("[Config] Found in env. Source: ENV key=%s", env_key)
         _cache_set(key, env_value)
         return env_value
 
-    logger.debug("[Config] Key '%s' not found anywhere", key)
     return None
