@@ -68,7 +68,7 @@ class SecretClient:
         )
         logger.info(f"[SecretClient] Connected to Redis L1 at {REDIS_HOST}:{REDIS_PORT} (with auth)")
 
-    def request_secret(self, secret_key: str, timeout: int = 10) -> Optional[str]:
+    def request_secret(self, secret_key: str, timeout: int = 60) -> Optional[str]:
         """
         Request a secret from the Launcher.
 
@@ -78,7 +78,7 @@ class SecretClient:
 
         Args:
             secret_key: Logical name of the secret (e.g. ``"redis-password"``).
-            timeout:    Maximum seconds to wait for the Launcher's response (default: 10s).
+            timeout:    Maximum seconds to wait for the Launcher's response (default: 60s).
 
         Returns:
             Decrypted plaintext secret string, or ``None`` if the request
@@ -251,9 +251,9 @@ class SecretClient:
         try:
             timestamp_sec = timestamp_ms // 1000
             totp_code = self._totp.generate_code(timestamp_sec)
-            logger.debug(f"[SecretClient._decrypt] ✅ TOTP code regenerated (length: {len(totp_code)} chars)")
-            logger.debug(f"[SecretClient._decrypt]    Timestamp: {timestamp_ms}ms = {timestamp_sec}s")
-            logger.debug(f"[SecretClient._decrypt]    TOTP code: {totp_code}")
+            logger.info(f"[SecretClient._decrypt] ✅ TOTP code regenerated (length: {len(totp_code)} chars)")
+            logger.info(f"[SecretClient._decrypt]    Timestamp: {timestamp_ms}ms = {timestamp_sec}s")
+            logger.info(f"[SecretClient._decrypt]    TOTP code: {totp_code}")
         except Exception as e:
             logger.error("[SecretClient._decrypt] ❌ Failed to generate TOTP code")
             logger.error(f"[SecretClient._decrypt] Error: {type(e).__name__}: {str(e)}")
