@@ -45,10 +45,12 @@ from job_executor import execute_subprocess_job
 # Shared utilities from artifacts/canonical/shared (PYTHONPATH=/app/artifacts in Docker)
 try:
     from canonical.shared.centralhub_redis_client import CentralHubRedisClient
+    from canonical.shared import redis_client
 except ImportError:
     # Fallback for local development (relative import)
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'shared'))
     from centralhub_redis_client import CentralHubRedisClient
+    import redis_client
 from json_logger import configure_json_logging
 from metrics import GateKeeperMetrics
 from orchestrator import ResourceOrchestrator
@@ -87,18 +89,6 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _build_redis(host: str, port: int, password: str, db: int) -> aioredis.Redis:
-    kwargs: Dict[str, Any] = {
-        "host": host,
-        "port": port,
-        "db": db,
-        "decode_responses": True,
-        "socket_connect_timeout": 10,
-        "socket_keepalive": True,
-    }
-    if password:
-        kwargs["password"] = password
-    return aioredis.Redis(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -151,9 +141,9 @@ class GateKeeper:
     async def run(self) -> None:
         logger.info("GateKeeper %s starting up", self.worker_id)
         logger.info(
-            "L1: %s:%d  L2: %s (via CentralHub HTTP)",
-            config.REDIS_L1_HOST,
-            config.REDIS_L1_PORT,
+            "L1: %s:%s  L2: %s (via CentralHub HTTP)",
+            redis_client.REDIS_L1_HOST,
+            redis_client.REDIS_L1_PORT,
             config.CENTRALHUB_URL,
         )
         logger.info("Workers path: %s", config.WORKERS_PATH)
@@ -453,12 +443,7 @@ async def main() -> None:
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
-    redis_l1 = _build_redis(
-        config.REDIS_L1_HOST,
-        config.REDIS_L1_PORT,
-        config.REDIS_L1_PASSWORD,
-        config.REDIS_L1_DB,
-    )
+    redis_l1 = await redis_client.get_redis_client()
     # Initialize CentralHub L2 client with resolved token
     logger.info("[main] ▶️ Initializing CentralHubRedisClient...")
     logger.info(f"[main]    URL: {config.CENTRALHUB_URL}")
@@ -484,7 +469,7 @@ async def main() -> None:
         gatekeeper = GateKeeper(redis_l1, redis_l2_client, http_client)
         await gatekeeper.run()
 
-    await redis_l1.aclose()
+    await redis_client.close_redis_client()
     await redis_l2_client.close()
 
 
