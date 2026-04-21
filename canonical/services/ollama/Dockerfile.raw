@@ -14,18 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy artifacts for heartbeat (BaseService import)
-COPY ../../../../artifacts /app/artifacts
-
-# Copy heartbeat script
+# Copy heartbeat script and entrypoint
 COPY heartbeat.py /app/heartbeat.py
-RUN chmod +x /app/heartbeat.py
-
-# Copy entrypoint script
 COPY entrypoint-raw.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
-# Set Python path for imports
+RUN chmod +x /app/heartbeat.py /entrypoint.sh
+
+# Set Python path for imports (artifacts mounted via docker-compose volume)
 ENV PYTHONPATH=/app/artifacts
 
 # Override the default CMD with our entrypoint

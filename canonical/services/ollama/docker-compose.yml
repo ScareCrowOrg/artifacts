@@ -61,6 +61,10 @@ services:
       HEARTBEAT_TTL: ${HEARTBEAT_TTL:-180}
 
     volumes:
+      # Artifacts directories (for BaseService heartbeat imports)
+      - ../../../../artifacts/canonical:/app/artifacts/canonical:ro
+      - ../../../../artifacts/shared:/app/artifacts/shared:ro
+
       # Named volume for model cache (shared across all tenants)
       # First start: downloads all 7 Ollama models (~40GB total)
       # Subsequent starts: instant (uses cached models)
