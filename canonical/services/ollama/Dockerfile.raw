@@ -1,0 +1,18 @@
+# ==============================================================================
+# Ollama Raw Service with Model Pre-loading
+# ==============================================================================
+# Extends official Ollama image with entrypoint that pre-pulls models
+# on first start, caching them in mounted volume.
+#
+
+FROM ollama/ollama:latest
+
+# Install curl for health checks (might already be present)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# Copy entrypoint script
+COPY entrypoint-ollama.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Override the default CMD with our entrypoint
+ENTRYPOINT ["/entrypoint.sh"]

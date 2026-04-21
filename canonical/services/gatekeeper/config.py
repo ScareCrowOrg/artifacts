@@ -26,7 +26,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 # Configure logging EARLY (before importing config_manager) so all loggers work
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Note: Level is set later in main.py via configure_json_logging(LOG_LEVEL)
+# For now, set to INFO to avoid flooding with third-party DEBUG logs during config load
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Log environment at startup
