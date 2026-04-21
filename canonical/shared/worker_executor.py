@@ -68,6 +68,8 @@ class WorkerExecutor:
 
         python_exe = await self._ensure_venv(worker_name)
 
+        # GateKeeper extracts input_data from job payload (which may be at top level)
+        # Pass extracted input_data wrapped back (worker interface expects input_data key)
         worker_input = {
             "job_id": job_id,
             "job_type": job_type,

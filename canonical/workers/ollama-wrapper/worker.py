@@ -47,6 +47,7 @@ class OllamaWorker(BaseWorker):
         self.logger.info("[%s] input_data keys: %s", self.job_id, list(self.input_data.keys()))
         self.logger.info("[%s] input_data: %s", self.job_id, json.dumps(self.input_data, default=str)[:1000])
 
+        # self.input_data is wrapped by worker_executor, extract the payload
         payload = self.input_data.get("payload") or self.input_data
 
         self.logger.info("[%s] === PAYLOAD AFTER EXTRACTION ===", self.job_id)

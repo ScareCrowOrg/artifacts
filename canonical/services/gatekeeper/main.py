@@ -247,10 +247,20 @@ class GateKeeper:
 
         try:
             if execution_model == "subprocess":
-                # Subprocess workers receive a clean input_data dict via stdin.
-                # Support both "input_data" (subprocess contract) and "payload"
-                # (legacy backend format) for backward compatibility with queued jobs.
+                # Extract input_data from job payload (which may be desempacotar at top level)
+                # redis_client.py puts payload keys at top level: {job_id, job_type, user_id, queue, **payload}
+                # We need to extract back into input_data for worker_executor
                 input_data = job.get("input_data") or job.get("payload") or {}
+
+                # If input_data is empty, try to extract from top-level keys
+                # (keys that are not job metadata like job_id, job_type, user_id, queue)
+                if not input_data:
+                    metadata_keys = {"job_id", "job_type", "user_id", "queue", "_source"}
+                    input_data = {k: v for k, v in job.items() if k not in metadata_keys}
+
+                logger.info("[%s] === EXTRACTED INPUT_DATA FOR WORKER ===", job_id)
+                logger.info("[%s] extracted input_data keys: %s", job_id, list(input_data.keys()))
+
                 result = await execute_subprocess_job(job_type, job_id, input_data, route)
                 elapsed = time.time() - start_time
                 self.metrics.record_job_execution(job_type, elapsed, success=True)
