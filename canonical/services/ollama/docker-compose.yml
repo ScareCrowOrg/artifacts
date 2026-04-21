@@ -25,6 +25,10 @@ version: "3.9"
 #       docker network create scareverse-net
 # ==============================================================================
 
+volumes:
+  ollama-models:
+    driver: local
+
 services:
 
   ollama-raw:
@@ -57,16 +61,11 @@ services:
       HEARTBEAT_TTL: ${HEARTBEAT_TTL:-180}
 
     volumes:
-      # Mount local models cache directory (persisted across restarts)
-      # First start: downloads all 7 Ollama models (~40GB total), caches locally
-      # Subsequent starts: uses cached models from local directory (instant)
-      #
-      # Default: ~/ollama_cache (shared across all tenants)
-      # This avoids duplicating 40GB of models per tenant
-      # Override: set OLLAMA_MODELS_PATH env var for custom location
-      - type: bind
-        source: ${OLLAMA_MODELS_PATH:-~/ollama_cache}
-        target: /root/.ollama
+      # Named volume for model cache (shared across all tenants)
+      # First start: downloads all 7 Ollama models (~40GB total)
+      # Subsequent starts: instant (uses cached models)
+      # Storage: managed by Docker in C:\ProgramData\Docker\volumes\...
+      - ollama-models:/root/.ollama
 
     deploy:
       resources:

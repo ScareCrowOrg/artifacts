@@ -1,9 +1,10 @@
 #!/bin/sh
 #
 # Ollama service entrypoint (replaces original entrypoint.sh for raw container).
-# 1. Pre-pulls models (from entrypoint-ollama.sh)
-# 2. Starts heartbeat.py (fire-and-forget, registers in Redis and exits)
-# 3. Runs Ollama in foreground (PID 1)
+# 1. Starts Ollama and waits for readiness
+# 2. Starts heartbeat immediately (fire-and-forget, registers in Redis)
+# 3. Pre-pulls models in background (non-blocking)
+# 4. Runs Ollama in foreground (PID 1)
 #
 
 set -e
@@ -36,46 +37,56 @@ done
 echo "[entrypoint] ✅ Ollama is ready!"
 
 # ============================================================================
-# Pre-pull models
+# Start heartbeat IMMEDIATELY (fire-and-forget)
 # ============================================================================
-
-echo "[entrypoint] Pre-pulling models..."
-
-# Models from artifacts/canonical/ai_models/README.md
-MODELS=(
-  "mistral"           # 7B - general purpose
-  "phi"               # 2.7B - fast, lightweight
-  "phi3"              # 3.8B - Microsoft efficient
-  "deepseek-coder"    # 6.7B - code generation
-  "qwen2.5-coder"     # 14B - large code model
-  "gemma"             # 7B - Google open model
-)
-
-for model in "${MODELS[@]}"; do
-  echo "[entrypoint] Pulling $model..."
-  if ollama pull "$model"; then
-    echo "[entrypoint] ✅ $model pulled successfully"
-  else
-    echo "[entrypoint] ⚠️  Failed to pull $model (may retry on demand)"
-  fi
-done
-
-echo "[entrypoint] ✅ Model initialization complete!"
-
-# ============================================================================
-# Start heartbeat in background (fire-and-forget)
-# ============================================================================
-# heartbeat.py will start asyncio task, register in Redis, and exit immediately
+# This registers state:service:ollama:available in Redis L1 so Launcher knows
+# the service is alive. Model pre-pulling happens in the background afterward.
 
 echo "[entrypoint] Starting Ollama heartbeat registration..."
 python3 /app/heartbeat.py &
+HEARTBEAT_PID=$!
 
-# Give heartbeat time to register
-sleep 1
+# Give heartbeat time to register (should complete within 1-2s)
+sleep 2
+
+echo "[entrypoint] ✅ Heartbeat registered, service is discoverable"
+
+# ============================================================================
+# Pre-pull models in background (non-blocking)
+# ============================================================================
+# Models download asynchronously while service remains available.
+# If cache is already mounted and populated, this completes quickly.
+# First startup with no cache takes 30-45 min, but service is accessible.
+
+(
+  echo "[entrypoint] Pre-pulling models in background..."
+
+  # Models from artifacts/canonical/ai_models/README.md
+  MODELS=(
+    "mistral"           # 7B - general purpose
+    "phi"               # 2.7B - fast, lightweight
+    "phi3"              # 3.8B - Microsoft efficient
+    "deepseek-coder"    # 6.7B - code generation
+    "qwen2.5-coder"     # 14B - large code model
+    "gemma"             # 7B - Google open model
+  )
+
+  for model in "${MODELS[@]}"; do
+    echo "[entrypoint] Pulling $model..."
+    if ollama pull "$model"; then
+      echo "[entrypoint] ✅ $model pulled successfully"
+    else
+      echo "[entrypoint] ⚠️  Failed to pull $model (will retry on demand)"
+    fi
+  done
+
+  echo "[entrypoint] ✅ Model initialization complete!"
+) &
+MODELS_PID=$!
 
 # ============================================================================
 # Keep Ollama running in foreground (PID 1)
 # ============================================================================
 
-echo "[entrypoint] ✅ Ollama service ready"
+echo "[entrypoint] ✅ Ollama service ready and discoverable"
 wait $OLLAMA_PID
