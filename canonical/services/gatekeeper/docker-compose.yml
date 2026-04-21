@@ -43,7 +43,7 @@ services:
       WORKER_ID: ${WORKER_ID:-gatekeeper-service-01}
 
       # Redis L1 (ScareRunner / owner)
-      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
       REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
       REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}

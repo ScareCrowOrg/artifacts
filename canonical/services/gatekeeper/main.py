@@ -365,6 +365,20 @@ class GateKeeper:
                 logger.error("Failed to persist error for job %s: %s", job_id, exc)
 
     # ------------------------------------------------------------------
+    # Service Availability Check (via Redis L1 heartbeat)
+    # ------------------------------------------------------------------
+
+    async def _is_service_available(self, service_name: str) -> bool:
+        """Check if a service is available by verifying its heartbeat in Redis L1."""
+        try:
+            key = f"state:service:{service_name}:available"
+            exists = await self.redis_l1.exists(key)
+            return bool(exists)
+        except Exception as exc:
+            logger.warning("Failed to check service availability for %s: %s", service_name, exc)
+            return False
+
+    # ------------------------------------------------------------------
     # Service Registry: capability heartbeat
     # ------------------------------------------------------------------
 
@@ -372,8 +386,8 @@ class GateKeeper:
         """
         Heartbeat: publish which job-types this GateKeeper can execute.
 
-        Probes each service job-type endpoint to determine local capability.
-        Subprocess job-types are always listed (no endpoint to probe).
+        Checks service job-type availability via Redis L1 heartbeat keys.
+        Subprocess job-types are always listed (no heartbeat needed).
 
         Runs every WORKER_HEARTBEAT_INTERVAL seconds with TTL = 3× interval.
         """
@@ -389,11 +403,10 @@ class GateKeeper:
                     if execution_model == "subprocess":
                         serving_types.append(job_type)
                     else:
-                        endpoint = job_config.get("endpoint", "")
-                        health_path = job_config.get("health_path", "/health")
-                        if endpoint and await self._probe_http_health(
-                            f"{endpoint.rstrip('/')}{health_path}"
-                        ):
+                        # For service workers: check Redis L1 heartbeat (state:service:{name}:available)
+                        service_info = job_config.get("service", {})
+                        service_name = service_info.get("name", "")
+                        if service_name and await self._is_service_available(service_name):
                             serving_types.append(job_type)
 
                 key = f"state:gatekeeper:{self.worker_id}:serving_job_types"
