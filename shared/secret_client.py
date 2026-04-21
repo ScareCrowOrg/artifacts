@@ -249,8 +249,11 @@ class SecretClient:
         # Sub-step 2: Regenerate TOTP code
         logger.debug("[SecretClient._decrypt] Sub-step 2: Regenerating TOTP code from timestamp")
         try:
-            totp_code = self._totp.generate_code(timestamp_ms // 1000)
+            timestamp_sec = timestamp_ms // 1000
+            totp_code = self._totp.generate_code(timestamp_sec)
             logger.debug(f"[SecretClient._decrypt] ✅ TOTP code regenerated (length: {len(totp_code)} chars)")
+            logger.debug(f"[SecretClient._decrypt]    Timestamp: {timestamp_ms}ms = {timestamp_sec}s")
+            logger.debug(f"[SecretClient._decrypt]    TOTP code: {totp_code}")
         except Exception as e:
             logger.error("[SecretClient._decrypt] ❌ Failed to generate TOTP code")
             logger.error(f"[SecretClient._decrypt] Error: {type(e).__name__}: {str(e)}")
