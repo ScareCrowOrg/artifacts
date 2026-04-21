@@ -1,18 +1,32 @@
 # ==============================================================================
-# Ollama Raw Service with Model Pre-loading
+# Ollama Raw Service with Model Pre-loading and Heartbeat
 # ==============================================================================
-# Extends official Ollama image with entrypoint that pre-pulls models
-# on first start, caching them in mounted volume.
+# Extends official Ollama image with:
+# 1. entrypoint-raw.sh: pre-pulls models, starts heartbeat, runs Ollama
+# 2. heartbeat.py: registers state:service:ollama:available in Redis L1
 #
 
 FROM ollama/ollama:latest
 
-# Install curl for health checks (might already be present)
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Install curl + python3 (for heartbeat)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy artifacts for heartbeat (BaseService import)
+COPY ../../../../artifacts /app/artifacts
+
+# Copy heartbeat script
+COPY heartbeat.py /app/heartbeat.py
+RUN chmod +x /app/heartbeat.py
 
 # Copy entrypoint script
-COPY entrypoint-ollama.sh /entrypoint.sh
+COPY entrypoint-raw.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# Set Python path for imports
+ENV PYTHONPATH=/app/artifacts
 
 # Override the default CMD with our entrypoint
 ENTRYPOINT ["/entrypoint.sh"]

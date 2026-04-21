@@ -1,19 +1,19 @@
 version: "3.9"
 
 # ==============================================================================
-# Ollama Infrastructure Service with FastAPI Wrapper
+# Ollama Infrastructure Service
 # ==============================================================================
-# Two-tier service:
-#   1. ollama-raw: Raw Ollama container (GPU inference)
-#   2. ollama-wrapper: FastAPI wrapper with Redis heartbeat registration
+# Single container: ollama-raw with integrated heartbeat registration
 #
-# The wrapper:
-#   - Runs on port 11434 (externally visible)
-#   - Proxies requests to ollama-raw:11434
-#   - Registers heartbeat to Redis L1 (state:service:ollama:available)
-#   - Enables GateKeeper to detect service health via Redis (no HTTP probes needed)
+# Architecture:
+#   1. Dockerfile.raw: extends ollama/ollama with heartbeat.py + entrypoint-raw.sh
+#   2. entrypoint-raw.sh: pre-pulls models, starts heartbeat, runs Ollama
+#   3. heartbeat.py: registers state:service:ollama:available in Redis L1
+#   4. GateKeeper workers call ollama-raw:11434 directly (no proxy layer)
 #
-# GateKeeper routes "ollama_generate" / "ollama_chat" jobs to wrapper via HTTP.
+# Volume mount: models cached locally at OLLAMA_MODELS_PATH (mounted volume)
+#   First start: downloads all 7 models (~40GB total), ~30-45 min
+#   Subsequent starts: instant (uses cached models)
 #
 # Usage:
 #   docker-compose up -d
@@ -23,7 +23,6 @@ version: "3.9"
 #   - NVIDIA Container Toolkit installed
 #   - External network scareverse-net created:
 #       docker network create scareverse-net
-#   - .env file with REDIS_L1_HOST, REDIS_L1_PASSWORD, OLLAMA_MODELS_PATH
 # ==============================================================================
 
 services:
@@ -39,18 +38,34 @@ services:
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       OLLAMA_HOST: "0.0.0.0:11434"
-      # Models directory (persisted locally to avoid re-downloading)
       OLLAMA_MODELS: /root/.ollama
+
+      # Python path for heartbeat.py imports
+      PYTHONPATH: /app/artifacts
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Redis L1 (for heartbeat registration)
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
+      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
+      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
+      REDIS_L1_DB: ${REDIS_L1_DB:-0}
+
+      # Heartbeat configuration (Launcher-injected for service availability tracking)
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-60}
+      HEARTBEAT_TTL: ${HEARTBEAT_TTL:-180}
 
     volumes:
       # Mount local models cache directory (persisted across restarts)
       # First start: downloads all 7 Ollama models (~40GB total), caches locally
       # Subsequent starts: uses cached models from local directory (instant)
       #
-      # Default: .scareverse/staging/ollama-models
-      # Override: set OLLAMA_MODELS_PATH env var (e.g., via settings.json → Launcher)
+      # Default: ~/ollama_cache (shared across all tenants)
+      # This avoids duplicating 40GB of models per tenant
+      # Override: set OLLAMA_MODELS_PATH env var for custom location
       - type: bind
-        source: ${OLLAMA_MODELS_PATH:-.scareverse/staging/ollama-models}
+        source: ${OLLAMA_MODELS_PATH:-~/ollama_cache}
         target: /root/.ollama
 
     deploy:
@@ -61,9 +76,9 @@ services:
               count: all
               capabilities: [gpu]
 
-    # Internal only - no port exposure
-    expose:
-      - "11434"
+    # Expose port 11434 for GateKeeper workers
+    ports:
+      - "11434:11434"
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
@@ -71,53 +86,6 @@ services:
       timeout: 15s
       start_period: 90s
       retries: 5
-
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-    networks:
-      - scareverse-net
-
-  ollama-wrapper:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: scareverse-ollama-service
-    depends_on:
-      - ollama-raw
-    environment:
-      OLLAMA_HOST: "http://ollama-raw:11434"
-      OLLAMA_REQUEST_TIMEOUT: "120"
-      PYTHONPATH: /app/artifacts
-      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
-      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
-      REDIS_L1_DB: ${REDIS_L1_DB:-0}
-      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
-      SERVICE_HOST: "0.0.0.0"
-      SERVICE_PORT: "11434"
-      LOG_LEVEL: "INFO"
-
-      # Heartbeat (Launcher-injected for service availability tracking)
-      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-60}
-      HEARTBEAT_TTL: ${HEARTBEAT_TTL:-180}
-
-    volumes:
-      # Artifacts (for canonical.shared.services.base_service import)
-      - ../../../../artifacts:/app/artifacts:ro
-
-    ports:
-      - "11434:11434"
-
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/health"]
-      interval: 30s
-      timeout: 15s
-      start_period: 30s
-      retries: 3
 
     restart: unless-stopped
     logging:

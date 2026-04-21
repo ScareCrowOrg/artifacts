@@ -21,7 +21,7 @@ except ImportError:
         sys.path.insert(0, str(_canonical.parent))
     from canonical.shared.base_worker import BaseWorker
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://scareverse-ollama-service:11434")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://scareverse-ollama-raw:11434")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_REQUEST_TIMEOUT", "120"))
 
 
