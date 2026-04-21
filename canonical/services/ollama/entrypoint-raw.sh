@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Ollama service entrypoint (replaces original entrypoint.sh for raw container).
 # 1. Starts Ollama and waits for readiness
@@ -21,6 +21,17 @@ echo "[entrypoint] Starting Ollama heartbeat registration (fire-and-forget)..."
 echo "[entrypoint] PYTHONPATH=${PYTHONPATH}"
 echo "[entrypoint] REDIS_L1_HOST=${REDIS_L1_HOST}"
 echo "[entrypoint] REDIS_L1_PORT=${REDIS_L1_PORT}"
+
+# Diagnostic: check python3 configuration and redis installation
+echo "[entrypoint] === Python3 Diagnostics ==="
+echo "[entrypoint] python3 location: $(which python3)"
+echo "[entrypoint] python3 version: $(python3 --version)"
+echo "[entrypoint] python3 sys.path:"
+python3 -c "import sys; [print(f'  {p}') for p in sys.path]" 2>&1
+echo "[entrypoint] pip3 list | grep redis:"
+pip3 list | grep -i redis || echo "  (redis not found in pip list)"
+echo "[entrypoint] Checking python3 redis module import:"
+python3 -c "import redis; print(f'✅ redis found at: {redis.__file__}')" 2>&1 || echo "[entrypoint] ⚠️  redis import failed"
 
 # Run heartbeat in background - outputs to stderr so docker logs captures it
 echo "[entrypoint] About to execute: python3 /app/heartbeat.py"
