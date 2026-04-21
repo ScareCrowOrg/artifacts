@@ -91,6 +91,13 @@ class WorkerExecutor:
             entry_point,
         )
         logger.info("[%s] Entry point exists: %s", job_id, entry_point.exists())
+
+        # DEBUG: Log complete worker input that will be sent via stdin
+        logger.info("[%s] === WORKER INPUT TO STDIN ===", job_id)
+        logger.info("[%s] worker_input keys: %s", job_id, list(worker_input.keys()))
+        logger.info("[%s] job_type: %s", job_id, worker_input.get("job_type"))
+        logger.info("[%s] input_data keys: %s", job_id, list(worker_input.get("input_data", {}).keys()))
+        logger.info("[%s] Complete stdin payload: %s", job_id, json.dumps(worker_input, default=str)[:1500])
         logger.debug("[%s] Worker input data: %s", job_id, json.dumps(worker_input)[:500])
 
         try:
@@ -120,6 +127,11 @@ class WorkerExecutor:
                 logger.info("[%s] Worker stderr (%d bytes): %s", job_id, len(stderr_bytes), stderr_text[:2000])
 
             raw_output = stdout_bytes.decode().strip()
+
+            # DEBUG: Log raw stdout before parsing
+            logger.info("[%s] === WORKER STDOUT INSPECTION ===", job_id)
+            logger.info("[%s] stdout length: %d bytes", job_id, len(stdout_bytes))
+            logger.info("[%s] raw_output: %s", job_id, raw_output[:1500])
             logger.debug("[%s] Worker stdout (%d bytes): %s", job_id, len(stdout_bytes), raw_output[:500])
 
             if not raw_output:

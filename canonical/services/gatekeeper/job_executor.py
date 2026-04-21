@@ -55,6 +55,13 @@ async def execute_subprocess_job(
     """
     executor = _get_executor()
     logger.info("[%s] Dispatching subprocess job type=%s", job_id, job_type)
+
+    # DEBUG: Log input_data structure
+    import json
+    logger.info("[%s] === INPUT_DATA TO WORKER ===", job_id)
+    logger.info("[%s] input_data keys: %s", job_id, list(input_data.keys()))
+    logger.info("[%s] input_data: %s", job_id, json.dumps(input_data, default=str)[:1000])
+
     return await executor.execute(job_type, job_id, input_data, job_type_config)
 
 

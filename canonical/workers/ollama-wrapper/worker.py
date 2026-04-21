@@ -40,25 +40,51 @@ class OllamaWorker(BaseWorker):
 
     def execute(self) -> Dict[str, Any]:
         job_type = self.job_type
+
+        # DEBUG: Log complete input_data structure
+        self.logger.info("[%s] === INPUT DATA INSPECTION ===", self.job_id)
+        self.logger.info("[%s] job_type: %s", self.job_id, job_type)
+        self.logger.info("[%s] input_data keys: %s", self.job_id, list(self.input_data.keys()))
+        self.logger.info("[%s] input_data: %s", self.job_id, json.dumps(self.input_data, default=str)[:1000])
+
         payload = self.input_data.get("payload") or self.input_data
+
+        self.logger.info("[%s] === PAYLOAD AFTER EXTRACTION ===", self.job_id)
+        self.logger.info("[%s] payload keys: %s", self.job_id, list(payload.keys()) if isinstance(payload, dict) else "NOT A DICT")
+        self.logger.info("[%s] payload: %s", self.job_id, json.dumps(payload, default=str)[:1000])
 
         self.logger.debug("[%s] Input payload: %s", self.job_id, json.dumps(payload)[:500])
 
         if job_type == "ollama_generate":
             endpoint = "/api/generate"
+            prompt = payload.get("prompt", "")
+            model = payload.get("model", "mistral")
+            options = payload.get("options", {})
+
+            self.logger.info("[%s] Building generate request: prompt_len=%d, model=%s",
+                           self.job_id, len(prompt) if prompt else 0, model)
+
             body = {
-                "model": payload.get("model", "mistral"),
-                "prompt": payload.get("prompt", ""),
+                "model": model,
+                "prompt": prompt,
                 "stream": False,
-                "options": payload.get("options", {}),
+                "options": options,
             }
         elif job_type == "ollama_chat":
             endpoint = "/api/chat"
+            messages = payload.get("messages", [])
+            model = payload.get("model", "mistral")
+            options = payload.get("options", {})
+
+            self.logger.info("[%s] Building chat request: messages_count=%d, model=%s",
+                           self.job_id, len(messages) if messages else 0, model)
+            self.logger.info("[%s] Messages: %s", self.job_id, json.dumps(messages)[:800])
+
             body = {
-                "model": payload.get("model", "mistral"),
-                "messages": payload.get("messages", []),
+                "model": model,
+                "messages": messages,
                 "stream": False,
-                "options": payload.get("options", {}),
+                "options": options,
             }
         else:
             raise ValueError(f"Unsupported job_type for OllamaWorker: {job_type}")
@@ -80,9 +106,21 @@ class OllamaWorker(BaseWorker):
                 response.status_code,
                 len(response.content),
             )
+
+            # DEBUG: Log complete response
+            self.logger.info("[%s] === OLLAMA RESPONSE INSPECTION ===", self.job_id)
+            self.logger.info("[%s] response.text length: %d", self.job_id, len(response.text))
+            self.logger.info("[%s] response.text: %s", self.job_id, response.text[:2000])
+            self.logger.info("[%s] response.content: %s", self.job_id, response.content[:2000])
+
             self.logger.debug("[%s] Response body: %s", self.job_id, response.text[:500])
             response.raise_for_status()
             result = response.json()
+
+            self.logger.info("[%s] === PARSED JSON RESULT ===", self.job_id)
+            self.logger.info("[%s] result keys: %s", self.job_id, list(result.keys()))
+            self.logger.info("[%s] result: %s", self.job_id, json.dumps(result, default=str)[:1500])
+
             self.logger.info("[%s] Successfully parsed response JSON", self.job_id)
             return result
         except httpx.HTTPStatusError as exc:

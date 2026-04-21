@@ -224,6 +224,17 @@ class GateKeeper:
         """Route job to service executor or subprocess executor based on execution_model."""
         job_type = job.get("job_type") or job.get("type", "")
         job_id = job.get("job_id", "unknown")
+
+        # DEBUG: Log complete job structure
+        logger.info("[%s] === JOB DISPATCH INSPECTION ===", job_id)
+        logger.info("[%s] job_type: %s", job_id, job_type)
+        logger.info("[%s] job keys: %s", job_id, list(job.keys()))
+        logger.info("[%s] input_data/payload keys: %s", job_id, list(job.get("input_data", job.get("payload", {})).keys()))
+        if job.get("input_data"):
+            logger.info("[%s] input_data: %s", job_id, json.dumps(job.get("input_data"), default=str)[:1000])
+        elif job.get("payload"):
+            logger.info("[%s] payload: %s", job_id, json.dumps(job.get("payload"), default=str)[:1000])
+
         route = config.JOB_TYPES_CONFIG.get(job_type)
 
         if route is None:
