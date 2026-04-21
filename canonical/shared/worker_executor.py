@@ -83,6 +83,14 @@ class WorkerExecutor:
             timeout,
             entry_point.name,
         )
+        logger.info(
+            "[%s] Worker environment: python=%s, cwd=%s, entry_point=%s",
+            job_id,
+            python_exe,
+            worker_dir,
+            entry_point,
+        )
+        logger.info("[%s] Entry point exists: %s", job_id, entry_point.exists())
         logger.debug("[%s] Worker input data: %s", job_id, json.dumps(worker_input)[:500])
 
         try:
@@ -95,6 +103,8 @@ class WorkerExecutor:
                 cwd=str(worker_dir),
             )
 
+            logger.debug("[%s] Subprocess created with PID: %s", job_id, proc.pid)
+
             stdin_bytes = json.dumps(worker_input).encode()
             logger.debug("[%s] Sending %d bytes to worker stdin", job_id, len(stdin_bytes))
 
@@ -103,9 +113,11 @@ class WorkerExecutor:
                 timeout=float(timeout),
             )
 
+            logger.info("[%s] Worker process exited with returncode: %d", job_id, proc.returncode)
+
             if stderr_bytes:
                 stderr_text = stderr_bytes.decode()
-                logger.info("[%s] Worker stderr (%d bytes): %s", job_id, len(stderr_bytes), stderr_text[:1500])
+                logger.info("[%s] Worker stderr (%d bytes): %s", job_id, len(stderr_bytes), stderr_text[:2000])
 
             raw_output = stdout_bytes.decode().strip()
             logger.debug("[%s] Worker stdout (%d bytes): %s", job_id, len(stdout_bytes), raw_output[:500])

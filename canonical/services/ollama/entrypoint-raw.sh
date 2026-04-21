@@ -19,7 +19,31 @@ echo "[entrypoint] Starting Ollama server..."
 /usr/bin/ollama serve &
 OLLAMA_PID=$!
 
+# ============================================================================
+# Start heartbeat IMMEDIATELY in parallel with Ollama
+# ============================================================================
+# This registers state:service:ollama:available in Redis L1 ASAP so Launcher
+# knows the service is alive - doesn't wait for Ollama or models to finish.
+
+echo "[entrypoint] Starting Ollama heartbeat registration..."
+python3 /app/heartbeat.py > /tmp/heartbeat.log 2>&1 &
+HEARTBEAT_PID=$!
+
+# Give heartbeat time to register (should complete within 1-2s)
+sleep 3
+
+# Check if heartbeat succeeded
+if ! grep -q "Heartbeat running" /tmp/heartbeat.log 2>/dev/null; then
+  echo "[entrypoint] ⚠️  Heartbeat may have failed - check /tmp/heartbeat.log"
+  cat /tmp/heartbeat.log 2>/dev/null || echo "[entrypoint] (log file not found)"
+else
+  echo "[entrypoint] ✅ Heartbeat registered, service is discoverable"
+fi
+
+# ============================================================================
 # Wait for Ollama to be ready (max 120s)
+# ============================================================================
+
 echo "[entrypoint] Waiting for Ollama to be ready..."
 TIMEOUT=120
 ELAPSED=0
@@ -35,21 +59,6 @@ while ! curl -s http://localhost:11434/api/version > /dev/null 2>&1; do
 done
 
 echo "[entrypoint] ✅ Ollama is ready!"
-
-# ============================================================================
-# Start heartbeat IMMEDIATELY (fire-and-forget)
-# ============================================================================
-# This registers state:service:ollama:available in Redis L1 so Launcher knows
-# the service is alive. Model pre-pulling happens in the background afterward.
-
-echo "[entrypoint] Starting Ollama heartbeat registration..."
-python3 /app/heartbeat.py &
-HEARTBEAT_PID=$!
-
-# Give heartbeat time to register (should complete within 1-2s)
-sleep 2
-
-echo "[entrypoint] ✅ Heartbeat registered, service is discoverable"
 
 # ============================================================================
 # Pre-pull models in background (non-blocking)
