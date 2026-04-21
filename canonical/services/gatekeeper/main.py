@@ -13,7 +13,9 @@ Responsibilities:
 - For "subprocess": delegate to JobExecutor (subprocess runner).
 - Persist job result / error back to Redis.
 - Run ResourceOrchestrator monitoring loop concurrently.
-- Publish heartbeat to Redis L1.
+- Register serving capability (job-types available) to Redis L1.
+
+NOTE: Heartbeat registration moved to heartbeat.py (entrypoint fire-and-forget).
 
 IMPORTANT: GateKeeper is a JOB CONSUMER, not a health checker.
 - Services (Ollama, SD, InstantMesh) self-register availability via BaseService
@@ -175,7 +177,6 @@ class GateKeeper:
 
         tasks = [
             asyncio.create_task(self._job_loop(), name="job_loop"),
-            asyncio.create_task(self._heartbeat_loop(), name="heartbeat"),
             asyncio.create_task(
                 self.orchestrator.monitor_and_publish(), name="orchestrator"
             ),
@@ -362,24 +363,6 @@ class GateKeeper:
                 await self.redis_l2.expire(key, config.JOB_STATE_TTL_SECONDS)
             except Exception as exc:
                 logger.error("Failed to persist error for job %s: %s", job_id, exc)
-
-    # ------------------------------------------------------------------
-    # Heartbeat
-    # ------------------------------------------------------------------
-
-    async def _heartbeat_loop(self) -> None:
-        # Standard heartbeat key for Launcher to verify service availability
-        key = "state:service:gatekeeper:available"
-        while not _shutdown_event.is_set():
-            try:
-                await self.redis_l1.set(
-                    key,
-                    "1",
-                    ex=config.WORKER_HEARTBEAT_INTERVAL * 3,
-                )
-            except Exception as exc:
-                logger.warning("Heartbeat publish failed: %s", exc)
-            await asyncio.sleep(config.WORKER_HEARTBEAT_INTERVAL)
 
     # ------------------------------------------------------------------
     # Service Registry: capability heartbeat

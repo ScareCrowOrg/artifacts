@@ -20,4 +20,8 @@ ENV PYTHONPATH=/app/artifacts
 # Workers path inside the container (populated via volume mount)
 ENV WORKERS_PATH=/app/artifacts/canonical/workers
 
-CMD ["python", "main.py"]
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
