@@ -62,9 +62,9 @@ services:
       CENTRALHUB_SERVICE_TOKEN: ${CENTRALHUB_SERVICE_TOKEN:-internal-gatekeeper-token}
 
       # Service worker endpoint overrides (optional – default to JSON definitions)
-      WORKER_OLLAMA_GENERATE_ENDPOINT: ${WORKER_OLLAMA_GENERATE_ENDPOINT:-http://scareverse-ollama-service:8080}
-      WORKER_OLLAMA_CHAT_ENDPOINT: ${WORKER_OLLAMA_CHAT_ENDPOINT:-http://scareverse-ollama-service:8080}
-      WORKER_SD_GENERATE_ENDPOINT: ${WORKER_SD_GENERATE_ENDPOINT:-http://scareverse-sd-service:8080}
+      WORKER_OLLAMA_GENERATE_ENDPOINT: ${WORKER_OLLAMA_GENERATE_ENDPOINT:-http://scareverse-ollama-service:11434}
+      WORKER_OLLAMA_CHAT_ENDPOINT: ${WORKER_OLLAMA_CHAT_ENDPOINT:-http://scareverse-ollama-service:11434}
+      WORKER_SD_GENERATE_ENDPOINT: ${WORKER_SD_GENERATE_ENDPOINT:-http://scareverse-sd-service:9090}
       WORKER_INSTANTMESH_ENDPOINT: ${WORKER_INSTANTMESH_ENDPOINT:-http://scareverse-worker-instantmesh:8000}
 
       # Pooling timeouts
