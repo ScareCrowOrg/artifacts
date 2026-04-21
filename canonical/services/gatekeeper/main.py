@@ -309,8 +309,10 @@ class GateKeeper:
             prefix = route.get("result_key_prefix", config.JOB_STATE_KEY_PREFIX)
             ttl = route.get("result_key_ttl", config.JOB_STATE_TTL_SECONDS)
             key = f"{prefix}:{job_id}"
+            # Wrap result in status envelope for backend compatibility
+            wrapped_result = {"status": "success", "data": result}
             try:
-                await self.redis_l1.rpush(key, json.dumps(result))
+                await self.redis_l1.rpush(key, json.dumps(wrapped_result))
                 await self.redis_l1.expire(key, ttl)
                 logger.info(
                     "Job %s completed – result RPUSH to L1 key=%s (TTL %ds)",
