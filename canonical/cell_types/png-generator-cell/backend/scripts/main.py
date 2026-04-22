@@ -582,6 +582,12 @@ Generate the optimized negative prompt:"""
 
     # Queue image generation job via redis_client (owner-first scheduling)
     try:
+        import sys
+        import os
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+
         from image_generation import queue_image_generation_job
 
         logger.info(f"[SD Queue] Queueing image generation job via redis_client...")
