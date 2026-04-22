@@ -27,7 +27,7 @@
 #   - NVIDIA Container Toolkit installed (8-10GB VRAM minimum for SDXL)
 #   - External network scareverse-net created:
 #       docker network create scareverse-net
-#   - .env file with HF_HUB_CACHE_PATH (optional, defaults to /root/.cache/huggingface)
+#   - Docker volume sd-models will be created automatically for model cache persistence
 # ==============================================================================
 
 services:
@@ -40,7 +40,7 @@ services:
       context: .
       dockerfile: Dockerfile
 
-    image: localhost:5001/scareverse-stable-diffusion:staging
+    image: localhost:5001/scareverse-stable-diffusion:staging20260422T041256
 
     runtime: nvidia
 
@@ -70,10 +70,8 @@ services:
     volumes:
       # Artifacts (for canonical.shared.services.base_service import)
       - ../../../../artifacts:/app/artifacts:ro
-      # HuggingFace model cache (for SD models)
-      - type: bind
-        source: ${HF_HUB_CACHE_PATH:-/root/.cache/huggingface}
-        target: /root/.cache/huggingface
+      # HuggingFace model cache (for SD models) - named volume for persistence
+      - sd-models:/root/.cache/huggingface
 
     deploy:
       resources:
@@ -109,3 +107,7 @@ services:
 networks:
   scareverse-net:
     external: true
+
+volumes:
+  sd-models:
+    driver: local
