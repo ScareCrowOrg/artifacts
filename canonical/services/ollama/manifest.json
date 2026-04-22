@@ -2,8 +2,8 @@
   "version": "0.1",
   "name": "ollama",
   "build": false,
-  "image": "localhost:5001/scareverse-ollama:staging20260421T235225",
-  "imageTag": "staging20260421T235225",
+  "image": "localhost:5001/scareverse-ollama:staging20260422T001615",
+  "imageTag": "staging20260422T001615",
   "checksum": "sha256:ded44d1012f9e7c1e39a7c3192c583c21c3438e0ec6dff1fe840bb88a7095fae",
   "dependencies": [
     "Dockerfile",
@@ -12,5 +12,5 @@
   ],
   "generate_env_file": false,
   "totp_seed": false,
-  "lastBuilt": "2026-04-21T23:52:29.186Z"
+  "lastBuilt": "2026-04-22T00:16:18.910Z"
 }
