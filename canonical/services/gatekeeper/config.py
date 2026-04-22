@@ -395,7 +395,7 @@ class LoggingConfig:
 
     @staticmethod
     def log_level() -> str:
-        return _get_config("log_level") or "INFO"
+        return _get_config("log_level") or "DEBUG"
 
     @staticmethod
     def log_format() -> str:

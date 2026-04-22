@@ -190,20 +190,45 @@ class GateKeeper:
 
     async def _job_loop(self) -> None:
         while not _shutdown_event.is_set():
+            poll_start = time.time()
             queue_name, raw_job, source = await self.pooler.next_job()
+            poll_elapsed = time.time() - poll_start
+
             if raw_job is None:
+                logger.debug("⏳ Polling cycle: %.3fs – no job available", poll_elapsed)
                 continue
+
             try:
+                parse_start = time.time()
                 job = json.loads(raw_job)
                 job["_source"] = source
+                parse_elapsed = time.time() - parse_start
+
+                job_id = job.get("job_id", "?")
                 job_type = job.get("job_type") or job.get("type", "?")
+
                 logger.info(
-                    "Dispatching job_id=%s type=%s source=%s",
-                    job.get("job_id", "?"),
+                    "⏱️  Job polling=%0.3fs parse=%0.3fs | Dispatching job_id=%s type=%s source=%s",
+                    poll_elapsed,
+                    parse_elapsed,
+                    job_id,
                     job_type,
                     source,
                 )
+
+                dispatch_start = time.time()
                 await self._dispatch(queue_name, raw_job, job, source)
+                dispatch_elapsed = time.time() - dispatch_start
+
+                total_elapsed = time.time() - poll_start
+                logger.info(
+                    "✅ Job %s completed in %.3fs (polling=%.3fs parse=%.3fs dispatch=%.3fs)",
+                    job_id,
+                    total_elapsed,
+                    poll_elapsed,
+                    parse_elapsed,
+                    dispatch_elapsed,
+                )
             except json.JSONDecodeError as exc:
                 logger.error("Invalid JSON payload: %s – %s", exc, raw_job[:200])
                 await self.pooler.push_to_dead_letter(raw_job)
@@ -243,7 +268,7 @@ class GateKeeper:
             return
 
         execution_model = route.get("execution_model", "service")
-        start_time = time.time()
+        total_start = time.time()
 
         try:
             if execution_model == "subprocess":
@@ -261,33 +286,45 @@ class GateKeeper:
                 logger.info("[%s] === EXTRACTED INPUT_DATA FOR WORKER ===", job_id)
                 logger.info("[%s] extracted input_data keys: %s", job_id, list(input_data.keys()))
 
+                exec_start = time.time()
                 result = await execute_subprocess_job(job_type, job_id, input_data, route)
-                elapsed = time.time() - start_time
-                self.metrics.record_job_execution(job_type, elapsed, success=True)
+                exec_elapsed = time.time() - exec_start
+                logger.info("[%s] ⚙️  Subprocess execution: %.3fs", job_id, exec_elapsed)
+
+                persist_start = time.time()
+                self.metrics.record_job_execution(job_type, time.time() - total_start, success=True)
                 await self._persist_success(job_id, result, source, job_type)
+                persist_elapsed = time.time() - persist_start
+                logger.info("[%s] 💾 Result persistence: %.3fs", job_id, persist_elapsed)
             else:
                 # "service" model: HTTP POST
+                exec_start = time.time()
                 result = await self.service_executor.execute(job_type, job_id, job, route)
-                elapsed = time.time() - start_time
-                self.metrics.record_job_execution(job_type, elapsed, success=True)
+                exec_elapsed = time.time() - exec_start
+                logger.info("[%s] 🌐 Service execution: %.3fs", job_id, exec_elapsed)
+
+                persist_start = time.time()
+                self.metrics.record_job_execution(job_type, time.time() - total_start, success=True)
                 await self._persist_success(job_id, result, source, job_type)
+                persist_elapsed = time.time() - persist_start
+                logger.info("[%s] 💾 Result persistence: %.3fs", job_id, persist_elapsed)
 
         except TimeoutError as exc:
-            elapsed = time.time() - start_time
+            elapsed = time.time() - total_start
             self.metrics.record_job_execution(job_type, elapsed, success=False)
-            logger.error("[%s] Timeout: %s", job_id, exc)
+            logger.error("[%s] ⏱️  Timeout: %s (after %.3fs)", job_id, exc, elapsed)
             await self._persist_error(job_id, str(exc), source, job_type)
             await self.pooler.push_to_dead_letter(raw_job)
         except ValueError as exc:
-            elapsed = time.time() - start_time
+            elapsed = time.time() - total_start
             self.metrics.record_job_execution(job_type, elapsed, success=False)
-            logger.error("[%s] Permanent failure: %s", job_id, exc)
+            logger.error("[%s] 🚨 Permanent failure: %s (after %.3fs)", job_id, exc, elapsed)
             await self._persist_error(job_id, str(exc), source, job_type)
             await self.pooler.push_to_dead_letter(raw_job)
         except Exception as exc:
-            elapsed = time.time() - start_time
+            elapsed = time.time() - total_start
             self.metrics.record_job_execution(job_type, elapsed, success=False)
-            logger.error("[%s] Dispatch failed: %s", job_id, exc, exc_info=True)
+            logger.error("[%s] ❌ Dispatch failed: %s (after %.3fs)", job_id, exc, elapsed, exc_info=True)
             await self._persist_error(job_id, str(exc), source, job_type)
             await self.pooler.push_to_dead_letter(raw_job)
 
@@ -312,11 +349,14 @@ class GateKeeper:
             # Wrap result in status envelope for backend compatibility
             wrapped_result = {"status": "success", "data": result}
             try:
+                rpush_start = time.time()
                 await self.redis_l1.rpush(key, json.dumps(wrapped_result))
                 await self.redis_l1.expire(key, ttl)
+                rpush_elapsed = time.time() - rpush_start
                 logger.info(
-                    "Job %s completed – result RPUSH to L1 key=%s (TTL %ds)",
+                    "[%s] 📦 RPUSH to L1: %.3fs – key=%s (TTL %ds)",
                     job_id,
+                    rpush_elapsed,
                     key,
                     ttl,
                 )
