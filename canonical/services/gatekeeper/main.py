@@ -195,7 +195,7 @@ class GateKeeper:
             poll_elapsed = time.time() - poll_start
 
             if raw_job is None:
-                logger.debug("⏳ Polling cycle: %.3fs – no job available", poll_elapsed)
+                logger.warning("⏳ Polling: no jobs available (%.3fs) – waiting...", poll_elapsed)
                 continue
 
             try:
