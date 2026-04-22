@@ -15,15 +15,14 @@ import main
 
 
 @pytest.fixture
-def mock_stable_diffusion_queue_client():
-    """Fixture to mock StableDiffusionQueueClient for tests."""
-    def _create_mock(generate_image_return_value):
-        mock_sd_class = MagicMock()
-        mock_client = AsyncMock()
-        mock_client.generate_image.return_value = generate_image_return_value
-        mock_sd_class.return_value = mock_client
-        return MagicMock(StableDiffusionQueueClient=mock_sd_class)
-    return _create_mock
+def mock_queue_image_generation_job():
+    """Fixture to mock queue_image_generation_job for tests."""
+    async def _mock_generator(generate_return_value):
+        """Create a mock for queue_image_generation_job async function."""
+        async def mock_job(*args, **kwargs):
+            return generate_return_value
+        return mock_job
+    return _mock_generator
 
 
 @pytest.mark.asyncio
@@ -58,15 +57,15 @@ class TestExecuteCell:
         assert result["has_png"] is False
         assert result["message"] == "No prompt provided"
     
-    async def test_execute_cell_generates_png_success(self, mock_stable_diffusion_queue_client):
+    async def test_execute_cell_generates_png_success(self, mock_queue_image_generation_job):
         """Test cell execution that triggers PNG generation successfully."""
         cell_data = {
             "prompt": "A red dragon",
             "generatedPng": None
         }
-        
+
         # Create mock using fixture
-        mock_module = mock_stable_diffusion_queue_client({
+        mock_job = await mock_queue_image_generation_job({
             "success": True,
             "image_base64": "iVBORw0KGgoAAAANSbase64data...",
             "metadata": {
@@ -75,10 +74,10 @@ class TestExecuteCell:
                 "height": 512
             }
         })
-        
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+
+        with patch('main.queue_image_generation_job', mock_job):
             result = await main.execute_cell(cell_data)
-        
+
         assert result["success"] is True
         assert result["message"] == "PNG generated successfully"
         assert result["has_png"] is True
@@ -86,37 +85,34 @@ class TestExecuteCell:
         assert result["generatedPng"].startswith("data:image/png;base64,")
         assert "fallback" not in result
     
-    async def test_execute_cell_generates_png_fallback(self, mock_stable_diffusion_queue_client):
-        """Test cell execution falls back to placeholder when service fails."""
+    async def test_execute_cell_generates_png_failure(self, mock_queue_image_generation_job):
+        """Test cell execution when image generation fails."""
         cell_data = {
             "prompt": "A mountain",
             "generatedPng": None
         }
-        
+
         # Create mock using fixture
-        mock_module = mock_stable_diffusion_queue_client({
+        mock_job = await mock_queue_image_generation_job({
             "success": False,
             "error": "Service timeout"
         })
-        
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+
+        with patch('main.queue_image_generation_job', mock_job):
             result = await main.execute_cell(cell_data)
-        
-        assert result["success"] is True
-        assert result["has_png"] is True
-        assert "generatedPng" in result
-        assert result["generatedPng"].startswith("data:image/png;base64,")
-        assert result.get("fallback") is True
+
+        assert result["success"] is False
         assert "error" in result
+        assert result["error"] == "Service timeout"
 
 
 @pytest.mark.asyncio
 class TestGeneratePngFromPrompt:
     """Tests for generate_png_from_prompt function."""
     
-    async def test_generate_png_success(self, mock_stable_diffusion_queue_client):
+    async def test_generate_png_success(self, mock_queue_image_generation_job):
         """Test successful PNG generation."""
-        mock_module = mock_stable_diffusion_queue_client({
+        mock_module = mock_queue_image_generation_job({
             "success": True,
             "image_base64": "iVBORw0KGgoAAAANS...",
             "metadata": {
@@ -144,9 +140,9 @@ class TestGeneratePngFromPrompt:
         assert result["prompt"] == "A blue crystal"
         assert "metadata" in result
     
-    async def test_generate_png_with_negative_prompt(self, mock_stable_diffusion_queue_client):
+    async def test_generate_png_with_negative_prompt(self, mock_queue_image_generation_job):
         """Test PNG generation with negative prompt."""
-        mock_module = mock_stable_diffusion_queue_client({
+        mock_module = mock_queue_image_generation_job({
             "success": True,
             "image_base64": "iVBORw0KGgoAAAANS...",
             "metadata": {
@@ -166,7 +162,7 @@ class TestGeneratePngFromPrompt:
         assert result["success"] is True
         assert "image_base64" in result
     
-    async def test_generate_png_with_3d_asset_mode_enabled(self, mock_stable_diffusion_queue_client):
+    async def test_generate_png_with_3d_asset_mode_enabled(self, mock_queue_image_generation_job):
         """Test PNG generation with 3D Asset Mode enabled."""
         captured_calls = []
         
@@ -204,7 +200,7 @@ class TestGeneratePngFromPrompt:
         assert "shadows" in enhanced_negative
         assert "dramatic lighting" in enhanced_negative
     
-    async def test_generate_png_with_3d_asset_mode_and_custom_negative_prompt(self, mock_stable_diffusion_queue_client):
+    async def test_generate_png_with_3d_asset_mode_and_custom_negative_prompt(self, mock_queue_image_generation_job):
         """Test PNG generation with 3D Asset Mode and custom negative prompt."""
         captured_calls = []
         
@@ -243,7 +239,7 @@ class TestGeneratePngFromPrompt:
         keywords = [k.strip() for k in enhanced_negative.split(',')]
         assert len(keywords) == len(set(keywords)), "Should not have duplicate keywords"
     
-    async def test_generate_png_3d_mode_deduplicates_keywords(self, mock_stable_diffusion_queue_client):
+    async def test_generate_png_3d_mode_deduplicates_keywords(self, mock_queue_image_generation_job):
         """Test that 3D Asset Mode properly deduplicates keywords in negative prompt."""
         captured_calls = []
         
@@ -286,7 +282,7 @@ class TestGeneratePngFromPrompt:
         assert "dramatic lighting" in keywords
         assert "depth of field" in keywords
     
-    async def test_generate_png_with_3d_asset_mode_disabled(self, mock_stable_diffusion_queue_client):
+    async def test_generate_png_with_3d_asset_mode_disabled(self, mock_queue_image_generation_job):
         """Test PNG generation with 3D Asset Mode disabled (default)."""
         captured_calls = []
         
@@ -319,9 +315,9 @@ class TestGeneratePngFromPrompt:
         assert "full body" not in enhanced_prompt
         assert "flat lighting" not in enhanced_prompt
     
-    async def test_generate_png_service_failure(self, mock_stable_diffusion_queue_client):
+    async def test_generate_png_service_failure(self, mock_queue_image_generation_job):
         """Test PNG generation when service returns failure."""
-        mock_module = mock_stable_diffusion_queue_client({
+        mock_module = mock_queue_image_generation_job({
             "success": False,
             "error": "Stable Diffusion API timeout"
         })
@@ -335,7 +331,7 @@ class TestGeneratePngFromPrompt:
         assert "error" in result
         assert "timeout" in result["error"].lower()
     
-    async def test_generate_png_exception_handling(self, mock_stable_diffusion_queue_client):
+    async def test_generate_png_exception_handling(self, mock_queue_image_generation_job):
         """Test PNG generation exception handling."""
         mock_sd_class = MagicMock()
         mock_service = AsyncMock()
@@ -357,7 +353,7 @@ class TestGeneratePngFromPrompt:
 class TestExecuteCellWith3DAssetMode:
     """Tests for execute_cell with 3D Asset Mode."""
     
-    async def test_execute_cell_with_3d_asset_mode(self, mock_stable_diffusion_queue_client):
+    async def test_execute_cell_with_3d_asset_mode(self, mock_queue_image_generation_job):
         """Test cell execution with 3D Asset Mode enabled."""
         cell_data = {
             "prompt": "A space robot",
@@ -403,7 +399,7 @@ class TestExecuteCellWith3DAssetMode:
 class TestOllamaOrchestration:
     """Tests for Ollama orchestration in 3D Asset Mode."""
     
-    async def test_ollama_orchestration_success(self, mock_stable_diffusion_queue_client):
+    async def test_ollama_orchestration_success(self, mock_queue_image_generation_job):
         """Test successful Ollama orchestration for prompt optimization."""
         # Mock Ollama service
         mock_ollama_module = MagicMock()
@@ -462,7 +458,7 @@ class TestOllamaOrchestration:
         assert "hands" in sd_negative
         assert "faces" in sd_negative
     
-    async def test_ollama_orchestration_ollama_unavailable(self, mock_stable_diffusion_queue_client):
+    async def test_ollama_orchestration_ollama_unavailable(self, mock_queue_image_generation_job):
         """Test fallback to static enhancement when Ollama is unavailable."""
         # Mock Ollama service as unavailable
         mock_ollama_module = MagicMock()
@@ -510,7 +506,7 @@ class TestOllamaOrchestration:
         assert "flat lighting" in sd_prompt
         assert "orthographic view" in sd_prompt
     
-    async def test_ollama_orchestration_ollama_returns_empty(self, mock_stable_diffusion_queue_client):
+    async def test_ollama_orchestration_ollama_returns_empty(self, mock_queue_image_generation_job):
         """Test fallback to static enhancement when Ollama returns empty response."""
         # Mock Ollama service returning empty
         mock_ollama_module = MagicMock()
@@ -554,7 +550,7 @@ class TestOllamaOrchestration:
         assert "A treasure chest" in sd_prompt
         assert "full body" in sd_prompt
     
-    async def test_ollama_orchestration_with_custom_negative_prompt(self, mock_stable_diffusion_queue_client):
+    async def test_ollama_orchestration_with_custom_negative_prompt(self, mock_queue_image_generation_job):
         """Test Ollama orchestration preserves user's negative prompt."""
         # Mock Ollama service
         mock_ollama_module = MagicMock()
@@ -606,7 +602,7 @@ class TestOllamaOrchestration:
         assert "people" in sd_negative
         assert "hands" in sd_negative
     
-    async def test_ollama_orchestration_exception_handling(self, mock_stable_diffusion_queue_client):
+    async def test_ollama_orchestration_exception_handling(self, mock_queue_image_generation_job):
         """Test fallback when Ollama raises exception."""
         # Mock Ollama service raising exception
         mock_ollama_module = MagicMock()
