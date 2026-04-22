@@ -121,11 +121,18 @@ async def queue_background_removal_job(
             }
 
         logger.info("Background removal completed: %s", job_id)
+
+        # GateKeeper wraps result in envelope: {"status": "success", "data": {...actual result...}}
+        # Extract the actual result from the "data" field
+        actual_result = result.get("data", result)  # Fallback to result if no data envelope
+        logger.debug("Result structure - keys: %s, has 'data' envelope: %s",
+                    list(result.keys()), "data" in result)
+
         return {
             "success": True,
-            "output_image_base64": result.get("result", ""),
+            "output_image_base64": actual_result.get("result", ""),
             "job_id": job_id,
-            "processing_time": result.get("processing_time", 0),
+            "processing_time": actual_result.get("processing_time", 0),
         }
 
     except Exception as e:

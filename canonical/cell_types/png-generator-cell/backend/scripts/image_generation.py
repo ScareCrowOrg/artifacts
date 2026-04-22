@@ -135,13 +135,27 @@ async def queue_image_generation_job(
             }
 
         logger.info("Image generation completed: %s", job_id)
+
+        # GateKeeper wraps result in envelope: {"status": "success", "data": {...actual result...}}
+        # Extract the actual result from the "data" field
+        actual_result = result.get("data", result)  # Fallback to result if no data envelope
+        logger.debug("Result structure - keys: %s, has 'data' envelope: %s",
+                    list(result.keys()), "data" in result)
+
+        image_b64 = actual_result.get("image_base64", "")
+        image_len = len(image_b64) if image_b64 else 0
+        logger.info("📦 RETURN VALUE - image_base64 length: %d chars", image_len)
+        if image_len == 0:
+            logger.error("🚨 CRITICAL: image_base64 is EMPTY! Result keys: %s, Data keys: %s",
+                        list(result.keys()), list(actual_result.keys()) if isinstance(actual_result, dict) else "NOT A DICT")
+            logger.error("🚨 Full result from Redis: %s", json.dumps(actual_result, default=str)[:500])
         return {
             "success": True,
-            "image_base64": result.get("image_base64", ""),
+            "image_base64": image_b64,
             "job_id": job_id,
-            "processing_time": result.get("processing_time_ms", 0),
+            "processing_time": actual_result.get("processing_time_ms", 0),
             "metadata": {
-                "model": result.get("model", model),
+                "model": actual_result.get("model", model),
                 "prompt": prompt,
             }
         }
@@ -179,11 +193,20 @@ async def brpop_result(
     try:
         result = await redis_client.brpop(result_key, timeout=timeout)
         if result is None:
+            logger.warning(f"BRPOP timeout or no data for key: {result_key}")
             return None
         _key, raw_value = result
-        return json.loads(raw_value)
+        logger.debug(f"BRPOP received raw_value length: {len(raw_value)} bytes")
+        parsed = json.loads(raw_value)
+        logger.debug(f"Parsed result keys: {list(parsed.keys()) if isinstance(parsed, dict) else 'NOT A DICT'}")
+        if isinstance(parsed, dict) and 'image_base64' in parsed:
+            image_b64_len = len(parsed.get('image_base64', ''))
+            logger.info(f"✅ Result contains image_base64: {image_b64_len} chars")
+        else:
+            logger.warning(f"⚠️ Result missing image_base64 field. Keys: {list(parsed.keys()) if isinstance(parsed, dict) else 'NOT A DICT'}")
+        return parsed
     except Exception as e:
-        logger.error(f"BRPOP failed for key {result_key}: {e}")
+        logger.error(f"BRPOP failed for key {result_key}: {e}", exc_info=True)
         return None
 
 
