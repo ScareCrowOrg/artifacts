@@ -16,7 +16,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: localhost:5001/scareverse-auth-proxy:staging
+    image: localhost:5001/scareverse-auth-proxy:staging20260422T021333
     container_name: scareverse-auth-proxy-worker
     restart: unless-stopped
 

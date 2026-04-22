@@ -50,9 +50,14 @@ async fn main() {
     );
 
     // Build a shared HTTP client with connection pooling.
+    // Timeout set to 330s to accommodate long-running backend requests:
+    // - Ollama query expansion: ~40s
+    // - Ollama generation: ~70s
+    // - Redis BRPOP wait (backend): up to 300s
+    // Total worst-case: 2+ minutes. 330s gives 30s margin.
     let http_client = ClientBuilder::new()
         .pool_max_idle_per_host(20)
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(330))
         .build()
         .expect("Failed to build HTTP client");
 
