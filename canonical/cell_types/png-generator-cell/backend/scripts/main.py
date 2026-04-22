@@ -580,17 +580,14 @@ Generate the optimized negative prompt:"""
     logger.info(f"[PNG Generation] FINAL PROMPT:\n{enhanced_prompt}")
     logger.info(f"[PNG Generation] FINAL NEGATIVE PROMPT:\n{enhanced_negative}")
 
-    # Try to import and use Stable Diffusion Queue Bridge client
+    # Queue image generation job via redis_client (owner-first scheduling)
     try:
-        from app.services.stable_diffusion_queue_client import StableDiffusionQueueClient
+        from image_generation import queue_image_generation_job
 
-        # Initialize Stable Diffusion Queue client
-        sd_client = StableDiffusionQueueClient()
+        logger.info(f"[SD Queue] Queueing image generation job via redis_client...")
 
-        logger.info(f"[SD Queue] Calling Stable Diffusion via queue bridge...")
-
-        # Generate image with enhanced prompts via queue bridge
-        result = await sd_client.generate_image(
+        # Generate image with enhanced prompts via redis_client
+        result = await queue_image_generation_job(
             prompt=enhanced_prompt,
             negative_prompt=enhanced_negative,
             width=width,
@@ -615,16 +612,16 @@ Generate the optimized negative prompt:"""
                 "error": result.get("error", "Unknown error"),
                 "prompt": prompt
             }
-    
+
     except ImportError as e:
-        # Queue client not available in path
-        logger.warning(f"StableDiffusionQueueClient not available: {e}")
+        # Image generation service not available in path
+        logger.error(f"Image generation service not available: {e}")
         return {
             "success": False,
-            "error": "Stable Diffusion Queue Bridge not available (import failed)",
+            "error": "Image generation service not available (import failed)",
             "prompt": prompt
         }
-    
+
     except Exception as e:
         logger.error(f"Error generating PNG: {str(e)}", exc_info=True)
         return {

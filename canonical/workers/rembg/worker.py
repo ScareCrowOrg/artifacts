@@ -36,29 +36,50 @@ class RembgWorker(BaseWorker):
         """Load the rembg ONNX model into memory."""
         import rembg
 
-        model_name = self.input_data.get("model", os.getenv("REMBG_MODEL_NAME", "u2net"))
+        # Handle both redis_client structure (top-level) and wrapped structure
+        payload = self.input_data.get("payload") or self.input_data
+
+        model_name = payload.get("model", os.getenv("REMBG_MODEL_NAME", "u2net"))
         cache_dir = os.getenv("REMBG_CACHE_DIR", "/root/.u2net")
         Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
-        self.logger.info("Loading rembg model: %s", model_name)
+        self.logger.info("[%s] Loading rembg model: %s", self.job_id, model_name)
         self._session = rembg.new_session(
             model_name=model_name,
             providers=["CPUExecutionProvider"],
         )
-        self.logger.info("Model loaded")
+        self.logger.info("[%s] Model loaded", self.job_id)
 
     def execute(self) -> Dict[str, Any]:
         """Remove background from base64-encoded input image."""
         import rembg
         from PIL import Image
 
-        image_base64 = strip_data_uri_prefix(self.input_data["image_base64"])
-        alpha_matting: bool = self.input_data.get("alpha_matting", True)
+        # Handle both redis_client structure (top-level) and wrapped structure
+        payload = self.input_data.get("payload") or self.input_data
+
+        # DEBUG: Log complete input_data structure
+        self.logger.info("[%s] === INPUT DATA INSPECTION ===", self.job_id)
+        self.logger.info("[%s] payload keys: %s", self.job_id, list(payload.keys()) if isinstance(payload, dict) else "NOT A DICT")
+
+        image_base64_raw = payload.get("image_base64")
+        if not image_base64_raw:
+            raise ValueError("Missing 'image_base64' in job payload")
+
+        image_base64 = strip_data_uri_prefix(image_base64_raw)
+        alpha_matting: bool = payload.get("alpha_matting", True)
+
+        self.logger.info(
+            "[%s] Removing background: image_len=%d chars, alpha_matting=%s",
+            self.job_id,
+            len(image_base64_raw),
+            alpha_matting,
+        )
 
         # Decode input
         image_bytes = base64.b64decode(image_base64)
         input_image = Image.open(io.BytesIO(image_bytes))
-        self.logger.info("Input image: %s %s", input_image.mode, input_image.size)
+        self.logger.info("[%s] Input image: %s %s", self.job_id, input_image.mode, input_image.size)
 
         # Remove background
         output_image = rembg.remove(
@@ -77,7 +98,8 @@ class RembgWorker(BaseWorker):
         result_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
         self.logger.info(
-            "Background removed: %s %s → %d chars base64",
+            "[%s] Background removed: %s %s → %d chars base64",
+            self.job_id,
             output_image.mode,
             output_image.size,
             len(result_base64),

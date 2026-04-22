@@ -1,8 +1,8 @@
 """
-Background Removal Integration for PNG Generator Cell
+Image Generation Integration for PNG Generator Cell
 
-Provides GPU-accelerated background removal by delegating to the
-Windows Worker via Redis queue.
+Provides GPU-accelerated image generation via Stable Diffusion by delegating to
+the Windows Worker via Redis queue using canonical redis_client.
 """
 
 import logging
@@ -24,34 +24,46 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / 'shared'))
     from redis_client import get_redis_client
 
-# Result key prefix must match GateKeeper config
-_REMBG_RESULT_KEY_PREFIX = "scareverse:rembg-results"
-_REMBG_RESULT_TTL = 120
+# Result key prefix must match stable_diffusion_queue router config
+_SD_RESULT_KEY_PREFIX = "scareverse:sd-results"
+_SD_RESULT_TTL = 300
 
 
-async def queue_background_removal_job(
-    input_image_base64: str,
-    alpha_matting: bool = True,
-    timeout: float = 60.0
+async def queue_image_generation_job(
+    prompt: str,
+    negative_prompt: str = "",
+    width: int = 512,
+    height: int = 512,
+    steps: int = 20,
+    cfg_scale: float = 7.5,
+    seed: int = -1,
+    model: str = "stabilityai/stable-diffusion-xl-base-1.0",
+    timeout: float = 300.0
 ) -> Dict[str, Any]:
     """
-    Queue a background removal job to Redis for GPU Worker processing.
+    Queue an image generation job to Redis for GPU Worker processing.
 
     This function:
     1. Calls redis_job_client.create_job() with owner-first scheduling
        (checks worker availability; enqueues to L1 if available, L2 otherwise)
     2. Uses BRPOP to wait for the result pushed by GateKeeper to L1
-    3. Returns the transparent PNG result
+    3. Returns the generated PNG result
 
     Args:
-        input_image_base64: Base64-encoded input image (with or without data URI prefix)
-        alpha_matting: Enable alpha matting for better edge quality (default: True)
+        prompt: Text description of the desired image
+        negative_prompt: Things to avoid in generation (optional)
+        width: Image width in pixels (256-1024)
+        height: Image height in pixels (256-1024)
+        steps: Number of denoising steps (1-100)
+        cfg_scale: Classifier-free guidance scale
+        seed: Random seed (-1 for random)
+        model: HuggingFace model ID
         timeout: Maximum time to wait for job completion in seconds
 
     Returns:
         Dict containing:
             - success: Boolean indicating success/failure
-            - output_image_base64: Base64-encoded transparent PNG (if success)
+            - image_base64: Base64-encoded PNG (if success)
             - error: Error message (if failure)
             - job_id: Unique job identifier
             - processing_time: Time taken by GPU worker
@@ -62,16 +74,18 @@ async def queue_background_removal_job(
     job_id = None
     try:
         job_id = str(uuid.uuid4())
-        logger.info("Queueing background removal job: %s", job_id)
+        logger.info("Queueing image generation job: %s", job_id)
 
-        # Strip data URI prefix if present
-        if ',' in input_image_base64:
-            input_image_base64 = input_image_base64.split(',', 1)[1]
-
-        # Build job payload (matches rembg worker expectations)
+        # Build job payload (matches SD worker expectations)
         payload = {
-            "image_base64": input_image_base64,  # Must match worker.py payload.get("image_base64")
-            "alpha_matting": alpha_matting,
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "width": width,
+            "height": height,
+            "num_inference_steps": steps,
+            "guidance_scale": cfg_scale,
+            "seed": seed,
+            "model": model,
             "timestamp": time.time(),
         }
 
@@ -79,7 +93,7 @@ async def queue_background_removal_job(
         try:
             from app.services.redis_job_client import create_job
             enqueued_job_id, location = await create_job(
-                job_type="rembg_removebackground",
+                job_type="sd_generate",
                 payload=payload,
                 owner_user_id="cell-script",
                 job_id=job_id,
@@ -92,20 +106,20 @@ async def queue_background_removal_job(
             redis_client = await get_redis_client()
             job_data = {
                 "job_id": job_id,
-                "job_type": "rembg_removebackground",
+                "job_type": "sd_generate",
                 "user_id": "cell-script",
-                "queue": "scareverse:cpu-jobs:queue",
+                "queue": "scareverse:gpu-jobs:queue",
                 **payload,
             }
-            await redis_client.lpush("scareverse:cpu-jobs:queue", json.dumps(job_data))
+            await redis_client.lpush("scareverse:gpu-jobs:queue", json.dumps(job_data))
 
         # Wait for result via BRPOP (GateKeeper pushes result to this key)
         redis_client = await get_redis_client()
-        result_key = f"{_REMBG_RESULT_KEY_PREFIX}:{job_id}"
+        result_key = f"{_SD_RESULT_KEY_PREFIX}:{job_id}"
         result = await brpop_result(redis_client, result_key, timeout)
 
         if result is None:
-            logger.error("Background removal timeout: %s", job_id)
+            logger.error("Image generation timeout: %s", job_id)
             return {
                 "success": False,
                 "error": f"Job did not complete within {timeout} seconds",
@@ -114,23 +128,27 @@ async def queue_background_removal_job(
 
         if result.get("status") == "error":
             error_msg = result.get("error", "Unknown error")
-            logger.error("Background removal failed: %s – %s", job_id, error_msg)
+            logger.error("Image generation failed: %s – %s", job_id, error_msg)
             return {
                 "success": False,
                 "error": error_msg,
                 "job_id": job_id,
             }
 
-        logger.info("Background removal completed: %s", job_id)
+        logger.info("Image generation completed: %s", job_id)
         return {
             "success": True,
-            "output_image_base64": result.get("result", ""),
+            "image_base64": result.get("image_base64", ""),
             "job_id": job_id,
-            "processing_time": result.get("processing_time", 0),
+            "processing_time": result.get("processing_time_ms", 0),
+            "metadata": {
+                "model": result.get("model", model),
+                "prompt": prompt,
+            }
         }
 
     except Exception as e:
-        logger.error("Failed to queue background removal job: %s", e, exc_info=True)
+        logger.error("Failed to queue image generation job: %s", e, exc_info=True)
         return {
             "success": False,
             "error": f"Failed to queue job: {str(e)}",
@@ -141,13 +159,13 @@ async def queue_background_removal_job(
 async def brpop_result(
     redis_client,
     result_key: str,
-    timeout: float = 60.0,
+    timeout: float = 300.0,
 ) -> Optional[Dict[str, Any]]:
     """
     Wait for a job result via BRPOP from Redis L1.
 
     GateKeeper pushes the result JSON to `result_key` via RPUSH after the
-    atomic worker completes. This function blocks until the result arrives
+    worker completes. This function blocks until the result arrives
     or the timeout elapses.
 
     Args:
@@ -171,28 +189,46 @@ async def brpop_result(
 
 
 # Synchronous wrapper for backward compatibility
-def queue_background_removal_job_sync(
-    input_image_base64: str,
-    alpha_matting: bool = True,
-    timeout: float = 60.0
+def queue_image_generation_job_sync(
+    prompt: str,
+    negative_prompt: str = "",
+    width: int = 512,
+    height: int = 512,
+    steps: int = 20,
+    cfg_scale: float = 7.5,
+    seed: int = -1,
+    model: str = "stabilityai/stable-diffusion-xl-base-1.0",
+    timeout: float = 300.0
 ) -> Dict[str, Any]:
     """
-    Synchronous wrapper for queue_background_removal_job.
-    
+    Synchronous wrapper for queue_image_generation_job.
+
     Uses asyncio.run to execute the async function.
     Useful for non-async contexts.
-    
+
     Args:
-        input_image_base64: Base64-encoded input image
-        alpha_matting: Enable alpha matting
+        prompt: Text description of the desired image
+        negative_prompt: Things to avoid in generation
+        width: Image width in pixels
+        height: Image height in pixels
+        steps: Number of denoising steps
+        cfg_scale: Classifier-free guidance scale
+        seed: Random seed (-1 for random)
+        model: HuggingFace model ID
         timeout: Maximum wait time
-        
+
     Returns:
         Dict with job result
     """
-    return asyncio.run(queue_background_removal_job(
-        input_image_base64=input_image_base64,
-        alpha_matting=alpha_matting,
+    return asyncio.run(queue_image_generation_job(
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        width=width,
+        height=height,
+        steps=steps,
+        cfg_scale=cfg_scale,
+        seed=seed,
+        model=model,
         timeout=timeout
     ))
 
@@ -200,13 +236,12 @@ def queue_background_removal_job_sync(
 if __name__ == "__main__":
     # Test script for standalone execution
     import sys
-    
-    if len(sys.argv) < 2:
-        print("Usage: python background_removal.py <base64_image>")
-        sys.exit(1)
-    
-    input_image = sys.argv[1]
-    result = queue_background_removal_job_sync(input_image)
-    
-    print(json.dumps(result, indent=2))
 
+    if len(sys.argv) < 2:
+        print("Usage: python image_generation.py '<prompt>'")
+        sys.exit(1)
+
+    prompt = sys.argv[1]
+    result = queue_image_generation_job_sync(prompt)
+
+    print(json.dumps(result, indent=2))
