@@ -30,7 +30,9 @@ class StableDiffusionWorker(BaseWorker):
     """HTTP wrapper that forwards jobs to the Stable Diffusion service."""
 
     def setup(self) -> None:
+        self.logger.info("[%s] Setting up SD worker: connecting to %s (timeout=%ss)", self.job_id, SD_HOST, SD_TIMEOUT)
         self._client = httpx.Client(base_url=SD_HOST, timeout=SD_TIMEOUT)
+        self.logger.info("[%s] ✅ SD worker client initialized", self.job_id)
 
     def execute(self) -> Dict[str, Any]:
         # DEBUG: Log complete input_data structure (matches Ollama pattern)
@@ -52,21 +54,61 @@ class StableDiffusionWorker(BaseWorker):
             "height": payload.get("height", 512),
             "num_inference_steps": payload.get("num_inference_steps", 20),
             "guidance_scale": payload.get("guidance_scale", 7.5),
+            "seed": payload.get("seed", -1),
         }
 
         self.logger.info(
-            "[%s] POST /api/generate prompt=%.60s model=%s width=%d height=%d steps=%d",
+            "[%s] POST /generate prompt=%.60s model=%s width=%dx%d steps=%d seed=%d",
             self.job_id,
             body["prompt"],
             body["model"],
             body["width"],
             body["height"],
             body["num_inference_steps"],
+            body["seed"],
         )
-        response = self._client.post("/api/generate", json=body)
-        response.raise_for_status()
-        return response.json()
+
+        try:
+            self.logger.debug("[%s] Request body: %s", self.job_id, body)
+            response = self._client.post("/generate", json=body)
+            self.logger.info(
+                "[%s] ✅ Response received: status_code=%d content_length=%s",
+                self.job_id,
+                response.status_code,
+                len(response.content),
+            )
+            response.raise_for_status()
+
+            result = response.json()
+            self.logger.info("[%s] === RESPONSE INSPECTION ===", self.job_id)
+            self.logger.info("[%s] Response keys: %s", self.job_id, list(result.keys()))
+            self.logger.info("[%s] Response status: %s", self.job_id, result.get("status"))
+            if result.get("status") == "success":
+                image_len = len(result.get("image_base64", ""))
+                self.logger.info("[%s] Image base64 length: %d chars", self.job_id, image_len)
+
+            self.logger.info("[%s] ✅ Returning response to BaseWorker", self.job_id)
+            return result
+
+        except httpx.HTTPStatusError as exc:
+            self.logger.error(
+                "[%s] ❌ HTTP error %d: %s",
+                self.job_id,
+                exc.response.status_code,
+                exc.response.text[:500],
+                exc_info=True
+            )
+            raise
+        except Exception as exc:
+            self.logger.error(
+                "[%s] ❌ Request failed: %s",
+                self.job_id,
+                str(exc),
+                exc_info=True
+            )
+            raise
 
     def teardown(self) -> None:
         if hasattr(self, "_client"):
             self._client.close()
+            self.logger.info("[%s] ✅ SD worker client closed", self.job_id)
