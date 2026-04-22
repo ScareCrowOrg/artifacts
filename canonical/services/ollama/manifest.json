@@ -6,9 +6,9 @@
   "imageTag": "staging20260422T002707",
   "checksum": "sha256:ded44d1012f9e7c1e39a7c3192c583c21c3438e0ec6dff1fe840bb88a7095fae",
   "dependencies": [
-    "Dockerfile",
-    "heartbeat.py",
-    "entrypoint-raw.sh"
+    "artifacts/canonical/services/ollama/Dockerfile",
+    "artifacts/canonical/services/ollama/heartbeat.py",
+    "artifacts/canonical/services/ollama/entrypoint-raw.sh"
   ],
   "generate_env_file": false,
   "totp_seed": false,
