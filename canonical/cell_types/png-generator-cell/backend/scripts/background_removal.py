@@ -75,20 +75,19 @@ async def queue_background_removal_job(
             "timestamp": time.time(),
         }
 
-        # Enqueue via unified redis_job_client (owner-first scheduling)
+        # Enqueue via canonical redis_client (owner-first scheduling, single source of truth)
         try:
-            from app.services.redis_job_client import create_job
+            from canonical.shared.redis_client import create_job
             enqueued_job_id, location = await create_job(
                 job_type="rembg_removebackground",
                 payload=payload,
                 owner_user_id="cell-script",
                 job_id=job_id,
             )
-            logger.info("Job enqueued via redis_job_client to %s: %s", location, job_id)
-        except (ImportError, ModuleNotFoundError):
-            # Fallback: direct LPUSH when running outside backend app context.
-            # Matches the job_data structure that create_job() would produce.
-            logger.warning("redis_job_client not available; using direct LPUSH fallback")
+            logger.info("Job enqueued via canonical redis_client to %s: %s", location, job_id)
+        except Exception as e:
+            # Fallback: direct LPUSH when create_job fails
+            logger.warning("canonical create_job unavailable (%s); using direct LPUSH fallback", e)
             redis_client = await get_redis_client()
             job_data = {
                 "job_id": job_id,
