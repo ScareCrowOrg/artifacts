@@ -15,7 +15,7 @@
   },
 
   "configuration": {
-    "timeout_seconds": 60,
+    "timeout_seconds": 180,
     "memory_limit_mb": 2048,
     "requires_gpu": false,
     "requires_internet": false

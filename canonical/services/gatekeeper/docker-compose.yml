@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: localhost:5001/scareverse-gatekeeper:staging20260422T045300
+    image: localhost:5001/scareverse-gatekeeper:staging20260423T010050
     container_name: scareverse-gatekeeper-service
     restart: unless-stopped
 
@@ -30,6 +30,8 @@ services:
       # Workers write .venv/ into this mount on first execution.
       # Path: from project root, artifacts/ → /app/artifacts inside container
       - ../../../:/app/artifacts:cached
+      # Rembg model cache (ONNX u2net model persists across container restarts)
+      - rembg-models:/root/.u2net
 
     environment:
       # Python import path (enables "from canonical.shared import ...")
@@ -92,6 +94,10 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  rembg-models:
+    driver: local
 
 networks:
   scareverse-net:
