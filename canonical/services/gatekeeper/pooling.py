@@ -8,6 +8,7 @@ a longer timeout. This ensures the local node's own jobs are prioritised.
 
 import asyncio
 import logging
+import time
 from typing import Dict, List, Optional, Protocol, Tuple, Union
 
 import redis.asyncio as aioredis
@@ -58,6 +59,7 @@ class MultiSourcePooler:
         redis_l2: RedisLikeClient,
         queues_l1: Optional[list] = None,
         queues_l2: Optional[list] = None,
+        polling_l2_interval: int = 20,
     ):
         self.redis_l1 = redis_l1
         self.redis_l2 = redis_l2
@@ -65,16 +67,21 @@ class MultiSourcePooler:
         self.queues_l2 = queues_l2 or config.ALL_QUEUES_L2
         self.brpop_l1_timeout = config.BRPOP_L1_TIMEOUT
         self.brpop_l2_timeout = config.BRPOP_L2_TIMEOUT
+        self.polling_l2_interval = polling_l2_interval
+        self.last_l2_poll_time = 0.0
 
     async def next_job(self) -> Tuple[Optional[str], Optional[str], str]:
         """
-        Fetch the next job using owner-first scheduling.
+        Fetch the next job using owner-first scheduling with L2 rate limiting.
+
+        L1 (owner/local): checked every time (fast)
+        L2 (global/CentralHub): checked only if polling_l2_interval has passed
 
         Returns:
             Tuple of (queue_name, raw_job_bytes, source) where source is
             "owner" (L1) or "global" (L2), or (None, None, "") if no job.
         """
-        # Step 1: Try L1 (owner/local) – non-blocking short timeout
+        # Step 1: Try L1 (owner/local) – always check, short timeout
         try:
             result = await self.redis_l1.brpop(
                 self.queues_l1,
@@ -87,18 +94,29 @@ class MultiSourcePooler:
         except Exception as exc:
             logger.warning("L1 BRPOP error: %s", exc)
 
-        # Step 2: L1 empty – block on L2 (global)
-        try:
-            result = await self.redis_l2.brpop(
-                self.queues_l2,
-                timeout=self.brpop_l2_timeout,
+        # Step 2: L1 empty – check L2 only if interval has passed
+        current_time = time.time()
+        time_since_last_l2_poll = current_time - self.last_l2_poll_time
+
+        if time_since_last_l2_poll >= self.polling_l2_interval:
+            try:
+                self.last_l2_poll_time = current_time
+                result = await self.redis_l2.brpop(
+                    self.queues_l2,
+                    timeout=self.brpop_l2_timeout,
+                )
+                if result:
+                    queue_name, raw_job = result
+                    logger.debug("Job dequeued from L2 (global): queue=%s", queue_name)
+                    return queue_name, raw_job, "global"
+            except Exception as exc:
+                logger.warning("L2 BRPOP error: %s", exc)
+        else:
+            logger.debug(
+                "L2 poll skipped (interval: %.1fs < %.1fs)",
+                time_since_last_l2_poll,
+                self.polling_l2_interval,
             )
-            if result:
-                queue_name, raw_job = result
-                logger.debug("Job dequeued from L2 (global): queue=%s", queue_name)
-                return queue_name, raw_job, "global"
-        except Exception as exc:
-            logger.warning("L2 BRPOP error: %s", exc)
 
         return None, None, ""
 

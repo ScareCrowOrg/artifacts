@@ -195,7 +195,8 @@ class GateKeeper:
             poll_elapsed = time.time() - poll_start
 
             if raw_job is None:
-                logger.warning("⏳ Polling: no jobs available (%.3fs) – waiting...", poll_elapsed)
+                logger.warning("⏳ Polling: no jobs available (%.3fs) – waiting 1s before next cycle...", poll_elapsed)
+                await asyncio.sleep(1)
                 continue
 
             try:
