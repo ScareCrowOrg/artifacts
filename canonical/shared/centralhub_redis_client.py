@@ -111,6 +111,9 @@ class CentralHubRedisClient:
         Returns:
             Tuple of (queue_name, raw_job_json_string) or None if timeout.
         """
+        import time
+        brpop_start = time.time()
+
         if isinstance(keys, (list, tuple)):
             queue_names = list(keys)
         else:
@@ -119,39 +122,61 @@ class CentralHubRedisClient:
         # CentralHub enforces max timeout of 10s, clamp for safety
         clamp_timeout = min(int(timeout), 10)
 
+        logger.debug("[BRPOP START] queues=%s timeout=%ds", queue_names, clamp_timeout)
+
         try:
+            post_start = time.time()
+            logger.debug("[BRPOP POST] starting HTTP request...")
+
             response = await self.client.post(
                 "/api/redis/jobs/dequeue",
                 json={"queue_names": queue_names, "timeout": clamp_timeout},
             )
+
+            post_elapsed = time.time() - post_start
+            logger.debug("[BRPOP POST DONE] elapsed=%.3fs status=%s", post_elapsed, response.status_code)
+
             response.raise_for_status()
+
+            parse_start = time.time()
             result = response.json()
+            parse_elapsed = time.time() - parse_start
+            logger.debug("[BRPOP PARSE] elapsed=%.3fs job_id=%s", parse_elapsed, result.get("job_id"))
 
             if result.get("job_id") is not None:
                 job_data = result.get("job_data", {})
                 raw = job_data if isinstance(job_data, str) else json.dumps(job_data)
                 queue_name = result.get("queue_name", queue_names[0])
+
+                total_elapsed = time.time() - brpop_start
+                logger.debug("[BRPOP SUCCESS] total=%.3fs queue=%s", total_elapsed, queue_name)
                 return (queue_name, raw)
 
         except httpx.HTTPStatusError as e:
+            total_elapsed = time.time() - brpop_start
             logger.error(
-                "Failed to dequeue from %s: HTTP %s - %s",
-                queue_names,
+                "[BRPOP ERROR] total=%.3fs HTTP %s - %s (queues=%s)",
+                total_elapsed,
                 e.response.status_code,
-                e.response.text,
+                e.response.text[:200],
+                queue_names,
                 exc_info=True,
             )
             raise
         except Exception as e:
+            total_elapsed = time.time() - brpop_start
             logger.error(
-                "Failed to dequeue from %s: %s (type=%s)",
-                queue_names,
-                str(e) or repr(e),
+                "[BRPOP ERROR] total=%.3fs type=%s msg=%s (queues=%s)",
+                total_elapsed,
                 type(e).__name__,
+                str(e)[:200] or repr(e)[:200],
+                queue_names,
                 exc_info=True,
             )
             raise
 
+        total_elapsed = time.time() - brpop_start
+        logger.debug("[BRPOP TIMEOUT] total=%.3fs no job available", total_elapsed)
         return None
 
     async def hgetall(self, key: str) -> Dict[str, Any]:

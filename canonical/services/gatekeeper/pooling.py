@@ -83,16 +83,18 @@ class MultiSourcePooler:
         """
         # Step 1: Try L1 (owner/local) – always check, short timeout
         try:
+            logger.debug("[L1 BRPOP] queues=%s timeout=%ds", self.queues_l1, self.brpop_l1_timeout)
             result = await self.redis_l1.brpop(
                 self.queues_l1,
                 timeout=self.brpop_l1_timeout,
             )
             if result:
                 queue_name, raw_job = result
-                logger.debug("Job dequeued from L1 (owner): queue=%s", queue_name)
+                logger.debug("[L1 BRPOP SUCCESS] queue=%s", queue_name)
                 return queue_name, raw_job, "owner"
+            logger.debug("[L1 BRPOP TIMEOUT] no job after %ds", self.brpop_l1_timeout)
         except Exception as exc:
-            logger.warning("L1 BRPOP error: %s", exc)
+            logger.warning("[L1 BRPOP ERROR] %s", exc)
 
         # Step 2: L1 empty – check L2 only if interval has passed
         current_time = time.time()
@@ -101,21 +103,24 @@ class MultiSourcePooler:
         if time_since_last_l2_poll >= self.polling_l2_interval:
             try:
                 self.last_l2_poll_time = current_time
+                logger.debug("[L2 BRPOP] queues=%s timeout=%ds", self.queues_l2, self.brpop_l2_timeout)
                 result = await self.redis_l2.brpop(
                     self.queues_l2,
                     timeout=self.brpop_l2_timeout,
                 )
                 if result:
                     queue_name, raw_job = result
-                    logger.debug("Job dequeued from L2 (global): queue=%s", queue_name)
+                    logger.debug("[L2 BRPOP SUCCESS] queue=%s", queue_name)
                     return queue_name, raw_job, "global"
+                logger.debug("[L2 BRPOP TIMEOUT] no job after %ds", self.brpop_l2_timeout)
             except Exception as exc:
-                logger.warning("L2 BRPOP error: %s", exc)
+                logger.warning("[L2 BRPOP ERROR] %s", exc)
         else:
             logger.debug(
-                "L2 poll skipped (interval: %.1fs < %.1fs)",
+                "[L2 BRPOP SKIP] interval: %.1fs < %.1fs (next L2 in %.1fs)",
                 time_since_last_l2_poll,
                 self.polling_l2_interval,
+                self.polling_l2_interval - time_since_last_l2_poll,
             )
 
         return None, None, ""
