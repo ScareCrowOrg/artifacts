@@ -222,10 +222,10 @@ class QueueConfig:
     def brpop_l2_timeout() -> int:
         try:
             value = _get_config("brpop_l2_timeout")
-            return int(value) if value else 20
+            return int(value) if value else 5
         except (ValueError, TypeError):
-            logger.warning("[Config] Invalid BRPOP_L2_TIMEOUT value, using default 20")
-            return 20
+            logger.warning("[Config] Invalid BRPOP_L2_TIMEOUT value, using default 5")
+            return 5
 
     @staticmethod
     def cpu_jobs_queue_l1() -> str:
