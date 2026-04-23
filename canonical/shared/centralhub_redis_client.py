@@ -92,7 +92,7 @@ class CentralHubRedisClient:
     async def brpop(
         self,
         keys: Union[str, List[str]],
-        timeout: int = 300,
+        timeout: int = 10,
     ) -> Optional[Tuple[str, str]]:
         """
         Dequeue the next job from one of the given queue(s) via HTTP.
@@ -101,13 +101,12 @@ class CentralHubRedisClient:
         MultiSourcePooler) can use the same call pattern for both direct
         Redis L1 (aioredis) and HTTP-based Redis L2 (CentralHub).
 
-        When multiple queue names are provided the method checks each queue
-        in order, blocking only on the last one for the full *timeout*
-        duration.  All other queues are checked non-blocking (timeout=0).
+        Uses CentralHub's new multi-queue dequeue API: blocks on ALL queues
+        simultaneously for the full timeout duration.
 
         Args:
             keys: Queue name or list of queue names.
-            timeout: Maximum seconds to block on the last queue (default 300s).
+            timeout: Maximum seconds to block (clamped to 10s by CentralHub).
 
         Returns:
             Tuple of (queue_name, raw_job_json_string) or None if timeout.
@@ -117,41 +116,41 @@ class CentralHubRedisClient:
         else:
             queue_names = [keys]
 
-        for i, queue_name in enumerate(queue_names):
-            # Non-blocking for all but the last queue; last queue gets full timeout
-            # CentralHub requires timeout >= 1, so use 1s minimum for non-blocking checks
-            check_timeout = timeout if i == len(queue_names) - 1 else 1
-            try:
-                response = await self.client.post(
-                    "/api/redis/jobs/dequeue",
-                    json={"queue_name": queue_name, "timeout": check_timeout},
-                )
-                response.raise_for_status()
-                result = response.json()
+        # CentralHub enforces max timeout of 10s, clamp for safety
+        clamp_timeout = min(int(timeout), 10)
 
-                if result.get("job_id") is not None:
-                    job_data = result.get("job_data", {})
-                    raw = job_data if isinstance(job_data, str) else json.dumps(job_data)
-                    return (queue_name, raw)
+        try:
+            response = await self.client.post(
+                "/api/redis/jobs/dequeue",
+                json={"queue_names": queue_names, "timeout": clamp_timeout},
+            )
+            response.raise_for_status()
+            result = response.json()
 
-            except httpx.HTTPStatusError as e:
-                logger.error(
-                    "Failed to dequeue from %s: HTTP %s - %s",
-                    queue_name,
-                    e.response.status_code,
-                    e.response.text,
-                    exc_info=True,
-                )
-                raise
-            except Exception as e:
-                logger.error(
-                    "Failed to dequeue from %s: %s (type=%s)",
-                    queue_name,
-                    str(e) or repr(e),
-                    type(e).__name__,
-                    exc_info=True,
-                )
-                raise
+            if result.get("job_id") is not None:
+                job_data = result.get("job_data", {})
+                raw = job_data if isinstance(job_data, str) else json.dumps(job_data)
+                queue_name = result.get("queue_name", queue_names[0])
+                return (queue_name, raw)
+
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                "Failed to dequeue from %s: HTTP %s - %s",
+                queue_names,
+                e.response.status_code,
+                e.response.text,
+                exc_info=True,
+            )
+            raise
+        except Exception as e:
+            logger.error(
+                "Failed to dequeue from %s: %s (type=%s)",
+                queue_names,
+                str(e) or repr(e),
+                type(e).__name__,
+                exc_info=True,
+            )
+            raise
 
         return None
 
