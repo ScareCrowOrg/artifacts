@@ -39,7 +39,7 @@ services:
       WORKERS_PATH: /app/artifacts/canonical/workers
 
       # Logging
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
       WORKER_ID: ${WORKER_ID:-gatekeeper-service-01}
 
       # Redis L1 (ScareRunner / owner)
