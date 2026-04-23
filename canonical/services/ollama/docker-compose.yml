@@ -35,7 +35,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: localhost:5001/scareverse-ollama:staging20260422T003044
+    image: localhost:5001/scareverse-ollama:staging20260423T223442
     container_name: scareverse-ollama-raw
     runtime: nvidia
     environment:

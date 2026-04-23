@@ -3,9 +3,9 @@
   "name": "node-pty-service",
   "description": "Node-PTY Service - WebSocket terminal + Git integration for AI agents",
   "build": false,
-  "image": "localhost:5001/scareverse-node-pty-service:staging",
-  "imageTag": "staging",
+  "image": "localhost:5001/scareverse-node-pty-service:staging20260423T223442",
+  "imageTag": "staging20260423T223442",
   "dependencies": [],
   "generate_env_file": false,
-  "lastBuilt": "2026-04-08T19:27:56.303Z"
+  "lastBuilt": "2026-04-23T22:39:18.989Z"
 }

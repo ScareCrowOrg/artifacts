@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: localhost:5001/scareverse-traefik:staging
+    image: localhost:5001/scareverse-traefik:staging20260423T223442
     container_name: scareverse-traefik-worker
 
     environment:

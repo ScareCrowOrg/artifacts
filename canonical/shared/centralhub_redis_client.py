@@ -92,7 +92,7 @@ class CentralHubRedisClient:
     async def brpop(
         self,
         keys: Union[str, List[str]],
-        timeout: int = 10,
+        timeout: int = 1,
     ) -> Optional[Tuple[str, str]]:
         """
         Dequeue the next job from one of the given queue(s) via HTTP.
@@ -106,7 +106,7 @@ class CentralHubRedisClient:
 
         Args:
             keys: Queue name or list of queue names.
-            timeout: Maximum seconds to block (clamped to 10s by CentralHub).
+            timeout: Maximum seconds to block (1s default to prevent Redis connection pool exhaustion).
 
         Returns:
             Tuple of (queue_name, raw_job_json_string) or None if timeout.
@@ -243,22 +243,28 @@ class CentralHubRedisClient:
             raise
 
     async def dequeue(
-        self, queue_name: str, timeout: int = 5
+        self, queue_names: Union[str, List[str]], timeout: int = 1
     ) -> Optional[Dict[str, Any]]:
         """
-        Dequeue next job from queue (worker operation).
+        Dequeue next job from queue(s) (worker operation).
 
         Args:
-            queue_name: Queue to dequeue from
-            timeout: BRPOP timeout in seconds
+            queue_names: Queue name or list of queue names
+            timeout: BRPOP timeout in seconds (1s default to prevent Redis connection pool exhaustion)
 
         Returns:
             Job data or None if timeout
         """
         try:
+            # Normalize to list
+            if isinstance(queue_names, str):
+                queue_list = [queue_names]
+            else:
+                queue_list = list(queue_names)
+
             response = await self.client.post(
                 "/api/redis/jobs/dequeue",
-                json={"queue_name": queue_name, "timeout": timeout},
+                json={"queue_names": queue_list, "timeout": timeout},
             )
             response.raise_for_status()
             result = response.json()
