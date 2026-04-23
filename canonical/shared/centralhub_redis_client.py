@@ -33,7 +33,7 @@ class CentralHubRedisClient:
         self,
         auth_token: str,
         base_url: str = "http://centralhub:8080",
-        timeout: float = 25.0,
+        timeout: float = 3.0,
     ):
         """
         Initialize CentralHub Redis client.
@@ -41,7 +41,7 @@ class CentralHubRedisClient:
         Args:
             auth_token: JWT token or service account token
             base_url: CentralHub URL (default: http://centralhub:8080)
-            timeout: Request timeout in seconds (default: 25s, slightly higher than BRPOP L2 of 20s)
+            timeout: Request timeout in seconds (default: 3s, aligns with BRPOP dequeue max timeout)
         """
         self.base_url = base_url.rstrip("/")
         self.auth_token = auth_token
@@ -51,7 +51,7 @@ class CentralHubRedisClient:
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
             headers={"Authorization": f"Bearer {self.auth_token}"},
-            timeout=httpx.Timeout(self.timeout, connect=10.0),
+            timeout=httpx.Timeout(self.timeout, connect=5.0),
             limits=httpx.Limits(
                 max_keepalive_connections=50, max_connections=100, keepalive_expiry=30.0
             ),
