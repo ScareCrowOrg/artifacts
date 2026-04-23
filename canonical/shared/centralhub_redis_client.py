@@ -33,7 +33,7 @@ class CentralHubRedisClient:
         self,
         auth_token: str,
         base_url: str = "http://centralhub:8080",
-        timeout: float = 310.0,
+        timeout: float = 25.0,
     ):
         """
         Initialize CentralHub Redis client.
@@ -41,7 +41,7 @@ class CentralHubRedisClient:
         Args:
             auth_token: JWT token or service account token
             base_url: CentralHub URL (default: http://centralhub:8080)
-            timeout: Request timeout in seconds (default: 310s for long-polling)
+            timeout: Request timeout in seconds (default: 25s, slightly higher than BRPOP L2 of 20s)
         """
         self.base_url = base_url.rstrip("/")
         self.auth_token = auth_token
@@ -51,7 +51,7 @@ class CentralHubRedisClient:
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
             headers={"Authorization": f"Bearer {self.auth_token}"},
-            timeout=self.timeout,
+            timeout=httpx.Timeout(self.timeout, connect=10.0),
             limits=httpx.Limits(
                 max_keepalive_connections=50, max_connections=100, keepalive_expiry=30.0
             ),
@@ -136,14 +136,21 @@ class CentralHubRedisClient:
 
             except httpx.HTTPStatusError as e:
                 logger.error(
-                    "Failed to dequeue from %s: %s - %s",
+                    "Failed to dequeue from %s: HTTP %s - %s",
                     queue_name,
                     e.response.status_code,
                     e.response.text,
+                    exc_info=True,
                 )
                 raise
             except Exception as e:
-                logger.error("Failed to dequeue from %s: %s", queue_name, e)
+                logger.error(
+                    "Failed to dequeue from %s: %s (type=%s)",
+                    queue_name,
+                    str(e) or repr(e),
+                    type(e).__name__,
+                    exc_info=True,
+                )
                 raise
 
         return None
