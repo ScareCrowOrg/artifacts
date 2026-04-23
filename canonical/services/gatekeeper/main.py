@@ -63,10 +63,15 @@ from worker_discovery import WorkerDiscovery
 # Logging setup
 # ---------------------------------------------------------------------------
 
-logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
+# Convert string log level to logging constant (e.g. "DEBUG" → logging.DEBUG)
+log_level_str = config.LOG_LEVEL
+log_level = getattr(logging, log_level_str.upper(), logging.INFO)
+
+logging.basicConfig(level=log_level, format=config.LOG_FORMAT)
 if config.LOG_FORMAT_TYPE == "json":
-    configure_json_logging(level=config.LOG_LEVEL)
+    configure_json_logging(level=log_level_str)
 logger = logging.getLogger(__name__)
+logger.info("GateKeeper logging initialized: level=%s", log_level_str)
 
 # ---------------------------------------------------------------------------
 # Shutdown event
