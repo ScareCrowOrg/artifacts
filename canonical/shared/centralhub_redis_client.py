@@ -119,10 +119,7 @@ class CentralHubRedisClient:
         else:
             queue_names = [keys]
 
-        # CentralHub enforces max timeout of 10s, clamp for safety
-        clamp_timeout = min(int(timeout), 10)
-
-        logger.debug("[BRPOP START] queues=%s timeout=%ds", queue_names, clamp_timeout)
+        logger.debug("[BRPOP START] queues=%s", queue_names)
 
         try:
             post_start = time.time()
@@ -130,7 +127,7 @@ class CentralHubRedisClient:
 
             response = await self.client.post(
                 "/api/redis/jobs/dequeue",
-                json={"queue_names": queue_names, "timeout": clamp_timeout},
+                json={"queue_names": queue_names},
             )
 
             post_elapsed = time.time() - post_start
@@ -250,7 +247,7 @@ class CentralHubRedisClient:
 
         Args:
             queue_names: Queue name or list of queue names
-            timeout: BRPOP timeout in seconds (1s default to prevent Redis connection pool exhaustion)
+            timeout: Ignored (server controls BRPOP timeout via env var)
 
         Returns:
             Job data or None if timeout
@@ -264,7 +261,7 @@ class CentralHubRedisClient:
 
             response = await self.client.post(
                 "/api/redis/jobs/dequeue",
-                json={"queue_names": queue_list, "timeout": timeout},
+                json={"queue_names": queue_list},
             )
             response.raise_for_status()
             result = response.json()
