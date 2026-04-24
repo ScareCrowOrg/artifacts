@@ -4,7 +4,7 @@
   "description": "Modelo de linguagem aberto do Google, versão 7B. Ideal para tarefas de geração de texto, conversação e compreensão de linguagem natural com alta qualidade.",
   "type": "local",
   "provider": "ollama",
-  "modelId": "gemma:7b",
+  "modelId": "gemma",
   "apiKey": null,
   "version": "1.0.0",
   "active": true,

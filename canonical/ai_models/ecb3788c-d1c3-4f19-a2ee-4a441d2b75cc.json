@@ -4,7 +4,7 @@
   "description": "Modelo compacto e eficiente da Microsoft, versão Phi-3. Otimizado para tarefas de raciocínio, código e compreensão de linguagem com alto desempenho e baixo consumo de recursos.",
   "type": "local",
   "provider": "ollama",
-  "modelId": "phi3:latest",
+  "modelId": "phi3",
   "apiKey": null,
   "version": "1.0.0",
   "active": true,

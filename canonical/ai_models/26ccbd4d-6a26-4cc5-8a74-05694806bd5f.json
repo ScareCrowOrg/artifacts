@@ -4,7 +4,7 @@
   "description": "Modelo especializado em código, versão 6.7B. Otimizado para geração, análise e refatoração de código com foco em qualidade e precisão técnica.",
   "type": "local",
   "provider": "ollama",
-  "modelId": "deepseek-coder:6.7b",
+  "modelId": "deepseek-coder",
   "apiKey": null,
   "version": "1.0.0",
   "active": true,
