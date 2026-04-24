@@ -101,12 +101,14 @@ class CentralHubRedisClient:
         MultiSourcePooler) can use the same call pattern for both direct
         Redis L1 (aioredis) and HTTP-based Redis L2 (CentralHub).
 
-        Uses CentralHub's new multi-queue dequeue API: blocks on ALL queues
-        simultaneously for the full timeout duration.
+        **IMPORTANT**: timeout parameter is accepted for interface compatibility but
+        is NOT sent to CentralHub. CentralHub manages BRPOP timeout server-side
+        via BRPOP_TIMEOUT env var (default 1s). Client is agnóstic to timeout strategy.
 
         Args:
             keys: Queue name or list of queue names.
-            timeout: Maximum seconds to block (1s default to prevent Redis connection pool exhaustion).
+            timeout: IGNORED — for interface compatibility only. CentralHub controls
+                     actual blocking timeout via server-side config.
 
         Returns:
             Tuple of (queue_name, raw_job_json_string) or None if timeout.
