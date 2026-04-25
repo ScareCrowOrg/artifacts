@@ -30,10 +30,10 @@ vi.mock('@/stores/auth', () => ({
   }))
 }))
 
-vi.mock('@/composables/usePermissions', () => ({
-  usePermissions: vi.fn(() => ({
-    can: vi.fn((permission: string) => Promise.resolve(permission === 'ai-models:admin'))
-  }))
+// Stub for non-existent module: @/composables/usePermissions (file does not exist yet)
+// Using local mock to avoid Vite import resolution error
+const usePermissions = vi.fn(() => ({
+  can: vi.fn((permission: string) => Promise.resolve(permission === 'ai-models:admin'))
 }))
 
 vi.mock('@/utils/logger', () => ({
@@ -172,9 +172,8 @@ describe.skip('AIModelsCell', () => {
 
   describe('execute() - RBAC', () => {
     it('should deny access without ai-models:admin permission', async () => {
-      // Mock permission check to return false
-      const { usePermissions } = await import('@/composables/usePermissions')
-      vi.mocked(usePermissions).mockReturnValue({
+      // Use local usePermissions stub (module @/composables/usePermissions does not exist yet)
+      usePermissions.mockReturnValue({
         can: vi.fn(() => Promise.resolve(false))
       } as any)
 

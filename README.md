@@ -375,7 +375,6 @@ O symlink permite que:
 - `svg-generator-cell` - Gerador de SVG
 - `threejs-scene-generator-cell` - Gerador de cenas Three.js
 - `unclassified` / `unclassified-cell` - Célula não classificada
-- `vault-token-manager` - Gerenciador de tokens Vault
 
 **Tipos com IDs UUID (especializados):**
 - `0cd532bb-f2b9-4951-8768-59644e40c7ab` - Executor de Testes (com workflow YAML)
