@@ -21,7 +21,7 @@ services:
     build:
       context: ../../../..
       dockerfile: artifacts/canonical/services/backend/Dockerfile
-    image: localhost:5001/scareverse-backend:staging20260425T065112
+    image: localhost:5001/scareverse-backend:staging20260425T210730
 
     ports:
       - "5050:5050"
