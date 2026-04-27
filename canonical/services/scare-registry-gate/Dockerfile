@@ -1,27 +1,28 @@
-# ─── Stage 1: Build ───────────────────────────────────────────────────────────
-FROM rust:1.93-slim AS builder
+# ─── Stage 1: Build (Static with MUSL) ────────────────────────────────────────
+FROM rust:1.93-alpine AS builder
 
 WORKDIR /app
 
-# System dependencies required by some crates (openssl, pkg-config)
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Static compilation dependencies
+RUN apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static g++ make
+
+# Add MUSL target for static linking
+RUN rustup target add x86_64-unknown-linux-musl
 
 # Copy manifest files first for layer caching
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 
-# Pre-compile dependencies with a dummy binary
+# Pre-compile dependencies with a dummy binary (static)
 RUN mkdir src && echo 'fn main() {}' > src/main.rs
-RUN cargo build --release 2>&1
+RUN RUSTFLAGS="-C target-feature=+crt-static" cargo build --release --target x86_64-unknown-linux-musl 2>&1
 RUN rm -rf src
 
 # Copy actual source files
 COPY src ./src
 
-# Touch main.rs to force rebuild of the binary (not deps)
-RUN touch src/main.rs && cargo build --release 2>&1
+# Build static binary (no dynamic libc dependency)
+RUN touch src/main.rs && \
+    RUSTFLAGS="-C target-feature=+crt-static" cargo build --release --target x86_64-unknown-linux-musl 2>&1
 
 # ─── Stage 2: Runtime ─────────────────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime
@@ -39,8 +40,8 @@ RUN apt-get update && apt-get install -y \
 # Python deps for BaseService heartbeat
 RUN pip install --no-cache-dir --break-system-packages redis httpx
 
-# Copy compiled binary from builder
-COPY --from=builder /app/target/release/scare-registry-gate /app/scare-registry-gate
+# Copy static binary from MUSL build (no GLIBC dependency)
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/scare-registry-gate /app/scare-registry-gate
 
 # Copy entrypoint and heartbeat scripts
 COPY entrypoint.sh /app/entrypoint.sh
