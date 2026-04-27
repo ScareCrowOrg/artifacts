@@ -1,0 +1,56 @@
+{
+  "version": "0.1",
+  "name": "scare-registry-gate",
+  "build": false,
+  "image": "localhost:5001/staging/scareverse-scare-registry-gate:staging20260427T070455",
+  "generate_env_file": false,
+  "totp_seed": false,
+  "injected_env_vars": [
+    {
+      "name": "R2_ACCOUNT_ID",
+      "source": "vault",
+      "required": true,
+      "description": "Cloudflare R2 account ID"
+    },
+    {
+      "name": "R2_ACCESS_KEY_ID",
+      "source": "vault",
+      "required": true,
+      "description": "R2 S3-compatible access key"
+    },
+    {
+      "name": "R2_SECRET_ACCESS_KEY",
+      "source": "vault",
+      "required": true,
+      "description": "R2 S3-compatible secret key"
+    },
+    {
+      "name": "CENTRALHUB_URL",
+      "source": "vault",
+      "required": true,
+      "description": "CentralHub base URL"
+    },
+    {
+      "name": "CENTRALHUB_API_KEY",
+      "source": "vault",
+      "required": true,
+      "description": "API key for CentralHub manifest registration"
+    }
+  ],
+  "dependencies": [
+    "Dockerfile",
+    "src/main.rs",
+    "src/config.rs",
+    "src/oci/mod.rs",
+    "src/oci/auth.rs",
+    "src/oci/blobs.rs",
+    "src/oci/manifests.rs",
+    "src/oci/types.rs",
+    "src/r2/mod.rs",
+    "src/r2/multipart.rs",
+    "src/hub/mod.rs",
+    "Cargo.toml"
+  ],
+  "imageTag": "staging20260427T070455",
+  "lastBuilt": "2026-04-27T07:08:23.300Z"
+}

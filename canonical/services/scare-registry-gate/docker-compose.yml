@@ -1,0 +1,52 @@
+version: '3.9'
+services:
+  scare-registry-gate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: localhost:5001/staging/scareverse-scare-registry-gate:staging20260427T070455
+    container_name: scareverse-registry-gate
+    restart: unless-stopped
+    volumes:
+      - ../../../../artifacts/canonical:/app/artifacts/canonical:ro
+      - ../../../../artifacts/shared:/app/artifacts/shared:ro
+    environment:
+      - PYTHONPATH=/app/artifacts
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - GATE_PORT=${GATE_PORT:-5678}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET=${R2_BUCKET:-scareverse-registry}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
+      - CENTRALHUB_URL=${CENTRALHUB_URL}
+      - CENTRALHUB_API_KEY=${CENTRALHUB_API_KEY}
+      - REDIS_L1_HOST=${REDIS_L1_HOST:-redis-local}
+      - REDIS_L1_PORT=${REDIS_L1_PORT:-6380}
+      - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
+      - REDIS_L1_DB=${REDIS_L1_DB:-0}
+      - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-20}
+      - HEARTBEAT_TTL=${HEARTBEAT_TTL:-60}
+      - WORKER_PORT=5678
+      - REGISTRY_USERNAME=${REGISTRY_USERNAME:-scareverse}
+      - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-}
+    ports:
+      - "5678:5678"
+    networks:
+      - scareverse-net
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5678/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  scareverse-net:
+    external: true
