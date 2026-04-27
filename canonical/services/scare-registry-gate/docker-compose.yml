@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: localhost:5001/staging/scareverse-scare-registry-gate:staging20260427T071456
+    image: localhost:5001/staging/scareverse-scare-registry-gate:staging20260427T072911
     container_name: scareverse-registry-gate
     restart: unless-stopped
     volumes:
@@ -21,7 +21,7 @@ services:
       - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
       - CENTRALHUB_URL=${CENTRALHUB_URL}
       - CENTRALHUB_API_KEY=${CENTRALHUB_API_KEY}
-      - REDIS_L1_HOST=${REDIS_L1_HOST:-redis-local}
+      - REDIS_L1_HOST=${REDIS_L1_HOST:-redis}
       - REDIS_L1_PORT=${REDIS_L1_PORT:-6380}
       - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
       - REDIS_L1_DB=${REDIS_L1_DB:-0}
