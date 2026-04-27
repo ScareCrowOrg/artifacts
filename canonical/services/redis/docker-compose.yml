@@ -13,7 +13,7 @@ version: '3.8'
 services:
   redis:
     build: .
-    image: localhost:5001/scareverse-redis:staging
+    image: localhost:5001/staging/scareverse-redis:staging20260427T013923
     container_name: scareverse-redis-local
     ports:
       - "6380:6380"
