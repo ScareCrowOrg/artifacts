@@ -225,14 +225,26 @@ impl R2Client {
                     );
                 }
 
-                // 404 / NotFound / NoSuchKey → blob does not exist (expected during push)
+                // 404 / NotFound / NoSuchKey → blob does not exist; this is the normal
+                // path during a docker push (Docker probes which blobs are already in
+                // the registry before uploading).  Return Ok(None) so the handler can
+                // respond with 404 and let Docker proceed to the upload phase.
+                //
+                // We check both `msg` (e.to_string(), usually "service error") and
+                // `detail` (the Debug repr of the parsed SDK error, which contains the
+                // R2 error code such as "NotFound", "NoSuchKey") because the exact
+                // display text varies across SDK versions and error types.
                 if msg.contains("404")
                     || msg.contains("NotFound")
                     || msg.contains("NoSuchKey")
+                    || detail.contains("NotFound")
                     || detail.contains("NoSuchKey")
                     || detail.contains("status: 404")
                 {
-                    info!("[R2Client] head_object: key={} not found in R2 (404)", key);
+                    tracing::debug!(
+                        "[R2Client] head_object: key={} → 404 Not Found (blob absent, expected during push)",
+                        key
+                    );
                     return Ok(None);
                 }
 
