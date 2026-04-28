@@ -69,7 +69,7 @@ impl Config {
     pub fn from_env() -> Self {
         Self {
             port: env_u16("GATE_PORT", 5678),
-            r2_account_id: env_str("R2_ACCOUNT_ID", ""),
+            r2_account_id: env_str_alnum("R2_ACCOUNT_ID", ""),
             r2_access_key_id: env_str("R2_ACCESS_KEY_ID", ""),
             r2_secret_access_key: env_str("R2_SECRET_ACCESS_KEY", ""),
             r2_bucket: env_str("R2_BUCKET", "scareverse-registry"),
@@ -86,6 +86,35 @@ impl Config {
             registry_password: env_str("REGISTRY_PASSWORD", "scareverse"),
             max_blob_size: env_usize("MAX_BLOB_SIZE_MB", 2048) * 1024 * 1024,
         }
+    }
+
+    /// Emit startup sanity-check logs for critical env vars.
+    ///
+    /// Logs the **first character**, **last character**, and **byte length** of
+    /// `R2_ACCOUNT_ID` and `R2_BUCKET`.  This lets us detect a Byte-Order-Mark
+    /// (BOM) or other invisible character that `trim()` may have left behind
+    /// because it sits in the middle of the string rather than at the edges.
+    ///
+    /// Call this **after** the tracing subscriber has been initialised.
+    pub fn log_sanity_check(&self) {
+        fn char_sanity(label: &str, value: &str) {
+            if value.is_empty() {
+                tracing::warn!(
+                    "[Config] {label}: <EMPTY> – env var not set or was fully stripped; \
+                     check that the Launcher is injecting this variable"
+                );
+                return;
+            }
+            let chars: Vec<char> = value.chars().collect();
+            tracing::info!(
+                "[Config] {label}: start='{}', end='{}', len={}",
+                chars[0],
+                chars[chars.len() - 1],
+                value.len()
+            );
+        }
+        char_sanity("R2_ACCOUNT_ID", &self.r2_account_id);
+        char_sanity("R2_BUCKET", &self.r2_bucket);
     }
 
     /// Build the Redis connection URL from components.
@@ -106,6 +135,22 @@ fn env_str(key: &str, default: &str) -> String {
     // URL, ID or credential field cause silent "dispatch failure" errors in the
     // AWS S3 SDK and connection errors in reqwest.
     raw.trim().to_owned()
+}
+
+/// Like `env_str`, but additionally filters out every character that is **not**
+/// ASCII-alphanumeric after trimming.
+///
+/// Used for identifier fields (currently `R2_ACCOUNT_ID`) where any
+/// non-alphanumeric character — including invisible ones that `trim()` cannot
+/// remove because they are embedded in the middle of the value (e.g. a
+/// Byte-Order-Mark `\u{FEFF}`) — is always a sign of corruption and would
+/// silently produce a malformed endpoint URL.
+///
+/// Cloudflare account IDs consist solely of lowercase hex digits (`[0-9a-f]`);
+/// no legitimate value contains hyphens, dots, or whitespace.
+fn env_str_alnum(key: &str, default: &str) -> String {
+    let trimmed = env_str(key, default);
+    trimmed.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
 }
 
 fn env_u16(key: &str, default: u16) -> u16 {
@@ -224,5 +269,27 @@ mod tests {
         std::env::remove_var("R2_ACCOUNT_ID");
         std::env::remove_var("R2_BUCKET");
         std::env::remove_var("CENTRALHUB_URL");
+    }
+
+    #[test]
+    fn test_r2_account_id_alnum_filter() {
+        // env_str_alnum must strip any non-alphanumeric character, including
+        // BOM (\u{FEFF}) and other invisible Unicode code points that trim()
+        // does not remove because they appear in the middle of the value.
+        std::env::set_var("R2_ACCOUNT_ID", "abc\u{FEFF}123");
+        let cfg = Config::from_env();
+        assert_eq!(
+            cfg.r2_account_id, "abc123",
+            "mid-string BOM must be stripped by alnum filter"
+        );
+        std::env::remove_var("R2_ACCOUNT_ID");
+
+        std::env::set_var("R2_ACCOUNT_ID", "abc-123!xyz");
+        let cfg2 = Config::from_env();
+        assert_eq!(
+            cfg2.r2_account_id, "abc123xyz",
+            "hyphens and special chars must be stripped"
+        );
+        std::env::remove_var("R2_ACCOUNT_ID");
     }
 }

@@ -67,6 +67,38 @@ impl R2Client {
             endpoint.len()
         );
 
+        // Validate the endpoint as a well-formed URI BEFORE handing it to the AWS
+        // SDK.  An invalid URI (e.g. an empty host when R2_ACCOUNT_ID is unset)
+        // causes the SDK to fail with the opaque "failed to construct request"
+        // error, which gives no indication of the actual cause.
+        //
+        // `panic!` here is intentional: a missing or corrupt R2_ACCOUNT_ID is a
+        // fatal misconfiguration and there is no sensible recovery path.
+        match endpoint.parse::<http::Uri>() {
+            Ok(uri) => {
+                // Additionally assert that the host segment is non-empty.
+                // http::Uri can technically parse "https://.example.com" as valid
+                // even though DNS would reject it.
+                let host = uri.host().unwrap_or("");
+                if host.is_empty() || host.starts_with('.') {
+                    panic!(
+                        "[R2Client] FATAL: endpoint '{}' has an invalid host '{}'. \
+                         R2_ACCOUNT_ID is empty or malformed ({} chars). \
+                         Ensure the Launcher injects R2_ACCOUNT_ID correctly.",
+                        endpoint, host, account_id.len()
+                    );
+                }
+            }
+            Err(e) => {
+                panic!(
+                    "[R2Client] FATAL: endpoint '{}' is not a valid URI: {}. \
+                     R2_ACCOUNT_ID contains {} chars. \
+                     Ensure R2_ACCOUNT_ID is a plain alphanumeric Cloudflare account ID.",
+                    endpoint, e, account_id.len()
+                );
+            }
+        }
+
         // Warn on any suspicious characters in the account_id or bucket name.
         // `account_id` is alphanumeric + hyphens; `bucket` may also contain dots.
         warn_if_suspicious("[R2Client] ⚠ R2_ACCOUNT_ID", account_id, &['-']);

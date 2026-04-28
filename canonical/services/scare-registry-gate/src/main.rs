@@ -59,6 +59,10 @@ async fn main() {
         cfg.port, cfg.r2_bucket, cfg.centralhub_url
     );
 
+    // Sanity-check critical env vars: log first/last char and byte length to
+    // detect invisible characters (BOM, NBSP, etc.) that trim() may leave behind.
+    cfg.log_sanity_check();
+
     // Warn if running with an empty registry password (insecure)
     if cfg.registry_password.is_empty() {
         tracing::warn!(
