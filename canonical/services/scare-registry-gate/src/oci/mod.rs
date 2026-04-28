@@ -59,6 +59,10 @@ pub fn oci_router() -> Router<Arc<AppState>> {
         // ── 3-segment manifest routes (registry/planet/name) ───────────────
         .route(
             "/v2/:registry/:planet/:name/manifests/:reference",
+            head(manifests::handle_manifest_head),
+        )
+        .route(
+            "/v2/:registry/:planet/:name/manifests/:reference",
             get(manifests::handle_manifest_get),
         )
         .route(
@@ -89,6 +93,10 @@ pub fn oci_router() -> Router<Arc<AppState>> {
         )
 
         // ── 2-segment manifest routes (ns/name) ────────────────────────────
+        .route(
+            "/v2/:ns/:name/manifests/:reference",
+            head(manifests::handle_manifest_head_2seg),
+        )
         .route(
             "/v2/:ns/:name/manifests/:reference",
             get(manifests::handle_manifest_get_2seg),

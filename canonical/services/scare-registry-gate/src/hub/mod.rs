@@ -36,6 +36,31 @@ impl HubClient {
     /// registry operations must succeed even if CentralHub is unreachable.
     pub async fn notify_manifest(&self, payload: &serde_json::Value) -> Result<(), String> {
         let url = format!("{}/api/registry/manifests", self.base_url);
+
+        // Diagnostic: log target URL and payload field names (not values) to aid
+        // debugging without leaking manifest content to the log stream.
+        let payload_keys: Vec<&str> = payload
+            .as_object()
+            .map(|o| o.keys().map(|k| k.as_str()).collect())
+            .unwrap_or_default();
+        info!(
+            "[HubClient] notify_manifest: url={} payload_keys={:?}",
+            url, payload_keys
+        );
+
+        if self.base_url.is_empty() {
+            warn!(
+                "[HubClient] base_url is empty – CentralHub notification will fail; \
+                 check CENTRALHUB_URL env var"
+            );
+        }
+        if self.api_key.is_empty() {
+            warn!(
+                "[HubClient] api_key is empty – CentralHub notification will fail with 401; \
+                 check CENTRALHUB_SERVICE_TOKEN env var"
+            );
+        }
+
         let resp = self
             .http
             .post(&url)
@@ -44,15 +69,21 @@ impl HubClient {
             .json(payload)
             .send()
             .await
-            .map_err(|e| format!("HTTP send error: {e}"))?;
+            .map_err(|e| {
+                warn!("[HubClient] notify_manifest send error: url={} err={}", url, e);
+                format!("HTTP send error: {e}")
+            })?;
 
         let status = resp.status();
         if status.is_success() {
-            info!("CentralHub notified: POST {} → {}", url, status);
+            info!("[HubClient] notify_manifest OK: POST {} → {}", url, status);
             Ok(())
         } else {
             let body = resp.text().await.unwrap_or_default();
-            warn!("CentralHub returned {}: {}", status, body);
+            warn!(
+                "[HubClient] notify_manifest FAILED: POST {} → {} | response_body={}",
+                url, status, body
+            );
             Err(format!("CentralHub HTTP {status}: {body}"))
         }
     }

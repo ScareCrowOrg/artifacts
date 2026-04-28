@@ -128,6 +128,60 @@ impl Config {
         // R2 secret access keys are typically 64 hex chars.
         char_sanity("R2_ACCESS_KEY_ID", &self.r2_access_key_id);
         char_sanity("R2_SECRET_ACCESS_KEY", &self.r2_secret_access_key);
+
+        // Log R2_PUBLIC_URL fully (it is not a credential) to detect misconfiguration
+        // where the S3 API endpoint is used instead of a public CDN URL.
+        // The manifest GET handler redirects Docker to this URL; if it points to the
+        // S3 API endpoint, Docker will get 400 on unauthenticated HEAD/GET requests.
+        if self.r2_public_url.is_empty() {
+            tracing::warn!(
+                "[Config] R2_PUBLIC_URL: <EMPTY> – manifest GET will redirect to an empty URL; \
+                 set R2_PUBLIC_URL to the public CDN URL (e.g. https://pub-xxx.r2.dev)"
+            );
+        } else {
+            let pub_chars: Vec<char> = self.r2_public_url.chars().collect();
+            tracing::info!(
+                "[Config] R2_PUBLIC_URL: start='{}', end='{}', len={} | value={}",
+                pub_chars[0],
+                pub_chars[pub_chars.len() - 1],
+                self.r2_public_url.len(),
+                self.r2_public_url
+            );
+            if self.r2_public_url.contains("r2.cloudflarestorage.com") {
+                tracing::warn!(
+                    "[Config] R2_PUBLIC_URL points to the R2 S3 API endpoint, not a public CDN URL. \
+                     Docker clients will receive 400 when following manifest GET redirects because \
+                     they do not send S3 request signatures. \
+                     Set R2_PUBLIC_URL to the Cloudflare public CDN URL \
+                     (e.g. https://pub-XXXX.r2.dev) or configure a custom domain."
+                );
+            }
+        }
+
+        // Log CentralHub URL (not a credential) to confirm correct configuration.
+        char_sanity("CENTRALHUB_URL", &self.centralhub_url);
+        if self.centralhub_url.is_empty() {
+            tracing::warn!(
+                "[Config] CENTRALHUB_URL: <EMPTY> – manifest push notifications will fail; \
+                 check CENTRALHUB_URL env var"
+            );
+        }
+
+        // Log CentralHub token length only (it IS a credential).
+        if self.centralhub_service_token.is_empty() {
+            tracing::warn!(
+                "[Config] CENTRALHUB_SERVICE_TOKEN: <EMPTY> – hub notifications will fail with 401; \
+                 check CENTRALHUB_SERVICE_TOKEN env var"
+            );
+        } else {
+            let tok_chars: Vec<char> = self.centralhub_service_token.chars().collect();
+            tracing::info!(
+                "[Config] CENTRALHUB_SERVICE_TOKEN: start='{}', end='{}', len={}",
+                tok_chars[0],
+                tok_chars[tok_chars.len() - 1],
+                self.centralhub_service_token.len()
+            );
+        }
     }
 
     /// Build the Redis connection URL from components.

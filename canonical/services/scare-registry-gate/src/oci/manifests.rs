@@ -1,5 +1,6 @@
 //! OCI v2 manifest handlers.
 //!
+//! HEAD → check existence via R2 head_object (no redirect)
 //! GET  → 307 redirect to the public R2 URL
 //! PUT  → upload to R2 (under both tag and digest keys) + notify CentralHub
 //!
@@ -19,6 +20,63 @@ use tracing::{error, info, warn};
 use crate::oci::auth::require_auth;
 use crate::oci::types::make_error_response;
 use crate::AppState;
+
+// ── Inner: manifest head ──────────────────────────────────────────────────────
+
+/// Core logic for `HEAD .../manifests/:reference`.
+///
+/// Docker sends HEAD before PUT to check if the manifest already exists.
+/// Returns 200 with size/digest headers if found, 404 MANIFEST_UNKNOWN if not.
+///
+/// **Does NOT redirect** — redirecting to the R2 S3 API causes 400 because
+/// Docker follows the redirect without S3 request signing.
+async fn manifest_head_inner(
+    state: Arc<AppState>,
+    repo: String,
+    reference: String,
+    req: Request<Body>,
+) -> Response<Body> {
+    info!(
+        "[manifest-head] HEAD /v2/{}/manifests/{} | has_auth: {}",
+        repo,
+        reference,
+        req.headers().get("Authorization").is_some()
+    );
+
+    if let Err(resp) = require_auth(req.headers(), &state.config) {
+        warn!("[manifest-head] Auth failed: repo={} ref={}", repo, reference);
+        return resp;
+    }
+
+    let r2_key = format!("manifests/{repo}/{reference}");
+    info!("[manifest-head] Checking R2: key={}", r2_key);
+
+    match state.r2.head_object(&r2_key).await {
+        Ok(Some(size)) => {
+            info!("[manifest-head] Manifest found: key={} size={}", r2_key, size);
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Length", size.to_string())
+                .header("Docker-Content-Digest", &reference)
+                .header("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
+                .header("Docker-Distribution-API-Version", "registry/2.0")
+                .body(Body::empty())
+                .unwrap_or_else(|_| Response::new(Body::empty()))
+        }
+        Ok(None) => {
+            info!("[manifest-head] Manifest not found: key={}", r2_key);
+            make_error_response(StatusCode::NOT_FOUND, "MANIFEST_UNKNOWN", "Manifest not found")
+        }
+        Err(e) => {
+            error!("[manifest-head] R2 head_object error for {r2_key}: {e}");
+            make_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                "Storage error",
+            )
+        }
+    }
+}
 
 // ── Inner: manifest get ───────────────────────────────────────────────────────
 
@@ -43,10 +101,23 @@ async fn manifest_get_inner(
 
     let r2_key = format!("manifests/{repo}/{reference}");
     let url = state.r2.public_url_for(&r2_key);
-    info!(
-        "[manifest-get] Redirecting: key={} → {}",
-        r2_key, url
-    );
+
+    // Warn if the redirect URL points to the R2 S3 API endpoint rather than a
+    // public CDN URL.  Docker (and other OCI clients) follow the 307 without
+    // adding S3 request signing, so an S3 API URL will produce a 400 response.
+    if url.contains("r2.cloudflarestorage.com") {
+        warn!(
+            "[manifest-get] Redirect URL contains 'r2.cloudflarestorage.com' – \
+             this is the S3 API endpoint, not a public CDN URL. \
+             Unauthenticated clients will receive 400 when following this redirect. \
+             Set R2_PUBLIC_URL to the public bucket URL (e.g. https://pub-xxx.r2.dev). \
+             key={} url={}",
+            r2_key, url
+        );
+    } else {
+        info!("[manifest-get] Redirecting: key={} → {}", r2_key, url);
+    }
+
     Response::builder()
         .status(StatusCode::TEMPORARY_REDIRECT)
         .header("Location", &url)
@@ -96,32 +167,57 @@ async fn manifest_put_inner(
         }
     };
 
+    info!(
+        "[manifest-put] Body received: repo={} ref={} body_size={}",
+        repo, reference, body_bytes.len()
+    );
+
     let hash = Sha256::digest(&body_bytes);
     let digest_hex = hex::encode(hash);
     let content_digest = format!("sha256:{digest_hex}");
 
+    info!(
+        "[manifest-put] Computed digest: repo={} ref={} digest={}",
+        repo, reference, content_digest
+    );
+
     let ref_key = format!("manifests/{repo}/{reference}");
     let digest_key = format!("manifests/{repo}/sha256:{digest_hex}");
 
-    if let Err(e) = state
+    info!(
+        "[manifest-put] R2 keys: ref_key={} digest_key={}",
+        ref_key, digest_key
+    );
+
+    match state
         .r2
         .put_object(&ref_key, body_bytes.clone(), &content_type)
         .await
     {
-        error!("[manifest-put] R2 put_object (ref) error for {ref_key}: {e}");
-        return make_error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "INTERNAL_ERROR",
-            "Failed to store manifest",
-        );
+        Ok(()) => {
+            info!("[manifest-put] R2 put_object OK: key={}", ref_key);
+        }
+        Err(e) => {
+            error!("[manifest-put] R2 put_object (ref) error for {ref_key}: {e}");
+            return make_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                "Failed to store manifest",
+            );
+        }
     }
 
-    if let Err(e) = state
+    match state
         .r2
         .put_object(&digest_key, body_bytes.clone(), &content_type)
         .await
     {
-        warn!("[manifest-put] R2 put_object (digest) error for {digest_key}: {e}");
+        Ok(()) => {
+            info!("[manifest-put] R2 put_object OK: key={}", digest_key);
+        }
+        Err(e) => {
+            warn!("[manifest-put] R2 put_object (digest) error for {digest_key}: {e}");
+        }
     }
 
     let manifest_json: serde_json::Value = match serde_json::from_slice(&body_bytes) {
@@ -135,13 +231,34 @@ async fn manifest_put_inner(
             );
         }
     };
+
     let layers = manifest_json
         .get("layers")
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
 
+    let schema_version = manifest_json
+        .get("schemaVersion")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let media_type = manifest_json
+        .get("mediaType")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    info!(
+        "[manifest-put] Manifest parsed: repo={} ref={} schemaVersion={} mediaType={} layers_count={}",
+        repo, reference, schema_version, media_type, layers.len()
+    );
+
     let (hub_registry, hub_planet, hub_image) = split_repo_for_hub(&repo);
+
+    info!(
+        "[manifest-put] Hub split: registry={} planet={} image={}",
+        hub_registry, hub_planet, hub_image
+    );
+
     let payload = serde_json::json!({
         "registry": hub_registry,
         "planet": hub_planet,
@@ -157,8 +274,8 @@ async fn manifest_put_inner(
     }
 
     info!(
-        "[manifest-put] Stored: repo={} ref={} digest={}",
-        repo, reference, content_digest
+        "[manifest-put] Responding 201 CREATED: repo={} ref={} digest={} location=/v2/{}/manifests/{}",
+        repo, reference, content_digest, repo, reference
     );
 
     Response::builder()
@@ -236,6 +353,15 @@ mod tests {
 
 // ── 3-segment public handlers ─────────────────────────────────────────────────
 
+/// `HEAD /v2/:registry/:planet/:name/manifests/:reference`
+pub async fn handle_manifest_head(
+    State(state): State<Arc<AppState>>,
+    Path((registry, planet, name, reference)): Path<(String, String, String, String)>,
+    req: Request<Body>,
+) -> Response<Body> {
+    manifest_head_inner(state, format!("{registry}/{planet}/{name}"), reference, req).await
+}
+
 /// `GET /v2/:registry/:planet/:name/manifests/:reference`
 pub async fn handle_manifest_get(
     State(state): State<Arc<AppState>>,
@@ -255,6 +381,15 @@ pub async fn handle_manifest_put(
 }
 
 // ── 2-segment public handlers ─────────────────────────────────────────────────
+
+/// `HEAD /v2/:ns/:name/manifests/:reference`
+pub async fn handle_manifest_head_2seg(
+    State(state): State<Arc<AppState>>,
+    Path((ns, name, reference)): Path<(String, String, String)>,
+    req: Request<Body>,
+) -> Response<Body> {
+    manifest_head_inner(state, format!("{ns}/{name}"), reference, req).await
+}
 
 /// `GET /v2/:ns/:name/manifests/:reference`
 pub async fn handle_manifest_get_2seg(
