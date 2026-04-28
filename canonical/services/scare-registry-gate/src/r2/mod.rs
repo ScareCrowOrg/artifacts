@@ -10,11 +10,25 @@ use aws_sdk_s3::{
     Config as S3Config,
 };
 use bytes::Bytes;
-use tracing::warn;
+use tracing::{info, warn};
 
 use multipart::{build_completed_multipart, PartInfo};
 
 type R2Result<T> = Result<T, String>;
+
+/// Emit a WARN log when `value` contains characters outside the expected set
+/// (alphanumeric + `extra_allowed`).  Used to detect invisible chars
+/// (e.g. `\n`, `\r`, Unicode spaces) injected by the Launcher env pipeline.
+fn warn_if_suspicious(label: &str, value: &str, extra_allowed: &[char]) {
+    if value.chars().any(|c| !c.is_ascii_alphanumeric() && !extra_allowed.contains(&c)) {
+        warn!(
+            "{} contains unexpected characters \
+             (bytes: {:?}) – check for invisible chars injected by Launcher",
+            label,
+            value.as_bytes()
+        );
+    }
+}
 
 /// Thin wrapper around the AWS S3 client configured for Cloudflare R2.
 pub struct R2Client {
@@ -34,8 +48,31 @@ impl R2Client {
         bucket: &str,
         public_url: &str,
     ) -> Self {
-        let creds = Credentials::new(access_key, secret_key, None, None, "r2-static");
+        // Trim all string parameters defensively.  The Launcher injects env vars
+        // from Vault/TOML which can include trailing newlines or whitespace that
+        // silently corrupt the endpoint URL and produce "dispatch failure" errors.
+        let account_id = account_id.trim();
+        let access_key = access_key.trim();
+        let secret_key = secret_key.trim();
+        let bucket = bucket.trim();
+        let public_url = public_url.trim();
+
+        // Diagnostic: log endpoint URL and its byte length to detect invisible chars.
         let endpoint = format!("https://{}.r2.cloudflarestorage.com", account_id);
+        info!(
+            "[R2Client] Initialising: account_id_len={} bucket_len={} endpoint=\"{}\" endpoint_bytes={}",
+            account_id.len(),
+            bucket.len(),
+            endpoint,
+            endpoint.len()
+        );
+
+        // Warn on any suspicious characters in the account_id or bucket name.
+        // `account_id` is alphanumeric + hyphens; `bucket` may also contain dots.
+        warn_if_suspicious("[R2Client] ⚠ R2_ACCOUNT_ID", account_id, &['-']);
+        warn_if_suspicious("[R2Client] ⚠ R2_BUCKET",     bucket,     &['-', '.']);
+
+        let creds = Credentials::new(access_key, secret_key, None, None, "r2-static");
         // R2 requires path-style URLs (no virtual-hosted subdomain support).
         // Without force_path_style(true) the SDK would construct
         // `https://{bucket}.{account}.r2.cloudflarestorage.com/…` which fails
@@ -43,7 +80,7 @@ impl R2Client {
         let s3_cfg = S3Config::builder()
             .behavior_version(BehaviorVersion::latest())
             .credentials_provider(creds)
-            .endpoint_url(endpoint)
+            .endpoint_url(&endpoint)
             .region(Region::new("auto"))
             .force_path_style(true)
             .build();
@@ -60,6 +97,25 @@ impl R2Client {
             Ok(resp) => Ok(resp.content_length()),
             Err(e) => {
                 let msg = e.to_string();
+                // "dispatch failure" means the HTTP connector could not send the
+                // request at all (DNS failure, TLS handshake error, or malformed
+                // endpoint URL).  Log the full error source chain to aid diagnosis.
+                if msg.contains("dispatch failure") {
+                    let source_chain = {
+                        use std::error::Error;
+                        let mut chain = vec![msg.clone()];
+                        let mut cur: &dyn Error = &e;
+                        while let Some(src) = cur.source() {
+                            chain.push(src.to_string());
+                            cur = src;
+                        }
+                        chain.join(" → ")
+                    };
+                    warn!(
+                        "[R2Client] dispatch failure for key={} | endpoint=https://{}.r2.cloudflarestorage.com | chain: {}",
+                        key, self.bucket, source_chain
+                    );
+                }
                 if msg.contains("404")
                     || msg.contains("NotFound")
                     || msg.contains("NoSuchKey")

@@ -98,7 +98,14 @@ impl Config {
 }
 
 fn env_str(key: &str, default: &str) -> String {
-    std::env::var(key).unwrap_or_else(|_| default.to_owned())
+    let raw = std::env::var(key).unwrap_or_else(|_| default.to_owned());
+    // Trim leading/trailing ASCII whitespace and Unicode whitespace characters
+    // (including \r, \n, BOM, NBSP) that may be injected by the Launcher's
+    // env-var pipeline (e.g. newlines from TOML multiline values or Vault output).
+    // NOTE: we trim all string env-vars uniformly because invisible chars in any
+    // URL, ID or credential field cause silent "dispatch failure" errors in the
+    // AWS S3 SDK and connection errors in reqwest.
+    raw.trim().to_owned()
 }
 
 fn env_u16(key: &str, default: u16) -> u16 {
@@ -197,5 +204,25 @@ mod tests {
         let cfg = Config::from_env();
         // Default is 2048 MiB
         assert_eq!(cfg.max_blob_size, 2048 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_env_str_trims_whitespace() {
+        // `env_str()` is a single helper called for ALL string env vars.
+        // Testing three representative vars (URL, bucket name, generic string)
+        // is sufficient to validate the trimming behaviour — the logic is
+        // identical for every call site.
+        std::env::set_var("R2_ACCOUNT_ID", "abc123\n");
+        std::env::set_var("R2_BUCKET", " my-bucket\r\n");
+        std::env::set_var("CENTRALHUB_URL", "  https://hub.example.com  ");
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.r2_account_id, "abc123",     "trailing newline must be stripped");
+        assert_eq!(cfg.r2_bucket,     "my-bucket",  "leading/trailing whitespace must be stripped");
+        assert_eq!(cfg.centralhub_url, "https://hub.example.com", "surrounding spaces must be stripped");
+
+        std::env::remove_var("R2_ACCOUNT_ID");
+        std::env::remove_var("R2_BUCKET");
+        std::env::remove_var("CENTRALHUB_URL");
     }
 }
