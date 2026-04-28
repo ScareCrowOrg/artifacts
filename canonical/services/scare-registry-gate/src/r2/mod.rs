@@ -5,12 +5,13 @@ pub mod multipart;
 use aws_credential_types::Credentials;
 use aws_sdk_s3::{
     config::{BehaviorVersion, Region},
+    error::SdkError,
     primitives::ByteStream,
     Client,
     Config as S3Config,
 };
 use bytes::Bytes;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use multipart::{build_completed_multipart, PartInfo};
 
@@ -27,6 +28,43 @@ fn warn_if_suspicious(label: &str, value: &str, extra_allowed: &[char]) {
             label,
             value.as_bytes()
         );
+    }
+}
+
+/// Extract a human-readable diagnostic string from any `SdkError`.
+///
+/// For `ServiceError` variants (i.e. when the R2 / Cloudflare server responded
+/// with a non-success HTTP status) this extracts:
+///   - The HTTP status code (e.g. 403, 404, 503)
+///   - The full Debug representation of the parsed error (contains the R2 error
+///     code such as `SignatureDoesNotMatch`, `AccessDenied`, `InvalidAccessKeyId`,
+///     `NoSuchBucket`, etc.)
+///
+/// For all other error kinds (dispatch failure, timeout, etc.) the function
+/// falls back to the Debug representation of the whole error.
+///
+/// **Security note:** This function never logs credential values; it only logs
+/// error metadata returned by the remote server.
+fn describe_sdk_error<E: std::fmt::Debug, R: std::fmt::Debug>(
+    e: &SdkError<E, R>,
+) -> String {
+    match e {
+        SdkError::ServiceError(se) => {
+            // se.err() is the parsed SDK error struct (contains code + message,
+            // e.g. SignatureDoesNotMatch, AccessDenied, NoSuchBucket).
+            // We intentionally omit se.raw() (the full HTTP response) to avoid
+            // logging potentially large response bodies for blob operations.
+            format!("service_error err={:?}", se.err())
+        }
+        SdkError::DispatchFailure(df) => {
+            format!("dispatch_failure err={:?}", df)
+        }
+        SdkError::TimeoutError(te) => {
+            format!("timeout err={:?}", te)
+        }
+        other => {
+            format!("sdk_error {:?}", other)
+        }
     }
 }
 
@@ -66,6 +104,38 @@ impl R2Client {
             endpoint,
             endpoint.len()
         );
+        // Log credential lengths (never log values) to confirm Launcher injection.
+        // R2 access key IDs are typically 32 hex chars; secret keys are 64 hex chars.
+        if access_key.is_empty() {
+            warn!("[R2Client] R2_ACCESS_KEY_ID is EMPTY – R2 requests will fail with auth error");
+        } else {
+            let ak_chars: Vec<char> = access_key.chars().collect();
+            if ak_chars.is_empty() {
+                warn!("[R2Client] R2_ACCESS_KEY_ID produced no printable chars after trim – check for invisible-only value");
+            } else {
+                info!(
+                    "[R2Client] R2_ACCESS_KEY_ID: start='{}', end='{}', len={}",
+                    ak_chars[0],
+                    ak_chars[ak_chars.len() - 1],
+                    access_key.len()
+                );
+            }
+        }
+        if secret_key.is_empty() {
+            warn!("[R2Client] R2_SECRET_ACCESS_KEY is EMPTY – R2 requests will fail with auth error");
+        } else {
+            let sk_chars: Vec<char> = secret_key.chars().collect();
+            if sk_chars.is_empty() {
+                warn!("[R2Client] R2_SECRET_ACCESS_KEY produced no printable chars after trim – check for invisible-only value");
+            } else {
+                info!(
+                    "[R2Client] R2_SECRET_ACCESS_KEY: start='{}', end='{}', len={}",
+                    sk_chars[0],
+                    sk_chars[sk_chars.len() - 1],
+                    secret_key.len()
+                );
+            }
+        }
 
         // Validate the endpoint as a well-formed URI BEFORE handing it to the AWS
         // SDK.  An invalid URI (e.g. an empty host when R2_ACCOUNT_ID is unset)
@@ -103,6 +173,10 @@ impl R2Client {
         // `account_id` is alphanumeric + hyphens; `bucket` may also contain dots.
         warn_if_suspicious("[R2Client] ⚠ R2_ACCOUNT_ID", account_id, &['-']);
         warn_if_suspicious("[R2Client] ⚠ R2_BUCKET",     bucket,     &['-', '.']);
+        // Access key IDs are alphanumeric; secret keys are base64 (alphanumeric + +/=).
+        // Any other characters indicate invisible chars from the Launcher injection pipeline.
+        warn_if_suspicious("[R2Client] ⚠ R2_ACCESS_KEY_ID",     access_key, &[]);
+        warn_if_suspicious("[R2Client] ⚠ R2_SECRET_ACCESS_KEY", secret_key, &['+', '/', '=', '-', '_']);
 
         let creds = Credentials::new(access_key, secret_key, None, None, "r2-static");
         // R2 requires path-style URLs (no virtual-hosted subdomain support).
@@ -128,7 +202,9 @@ impl R2Client {
         match self.client.head_object().bucket(&self.bucket).key(key).send().await {
             Ok(resp) => Ok(resp.content_length()),
             Err(e) => {
+                let detail = describe_sdk_error(&e);
                 let msg = e.to_string();
+
                 // "dispatch failure" means the HTTP connector could not send the
                 // request at all (DNS failure, TLS handshake error, or malformed
                 // endpoint URL).  Log the full error source chain to aid diagnosis.
@@ -143,19 +219,31 @@ impl R2Client {
                         }
                         chain.join(" → ")
                     };
-                    warn!(
+                    error!(
                         "[R2Client] dispatch failure for key={} | endpoint=https://{}.r2.cloudflarestorage.com | chain: {}",
                         key, self.bucket, source_chain
                     );
                 }
+
+                // 404 / NotFound / NoSuchKey → blob does not exist (expected during push)
                 if msg.contains("404")
                     || msg.contains("NotFound")
                     || msg.contains("NoSuchKey")
+                    || detail.contains("NoSuchKey")
+                    || detail.contains("status: 404")
                 {
-                    Ok(None)
-                } else {
-                    Err(format!("head_object error: {msg}"))
+                    info!("[R2Client] head_object: key={} not found in R2 (404)", key);
+                    return Ok(None);
                 }
+
+                // For all other errors (service errors, auth errors, etc.) log the
+                // full detail extracted from the SDK error so operators can see the
+                // exact R2 error code (e.g. SignatureDoesNotMatch, AccessDenied).
+                error!(
+                    "[R2Client] head_object FAILED | key={} | {}",
+                    key, detail
+                );
+                Err(format!("head_object error: {detail}"))
             }
         }
     }
@@ -169,7 +257,11 @@ impl R2Client {
             .key(key)
             .send()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                let detail = describe_sdk_error(&e);
+                error!("[R2Client] create_multipart_upload FAILED | key={} | {}", key, detail);
+                detail
+            })?;
         resp.upload_id()
             .ok_or_else(|| "No upload_id in CreateMultipartUpload response".to_string())
             .map(|s| s.to_owned())
@@ -193,7 +285,11 @@ impl R2Client {
             .body(ByteStream::from(data))
             .send()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                let detail = describe_sdk_error(&e);
+                error!("[R2Client] upload_part FAILED | key={} part={} | {}", key, part_number, detail);
+                detail
+            })?;
         Ok(resp.e_tag().unwrap_or("").to_owned())
     }
 
@@ -213,7 +309,11 @@ impl R2Client {
             .multipart_upload(completed)
             .send()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                let detail = describe_sdk_error(&e);
+                error!("[R2Client] complete_multipart FAILED | key={} | {}", key, detail);
+                detail
+            })?;
         Ok(())
     }
 
@@ -227,7 +327,11 @@ impl R2Client {
             .body(ByteStream::from(data))
             .send()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                let detail = describe_sdk_error(&e);
+                error!("[R2Client] put_object FAILED | key={} | {}", key, detail);
+                detail
+            })?;
         Ok(())
     }
 
@@ -242,8 +346,9 @@ impl R2Client {
             .send()
             .await
         {
-            warn!("abort_multipart error (key={key}): {e}");
-            return Err(e.to_string());
+            let detail = describe_sdk_error(&e);
+            warn!("[R2Client] abort_multipart error (key={key}): {detail}");
+            return Err(detail);
         }
         Ok(())
     }

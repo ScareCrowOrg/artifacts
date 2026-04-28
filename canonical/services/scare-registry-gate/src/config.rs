@@ -106,6 +106,12 @@ impl Config {
                 return;
             }
             let chars: Vec<char> = value.chars().collect();
+            if chars.is_empty() {
+                tracing::warn!(
+                    "[Config] {label}: produced no printable chars (invisible-only value?)"
+                );
+                return;
+            }
             tracing::info!(
                 "[Config] {label}: start='{}', end='{}', len={}",
                 chars[0],
@@ -113,8 +119,15 @@ impl Config {
                 value.len()
             );
         }
+        // Log first/last char + length to detect invisible chars from Launcher injection.
         char_sanity("R2_ACCOUNT_ID", &self.r2_account_id);
         char_sanity("R2_BUCKET", &self.r2_bucket);
+
+        // For credentials log only length and first/last char – never the full value.
+        // Cloudflare R2 access key IDs are typically 32 hex chars.
+        // R2 secret access keys are typically 64 hex chars.
+        char_sanity("R2_ACCESS_KEY_ID", &self.r2_access_key_id);
+        char_sanity("R2_SECRET_ACCESS_KEY", &self.r2_secret_access_key);
     }
 
     /// Build the Redis connection URL from components.
