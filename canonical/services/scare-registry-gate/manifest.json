@@ -49,20 +49,7 @@
       "description": "Public base URL for R2 blobs (for pull redirects)"
     }
   ],
-  "dependencies": [
-    "Dockerfile",
-    "src/main.rs",
-    "src/config.rs",
-    "src/oci/mod.rs",
-    "src/oci/auth.rs",
-    "src/oci/blobs.rs",
-    "src/oci/manifests.rs",
-    "src/oci/types.rs",
-    "src/r2/mod.rs",
-    "src/r2/multipart.rs",
-    "src/hub/mod.rs",
-    "Cargo.toml"
-  ],
+  "dependencies": [],
   "imageTag": "staging20260428T162104",
   "lastBuilt": "2026-04-28T16:21:08.622Z"
 }
