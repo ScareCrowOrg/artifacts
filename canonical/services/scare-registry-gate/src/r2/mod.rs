@@ -36,12 +36,16 @@ impl R2Client {
     ) -> Self {
         let creds = Credentials::new(access_key, secret_key, None, None, "r2-static");
         let endpoint = format!("https://{}.r2.cloudflarestorage.com", account_id);
+        // R2 requires path-style URLs (no virtual-hosted subdomain support).
+        // Without force_path_style(true) the SDK would construct
+        // `https://{bucket}.{account}.r2.cloudflarestorage.com/…` which fails
+        // with a "dispatch failure" (DNS resolution error or TLS mismatch).
         let s3_cfg = S3Config::builder()
             .behavior_version(BehaviorVersion::latest())
             .credentials_provider(creds)
             .endpoint_url(endpoint)
             .region(Region::new("auto"))
-            .force_path_style(false)
+            .force_path_style(true)
             .build();
         Self {
             client: Client::from_conf(s3_cfg),
