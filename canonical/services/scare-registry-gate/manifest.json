@@ -2,7 +2,7 @@
   "version": "0.1",
   "name": "scare-registry-gate",
   "build": false,
-  "image": "localhost:5001/registry/staging/scareverse-scare-registry-gate:staging20260428T055931",
+  "image": "localhost:5001/registry/staging/scareverse-scare-registry-gate:staging20260428T060243",
   "generate_env_file": false,
   "totp_seed": false,
   "injected_env_vars": [
@@ -63,6 +63,6 @@
     "src/hub/mod.rs",
     "Cargo.toml"
   ],
-  "imageTag": "staging20260428T055931",
-  "lastBuilt": "2026-04-28T06:01:24.501Z"
+  "imageTag": "staging20260428T060243",
+  "lastBuilt": "2026-04-28T06:02:48.159Z"
 }
