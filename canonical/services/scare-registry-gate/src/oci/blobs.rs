@@ -4,6 +4,10 @@
 //!   POST  → generate UUID, store empty session in Redis
 //!   PATCH → accumulate body in `AppState.session_buffers`
 //!   PUT   → verify SHA-256, `PutObject` to R2, clean up
+//!
+//! Both 3-segment (`registry/planet/name`) and 2-segment (`ns/name`) namespace
+//! paths are supported.  2-segment variants call the same inner functions with
+//! the full repo path string (e.g. `"staging/scareverse-backend"`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -22,26 +26,36 @@ use crate::oci::auth::require_auth;
 use crate::oci::types::{make_error_response, UploadSession};
 use crate::AppState;
 
-// ── POST /v2/:registry/:planet/:name/blobs/uploads/ ──────────────────────────
+// ── Inner: blob upload init ───────────────────────────────────────────────────
 
-/// Initialise a new blob upload session.
-/// Returns 202 with `Location` and `Docker-Upload-UUID` headers.
-pub async fn handle_blob_upload_init(
-    State(state): State<Arc<AppState>>,
-    Path((registry, planet, name)): Path<(String, String, String)>,
+/// Core logic for `POST .../blobs/uploads/`.
+/// `repo` is the full repository path, e.g. `"registry/planet/name"` or `"ns/name"`.
+async fn blob_upload_init_inner(
+    state: Arc<AppState>,
+    repo: String,
     req: Request<Body>,
 ) -> Response<Body> {
+    info!(
+        "[blob-upload-init] POST /v2/{}/blobs/uploads/ | has_auth: {}",
+        repo,
+        req.headers().get("Authorization").is_some()
+    );
+
     if let Err(resp) = require_auth(req.headers(), &state.config) {
+        warn!("[blob-upload-init] Auth failed for repo={}", repo);
         return resp;
     }
 
+    info!("[blob-upload-init] Auth passed for repo={}", repo);
+
     let uuid = uuid::Uuid::new_v4().to_string();
     let session = UploadSession::new(uuid.clone());
+    info!("[blob-upload-init] Created session UUID: {} for repo={}", uuid, repo);
 
     let session_json = match session.to_redis_value() {
         Ok(s) => s,
         Err(e) => {
-            error!("Session serialize error: {e}");
+            error!("[blob-upload-init] Session serialize error: {e}");
             return make_error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "INTERNAL_ERROR",
@@ -56,7 +70,7 @@ pub async fn handle_blob_upload_init(
         .set_ex::<_, _, ()>(&redis_key, &session_json, 3600_u64)
         .await
     {
-        error!("Redis SET error: {e}");
+        error!("[blob-upload-init] Redis SET error: {e}");
         return make_error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
             "INTERNAL_ERROR",
@@ -64,7 +78,8 @@ pub async fn handle_blob_upload_init(
         );
     }
 
-    let location = format!("/v2/{registry}/{planet}/{name}/blobs/uploads/{uuid}");
+    let location = format!("/v2/{repo}/blobs/uploads/{uuid}");
+    info!("[blob-upload-init] Session ready: uuid={} location={}", uuid, location);
     Response::builder()
         .status(StatusCode::ACCEPTED)
         .header("Location", &location)
@@ -75,25 +90,33 @@ pub async fn handle_blob_upload_init(
         .unwrap_or_else(|_| Response::new(Body::empty()))
 }
 
-// ── PATCH /v2/:registry/:planet/:name/blobs/uploads/:uuid ────────────────────
+// ── Inner: blob patch ─────────────────────────────────────────────────────────
 
-/// Receive a chunk of blob data. Appends to the in-memory session buffer.
-/// Returns 202 with `Range: 0-{offset}`.
-pub async fn handle_blob_patch(
-    State(state): State<Arc<AppState>>,
-    Path((_registry, _planet, _name, uuid)): Path<(String, String, String, String)>,
+/// Core logic for `PATCH .../blobs/uploads/:uuid`.
+async fn blob_patch_inner(
+    state: Arc<AppState>,
+    repo: String,
+    uuid: String,
     req: Request<Body>,
 ) -> Response<Body> {
+    info!(
+        "[blob-patch] PATCH /v2/{}/blobs/uploads/{} | has_auth: {}",
+        repo,
+        uuid,
+        req.headers().get("Authorization").is_some()
+    );
+
     if let Err(resp) = require_auth(req.headers(), &state.config) {
+        warn!("[blob-patch] Auth failed: uuid={}", uuid);
         return resp;
     }
 
-    // Validate session exists
     let redis_key = format!("gate:upload:{uuid}");
     let mut conn = state.redis.clone();
     let exists: Result<Option<String>, _> = conn.get(&redis_key).await;
     match exists {
         Ok(None) => {
+            warn!("[blob-patch] Upload session not found in Redis: uuid={}", uuid);
             return make_error_response(
                 StatusCode::NOT_FOUND,
                 "BLOB_UPLOAD_UNKNOWN",
@@ -101,7 +124,7 @@ pub async fn handle_blob_patch(
             );
         }
         Err(e) => {
-            error!("Redis GET error: {e}");
+            error!("[blob-patch] Redis GET error: {e}");
             return make_error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "INTERNAL_ERROR",
@@ -114,7 +137,7 @@ pub async fn handle_blob_patch(
     let body_bytes = match to_bytes(req.into_body(), state.config.max_blob_size).await {
         Ok(b) => b,
         Err(e) => {
-            error!("Body read error: {e}");
+            error!("[blob-patch] Body read error: {e}");
             return make_error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "BLOB_UPLOAD_INVALID",
@@ -123,7 +146,7 @@ pub async fn handle_blob_patch(
         }
     };
 
-    // Append to in-memory buffer
+    let chunk_len = body_bytes.len();
     let new_size = {
         let mut entry = state
             .session_buffers
@@ -132,6 +155,11 @@ pub async fn handle_blob_patch(
         entry.extend_from_slice(&body_bytes);
         entry.len()
     };
+
+    info!(
+        "[blob-patch] Chunk received: uuid={} chunk_bytes={} total_buffered={}",
+        uuid, chunk_len, new_size
+    );
 
     let range_end = if new_size > 0 { new_size - 1 } else { 0 };
     Response::builder()
@@ -143,23 +171,32 @@ pub async fn handle_blob_patch(
         .unwrap_or_else(|_| Response::new(Body::empty()))
 }
 
-// ── PUT /v2/:registry/:planet/:name/blobs/uploads/:uuid?digest=sha256:… ──────
+// ── Inner: blob put ───────────────────────────────────────────────────────────
 
-/// Finalise a blob upload: verify digest, upload to R2, clean up.
-/// Returns 201 with `Docker-Content-Digest`.
-pub async fn handle_blob_put(
-    State(state): State<Arc<AppState>>,
-    Path((registry, planet, name, uuid)): Path<(String, String, String, String)>,
-    Query(params): Query<HashMap<String, String>>,
+/// Core logic for `PUT .../blobs/uploads/:uuid?digest=sha256:…`.
+async fn blob_put_inner(
+    state: Arc<AppState>,
+    repo: String,
+    uuid: String,
+    params: HashMap<String, String>,
     req: Request<Body>,
 ) -> Response<Body> {
+    info!(
+        "[blob-put] PUT /v2/{}/blobs/uploads/{} | has_auth: {}",
+        repo,
+        uuid,
+        req.headers().get("Authorization").is_some()
+    );
+
     if let Err(resp) = require_auth(req.headers(), &state.config) {
+        warn!("[blob-put] Auth failed: uuid={}", uuid);
         return resp;
     }
 
     let provided_digest = match params.get("digest") {
         Some(d) => d.clone(),
         None => {
+            warn!("[blob-put] Missing digest param: uuid={}", uuid);
             return make_error_response(
                 StatusCode::BAD_REQUEST,
                 "DIGEST_INVALID",
@@ -168,11 +205,15 @@ pub async fn handle_blob_put(
         }
     };
 
-    // Read any final body bytes (may be empty for chunked uploads)
+    info!(
+        "[blob-put] Finalising upload: uuid={} digest_param={}",
+        uuid, provided_digest
+    );
+
     let final_bytes = match to_bytes(req.into_body(), state.config.max_blob_size).await {
         Ok(b) => b,
         Err(e) => {
-            error!("Body read error: {e}");
+            error!("[blob-put] Body read error: {e}");
             return make_error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "BLOB_UPLOAD_INVALID",
@@ -181,7 +222,6 @@ pub async fn handle_blob_put(
         }
     };
 
-    // Merge buffered + final bytes
     let mut buffer = state
         .session_buffers
         .remove(&uuid)
@@ -191,12 +231,14 @@ pub async fn handle_blob_put(
         buffer.extend_from_slice(&final_bytes);
     }
 
-    // Verify SHA-256 digest
     let hash = Sha256::digest(&buffer);
     let computed_hex = hex::encode(hash);
     let expected = format!("sha256:{computed_hex}");
     if provided_digest != expected {
-        warn!("Digest mismatch for {uuid}: got {provided_digest}, expected {expected}");
+        warn!(
+            "[blob-put] Digest mismatch: uuid={} got={} expected={}",
+            uuid, provided_digest, expected
+        );
         return make_error_response(
             StatusCode::BAD_REQUEST,
             "DIGEST_INVALID",
@@ -205,13 +247,18 @@ pub async fn handle_blob_put(
     }
 
     let size = buffer.len();
-    let r2_key = format!("blobs/{registry}/{planet}/{name}/{provided_digest}");
+    info!(
+        "[blob-put] Digest verified OK: uuid={} digest={} size={}",
+        uuid, provided_digest, size
+    );
+
+    let r2_key = format!("blobs/{repo}/{provided_digest}");
     if let Err(e) = state
         .r2
         .put_object(&r2_key, Bytes::from(buffer), "application/octet-stream")
         .await
     {
-        error!("R2 put_object error for {r2_key}: {e}");
+        error!("[blob-put] R2 put_object error for {r2_key}: {e}");
         return make_error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
             "INTERNAL_ERROR",
@@ -219,49 +266,58 @@ pub async fn handle_blob_put(
         );
     }
 
-    // Clean up Redis session (best-effort)
     let redis_key = format!("gate:upload:{uuid}");
     let mut conn = state.redis.clone();
     conn.del::<_, ()>(&redis_key).await.ok();
 
-    info!("Blob stored: key={r2_key} size={size}");
+    info!("[blob-put] Blob stored: key={r2_key} size={size}");
     Response::builder()
         .status(StatusCode::CREATED)
         .header("Docker-Content-Digest", &provided_digest)
-        .header(
-            "Location",
-            format!("/v2/{registry}/{planet}/{name}/blobs/{provided_digest}"),
-        )
+        .header("Location", format!("/v2/{repo}/blobs/{provided_digest}"))
         .header("Docker-Distribution-API-Version", "registry/2.0")
         .body(Body::empty())
         .unwrap_or_else(|_| Response::new(Body::empty()))
 }
 
-// ── HEAD /v2/:registry/:planet/:name/blobs/:digest ───────────────────────────
+// ── Inner: blob head ──────────────────────────────────────────────────────────
 
-/// Check whether a blob exists in R2.
-/// Returns 200 with `Content-Length`, or 404.
-pub async fn handle_blob_head(
-    State(state): State<Arc<AppState>>,
-    Path((registry, planet, name, digest)): Path<(String, String, String, String)>,
+/// Core logic for `HEAD .../blobs/:digest`.
+async fn blob_head_inner(
+    state: Arc<AppState>,
+    repo: String,
+    digest: String,
     req: Request<Body>,
 ) -> Response<Body> {
+    info!(
+        "[blob-head] HEAD /v2/{}/blobs/{} | has_auth: {}",
+        repo,
+        digest,
+        req.headers().get("Authorization").is_some()
+    );
+
     if let Err(resp) = require_auth(req.headers(), &state.config) {
         return resp;
     }
 
-    let r2_key = format!("blobs/{registry}/{planet}/{name}/{digest}");
+    let r2_key = format!("blobs/{repo}/{digest}");
     match state.r2.head_object(&r2_key).await {
-        Ok(Some(size)) => Response::builder()
-            .status(StatusCode::OK)
-            .header("Content-Length", size.to_string())
-            .header("Docker-Content-Digest", &digest)
-            .header("Docker-Distribution-API-Version", "registry/2.0")
-            .body(Body::empty())
-            .unwrap_or_else(|_| Response::new(Body::empty())),
-        Ok(None) => make_error_response(StatusCode::NOT_FOUND, "BLOB_UNKNOWN", "Blob not found"),
+        Ok(Some(size)) => {
+            info!("[blob-head] Blob found: key={} size={}", r2_key, size);
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Length", size.to_string())
+                .header("Docker-Content-Digest", &digest)
+                .header("Docker-Distribution-API-Version", "registry/2.0")
+                .body(Body::empty())
+                .unwrap_or_else(|_| Response::new(Body::empty()))
+        }
+        Ok(None) => {
+            info!("[blob-head] Blob not found: key={}", r2_key);
+            make_error_response(StatusCode::NOT_FOUND, "BLOB_UNKNOWN", "Blob not found")
+        }
         Err(e) => {
-            error!("R2 head_object error for {r2_key}: {e}");
+            error!("[blob-head] R2 head_object error for {r2_key}: {e}");
             make_error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "INTERNAL_ERROR",
@@ -271,20 +327,24 @@ pub async fn handle_blob_head(
     }
 }
 
-// ── GET /v2/:registry/:planet/:name/blobs/:digest ────────────────────────────
+// ── Inner: blob get ───────────────────────────────────────────────────────────
 
-/// Redirect to the public R2 URL for the requested blob.
-pub async fn handle_blob_get(
-    State(state): State<Arc<AppState>>,
-    Path((registry, planet, name, digest)): Path<(String, String, String, String)>,
+/// Core logic for `GET .../blobs/:digest`.
+async fn blob_get_inner(
+    state: Arc<AppState>,
+    repo: String,
+    digest: String,
     req: Request<Body>,
 ) -> Response<Body> {
+    info!("[blob-get] GET /v2/{}/blobs/{} → redirect to R2", repo, digest);
+
     if let Err(resp) = require_auth(req.headers(), &state.config) {
         return resp;
     }
 
-    let r2_key = format!("blobs/{registry}/{planet}/{name}/{digest}");
+    let r2_key = format!("blobs/{repo}/{digest}");
     let url = state.r2.public_url_for(&r2_key);
+    info!("[blob-get] Redirecting: key={} → {}", r2_key, url);
     Response::builder()
         .status(StatusCode::TEMPORARY_REDIRECT)
         .header("Location", &url)
@@ -292,4 +352,101 @@ pub async fn handle_blob_get(
         .header("Docker-Distribution-API-Version", "registry/2.0")
         .body(Body::empty())
         .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+// ── 3-segment public handlers ─────────────────────────────────────────────────
+
+/// `POST /v2/:registry/:planet/:name/blobs/uploads/`
+pub async fn handle_blob_upload_init(
+    State(state): State<Arc<AppState>>,
+    Path((registry, planet, name)): Path<(String, String, String)>,
+    req: Request<Body>,
+) -> Response<Body> {
+    blob_upload_init_inner(state, format!("{registry}/{planet}/{name}"), req).await
+}
+
+/// `PATCH /v2/:registry/:planet/:name/blobs/uploads/:uuid`
+pub async fn handle_blob_patch(
+    State(state): State<Arc<AppState>>,
+    Path((_registry, _planet, _name, uuid)): Path<(String, String, String, String)>,
+    req: Request<Body>,
+) -> Response<Body> {
+    let repo = format!("{_registry}/{_planet}/{_name}");
+    blob_patch_inner(state, repo, uuid, req).await
+}
+
+/// `PUT /v2/:registry/:planet/:name/blobs/uploads/:uuid`
+pub async fn handle_blob_put(
+    State(state): State<Arc<AppState>>,
+    Path((registry, planet, name, uuid)): Path<(String, String, String, String)>,
+    Query(params): Query<HashMap<String, String>>,
+    req: Request<Body>,
+) -> Response<Body> {
+    blob_put_inner(state, format!("{registry}/{planet}/{name}"), uuid, params, req).await
+}
+
+/// `HEAD /v2/:registry/:planet/:name/blobs/:digest`
+pub async fn handle_blob_head(
+    State(state): State<Arc<AppState>>,
+    Path((registry, planet, name, digest)): Path<(String, String, String, String)>,
+    req: Request<Body>,
+) -> Response<Body> {
+    blob_head_inner(state, format!("{registry}/{planet}/{name}"), digest, req).await
+}
+
+/// `GET /v2/:registry/:planet/:name/blobs/:digest`
+pub async fn handle_blob_get(
+    State(state): State<Arc<AppState>>,
+    Path((registry, planet, name, digest)): Path<(String, String, String, String)>,
+    req: Request<Body>,
+) -> Response<Body> {
+    blob_get_inner(state, format!("{registry}/{planet}/{name}"), digest, req).await
+}
+
+// ── 2-segment public handlers (for Builder-style `{env}/{service}` tags) ─────
+
+/// `POST /v2/:ns/:name/blobs/uploads/`
+pub async fn handle_blob_upload_init_2seg(
+    State(state): State<Arc<AppState>>,
+    Path((ns, name)): Path<(String, String)>,
+    req: Request<Body>,
+) -> Response<Body> {
+    blob_upload_init_inner(state, format!("{ns}/{name}"), req).await
+}
+
+/// `PATCH /v2/:ns/:name/blobs/uploads/:uuid`
+pub async fn handle_blob_patch_2seg(
+    State(state): State<Arc<AppState>>,
+    Path((ns, name, uuid)): Path<(String, String, String)>,
+    req: Request<Body>,
+) -> Response<Body> {
+    blob_patch_inner(state, format!("{ns}/{name}"), uuid, req).await
+}
+
+/// `PUT /v2/:ns/:name/blobs/uploads/:uuid`
+pub async fn handle_blob_put_2seg(
+    State(state): State<Arc<AppState>>,
+    Path((ns, name, uuid)): Path<(String, String, String)>,
+    Query(params): Query<HashMap<String, String>>,
+    req: Request<Body>,
+) -> Response<Body> {
+    blob_put_inner(state, format!("{ns}/{name}"), uuid, params, req).await
+}
+
+/// `HEAD /v2/:ns/:name/blobs/:digest`
+pub async fn handle_blob_head_2seg(
+    State(state): State<Arc<AppState>>,
+    Path((ns, name, digest)): Path<(String, String, String)>,
+    req: Request<Body>,
+) -> Response<Body> {
+    blob_head_inner(state, format!("{ns}/{name}"), digest, req).await
+}
+
+/// `GET /v2/:ns/:name/blobs/:digest`
+pub async fn handle_blob_get_2seg(
+    State(state): State<Arc<AppState>>,
+    Path((ns, name, digest)): Path<(String, String, String)>,
+    req: Request<Body>,
+) -> Response<Body> {
+    blob_get_inner(state, format!("{ns}/{name}"), digest, req).await
 }

@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: localhost:5001/staging/scareverse-scare-registry-gate:staging20260427T072911
+    image: hub-staging.scareverse.net/staging/scareverse-scare-registry-gate:staging20260428T003900
     container_name: scareverse-registry-gate
     restart: unless-stopped
     volumes:
@@ -29,7 +29,7 @@ services:
       - HEARTBEAT_TTL=${HEARTBEAT_TTL:-60}
       - WORKER_PORT=5678
       - REGISTRY_USERNAME=${REGISTRY_USERNAME:-scareverse}
-      - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-}
+      - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-scareverse}
     ports:
       - "5678:5678"
     networks:

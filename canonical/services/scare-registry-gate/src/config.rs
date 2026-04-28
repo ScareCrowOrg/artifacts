@@ -51,10 +51,10 @@ pub struct Config {
     /// OCI registry username for Basic Auth (env: `REGISTRY_USERNAME`, default: `"scareverse"`).
     pub registry_username: String,
 
-    /// OCI registry password for Basic Auth (env: `REGISTRY_PASSWORD`).
+    /// OCI registry password for Basic Auth (env: `REGISTRY_PASSWORD`, default: `"scareverse"`).
     ///
-    /// **SECURITY**: The empty-string default is intentionally insecure.
-    /// Set a non-empty `REGISTRY_PASSWORD` in production to prevent unauthorised pushes.
+    /// **SECURITY**: Default is "scareverse" for local development (inaccessible externally).
+    /// Override with a strong password in production to prevent unauthorised pushes.
     pub registry_password: String,
 
     /// Maximum blob size in bytes for a single push (env: `MAX_BLOB_SIZE_MB`, default: `2048`).
@@ -83,7 +83,7 @@ impl Config {
             heartbeat_interval: env_u64("HEARTBEAT_INTERVAL", 20),
             log_level: env_str("LOG_LEVEL", "INFO"),
             registry_username: env_str("REGISTRY_USERNAME", "scareverse"),
-            registry_password: env_str("REGISTRY_PASSWORD", ""),
+            registry_password: env_str("REGISTRY_PASSWORD", "scareverse"),
             max_blob_size: env_usize("MAX_BLOB_SIZE_MB", 2048) * 1024 * 1024,
         }
     }
