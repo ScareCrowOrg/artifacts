@@ -60,7 +60,7 @@ mod tests {
             r2_bucket: "bucket".into(),
             r2_public_url: String::new(),
             centralhub_url: String::new(),
-            centralhub_api_key: String::new(),
+            centralhub_service_token: String::new(),
             redis_host: "localhost".into(),
             redis_port: 6380,
             redis_password: String::new(),

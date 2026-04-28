@@ -81,7 +81,7 @@ async fn main() {
     );
 
     // Build CentralHub client.
-    let hub_client = hub::HubClient::new(&cfg.centralhub_url, &cfg.centralhub_api_key);
+    let hub_client = hub::HubClient::new(&cfg.centralhub_url, &cfg.centralhub_service_token);
 
     // Connect to Redis.
     let redis_url = cfg.redis_url();

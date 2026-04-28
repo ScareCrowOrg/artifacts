@@ -27,8 +27,8 @@ pub struct Config {
     /// CentralHub base URL (env: `CENTRALHUB_URL`, required).
     pub centralhub_url: String,
 
-    /// API key for CentralHub manifest registration (env: `CENTRALHUB_API_KEY`, required).
-    pub centralhub_api_key: String,
+    /// Service token for CentralHub API (env: `CENTRALHUB_SERVICE_TOKEN`, required).
+    pub centralhub_service_token: String,
 
     /// Redis L1 host (env: `REDIS_L1_HOST`, default: `"redis-local"`).
     pub redis_host: String,
@@ -75,7 +75,7 @@ impl Config {
             r2_bucket: env_str("R2_BUCKET", "scareverse-registry"),
             r2_public_url: env_str("R2_PUBLIC_URL", ""),
             centralhub_url: env_str("CENTRALHUB_URL", ""),
-            centralhub_api_key: env_str("CENTRALHUB_API_KEY", ""),
+            centralhub_service_token: env_str("CENTRALHUB_SERVICE_TOKEN", ""),
             redis_host: env_str("REDIS_L1_HOST", "redis-local"),
             redis_port: env_u16("REDIS_L1_PORT", 6380),
             redis_password: env_str("REDIS_L1_PASSWORD", "scarerunner"),
@@ -229,7 +229,7 @@ mod tests {
             r2_bucket: "bucket".into(),
             r2_public_url: String::new(),
             centralhub_url: String::new(),
-            centralhub_api_key: String::new(),
+            centralhub_service_token: String::new(),
             redis_host: "redis-local".into(),
             redis_port: 6380,
             redis_password: "secret".into(),
