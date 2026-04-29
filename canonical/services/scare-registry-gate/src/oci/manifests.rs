@@ -102,6 +102,14 @@ async fn manifest_get_inner(
     let r2_key = format!("manifests/{repo}/{reference}");
     let url = state.r2.public_url_for(&r2_key);
 
+    // [it9:redirect-source] Log the exact URL the Gate uses for this redirect so it can
+    // be compared with r2_public_url_base stored in CentralHub (notified during PUT).
+    // Both must share the same base URL for docker pull via CentralHub to be consistent.
+    info!(
+        "[manifest-get] [it9:redirect-source] r2client_public_url='{}' | redirect_url='{}'",
+        state.r2.public_url, url
+    );
+
     // Warn if the redirect URL points to the R2 S3 API endpoint rather than a
     // public CDN URL.  Docker (and other OCI clients) follow the 307 without
     // adding S3 request signing, so an S3 API URL will produce a 400 response.
@@ -259,8 +267,30 @@ async fn manifest_put_inner(
         hub_registry, hub_planet, hub_image
     );
 
+    // [it9:dry-check] Both fields carry the same R2_PUBLIC_URL env var value; logging
+    // them together makes any future divergence immediately visible in gate logs.
+    info!(
+        "[manifest-put] [it9:r2-url-sources] \
+         config_r2_public_url='{}' (len={}) | \
+         r2client_public_url='{}' (len={}) | \
+         same={}",
+        state.config.r2_public_url,
+        state.config.r2_public_url.len(),
+        state.r2.public_url,
+        state.r2.public_url.len(),
+        state.config.r2_public_url == state.r2.public_url,
+    );
+
     // Include the public R2 URL that was used for this push so CentralHub can
     // redirect pulls to the exact same bucket/CDN without relying on a global env var.
+    //
+    // Use state.r2.public_url — the canonical source used by all GET redirect handlers
+    // (manifest_get_inner, blob_get_inner) via public_url_for().  This is the single
+    // source of truth: whatever URL the Gate itself would serve as a redirect is exactly
+    // what CentralHub must store and serve back on docker pull.
+    //
+    // Using state.config.r2_public_url (a separate copy of the same env var) was a DRY
+    // violation that risked divergence if the two fields ever differed.
     let payload = serde_json::json!({
         "registry": hub_registry,
         "planet": hub_planet,
@@ -269,12 +299,17 @@ async fn manifest_put_inner(
         "digest": content_digest,
         "manifest_json": String::from_utf8_lossy(&body_bytes),
         "layers": layers,
-        "r2_public_url_base": state.config.r2_public_url,
+        "r2_public_url_base": state.r2.public_url,
     });
 
+    // [it9:payload-r2-url] Log the exact r2_public_url_base value persisted in CentralHub.
+    let notified_r2_url = payload
+        .get("r2_public_url_base")
+        .and_then(|v| v.as_str())
+        .unwrap_or("<missing>");
     info!(
-        "[manifest-put] Including r2_public_url_base in hub notification: len={}",
-        state.config.r2_public_url.len()
+        "[manifest-put] [it9:notified-r2-url] r2_public_url_base_in_payload='{}' | repo={} ref={}",
+        notified_r2_url, repo, reference
     );
 
     if let Err(e) = state.hub.notify_manifest(&payload).await {
