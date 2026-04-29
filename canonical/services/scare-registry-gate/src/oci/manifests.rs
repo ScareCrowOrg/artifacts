@@ -259,6 +259,8 @@ async fn manifest_put_inner(
         hub_registry, hub_planet, hub_image
     );
 
+    // Include the public R2 URL that was used for this push so CentralHub can
+    // redirect pulls to the exact same bucket/CDN without relying on a global env var.
     let payload = serde_json::json!({
         "registry": hub_registry,
         "planet": hub_planet,
@@ -267,7 +269,13 @@ async fn manifest_put_inner(
         "digest": content_digest,
         "manifest_json": String::from_utf8_lossy(&body_bytes),
         "layers": layers,
+        "r2_public_url_base": state.config.r2_public_url,
     });
+
+    info!(
+        "[manifest-put] Including r2_public_url_base in hub notification: len={}",
+        state.config.r2_public_url.len()
+    );
 
     if let Err(e) = state.hub.notify_manifest(&payload).await {
         warn!("[manifest-put] CentralHub notification failed (non-fatal): {e}");

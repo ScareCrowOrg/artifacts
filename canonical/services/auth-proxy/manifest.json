@@ -2,7 +2,7 @@
   "version": "0.1",
   "name": "auth-proxy",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-auth-proxy:staging20260429T032711",
-  "imageTag": "staging20260429T032711",
-  "lastBuilt": "2026-04-29T03:27:19.329Z"
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-auth-proxy:staging20260429T183747",
+  "imageTag": "staging20260429T183747",
+  "lastBuilt": "2026-04-29T18:40:16.309Z"
 }
