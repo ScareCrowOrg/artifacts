@@ -1,89 +1,60 @@
-# Auth Proxy (Recepção) – Docker Compose service definition
-#
-# Intercepts /artifacts/* requests from Nginx Unit, validates SessionID via
-# Backend's /api/v1/auth/session-check, then proxies to Vite on success.
-#
-# Usage (standalone):
-#   docker-compose -f artifacts/canonical/services/auth-proxy/docker-compose.yml up --build
-#
-# Usage (meta-orchestrator):
-#   docker-compose -f artifacts/canonical/services/docker-compose.yml up
-
-version: '3.9'
-
+version: "3.9"
 services:
   auth-proxy:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-auth-proxy:staging20260430T034955
+    image: hub-staging.scareverse.net/registry/staging/scareverse-auth-proxy:staging20260430T225307
     container_name: scareverse-auth-proxy-worker
     restart: unless-stopped
-
     volumes:
-      # Artifacts directories (for BaseService heartbeat imports)
       - ../../../../artifacts/canonical:/app/artifacts/canonical:ro
       - ../../../../artifacts/shared:/app/artifacts/shared:ro
-
+      - C:\Users\flavi\.scareverse\staging\logs\auth-proxy:/app/logs:rw
     environment:
-      # Python path (for canonical.shared imports in heartbeat.py)
       - PYTHONPATH=/app/artifacts
-
-      # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-
-      # Proxy configuration
       - PROXY_PORT=${PROXY_PORT:-5055}
       - VITE_UPSTREAM=${VITE_UPSTREAM:-http://vite:5052}
       - BACKEND_UPSTREAM=${BACKEND_UPSTREAM:-http://backend:5050}
       - BACKEND_AUTH_URL=${BACKEND_AUTH_URL:-http://backend:5050/api/v1/auth/session-check}
-
-      # Redis L1 (heartbeat registration)
       - REDIS_L1_HOST=${REDIS_L1_HOST:-redis-local}
       - REDIS_L1_PORT=${REDIS_L1_PORT:-6380}
       - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
       - REDIS_L1_DB=${REDIS_L1_DB:-0}
       - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-15}
       - HEARTBEAT_TTL=${HEARTBEAT_TTL:-30}
-      # Worker port (read by BaseService for port health check → port_opened in Redis)
       - WORKER_PORT=5055
-
+      - SCARE_LOG_DESTINATION=/app/logs/service.log
     ports:
-      - "5055:5055"
-
+      - 5055:5055
     labels:
-      # ── Traefik service discovery ─────────────────────────────────────────
-      - "traefik.enable=true"
-      # HTTP route: all paths go to auth-proxy (universal ingress gatekeeper)
-      - "traefik.http.routers.auth-proxy.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.auth-proxy.entrypoints=http"
-      # HTTPS route: same rule for encrypted traffic (WebSocket, etc)
-      - "traefik.http.routers.auth-proxy-https.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.auth-proxy-https.entrypoints=websecure"
-      # Highest priority – auth-proxy must be matched before catch-all
-      - "traefik.http.routers.auth-proxy.priority=100"
-      - "traefik.http.routers.auth-proxy-https.priority=100"
-      - "traefik.http.services.auth-proxy.loadbalancer.server.port=5055"
-
+      - traefik.enable=true
+      - traefik.http.routers.auth-proxy.rule=PathPrefix(`/`)
+      - traefik.http.routers.auth-proxy.entrypoints=http
+      - traefik.http.routers.auth-proxy-https.rule=PathPrefix(`/`)
+      - traefik.http.routers.auth-proxy-https.entrypoints=websecure
+      - traefik.http.routers.auth-proxy.priority=100
+      - traefik.http.routers.auth-proxy-https.priority=100
+      - traefik.http.services.auth-proxy.loadbalancer.server.port=5055
     networks:
       - scareverse-net
-
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:5055/health"]
+      test:
+        - CMD
+        - curl
+        - -sf
+        - http://localhost:5055/health
       interval: 30s
       timeout: 10s
       start_period: 15s
       retries: 3
-
-    # Allow 30 seconds for graceful shutdown (matches SIGTERM handler)
     stop_grace_period: 30s
-
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "5m"
+        max-size: 5m
         max-file: "2"
-
 networks:
   scareverse-net:
     external: true
