@@ -1,75 +1,47 @@
 version: "3.9"
-
-# ==============================================================================
-# Node-PTY Service - Persistent Terminal Infrastructure
-# ==============================================================================
-# Long-lived WebSocket service providing PTY sessions and Git operations.
-# Acts as shared terminal backend for AI agent CLI tools (GeminiCLI, Claude Code,
-# Aider, OpenInterpreter, etc.).
-#
-# WebSocket API: ws://node-pty-service:8000/ws
-# Git HTTP API:  http://node-pty-service:8000/api/git/*
-# Health check:  http://node-pty-service:8000/health
-#
-# Prerequisites:
-#   - External network scareverse-net must exist:
-#       docker network create scareverse-net
-#   - .env file (see .env.example)
-#
-# Usage:
-#   docker-compose up -d
-#   docker-compose down
-# ==============================================================================
-
 services:
   node-pty-service:
     build:
       context: .
       dockerfile: Dockerfile
-    image: localhost:5001/staging/scareverse-node-pty-service:staging20260427T013923
+    image: hub-staging.scareverse.net/registry/staging/scareverse-node-pty-service:staging20260501T050141
     container_name: scareverse-node-pty-worker
-
     environment:
       PORT: ${PORT:-8000}
       SESSION_TIMEOUT: ${SESSION_TIMEOUT:-3600}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ARTIFACTS_PATH: /app/artifacts
       SHELL: /bin/bash
-
-      # Redis L1 heartbeat (GateKeeper service discovery)
       REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
       REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
       REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-20}
       HEARTBEAT_TTL: ${HEARTBEAT_TTL:-60}
-
+      SCARE_LOG_DESTINATION: /app/logs/service.log
     volumes:
-      # Persistent artifact file system (read-write)
       - ./volumes/artifacts:/app/artifacts:rw
-
-    # Internal only - no host ports exposed (communicate via scareverse-net)
+      - C:\Users\flavi\.scareverse\staging\logs\node-pty-service:/app/logs:rw
     expose:
       - "8000"
-
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:8000/health
       interval: 30s
       timeout: 10s
       start_period: 15s
       retries: 3
-
     restart: unless-stopped
-
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "10m"
+        max-size: 10m
         max-file: "3"
-
     networks:
       - scareverse-net
-
 networks:
   scareverse-net:
     external: true

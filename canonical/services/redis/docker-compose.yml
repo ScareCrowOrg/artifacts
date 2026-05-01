@@ -1,26 +1,15 @@
-# Redis L1 Service - Standalone docker-compose
-#
-# Local Redis cache (L1) for artifact metadata and session data.
-# Uses redis:7-alpine with password protection and AOF persistence.
-#
-# Usage (from project root):
-#   docker-compose -f artifacts/canonical/services/redis/docker-compose.yml up -d
-#   docker-compose -f artifacts/canonical/services/redis/docker-compose.yml logs -f
-#   docker-compose -f artifacts/canonical/services/redis/docker-compose.yml down
-
-version: '3.8'
-
+version: "3.8"
 services:
   redis:
     build: .
-    image: localhost:5001/staging/scareverse-redis:staging20260427T013923
+    image: hub-staging.scareverse.net/registry/staging/scareverse-redis:staging20260501T050141
     container_name: scareverse-redis-local
     ports:
-      - "6380:6380"
+      - 6380:6380
     volumes:
       - redis_local_data:/data
+      - C:\Users\flavi\.scareverse\staging\logs\redis:/app/logs:rw
     environment:
-      # Launcher-injected variables
       - TENANT_NAME=${TENANT_NAME:-staging}
       - REDIS_ADMIN_USERNAME=${REDIS_ADMIN_USERNAME:-admin}
       - REDIS_ADMIN_PASSWORD=${REDIS_ADMIN_PASSWORD}
@@ -30,28 +19,33 @@ services:
       - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
       - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-20}
       - HEARTBEAT_TTL=${HEARTBEAT_TTL:-60}
-      # Default variables
       - REDIS_PORT=6380
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SCARE_LOG_DESTINATION=/app/logs/service.log
     networks:
       - scareverse-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "-p", "6380", "-a", "${REDIS_L1_PASSWORD:-scarerunner}", "ping"]
+      test:
+        - CMD
+        - redis-cli
+        - -p
+        - "6380"
+        - -a
+        - ${REDIS_L1_PASSWORD:-scarerunner}
+        - ping
       interval: 10s
       timeout: 5s
       start_period: 5s
       retries: 3
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "5m"
+        max-size: 5m
         max-file: "2"
-
 networks:
   scareverse-net:
     external: true
-
 volumes:
   redis_local_data:
     driver: local
