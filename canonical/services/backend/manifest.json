@@ -3,8 +3,8 @@
   "name": "backend",
   "description": "ScareVerse Backend - FastAPI/uvicorn service",
   "build": false,
-  "image": "localhost:5001/registry/staging/scareverse-backend:staging20260501T041448",
-  "imageTag": "staging20260501T041448",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-backend:staging20260501T050010",
+  "imageTag": "staging20260501T050010",
   "checksum": "sha256:7474f57639e8d654ec71a2b85002956447f56eebf5865c32bb91528dee4dc6ec",
   "dependencies": [
     "backend/"
@@ -25,5 +25,5 @@
       "description": "ScareRunner base URL for frontend (translations, cell types, API). Resolved from settings.vite.scarerunner.url"
     }
   ],
-  "lastBuilt": "2026-05-01T04:28:41.320Z"
+  "lastBuilt": "2026-05-01T05:00:26.074Z"
 }
