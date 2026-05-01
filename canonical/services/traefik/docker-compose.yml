@@ -1,79 +1,39 @@
-# ==============================================================================
-# Traefik Service Worker – Standalone docker-compose
-# ==============================================================================
-# Traefik v3.1.0 reverse proxy with Redis L1-based service discovery.
-# Routes are auto-discovered via service-discovery.py reading Redis L1 heartbeat
-# keys (state:service:*:available) and writing traefik-services.yml.
-# No docker.sock access required (Windows + security compatible).
-#
-# Prerequisites:
-#   docker network create scareverse-net
-#
-# Usage:
-#   docker-compose up -d
-#   docker-compose logs -f
-#   docker-compose down
-# ==============================================================================
-
 services:
   traefik:
     build:
       context: .
       dockerfile: Dockerfile
-    image: localhost:5001/staging/scareverse-traefik:staging20260427T013923
+    image: hub-staging.scareverse.net/registry/staging/scareverse-traefik:staging20260501T050521
     container_name: scareverse-traefik-worker
-
     environment:
-      # ── Logging ────────────────────────────────────────────────────────────
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-
-      # ── Service identification ────────────────────────────────────────────
       WORKER_ID: ${WORKER_ID:-traefik}
-
-      # ── Redis / heartbeat ──────────────────────────────────────────────────
       REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
       REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
       REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-20}
       HEARTBEAT_TTL: ${HEARTBEAT_TTL:-60}
-
-      # ── Service discovery ─────────────────────────────────────────────────
-      # Polling interval for Redis L1 service scan (seconds).
-      # Development: 5s  |  Production: 15s  |  Conservative: 30s
       SERVICE_DISCOVERY_INTERVAL: ${SERVICE_DISCOVERY_INTERVAL:-15}
-
-      # ── Python path (BaseService import) ─────────────────────────────────
       PYTHONPATH: /app/artifacts
-
+      SCARE_LOG_DESTINATION: /app/logs/service.log
     volumes:
-      # Static configuration (read-only)
       - ./traefik.yml:/app/traefik.yml:ro
-
-      # Artifacts (for canonical.shared.services.base_service import)
       - ../../../../artifacts:/app/artifacts:ro
-
-    # Port 80: HTTP reverse proxy (public, replaces nginx-unity:80)
-    # Port 443: HTTPS reverse proxy (public, from Cloudflare)
-    # Port 8080: Traefik dashboard / API (internal, accessible at /dashboard)
+      - C:\Users\flavi\.scareverse\staging\logs\traefik:/app/logs:rw
     ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080"
-
+      - 80:80
+      - 443:443
+      - 8080:8080
     restart: unless-stopped
-
     stop_grace_period: 30s
-
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "10m"
+        max-size: 10m
         max-file: "3"
-
     networks:
       - scareverse-net
-
 networks:
   scareverse-net:
     external: true

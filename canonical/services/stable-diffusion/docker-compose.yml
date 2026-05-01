@@ -1,113 +1,61 @@
-# ==============================================================================
-# Stable Diffusion FastAPI Service
-# ==============================================================================
-# Long-lived Stable Diffusion GPU inference service with FastAPI wrapper.
-# GateKeeper routes "sd_generate" jobs here via HTTP POST /generate.
-#
-# This service exposes:
-#   - POST /generate: Generate image from text prompt
-#   - GET /health: Health check endpoint
-#
-# Features:
-#   - Lazy model loading (loads on first request, stays in memory)
-#   - GPU-accelerated with torch.float16 precision
-#   - Base64 PNG responses
-#   - Supports both SD 1.5 and SDXL via AutoPipeline detection
-#   - OOM error handling with CUDA cache clearing
-#
-# Usage:
-#   docker-compose up -d
-#   docker-compose down
-#   curl http://localhost:9090/health
-#   curl -X POST http://localhost:9090/generate \
-#     -H "Content-Type: application/json" \
-#     -d '{"prompt": "a beautiful landscape", "num_inference_steps": 10}'
-#
-# Prerequisites:
-#   - NVIDIA Container Toolkit installed (8-10GB VRAM minimum for SDXL)
-#   - External network scareverse-net created:
-#       docker network create scareverse-net
-#   - Docker volume sd-models will be created automatically for model cache persistence
-# ==============================================================================
-
 services:
-
   stable-diffusion:
     container_name: scareverse-sd-service
-
-    # Build from local Dockerfile (FastAPI wrapper)
     build:
       context: .
       dockerfile: Dockerfile
-
-    image: localhost:5001/staging/scareverse-stable-diffusion:staging20260427T013923
-
+    image: hub-staging.scareverse.net/registry/staging/scareverse-stable-diffusion:staging20260501T050521
     runtime: nvidia
-
     environment:
-      # NVIDIA/CUDA settings (required for GPU access)
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
-
-      # HuggingFace configuration (cache for SD models)
       HF_HUB_CACHE: /root/.cache/huggingface
       HF_HUB_OFFLINE: "0"
-
-      # Python configuration
       PYTHONUNBUFFERED: "1"
       PYTHONPATH: /app/artifacts
-
-      # Redis L1 (for heartbeat registration)
       REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
       REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
       REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
-
-      # Heartbeat (Launcher-injected for service availability tracking)
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-60}
       HEARTBEAT_TTL: ${HEARTBEAT_TTL:-180}
-
+      SCARE_LOG_DESTINATION: /app/logs/service.log
     volumes:
-      # Artifacts (for canonical.shared.services.base_service import)
       - ../../../../artifacts:/app/artifacts:ro
-      # HuggingFace model cache (for SD models) - named volume for persistence
       - sd-models:/root/.cache/huggingface
-
+      - C:\Users\flavi\.scareverse\staging\logs\stable-diffusion:/app/logs:rw
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [gpu]
-
-    shm_size: "2gb"
-
+              capabilities:
+                - gpu
+    shm_size: 2gb
     ports:
-      - "9090:9090"
-
+      - 9090:9090
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:9090/health
       interval: 30s
       timeout: 15s
       start_period: 120s
       retries: 5
-
     restart: unless-stopped
-
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "10m"
+        max-size: 10m
         max-file: "3"
-
     networks:
       - scareverse-net
-
 networks:
   scareverse-net:
     external: true
-
 volumes:
   sd-models:
     driver: local

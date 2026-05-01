@@ -1,27 +1,13 @@
-# Vite Service - Standalone docker-compose
-#
-# Runs the Vite dev server for on-demand TypeScript/Vue compilation.
-# HMR (Hot Module Replacement) enabled for live file watching.
-#
-# Usage (from project root):
-#   docker-compose -f artifacts/canonical/services/vite/docker-compose.yml build
-#   docker-compose -f artifacts/canonical/services/vite/docker-compose.yml up -d
-#   docker-compose -f artifacts/canonical/services/vite/docker-compose.yml logs -f
-#   docker-compose -f artifacts/canonical/services/vite/docker-compose.yml down
-
-version: '3.8'
-
+version: "3.8"
 services:
   vite:
     container_name: scareverse-vite
     build:
       context: ../../../..
       dockerfile: artifacts/canonical/services/vite/Dockerfile
-    image: localhost:5001/staging/scareverse-vite:staging20260427T013923
-
+    image: hub-staging.scareverse.net/registry/staging/scareverse-vite:staging20260501T050521
     ports:
-      - "5052:5052"
-
+      - 5052:5052
     volumes:
       - ../../../../artifacts/canonical:/app/artifacts/canonical:rw
       - ../../../../artifacts/runtime:/app/artifacts/runtime:rw
@@ -29,83 +15,60 @@ services:
       - ../../../../artifacts/shared:/app/artifacts/shared:rw
       - ../../../../artifacts/package.json:/app/artifacts/package.json:ro
       - ../../../../artifacts/vite.config.ts:/app/artifacts/vite.config.ts:ro
-
+      - C:\Users\flavi\.scareverse\staging\logs\vite:/app/logs:rw
     environment:
       - NODE_ENV=development
-      # PYTHONPATH enables entrypoint.py to import canonical.shared.services.base_service
       - PYTHONPATH=/app/artifacts
-
-      # Debug logging for Vite HMR troubleshooting
       - DEBUG=vite:hmr
-
-      # Vite HMR (Hot Module Replacement)
       - VITE_HMR_HOST=${VITE_HMR_HOST:-localhost}
       - VITE_HMR_PORT=${VITE_HMR_PORT:-5052}
       - VITE_HMR_PROTOCOL=${VITE_HMR_PROTOCOL:-ws}
-
-      # CORS
       - VITE_CORS_ORIGINS=${VITE_CORS_ORIGINS:-http://localhost:8000,http://localhost:5173,http://localhost:5050}
-
-      # Tunnel FQDN (injected by orchestration Phase 7 via manifest injected_env_vars)
-      # When set, Vite is aware of its public subdomain address.
       - TUNNEL_FQDN=${TUNNEL_FQDN:-}
-
-      # API references (relative to same origin when served behind nginx tunnel proxy)
       - VITE_BASE_URL=${VITE_BASE_URL:-/}
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api}
       - VITE_SCARERUNNER_URL=${VITE_SCARERUNNER_URL}
       - VITE_CENTRALHUB_URL=${VITE_CENTRALHUB_URL}
-
-      # Workspace handshake (Cockpit ↔ Runner communication)
       - VITE_COCKPIT_ORIGINS=${VITE_COCKPIT_ORIGINS:-http://localhost:5173,http://localhost:8000,http://127.0.0.1:5173,http://localhost:5052}
-
-      # Performance tracing (disabled by default)
       - VITE_TRACE=${VITE_TRACE:-false}
       - VITE_TRACE_RESOLVE=${VITE_TRACE_RESOLVE:-false}
       - VITE_TRACE_LOAD=${VITE_TRACE_LOAD:-false}
       - VITE_DEBUG=${VITE_DEBUG:-false}
       - VITE_REQUEST_LOG=${VITE_REQUEST_LOG:-false}
-
-      # Redis L1 (for heartbeat registration)
       - REDIS_L1_HOST=${REDIS_L1_HOST:-redis}
       - REDIS_L1_PORT=${REDIS_L1_PORT:-6380}
       - REDIS_L1_PASSWORD=${REDIS_L1_PASSWORD:-scarerunner}
       - REDIS_L1_DB=${REDIS_L1_DB:-0}
-
-      # Heartbeat (Launcher-injected for service availability tracking)
       - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-20}
       - HEARTBEAT_TTL=${HEARTBEAT_TTL:-60}
-      # Worker port (read by BaseService for port health check → port_opened in Redis)
       - WORKER_PORT=5052
-
+      - SCARE_LOG_DESTINATION=/app/logs/service.log
     labels:
-      # ── Traefik service discovery ─────────────────────────────────────────
-      - "traefik.enable=true"
-      # Catch-all route: matches everything except /api and /artifacts
-      - "traefik.http.routers.vite.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.vite.entrypoints=http"
-      # Lowest priority – vite is the fallback for all unmatched paths
-      - "traefik.http.routers.vite.priority=1"
-      - "traefik.http.services.vite.loadbalancer.server.port=5052"
-
+      - traefik.enable=true
+      - traefik.http.routers.vite.rule=PathPrefix(`/`)
+      - traefik.http.routers.vite.entrypoints=http
+      - traefik.http.routers.vite.priority=1
+      - traefik.http.services.vite.loadbalancer.server.port=5052
     networks:
       - scareverse-net
-
     healthcheck:
-      test: ["CMD", "curl", "-s", "-o", "/dev/null", "http://localhost:5052/"]
+      test:
+        - CMD
+        - curl
+        - -s
+        - -o
+        - /dev/null
+        - http://localhost:5052/
       interval: 30s
       timeout: 10s
       start_period: 30s
       retries: 3
-
     restart: unless-stopped
-
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "10m"
+        max-size: 10m
         max-file: "3"
-
 networks:
   scareverse-net:
     external: true
