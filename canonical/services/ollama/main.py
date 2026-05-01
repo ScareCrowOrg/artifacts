@@ -35,6 +35,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Wire persistent file logging when SCARE_LOG_DESTINATION is injected by the builder
+try:
+    from canonical.shared.log_destination import configure_log_destination as _configure_log_dest
+    if not _configure_log_dest():
+        logger.debug("configure_log_destination returned False — SCARE_LOG_DESTINATION not set or already configured")
+except ImportError:
+    logger.debug("log_destination utility not available — file logging skipped")
+
 # FastAPI app
 app = FastAPI(
     title="Ollama Wrapper API",

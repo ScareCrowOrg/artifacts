@@ -1,104 +1,60 @@
 version: "3.9"
-
-# ==============================================================================
-# GateKeeper Service
-# ==============================================================================
-# Unified job dispatcher supporting two execution models:
-#   1. "service":    HTTP POST to long-lived worker containers (Ollama, SD, etc.)
-#   2. "subprocess": Isolated Python subprocess for ephemeral workers (Rembg, etc.)
-#
-# Volume mount: artifacts/ is mounted at /app/artifacts for:
-#   - Worker discovery: /app/artifacts/canonical/workers/
-#   - Shared libs:      /app/artifacts/canonical/shared/
-#   - Job-type configs: /app/artifacts/canonical/job-types/
-#
-# The :cached flag optimises read-heavy mounts on Docker Desktop for Windows/Mac.
-# ==============================================================================
-
 services:
   gatekeeper:
     build:
       context: .
       dockerfile: Dockerfile
-    image: localhost:5001/staging/scareverse-gatekeeper:staging20260427T013923
+    image: localhost:5001/registry/staging/scareverse-gatekeeper:staging20260501T041448
     container_name: scareverse-gatekeeper-service
     restart: unless-stopped
-
     volumes:
-      # Mount artifacts/ directory so GateKeeper can discover and
-      # execute workers as subprocesses, and import shared libraries.
-      # Workers write .venv/ into this mount on first execution.
-      # Path: from project root, artifacts/ → /app/artifacts inside container
       - ../../../:/app/artifacts:cached
-      # Rembg model cache (ONNX u2net model persists across container restarts)
       - rembg-models:/root/.u2net
-
+      - C:\Users\flavi\.scareverse\staging\logs\gatekeeper:/app/logs:rw
     environment:
-      # Python import path (enables "from canonical.shared import ...")
       PYTHONPATH: /app/artifacts
-
-      # Path to subprocess workers directory inside container
       WORKERS_PATH: /app/artifacts/canonical/workers
-
-      # Logging
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
       WORKER_ID: ${WORKER_ID:-gatekeeper-service-01}
-
-      # Redis L1 (ScareRunner / owner)
       REDIS_L1_ENABLED: ${REDIS_L1_ENABLED:-true}
       REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
       REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
       REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
-
-      # TOTP Seed – Injected by Launcher during service:start
-      # Required for SecretClient to request encrypted vault secrets (vault.centralhub_pat)
       TOTP_SEED: ${TOTP_SEED}
-
-      # Service Name – Used by SecretClient to identify itself to Launcher
-      # Must match the service name registered with Launcher's TOTP seed
       SERVICE_NAME: ${SERVICE_NAME:-gatekeeper}
-
-      # CentralHub (L2 access via HTTP) – uses external FQDN for global connectivity
       CENTRALHUB_URL: ${CENTRALHUB_URL:-https://hub-staging.scareverse.net}
       CENTRALHUB_SERVICE_TOKEN: ${CENTRALHUB_SERVICE_TOKEN:-internal-gatekeeper-token}
-
-      # Service worker endpoint overrides (optional – default to JSON definitions)
       WORKER_OLLAMA_GENERATE_ENDPOINT: ${WORKER_OLLAMA_GENERATE_ENDPOINT:-http://scareverse-ollama-service:11434}
       WORKER_OLLAMA_CHAT_ENDPOINT: ${WORKER_OLLAMA_CHAT_ENDPOINT:-http://scareverse-ollama-service:11434}
       WORKER_SD_GENERATE_ENDPOINT: ${WORKER_SD_GENERATE_ENDPOINT:-http://scareverse-sd-service:9090}
       WORKER_INSTANTMESH_ENDPOINT: ${WORKER_INSTANTMESH_ENDPOINT:-http://scareverse-worker-instantmesh:8000}
-
-      # Pooling timeouts
       BRPOP_L1_TIMEOUT: ${BRPOP_L1_TIMEOUT:-1}
       BRPOP_L2_TIMEOUT: ${BRPOP_L2_TIMEOUT:-20}
-
-      # Heartbeat (Launcher-injected for service availability tracking)
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-20}
       HEARTBEAT_TTL: ${HEARTBEAT_TTL:-60}
-
+      SCARE_LOG_DESTINATION: /app/logs/service.log
     ports:
-      - "9000:9000"
-
+      - 9000:9000
     networks:
       - scareverse-net
-
     healthcheck:
-      test: ["CMD", "python", "-c", "import config; print('ok')"]
+      test:
+        - CMD
+        - python
+        - -c
+        - import config; print('ok')
       interval: 30s
       timeout: 10s
       retries: 3
-
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "10m"
+        max-size: 10m
         max-file: "3"
-
 volumes:
   rembg-models:
     driver: local
-
 networks:
   scareverse-net:
     external: true

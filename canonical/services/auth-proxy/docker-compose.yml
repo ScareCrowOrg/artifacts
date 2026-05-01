@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-auth-proxy:staging20260430T225307
+    image: localhost:5001/registry/staging/scareverse-auth-proxy:staging20260501T041448
     container_name: scareverse-auth-proxy-worker
     restart: unless-stopped
     volumes:

@@ -1,15 +1,16 @@
-version: '3.9'
+version: "3.9"
 services:
   scare-registry-gate:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-scare-registry-gate:staging20260430T043806
+    image: localhost:5001/registry/staging/scareverse-scare-registry-gate:staging20260501T041448
     container_name: scareverse-registry-gate
     restart: unless-stopped
     volumes:
       - ../../../../artifacts/canonical:/app/artifacts/canonical:ro
       - ../../../../artifacts/shared:/app/artifacts/shared:ro
+      - C:\Users\flavi\.scareverse\staging\logs\scare-registry-gate:/app/logs:rw
     environment:
       - PYTHONPATH=/app/artifacts
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -30,23 +31,27 @@ services:
       - WORKER_PORT=5678
       - REGISTRY_USERNAME=${REGISTRY_USERNAME:-scareverse}
       - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-scareverse}
+      - SCARE_LOG_DESTINATION=/app/logs/service.log
     ports:
-      - "5678:5678"
+      - 5678:5678
     networks:
       - scareverse-net
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:5678/health"]
+      test:
+        - CMD
+        - curl
+        - -sf
+        - http://localhost:5678/health
       interval: 30s
       timeout: 10s
       start_period: 15s
       retries: 3
     stop_grace_period: 30s
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "5m"
+        max-size: 5m
         max-file: "2"
-
 networks:
   scareverse-net:
     external: true

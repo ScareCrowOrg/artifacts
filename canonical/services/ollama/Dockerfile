@@ -8,6 +8,10 @@
 
 FROM ollama/ollama:latest
 
+# Remove pre-downloaded models from base image to reduce layer size
+# Models will be pulled at runtime via entrypoint-raw.sh
+RUN rm -rf /root/.ollama/models /root/.ollama/*.bin 2>/dev/null || true
+
 # Install curl + python3 (for heartbeat)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \

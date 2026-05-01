@@ -57,10 +57,10 @@ pub struct Config {
     /// Override with a strong password in production to prevent unauthorised pushes.
     pub registry_password: String,
 
-    /// Maximum blob size in bytes for a single push (env: `MAX_BLOB_SIZE_MB`, default: `2048`).
+    /// Maximum blob size in bytes for a single push (env: `MAX_BLOB_SIZE_MB`, default: `10240`).
     ///
     /// Requests exceeding this limit are rejected with `413 Payload Too Large` before
-    /// any bytes are buffered.  Default is 2 GiB which covers typical Docker images.
+    /// any bytes are buffered.  Default is 10 GiB which covers large images like Ollama.
     pub max_blob_size: usize,
 }
 
@@ -84,7 +84,7 @@ impl Config {
             log_level: env_str("LOG_LEVEL", "INFO"),
             registry_username: env_str("REGISTRY_USERNAME", "scareverse"),
             registry_password: env_str("REGISTRY_PASSWORD", "scareverse"),
-            max_blob_size: env_usize("MAX_BLOB_SIZE_MB", 2048) * 1024 * 1024,
+            max_blob_size: env_usize("MAX_BLOB_SIZE_MB", 10240) * 1024 * 1024,
         }
     }
 
@@ -314,8 +314,8 @@ mod tests {
     fn test_max_blob_size_default() {
         std::env::remove_var("MAX_BLOB_SIZE_MB");
         let cfg = Config::from_env();
-        // Default is 2048 MiB
-        assert_eq!(cfg.max_blob_size, 2048 * 1024 * 1024);
+        // Default is 10240 MiB (10 GiB)
+        assert_eq!(cfg.max_blob_size, 10240 * 1024 * 1024);
     }
 
     #[test]
