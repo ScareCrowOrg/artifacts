@@ -28,6 +28,9 @@ pub struct AppState {
     pub backend_auth_url: String,
     /// Backend upstream base URL (e.g. `http://backend:5050`).
     pub backend_upstream: String,
+    /// Redis connection manager used for dynamic WSS alias lookup at request time.
+    /// Queries `state:service:{alias}:routing` in Redis L1 per `/wss/*` request.
+    pub redis_cm: redis::aio::ConnectionManager,
 }
 
 #[tokio::main]
@@ -61,11 +64,24 @@ async fn main() {
         .build()
         .expect("Failed to build HTTP client");
 
+    // Build Redis connection manager for dynamic WSS alias lookup.
+    // Uses Redis L1 credentials from Config (same Redis used by heartbeat).
+    let redis_url = format!(
+        "redis://:{}@{}:{}/{}",
+        cfg.redis_password, cfg.redis_host, cfg.redis_port, cfg.redis_db
+    );
+    let redis_client = redis::Client::open(redis_url.as_str())
+        .expect("Failed to create Redis client for WSS alias lookup");
+    let redis_cm = redis::aio::ConnectionManager::new(redis_client)
+        .await
+        .expect("Failed to create Redis connection manager for WSS alias lookup");
+
     let state = Arc::new(AppState {
         http_client,
         vite_upstream: cfg.vite_upstream.clone(),
         backend_auth_url: cfg.backend_auth_url.clone(),
         backend_upstream: cfg.backend_upstream.clone(),
+        redis_cm,
     });
 
     // Note: Redis heartbeat registration is now handled by heartbeat.py

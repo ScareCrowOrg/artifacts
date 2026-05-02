@@ -36,6 +36,7 @@ pub struct Config {
 
     /// Log level string (env: `LOG_LEVEL`, default: `INFO`).
     pub log_level: String,
+
 }
 
 impl Config {
@@ -89,6 +90,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[serial_test::serial]
     fn test_defaults() {
         // Ensure no relevant env vars pollute this test.
         std::env::remove_var("PROXY_PORT");
@@ -105,6 +107,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_env_override() {
         std::env::set_var("PROXY_PORT", "9999");
         std::env::set_var("LOG_LEVEL", "DEBUG");

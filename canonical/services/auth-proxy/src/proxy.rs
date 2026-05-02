@@ -37,22 +37,109 @@ pub async fn health_handler() -> impl IntoResponse {
     (StatusCode::OK, "OK")
 }
 
+/// Routing decision for an incoming request.
 #[derive(Debug, Clone, Copy)]
 enum RouteDecision {
     BackendBypass,
     BackendProtected,
     ViteProtected,
+    /// Path starts with `/wss/` — alias lookup in `AppState::wss_aliases`.
+    WssProxy,
     Deny,
 }
 
 fn classify_route(path: &str) -> RouteDecision {
     if path == "/api/v1/auth/session-bind" {
         RouteDecision::BackendBypass
+    } else if path.starts_with("/wss/") {
+        RouteDecision::WssProxy
     } else if path.starts_with("/api/") {
         RouteDecision::BackendProtected
     } else {
         // Everything else → Vite (/, /viewers*, /canonical/*, /sandbox/*, /runtime/*, etc.)
         RouteDecision::ViteProtected
+    }
+}
+
+/// Extract the WSS alias from a `/wss/{alias}[/...]` path.
+///
+/// Returns `None` if the path does not start with `/wss/` or has no alias segment.
+fn extract_wss_alias(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix("/wss/")?;
+    // Alias is the first path segment after `/wss/`.
+    let alias = rest.split('/').next()?;
+    if alias.is_empty() {
+        None
+    } else {
+        Some(alias)
+    }
+}
+
+/// Parse a routing JSON value stored in Redis and extract the upstream URL.
+///
+/// Expected JSON format:
+/// `{"wss": {"enabled": true, "alias": "events", "upstream_port": 5050, ...}}`
+///
+/// Returns `Ok("http://{alias}:{upstream_port}")` on success.
+/// Returns `Err(404)` if `wss.enabled` is false or the `wss` key is missing.
+/// Returns `Err(500)` if JSON is malformed or `upstream_port` is absent.
+pub fn parse_wss_routing_value(raw_json: &str, alias: &str) -> Result<String, StatusCode> {
+    let data: serde_json::Value = serde_json::from_str(raw_json).map_err(|e| {
+        warn!("[WSSProxy] Invalid JSON for alias '{}': {}", alias, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let wss = data.get("wss").ok_or_else(|| {
+        warn!("[WSSProxy] No 'wss' key in routing data for alias '{}'", alias);
+        StatusCode::NOT_FOUND
+    })?;
+
+    let enabled = wss.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
+    if !enabled {
+        warn!("[WSSProxy] wss.enabled=false for alias '{}'", alias);
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let upstream_port = wss
+        .get("upstream_port")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| {
+            warn!("[WSSProxy] Missing upstream_port for alias '{}'", alias);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(format!("http://{}:{}", alias, upstream_port))
+}
+
+/// Resolve the upstream URL for a WSS alias via a live Redis GET.
+///
+/// Queries `state:service:{alias}:routing` in Redis L1.
+///
+/// Returns `Ok(upstream_url)` on success.
+/// Returns `Err(404)` if the key is absent or `wss.enabled` is false.
+/// Returns `Err(503)` if Redis is temporarily unavailable.
+async fn resolve_wss_upstream(
+    state: &AppState,
+    alias: &str,
+) -> Result<String, axum::http::StatusCode> {
+    let routing_key = format!("state:service:{}:routing", alias);
+
+    let mut conn = state.redis_cm.clone();
+    let value: Option<String> = redis::cmd("GET")
+        .arg(&routing_key)
+        .query_async(&mut conn)
+        .await
+        .map_err(|e| {
+            warn!("[WSSProxy] Redis error for key '{}': {}", routing_key, e);
+            axum::http::StatusCode::SERVICE_UNAVAILABLE
+        })?;
+
+    match value {
+        None => {
+            warn!("[WSSProxy] Routing key '{}' not found in Redis", routing_key);
+            Err(axum::http::StatusCode::NOT_FOUND)
+        }
+        Some(raw) => parse_wss_routing_value(&raw, alias),
     }
 }
 
@@ -101,17 +188,63 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
             return crate::ws_proxy::proxy_ws_to_upstream(req, &state.backend_upstream).await;
         }
 
+        // WssProxy: session check FIRST (prevents unauthenticated alias enumeration),
+        // then resolve upstream. This ordering ensures an attacker cannot probe valid
+        // aliases without a valid session.
+        if matches!(decision, RouteDecision::WssProxy) {
+            // Extract session cookie for validation before any alias resolution.
+            let cookie_header = req
+                .headers()
+                .get(header::COOKIE)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+            let has_cookie = cookie_header.is_some();
+            info!(
+                "[WSSProxy] Session validation: path={} (SessionID={})",
+                path, has_cookie
+            );
+
+            // Session check before alias resolution and HTTP 101.
+            let session_result = check_session(&state, &cookie_header, &path).await;
+            if let Err(status) = session_result {
+                warn!(
+                    "[WSSProxy] Session denied ({}) for {}, rejecting upgrade",
+                    status, path
+                );
+                return build_error_response(status);
+            }
+
+            // Session is valid — now resolve the upstream alias.
+            let alias = match extract_wss_alias(&path) {
+                Some(a) => a.to_owned(),
+                None => {
+                    warn!("[WSSProxy] Could not extract alias from path={}", path);
+                    return build_error_response(StatusCode::NOT_FOUND);
+                }
+            };
+            let upstream = match resolve_wss_upstream(&state, &alias).await {
+                Ok(u) => u,
+                Err(status) => return build_error_response(status),
+            };
+
+            info!(
+                "[WSSProxy] Session valid, tunnelling {} → {} (alias={})",
+                path, upstream, alias
+            );
+            return crate::ws_proxy::proxy_ws_to_upstream(req, &upstream).await;
+        }
+
         let upstream_base = match decision {
             RouteDecision::BackendProtected => state.backend_upstream.as_str(),
             RouteDecision::ViteProtected => state.vite_upstream.as_str(),
-            // Deny is already rejected above; BackendBypass is handled above.
+            // Deny is already rejected above; BackendBypass and WssProxy are handled above.
             // This arm is a safety net in case new variants are added.
             RouteDecision::Deny => {
                 warn!("[WS] Deny decision reached WebSocket bifurcation — rejecting");
                 return build_error_response(StatusCode::FORBIDDEN);
             }
-            RouteDecision::BackendBypass => {
-                error!("[WS] BackendBypass decision reached protected WebSocket branch — internal inconsistency");
+            RouteDecision::BackendBypass | RouteDecision::WssProxy => {
+                error!("[WS] BackendBypass/WssProxy decision reached protected WebSocket branch — internal inconsistency");
                 return build_error_response(StatusCode::INTERNAL_SERVER_ERROR);
             }
         };
@@ -147,6 +280,34 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
         };
     }
     // ── End WebSocket bifurcation ─────────────────────────────────────────────
+
+    // WssProxy paths that are NOT WebSocket upgrades (e.g., GET /wss/events/health).
+    // These are plain HTTP requests — session check FIRST, then alias resolution
+    // to prevent unauthenticated enumeration of valid aliases.
+    if matches!(decision, RouteDecision::WssProxy) {
+        let cookie_header = req
+            .headers()
+            .get(header::COOKIE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        // Session check before alias resolution (security: prevents alias enumeration).
+        if let Err(status) = check_session(&state, &cookie_header, &path).await {
+            return build_error_response(status);
+        }
+        // Session valid — now extract alias and resolve upstream.
+        let alias = match extract_wss_alias(&path) {
+            Some(a) => a.to_owned(),
+            None => {
+                warn!("[WSSProxy] Could not extract alias from HTTP path={}", path);
+                return build_error_response(StatusCode::NOT_FOUND);
+            }
+        };
+        let upstream = match resolve_wss_upstream(&state, &alias).await {
+            Ok(u) => u,
+            Err(status) => return build_error_response(status),
+        };
+        return proxy_to_upstream(&state, req, &full_path, &upstream, None).await;
+    }
 
     if matches!(decision, RouteDecision::BackendBypass) {
         return proxy_to_backend(state, req, &full_path, true).await;
@@ -184,7 +345,7 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                 );
                 proxy_to_vite(state, req, &full_path).await
             }
-            RouteDecision::BackendBypass | RouteDecision::Deny => {
+            RouteDecision::BackendBypass | RouteDecision::Deny | RouteDecision::WssProxy => {
                 error!(
                     "[AuthProxy] Internal routing inconsistency: authenticated flow reached unexpected decision {:?} for path {}",
                     decision, path
@@ -616,5 +777,64 @@ mod tests {
             classify_route("/sandbox/test"),
             RouteDecision::ViteProtected
         ));
+    }
+
+    #[test]
+    fn test_classify_route_wss_proxy() {
+        // /wss/* paths are classified as WssProxy.
+        assert!(matches!(
+            classify_route("/wss/events"),
+            RouteDecision::WssProxy
+        ));
+        assert!(matches!(
+            classify_route("/wss/logs"),
+            RouteDecision::WssProxy
+        ));
+        assert!(matches!(
+            classify_route("/wss/unknown-alias"),
+            RouteDecision::WssProxy
+        ));
+    }
+
+    #[test]
+    fn test_extract_wss_alias() {
+        assert_eq!(extract_wss_alias("/wss/events"), Some("events"));
+        assert_eq!(extract_wss_alias("/wss/logs"), Some("logs"));
+        assert_eq!(extract_wss_alias("/wss/events/extra"), Some("events"));
+        assert_eq!(extract_wss_alias("/wss/"), None);
+        assert_eq!(extract_wss_alias("/api/v1"), None);
+        assert_eq!(extract_wss_alias("/"), None);
+    }
+
+    #[test]
+    fn test_parse_wss_routing_value_valid() {
+        let raw = r#"{"wss":{"enabled":true,"alias":"events","upstream_port":5050}}"#;
+        let result = parse_wss_routing_value(raw, "events");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "http://events:5050");
+    }
+
+    #[test]
+    fn test_parse_wss_routing_value_disabled() {
+        let raw = r#"{"wss":{"enabled":false,"alias":"events","upstream_port":5050}}"#;
+        let result = parse_wss_routing_value(raw, "events");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_parse_wss_routing_value_missing_port() {
+        let raw = r#"{"wss":{"enabled":true,"alias":"events"}}"#;
+        let result = parse_wss_routing_value(raw, "events");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn test_parse_wss_routing_value_invalid_json() {
+        let raw = "not valid json {{{";
+        let result = parse_wss_routing_value(raw, "events");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }

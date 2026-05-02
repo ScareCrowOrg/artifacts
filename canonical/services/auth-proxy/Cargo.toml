@@ -48,3 +48,7 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 sha1 = "0.10"
 # base64: Encode SHA-1 digest for Sec-WebSocket-Accept header
 base64 = "0.22"
+
+[dev-dependencies]
+# Serialize env-var-touching tests to prevent race conditions in parallel test runs
+serial_test = "3.0"

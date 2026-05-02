@@ -357,3 +357,161 @@ class TestDiscoveryLoopIdempotency:
         assert healthy != current
         sd._write_config_atomic(sd._build_traefik_config(healthy), config_path)
         assert sd._load_current_services(config_path) == set()
+
+
+# ---------------------------------------------------------------------------
+# Tests – WSS routing (scan_wss_routes + _build_traefik_config with wss_routes)
+# ---------------------------------------------------------------------------
+
+
+def _make_routing_redis_mock(routing_keys_and_values):
+    """
+    Build a mock Redis client for scan_wss_routes tests.
+    Keys should match `state:service:*:routing` pattern.
+    """
+    async def _scan_iter(match: str, count: int):
+        for key in routing_keys_and_values:
+            yield key
+
+    async def _get(key):
+        val = routing_keys_and_values.get(key)
+        if val is None:
+            return None
+        return json.dumps(val)
+
+    mock_redis = AsyncMock()
+    mock_redis.scan_iter = _scan_iter
+    mock_redis.get = AsyncMock(side_effect=_get)
+    return mock_redis
+
+
+class TestScanWssRoutes:
+    @pytest.mark.asyncio
+    async def test_returns_wss_route_for_enabled_service(self):
+        """scan_wss_routes returns routes for services with wss.enabled=true."""
+        redis = _make_routing_redis_mock({
+            "state:service:backend:routing": {
+                "wss": {"enabled": True, "alias": "events", "upstream_port": 5050, "path": "/wss/events"}
+            },
+        })
+        result = await sd.scan_wss_routes(redis)
+        assert "backend" in result
+        assert result["backend"]["alias"] == "events"
+        assert result["backend"]["upstream_port"] == 5050
+
+    @pytest.mark.asyncio
+    async def test_excludes_disabled_wss_route(self):
+        """scan_wss_routes excludes services with wss.enabled=false."""
+        redis = _make_routing_redis_mock({
+            "state:service:backend:routing": {
+                "wss": {"enabled": False, "alias": "events", "upstream_port": 5050, "path": "/wss/events"}
+            },
+        })
+        result = await sd.scan_wss_routes(redis)
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_excludes_routing_without_wss_key(self):
+        """scan_wss_routes skips entries without a 'wss' key."""
+        redis = _make_routing_redis_mock({
+            "state:service:backend:routing": {"http": {"enabled": True}},
+        })
+        result = await sd.scan_wss_routes(redis)
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_handles_missing_value(self):
+        """scan_wss_routes safely skips keys with no Redis value."""
+        redis = _make_routing_redis_mock({
+            "state:service:backend:routing": None,
+        })
+        result = await sd.scan_wss_routes(redis)
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_handles_invalid_json(self):
+        """scan_wss_routes skips keys whose value is not valid JSON."""
+        async def _scan_iter(match, count):
+            yield "state:service:backend:routing"
+
+        async def _get(key):
+            return "not-valid-json"
+
+        mock_redis = AsyncMock()
+        mock_redis.scan_iter = _scan_iter
+        mock_redis.get = AsyncMock(side_effect=_get)
+
+        result = await sd.scan_wss_routes(mock_redis)
+        assert result == {}
+
+
+class TestBuildTraefikConfigWss:
+    def test_wss_route_has_priority_110(self):
+        """WSS routes are generated with priority 110."""
+        wss_routes = {
+            "backend": {"enabled": True, "alias": "events", "upstream_port": 5050, "path": "/wss/events"}
+        }
+        config = sd._build_traefik_config(set(), wss_routes)
+        routers = config["http"]["routers"]
+        assert "backend-wss-events" in routers
+        assert routers["backend-wss-events"]["priority"] == 110
+
+    def test_wss_route_rule_uses_path_prefix(self):
+        """WSS route rule uses PathPrefix with the configured path."""
+        wss_routes = {
+            "backend": {"enabled": True, "alias": "events", "upstream_port": 5050, "path": "/wss/events"}
+        }
+        config = sd._build_traefik_config(set(), wss_routes)
+        router = config["http"]["routers"]["backend-wss-events"]
+        assert "PathPrefix(`/wss/events`)" in router["rule"]
+
+    def test_wss_service_points_to_correct_upstream(self):
+        """WSS service loadBalancer points to correct service:port."""
+        wss_routes = {
+            "backend": {"enabled": True, "alias": "events", "upstream_port": 5050, "path": "/wss/events"}
+        }
+        config = sd._build_traefik_config(set(), wss_routes)
+        services = config["http"]["services"]
+        assert "backend-wss-events" in services
+        url = services["backend-wss-events"]["loadBalancer"]["servers"][0]["url"]
+        assert url == "http://backend:5050"
+
+    def test_wss_and_base_routes_coexist(self):
+        """WSS routes coexist with base auth-proxy route."""
+        wss_routes = {
+            "backend": {"enabled": True, "alias": "events", "upstream_port": 5050, "path": "/wss/events"}
+        }
+        config = sd._build_traefik_config({"auth-proxy"}, wss_routes)
+        routers = config["http"]["routers"]
+        assert "auth-proxy" in routers
+        assert "backend-wss-events" in routers
+        # auth-proxy has lower priority
+        assert routers["auth-proxy"]["priority"] < routers["backend-wss-events"]["priority"]
+
+    def test_wss_route_skipped_if_missing_alias(self):
+        """WSS route with empty alias is skipped."""
+        wss_routes = {
+            "backend": {"enabled": True, "alias": "", "upstream_port": 5050, "path": "/wss/events"}
+        }
+        config = sd._build_traefik_config(set(), wss_routes)
+        assert config["http"]["routers"] == {}
+
+    def test_wss_route_skipped_if_missing_upstream_port(self):
+        """WSS route without upstream_port is skipped."""
+        wss_routes = {
+            "backend": {"enabled": True, "alias": "events", "path": "/wss/events"}
+        }
+        config = sd._build_traefik_config(set(), wss_routes)
+        assert config["http"]["routers"] == {}
+
+    def test_no_wss_routes_when_none_passed(self):
+        """Passing None for wss_routes generates no WSS entries."""
+        config = sd._build_traefik_config(set(), None)
+        assert config["http"]["routers"] == {}
+
+    def test_backward_compat_no_wss_routes_arg(self):
+        """Calling _build_traefik_config without wss_routes arg (backward compat)."""
+        config = sd._build_traefik_config({"auth-proxy"})
+        assert "auth-proxy" in config["http"]["routers"]
+        # No WSS routes generated
+        assert not any(k.endswith("-wss-events") for k in config["http"]["routers"])

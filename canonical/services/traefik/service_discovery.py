@@ -13,10 +13,14 @@ provider for service discovery.
 Invoked by:
     entrypoint.sh line ~7 (background daemon)
 
-Redis key pattern scanned:
+Redis key patterns scanned:
     state:service:{name}:available  →  JSON  {"port_opened": true|false|null, "timestamp": float}
+    state:service:{name}:routing    →  JSON  {"wss": {"enabled": bool, "alias": str,
+                                                       "upstream_port": int, "path": str}}
 
-Only services with ``port_opened: true`` are added to the Traefik config.
+Services with ``port_opened: true`` are added to the Traefik config.
+Services that also have a ``state:service:{name}:routing`` key with
+``routing.wss.enabled: true`` get an additional WSS route with priority 110.
 Config is written atomically (temp file + os.replace) and only when routes
 actually change to avoid unnecessary Traefik hot-reloads.
 """
@@ -93,14 +97,20 @@ logger = logging.getLogger("service-discovery")
 # ---------------------------------------------------------------------------
 
 
-def _build_traefik_config(healthy_services: Set[str]) -> dict:
+def _build_traefik_config(healthy_services: Set[str], wss_routes: Optional[Dict[str, Dict]] = None) -> dict:
     """
     Build a Traefik dynamic YAML config dict from the set of healthy services.
 
     Services not present in SERVICE_ROUTES are logged and skipped.
+    For each entry in *wss_routes* (service_name → routing.wss dict), an
+    additional router/service is generated with priority 110 so it takes
+    precedence over the auth-proxy catch-all (priority 100).
 
     Args:
         healthy_services: Set of service names with ``port_opened: true``.
+        wss_routes: Optional mapping of service_name → routing.wss config dict.
+                    Example: {"backend": {"alias": "events", "upstream_port": 5050,
+                                          "path": "/wss/events"}}
 
     Returns:
         Dict suitable for ``yaml.dump()`` as a Traefik File provider config.
@@ -112,30 +122,59 @@ def _build_traefik_config(healthy_services: Set[str]) -> dict:
     for name in sorted(healthy_services):
         route_cfg = SERVICE_ROUTES.get(name)
         if route_cfg is None:
-            logger.warning(
-                "  ⚠️  No route config for service '%s' – skipping", name
+            logger.debug(
+                "  ⏭️  No static route config for service '%s' – skipping base route", name
             )
-            continue
-
-        logger.debug(
-            "  ➕ Adding route for %s: rule=%s, port=%d, priority=%d",
-            name,
-            route_cfg["rule"],
-            route_cfg["port"],
-            route_cfg["priority"],
-        )
-        routers[name] = {
-            "rule": route_cfg["rule"],
-            "service": name,
-            "entryPoints": ["http", "websecure"],  # Listen on both HTTP and HTTPS
-            "priority": route_cfg["priority"],
-        }
-
-        services[name] = {
-            "loadBalancer": {
-                "servers": [{"url": f"http://{name}:{route_cfg['port']}"}]
+        else:
+            logger.debug(
+                "  ➕ Adding route for %s: rule=%s, port=%d, priority=%d",
+                name,
+                route_cfg["rule"],
+                route_cfg["port"],
+                route_cfg["priority"],
+            )
+            routers[name] = {
+                "rule": route_cfg["rule"],
+                "service": name,
+                "entryPoints": ["http", "websecure"],
+                "priority": route_cfg["priority"],
             }
-        }
+            services[name] = {
+                "loadBalancer": {
+                    "servers": [{"url": f"http://{name}:{route_cfg['port']}"}]
+                }
+            }
+
+    # ── WSS dynamic routes (priority 110) ────────────────────────────────────
+    if wss_routes:
+        for service_name, wss_cfg in sorted(wss_routes.items()):
+            alias = wss_cfg.get("alias", "")
+            upstream_port = wss_cfg.get("upstream_port")
+            wss_path = wss_cfg.get("path", f"/wss/{alias}")
+
+            if not alias or not upstream_port:
+                logger.warning(
+                    "  ⚠️  WSS config for '%s' missing alias or upstream_port – skipping",
+                    service_name,
+                )
+                continue
+
+            router_name = f"{service_name}-wss-{alias}"
+            logger.debug(
+                "  ➕ Adding WSS route '%s': PathPrefix(%s) → %s:%d (priority 110)",
+                router_name, wss_path, service_name, upstream_port,
+            )
+            routers[router_name] = {
+                "rule": f"PathPrefix(`{wss_path}`)",
+                "service": router_name,
+                "entryPoints": ["http", "websecure"],
+                "priority": 110,
+            }
+            services[router_name] = {
+                "loadBalancer": {
+                    "servers": [{"url": f"http://{service_name}:{upstream_port}"}]
+                }
+            }
 
     logger.debug("✓ Config built with %d routers", len(routers))
     return {"http": {"routers": routers, "services": services}}
@@ -226,6 +265,65 @@ def _load_current_services(path: str) -> Set[str]:
     except (yaml.YAMLError, AttributeError) as exc:
         logger.warning("  ⚠️  Cannot parse current config %s: %s", path, exc)
         return set()
+
+
+async def scan_wss_routes(redis_client) -> Dict[str, Dict]:
+    """
+    Scan Redis L1 for WSS routing metadata published by the Launcher (Phase 8.1).
+
+    Key pattern: ``state:service:{name}:routing``
+    Value format: JSON ``{"wss": {"enabled": bool, "alias": str,
+                                   "upstream_port": int, "path": str}}``
+
+    Only entries with ``wss.enabled: true`` are returned.
+
+    Args:
+        redis_client: Connected ``redis.asyncio.Redis`` instance.
+
+    Returns:
+        Dict mapping service_name → routing.wss config for services that have
+        WSS routing enabled.
+    """
+    wss_routes: Dict[str, Dict] = {}
+    logger.debug("🔍 Scanning Redis for state:service:*:routing keys...")
+
+    async for key in redis_client.scan_iter(
+        match="state:service:*:routing", count=100
+    ):
+        key_str = key if isinstance(key, str) else key.decode()
+        parts = key_str.split(":")
+        # Expected: ['state', 'service', '{name}', 'routing']
+        if len(parts) < 4:
+            logger.debug("  ⚠️  Invalid routing key format: %s", key_str)
+            continue
+        service_name = parts[2]
+
+        value = await redis_client.get(key)
+        if value is None:
+            continue
+
+        try:
+            data = json.loads(value)
+            wss_cfg = data.get("wss")
+            if not wss_cfg:
+                logger.debug("  ⏭️  %s: no 'wss' key in routing data", service_name)
+                continue
+            if not wss_cfg.get("enabled"):
+                logger.debug("  ⏭️  %s: wss.enabled=false – skipping", service_name)
+                continue
+            logger.debug(
+                "  ✅ %s: WSS routing enabled (alias=%s, port=%s, path=%s)",
+                service_name,
+                wss_cfg.get("alias"),
+                wss_cfg.get("upstream_port"),
+                wss_cfg.get("path"),
+            )
+            wss_routes[service_name] = wss_cfg
+        except (json.JSONDecodeError, AttributeError) as e:
+            logger.debug("  ❌ %s: invalid routing JSON – %s", service_name, e)
+
+    logger.debug("✓ WSS scan complete: found %d WSS routes", len(wss_routes))
+    return wss_routes
 
 
 # ---------------------------------------------------------------------------
@@ -348,26 +446,42 @@ async def discovery_loop() -> None:
                 logger.debug("✓ Redis connection established")
 
             healthy_services = await scan_healthy_services(redis_client)
+            wss_routes = await scan_wss_routes(redis_client)
+
+            # Build the canonical set of router names that *should* exist
+            # (base services + WSS sub-routes) so change detection is accurate.
+            # This logic must mirror the validation inside _build_traefik_config()
+            # so expected_router_names matches the config file that will be written.
+            expected_router_names: Set[str] = set()
+            for name in healthy_services:
+                if name in SERVICE_ROUTES:
+                    expected_router_names.add(name)
+            for svc_name, wss_cfg in wss_routes.items():
+                alias = wss_cfg.get("alias", "")
+                upstream_port = wss_cfg.get("upstream_port")
+                # Only count this WSS route if _build_traefik_config() would generate it.
+                if alias and upstream_port:
+                    expected_router_names.add(f"{svc_name}-wss-{alias}")
 
             current_services = _load_current_services(TRAEFIK_CONFIG_PATH)
             logger.debug("Current config routes: %s", sorted(current_services))
 
-            if healthy_services != current_services:
-                added = healthy_services - current_services
-                removed = current_services - healthy_services
+            if expected_router_names != current_services:
+                added = expected_router_names - current_services
+                removed = current_services - expected_router_names
                 logger.info(
                     "Route changes detected: +%s -%s → writing config",
                     sorted(added),
                     sorted(removed),
                 )
                 logger.debug("Building config for services: %s", sorted(healthy_services))
-                config = _build_traefik_config(healthy_services)
+                config = _build_traefik_config(healthy_services, wss_routes)
                 logger.debug("Config built, attempting atomic write to %s", TRAEFIK_CONFIG_PATH)
                 try:
                     _write_config_atomic(config, TRAEFIK_CONFIG_PATH)
                     logger.info(
                         "✅ Config updated: active routes = %s",
-                        sorted(healthy_services & set(SERVICE_PORT_MAPPING)),
+                        sorted(expected_router_names),
                     )
                 except Exception as exc:
                     logger.error(
@@ -379,7 +493,7 @@ async def discovery_loop() -> None:
                     continue
             else:
                 logger.debug(
-                    "No route changes (services: %s)", sorted(healthy_services)
+                    "No route changes (routers: %s)", sorted(expected_router_names)
                 )
 
         except Exception as exc:
