@@ -1,0 +1,76 @@
+{
+  "id": "planet-chat-cell",
+  "name": "Planet Chat",
+  "description": "Real-time multi-user chat cell with distributed state via Redis Pub/Sub and WebSocket",
+  "version": "1.0.0",
+  "category": "communication",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/PlanetChatCell.ts"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "default_initial_data": {
+    "partyId": null,
+    "maxMessages": 200
+  },
+  "allow_instance_override_refs": false,
+  "properties_schema": {
+    "partyId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Party/context ID for channel isolation. Null = auto-generated from cell instance ID."
+    },
+    "maxMessages": {
+      "type": "integer",
+      "default": 200,
+      "description": "Maximum number of messages to retain in the local store."
+    }
+  },
+  "_discovery": {
+    "labels": [
+      "#chat",
+      "#realtime",
+      "#communication",
+      "#distributed",
+      "#websocket"
+    ],
+    "describe": "Real-time multi-user chat cell powered by Redis Pub/Sub and WebSocket. Supports multiple concurrent users in the same party seeing messages instantly (< 100ms). Uses distributed state synchronisation with append-only conflict resolution to prevent message loss. Ideal for team collaboration, live Q&A, and AI-human communication workflows.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [
+      "redis",
+      "websocket"
+    ],
+    "dependencies": [
+      "wss_pubsub_router",
+      "redis_l1"
+    ],
+    "tags": [
+      "chat",
+      "realtime",
+      "communication",
+      "distributed-state",
+      "websocket",
+      "redis",
+      "multi-user"
+    ],
+    "use_cases": [
+      "Team communication within a notebook party",
+      "AI agent and human real-time collaboration",
+      "Live Q&A sessions",
+      "Coordination between multiple agents"
+    ]
+  },
+  "kind": "cell",
+  "updated_at": "2026-05-02T00:00:00",
+  "created_at": "2026-05-02T00:00:00"
+}

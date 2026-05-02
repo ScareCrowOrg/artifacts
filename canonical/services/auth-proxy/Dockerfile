@@ -28,9 +28,10 @@ FROM debian:bookworm-slim AS runtime
 
 WORKDIR /app
 
-# Install Python 3 + pip (for heartbeat.py), ca-certificates (for HTTPS)
+# Install Python 3 + pip (for heartbeat.py), ca-certificates (for HTTPS), curl (for health checks)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    curl \
     python3 \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
