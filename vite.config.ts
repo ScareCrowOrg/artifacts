@@ -718,7 +718,7 @@ export default defineConfig({
       // Use flexible paths for both container and local development
       // In container: /app/artifacts
       // In local/test: __dirname
-      
+
       // Map #artifacts to artifacts root (for all cell types and composition)
       '#artifacts': __dirname,
 
@@ -738,6 +738,12 @@ export default defineConfig({
       '@/stores': path.resolve(__dirname, 'shared/stores'),
       '@/composables': path.resolve(__dirname, 'shared/composables'),
       '@/i18n': path.resolve(__dirname, 'shared/i18n'),
+
+      // Force npm packages to resolve from node_modules inside __dirname
+      // (root is /app but node_modules is at /app/artifacts/node_modules)
+      'vue': path.resolve(__dirname, 'node_modules/vue'),
+      '@vue/runtime-core': path.resolve(__dirname, 'node_modules/@vue/runtime-core'),
+      '@vue/runtime-dom': path.resolve(__dirname, 'node_modules/@vue/runtime-dom'),
     },
     extensions: ['.ts', '.tsx', '.vue', '.js', '.jsx', '.json'],
   },
