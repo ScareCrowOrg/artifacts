@@ -11,14 +11,14 @@ import type { Component } from 'vue'
 
 /**
  * A cell type as loaded from HybridDatabase (canonical type.json).
- * Uses semantic `name` (e.g. "calculator-cell") as the primary identifier.
- * The `id` field is kept for database references only — never used for loading.
+ * Uses semantic `id` (e.g. "planet-chat-cell") as the primary identifier for dynamic imports.
+ * The `name` field is human-readable display name (may contain spaces).
  */
 export interface CellTypeDefinition {
-  /** Semantic name (kebab-case) — used for dynamic imports and display */
-  name: string
-  /** UUID or opaque string — only for DB references, not for loading */
+  /** Semantic identifier (kebab-case) — used for dynamic imports and artifact paths */
   id: string
+  /** Human-readable display name (may contain spaces) */
+  name: string
   /** Human-readable description */
   description: string
   /** Semantic version */

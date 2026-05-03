@@ -288,15 +288,15 @@ async function loadSavedLayouts(): Promise<void> {
  * 4. updateCell() → sets cellInstance, viewSpec, isLoading = false
  */
 async function handleCellTypeSelected(cellType: CellTypeDefinition): Promise<void> {
-  log.info('[App] handleCellTypeSelected', { cellTypeName: cellType.name })
+  log.info('[App] handleCellTypeSelected', { cellTypeName: cellType.id })
 
-  const cellId = addCell(cellType.name, cellType)
+  const cellId = addCell(cellType.id, cellType)
 
   try {
-    const cellInstance = await instantiateCellByType(cellType.name, cellType)
-    const viewSpec = await resolveViewSpec(cellInstance, cellType.name, cellType)
+    const cellInstance = await instantiateCellByType(cellType.id, cellType)
+    const viewSpec = await resolveViewSpec(cellInstance, cellType.id, cellType)
     updateCell(cellId, { cellInstance, viewSpec, isLoading: false })
-    log.info('[App] Cell ready', { cellId, cellTypeName: cellType.name })
+    log.info('[App] Cell ready', { cellId, cellTypeName: cellType.id })
   } catch (err: any) {
     const errorMsg = err?.message || 'Failed to load cell'
     updateCell(cellId, { isLoading: false, error: errorMsg })
@@ -367,10 +367,10 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
 
     try {
       // Find the full CellTypeDefinition from the loaded list (or synthesize a minimal one)
-      const knownType = availableCellTypes.value.find(t => t.name === cellRef.type)
+      const knownType = availableCellTypes.value.find(t => t.id === cellRef.type)
       const cellType: CellTypeDefinition = knownType ?? {
-        name: cellRef.type,
         id: cellRef.type,
+        name: cellRef.type,
         description: '',
         version: '1.0.0',
         can_render_dynamically: true,
