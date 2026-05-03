@@ -388,25 +388,6 @@ const migrationWarningPlugin = {
   },
 }
 
-// Plugin to handle /artifacts/* file serving
-const artifactsRewritePlugin = {
-  name: 'artifacts-rewrite',
-  enforce: 'pre',
-  resolveId(id) {
-    // Handle /artifacts/ prefixes in import paths
-    if (id.startsWith('/artifacts/')) {
-      return { id: id.replace('/artifacts', ''), external: false }
-    }
-  },
-  load(id) {
-    // Handle /artifacts/ prefixes in file paths from middleware
-    if (id.startsWith('/artifacts/')) {
-      const newId = id.replace('/artifacts', '')
-      return this.load(newId)
-    }
-  },
-}
-
 // Plugin to handle URL rewriting for /artifacts/* and /viewers/* requests
 // - /artifacts/* URLs → /* for file serving
 // - /viewers/:viewerName → serve index.html
@@ -549,7 +530,7 @@ const urlRewritePlugin = {
 console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-19T18:30 - ALL MIDDLEWARES RE-ENABLED (HMR WORKING)\n')
 
 export default defineConfig({
-  root: '/app/artifacts',
+  root: '/app',
   plugins: [
     // HMR Debug plugin - auto-enable HMR logging in browser
     {
