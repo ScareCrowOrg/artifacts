@@ -458,28 +458,6 @@ const urlRewritePlugin = {
           return next()
         }
 
-        // 403-HUNT: Debug logs to check URL path and root mismatch
-        if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime') || url.includes('/artifacts')) {
-          console.error(`[403-HUNT] URL Original: ${url}`)
-          console.error(`[403-HUNT] Root do Vite: ${server.config.root}`)
-          console.error(`[403-HUNT] __dirname: ${__dirname}`)
-          // Check for nested artifacts problem
-          if (url.includes('/artifacts/') && server.config.root.includes('/artifacts')) {
-            console.error(`[403-HUNT] ⚠️  POTENTIAL DOUBLE ARTIFACTS!`)
-            console.error(`[403-HUNT]   URL has /artifacts/, root also ends with /artifacts`)
-            console.error(`[403-HUNT]   This would resolve to: /app/artifacts/artifacts/...`)
-          }
-        }
-
-        // Log every request (especially artifact paths)
-        if (!url.includes('.js') && !url.includes('.css') && !url.includes('.json') && !url.includes('/@vite')) {
-          console.error(`[url-rewrite] REQUEST: ${url}`)
-          if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime')) {
-            console.error(`[url-rewrite] 📍 ARTIFACT PATH DETECTED: ${url}`)
-          }
-        }
-
-
         // Match /viewers/:viewerName (with optional path segments and query string)
         // Pattern: /viewers/{viewerName}[/arbitrary/path][?query]
         // Examples: /viewers/dynamic-workspace, /viewers/dynamic-workspace/main.ts, /viewers/dynamic-workspace?q=1
@@ -515,25 +493,6 @@ const urlRewritePlugin = {
             console.error(`[url-rewrite] ❌ ERROR: ${msg}`)
             return next()
           }
-        } else {
-          console.error(`[url-rewrite] NO MATCH: ${url}`)
-
-          // For artifact paths, show what Vite will try to access
-          if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime')) {
-            const attemptedPath = path.join(__dirname, url)
-            console.error(`[url-rewrite] 📍 ARTIFACT PATH DETAILS:`)
-            console.error(`[url-rewrite]   URL: ${url}`)
-            console.error(`[url-rewrite]   Vite will attempt: ${attemptedPath}`)
-            console.error(`[url-rewrite]   File exists: ${fs.existsSync(attemptedPath)}`)
-            console.error(`[url-rewrite]   fs.allow: ${JSON.stringify(server.config.server.fs.allow)}`)
-            console.error(`[url-rewrite]   fs.strict: ${server.config.server.fs.strict}`)
-          } else {
-            console.error(`[url-rewrite] → Passing to next middleware (will try to serve as static file)`)
-            console.error(`[url-rewrite] → fs.allow: ${JSON.stringify(server.config.server.fs.allow)}`)
-            console.error(`[url-rewrite] → fs.strict: ${server.config.server.fs.strict}`)
-          }
-
-          console.error(`[url-rewrite] ⚠️  If you see 403 after this, check if path is in fs.allow`)
         }
 
         // Fallback: Handle root path (/)

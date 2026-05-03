@@ -11,6 +11,7 @@ Validates:
 - Config round-trip: loaded routes match written routes.
 - Non-JSON heartbeat values are silently skipped.
 - Unknown services (no port mapping) are logged and skipped.
+- Artifact sovereignty: no direct Vite route is emitted — auth-proxy is the only gatekeeper.
 """
 
 import asyncio
@@ -515,3 +516,55 @@ class TestBuildTraefikConfigWss:
         assert "auth-proxy" in config["http"]["routers"]
         # No WSS routes generated
         assert not any(k.endswith("-wss-events") for k in config["http"]["routers"])
+
+
+# ---------------------------------------------------------------------------
+# Tests – Artifact Sovereignty (no direct Vite route)
+# ---------------------------------------------------------------------------
+
+
+class TestArtifactSovereignty:
+    """Validate that auth-proxy is the sole Traefik gatekeeper (no direct Vite route)."""
+
+    def test_vite_healthy_produces_no_direct_route(self):
+        """Even when Vite reports port_opened=True, no direct Vite route is emitted."""
+        # Simulate both auth-proxy and vite healthy.
+        config = sd._build_traefik_config({"auth-proxy", "vite"})
+        routers = config["http"]["routers"]
+        assert "vite" not in routers, (
+            "Vite must NOT have a direct Traefik route — all traffic must pass through auth-proxy"
+        )
+
+    def test_auth_proxy_is_only_base_route(self):
+        """Only auth-proxy has a base HTTP route — no other service gets one."""
+        config = sd._build_traefik_config({"auth-proxy", "vite", "backend"})
+        base_routes = [
+            name for name in config["http"]["routers"]
+            if not name.endswith(tuple(f"-wss-{a}" for a in ["events", "logs"]))
+        ]
+        assert base_routes == ["auth-proxy"], (
+            f"Expected only auth-proxy as base route, got: {base_routes}"
+        )
+
+    def test_artifacts_path_covered_by_auth_proxy_catch_all(self):
+        """auth-proxy catch-all (PathPrefix `/`) covers /artifacts/* paths."""
+        config = sd._build_traefik_config({"auth-proxy"})
+        router = config["http"]["routers"]["auth-proxy"]
+        # PathPrefix(`/`) matches all paths including /artifacts/*
+        assert "PathPrefix(`/`)" in router["rule"], (
+            "auth-proxy must use PathPrefix(`/`) to cover /artifacts/* and all other paths"
+        )
+
+    @pytest.mark.asyncio
+    async def test_vite_healthy_scan_produces_no_route(self):
+        """Integration: when Vite is healthy in Redis, no Vite route appears in YAML."""
+        redis = _make_redis_mock({
+            "state:service:auth-proxy:available": {"port_opened": True, "timestamp": 1.0},
+            "state:service:vite:available": {"port_opened": True, "timestamp": 1.0},
+        })
+        healthy = await sd.scan_healthy_services(redis)
+        assert "vite" in healthy  # Vite IS discovered as healthy...
+        config = sd._build_traefik_config(healthy)
+        assert "vite" not in config["http"]["routers"]  # ...but gets NO route
+        assert "auth-proxy" in config["http"]["routers"]  # auth-proxy is the sole gatekeeper
+

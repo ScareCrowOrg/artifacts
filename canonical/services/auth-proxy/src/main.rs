@@ -12,9 +12,11 @@ mod ws_proxy;
 
 use axum::{extract::Request, routing::any, Router};
 use reqwest::ClientBuilder;
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 use tracing::{error, info};
 
 /// Shared application state injected into every Axum handler.
@@ -31,6 +33,13 @@ pub struct AppState {
     /// Redis connection manager used for dynamic WSS alias lookup at request time.
     /// Queries `state:service:{alias}:routing` in Redis L1 per `/wss/*` request.
     pub redis_cm: redis::aio::ConnectionManager,
+    /// In-memory session validation cache (sessionId → (checked_at, is_valid)).
+    ///
+    /// Keyed by `sessionId` cookie value. TTL: 5 s for valid sessions, 1 s for
+    /// invalid sessions (avoids blacklisting a re-issued sessionId by accident).
+    /// Expired entries are pruned on each cache insert to bound memory growth.
+    /// Uses `tokio::sync::Mutex` to remain non-blocking inside the async runtime.
+    pub session_cache: Arc<Mutex<HashMap<String, (Instant, bool)>>>,
 }
 
 #[tokio::main]
@@ -82,6 +91,7 @@ async fn main() {
         backend_auth_url: cfg.backend_auth_url.clone(),
         backend_upstream: cfg.backend_upstream.clone(),
         redis_cm,
+        session_cache: Arc::new(Mutex::new(HashMap::new())),
     });
 
     // Note: Redis heartbeat registration is now handled by heartbeat.py

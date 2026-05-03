@@ -63,26 +63,16 @@ REDIS_L1_PASSWORD: Optional[str] = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
 # Phase 2: Could read from env var SERVICE_ROUTES_JSON or Redis values.
 
 SERVICE_ROUTES: Dict[str, Dict] = {
-    # Auth Proxy is the universal ingress gatekeeper.
-    # All traffic (HTTP and WebSocket) goes through it, then auth-proxy decides:
-    # - WebSocket with valid session → tunnel to vite:5052 or backend:5050
+    # Auth Proxy is the ONLY ingress gatekeeper — no service has a direct Traefik route.
+    # All traffic (HTTP, WebSocket, and /artifacts/*) goes through auth-proxy first:
+    # - /artifacts/*: require valid sessionId → proxy to vite:5052 (RBAC enforced)
     # - /api/v1/auth/session-bind: bypass to backend (no auth required)
-    # - /api/*, /viewers/*, /: require sessionId
-    # - Deny unknown paths
+    # - /api/*, /viewers/*, /: require sessionId → proxy to backend or vite
+    # - /wss/*: require sessionId → WebSocket tunnel to upstream
+    # Vite (port 5052) has NO direct Traefik route — accessed only via auth-proxy.
     "auth-proxy": {
         "port": 5055,
         "rule": "PathPrefix(`/`)",
-        "priority": 100,
-    },
-    # Vite is the sovereign artifact host for cell type files.
-    # PathPrefix(`/artifacts/canonical/cell_types/`) is more specific than PathPrefix(`/`),
-    # so Traefik picks this route first even at the same priority (longer rule wins).
-    # URL layout: /artifacts/canonical/cell_types/{cellTypeName}/{filePath}
-    # Vite's artifactsRewritePlugin strips /artifacts → /canonical/cell_types/...
-    # resolving to /app/artifacts/canonical/cell_types/{cellTypeName}/{filePath}
-    "vite": {
-        "port": 5052,
-        "rule": "PathPrefix(`/artifacts/canonical/cell_types/`)",
         "priority": 100,
     },
 }

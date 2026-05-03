@@ -1,10 +1,12 @@
-//! Core proxy logic – universal ingress guard for API and Vite traffic.
+//! Core proxy logic – universal ingress guard for API, Vite, and Artifacts traffic.
 //!
 //! # Flow
 //! 1. Classify request path:
 //!    - `/api/v1/auth/session-bind` → bypass auth, proxy to Backend.
-//!    - `/api/*` or `/viewers*` or `/` → require valid `sessionId`.
-//!    - anything else → 403.
+//!    - `/wss/*` → require valid `sessionId`, tunnel WebSocket to upstream.
+//!    - `/api/*` → require valid `sessionId`, proxy to Backend.
+//!    - `/artifacts/*` → require valid `sessionId`, proxy to Vite (RBAC enforced).
+//!    - anything else (e.g. `/`, `/viewers/*`) → require valid `sessionId`, proxy to Vite.
 //! 2. For protected paths, call Backend session-check endpoint.
 //! 3. **200 OK** → proxy to Backend or Vite depending on path.
 //! 4. **403 Forbidden** → return 403 immediately.
@@ -14,7 +16,10 @@
 //! - Vite traffic rewrites `Host` to the Vite upstream host (`vite:5052`).
 //! - Backend traffic preserves incoming `Host` when present so Backend can keep
 //!   FQDN-sensitive logic (CORS/JWT validations), otherwise uses upstream host.
-//! para rebuild
+//!
+//! # Artifact Sovereignty
+//! All `/artifacts/*` requests are validated here before any byte is served.
+//! Vite (port 5052) has no direct Traefik route — Auth-Proxy is the sole gatekeeper.
 
 use axum::{
     body::Body,
@@ -55,6 +60,10 @@ fn classify_route(path: &str) -> RouteDecision {
         RouteDecision::WssProxy
     } else if path.starts_with("/api/") {
         RouteDecision::BackendProtected
+    } else if path.starts_with("/artifacts/") {
+        // Artifacts are served by Vite but must be session-validated first.
+        // Auth-Proxy is the sole gatekeeper — no direct Traefik route to Vite exists.
+        RouteDecision::ViteProtected
     } else {
         // Everything else → Vite (/, /viewers*, /canonical/*, /sandbox/*, /runtime/*, etc.)
         RouteDecision::ViteProtected
@@ -370,7 +379,29 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
     }
 }
 
+/// Extract the `sessionId` value from a raw `Cookie` header string.
+///
+/// Parses `sessionId=<value>` from a semicolon-separated list of cookie pairs.
+/// Returns `None` if the `sessionId` key is not present or the value is too long
+/// (> 512 bytes) to prevent cache-key pollution attacks.
+fn extract_session_id(cookie_header: &str) -> Option<String> {
+    const MAX_SESSION_ID_LEN: usize = 512;
+    for part in cookie_header.split(';') {
+        let part = part.trim();
+        if let Some(val) = part.strip_prefix("sessionId=") {
+            if !val.is_empty() && val.len() <= MAX_SESSION_ID_LEN {
+                return Some(val.to_owned());
+            }
+        }
+    }
+    None
+}
+
 /// Call Backend's `/api/v1/auth/session-check` endpoint.
+///
+/// Results are cached per `sessionId` to absorb burst traffic when a workspace loads
+/// multiple cell assets in parallel.  TTL: 5 s for valid sessions, 1 s for invalid
+/// sessions (short TTL avoids persisting a wrongly-denied result for a re-issued sessionId).
 ///
 /// Returns:
 /// - `Ok(())` when Backend responds with 200 (session valid, RBAC passed).
@@ -381,6 +412,38 @@ async fn check_session(
     cookie_header: &Option<String>,
     uri: &str,
 ) -> Result<(), StatusCode> {
+    use std::time::Instant;
+
+    const VALID_TTL_SECS: u64 = 5;
+    const INVALID_TTL_SECS: u64 = 1;
+
+    // Try to read sessionId from cookie for cache lookup.
+    let session_id: Option<String> = cookie_header
+        .as_deref()
+        .and_then(extract_session_id);
+
+    // Cache lookup — only when a sessionId is present.
+    if let Some(ref sid) = session_id {
+        let cache = state.session_cache.lock().await;
+        if let Some(&(checked_at, is_valid)) = cache.get(sid.as_str()) {
+            let ttl = if is_valid { VALID_TTL_SECS } else { INVALID_TTL_SECS };
+            if checked_at.elapsed().as_secs() < ttl {
+                debug!(
+                    "[AuthProxy] Session cache HIT for sessionId={} (valid={}, age={}ms)",
+                    sid,
+                    is_valid,
+                    checked_at.elapsed().as_millis()
+                );
+                return if is_valid {
+                    Ok(())
+                } else {
+                    Err(StatusCode::FORBIDDEN)
+                };
+            }
+        }
+        debug!("[AuthProxy] Session cache MISS for sessionId={}", sid);
+    }
+
     // Build auth URL with `uri` query parameter so Backend can apply RBAC rules.
     let auth_url = format!(
         "{}?uri={}",
@@ -406,7 +469,7 @@ async fn check_session(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    match response.status().as_u16() {
+    let result = match response.status().as_u16() {
         200 => {
             debug!("[AuthProxy] Backend returned 200 OK for {}", uri);
             Ok(())
@@ -419,7 +482,26 @@ async fn check_session(
             error!("[AuthProxy] Unexpected Backend status {} for {}", code, uri);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
+    };
+
+    // Store result in cache (only for definitive valid/invalid outcomes, not 5xx errors).
+    if let Some(sid) = session_id {
+        match &result {
+            Ok(()) | Err(StatusCode::FORBIDDEN) => {
+                let is_valid = result.is_ok();
+                let mut cache = state.session_cache.lock().await;
+                // Prune all expired entries before inserting to bound memory growth.
+                cache.retain(|_, &mut (checked_at, is_v)| {
+                    let ttl = if is_v { VALID_TTL_SECS } else { INVALID_TTL_SECS };
+                    checked_at.elapsed().as_secs() < ttl
+                });
+                cache.insert(sid, (Instant::now(), is_valid));
+            }
+            _ => {}
+        }
     }
+
+    result
 }
 
 /// Proxy the validated request to Vite and stream the response back.
@@ -780,6 +862,37 @@ mod tests {
     }
 
     #[test]
+    fn test_classify_route_artifacts_cell_types() {
+        // /artifacts/cell_types/* must be explicitly classified as ViteProtected.
+        assert!(matches!(
+            classify_route("/artifacts/cell_types/png-generator/BaseCell.js"),
+            RouteDecision::ViteProtected
+        ));
+    }
+
+    #[test]
+    fn test_classify_route_artifacts_viewers() {
+        // /artifacts/viewers/* must be classified as ViteProtected (Vite-served assets).
+        assert!(matches!(
+            classify_route("/artifacts/viewers/3d-mesh/bundle.js"),
+            RouteDecision::ViteProtected
+        ));
+    }
+
+    #[test]
+    fn test_classify_route_artifacts_generic() {
+        // Any future /artifacts/** subpath must be classified as ViteProtected.
+        assert!(matches!(
+            classify_route("/artifacts/any/future/path"),
+            RouteDecision::ViteProtected
+        ));
+        assert!(matches!(
+            classify_route("/artifacts/"),
+            RouteDecision::ViteProtected
+        ));
+    }
+
+    #[test]
     fn test_classify_route_wss_proxy() {
         // /wss/* paths are classified as WssProxy.
         assert!(matches!(
@@ -836,5 +949,119 @@ mod tests {
         let result = parse_wss_routing_value(raw, "events");
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // ── extract_session_id tests ───────────────────────────────────────────────
+
+    #[test]
+    fn test_extract_session_id_basic() {
+        assert_eq!(
+            extract_session_id("sessionId=abc123"),
+            Some("abc123".to_owned())
+        );
+    }
+
+    #[test]
+    fn test_extract_session_id_with_other_cookies() {
+        assert_eq!(
+            extract_session_id("lang=en; sessionId=xyz789; theme=dark"),
+            Some("xyz789".to_owned())
+        );
+    }
+
+    #[test]
+    fn test_extract_session_id_missing() {
+        assert_eq!(extract_session_id("lang=en; theme=dark"), None);
+    }
+
+    #[test]
+    fn test_extract_session_id_empty_value() {
+        // sessionId= with no value should return None.
+        assert_eq!(extract_session_id("sessionId="), None);
+    }
+
+    #[test]
+    fn test_extract_session_id_too_long() {
+        // sessionId exceeding 512 bytes must be rejected to prevent cache key pollution.
+        let long_id = "x".repeat(513);
+        let cookie = format!("sessionId={}", long_id);
+        assert_eq!(extract_session_id(&cookie), None);
+    }
+
+    #[test]
+    fn test_extract_session_id_exactly_max_len() {
+        // sessionId of exactly 512 bytes is accepted.
+        let max_id = "a".repeat(512);
+        let cookie = format!("sessionId={}", max_id);
+        assert_eq!(extract_session_id(&cookie), Some(max_id));
+    }
+
+    // ── Session cache tests ────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_session_cache_hit_valid() {
+        use std::collections::HashMap;
+        use std::sync::Arc;
+        use std::time::Instant;
+        use tokio::sync::Mutex;
+
+        // Pre-populate cache with a valid entry that was just set.
+        let cache: Arc<Mutex<HashMap<String, (Instant, bool)>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+        {
+            let mut c = cache.lock().await;
+            c.insert("sid-valid".to_owned(), (Instant::now(), true));
+        }
+
+        // Confirm the cached entry is unexpired (age < 5 s).
+        let c = cache.lock().await;
+        let &(checked_at, is_valid) = c.get("sid-valid").unwrap();
+        assert!(is_valid);
+        assert!(checked_at.elapsed().as_secs() < 5);
+    }
+
+    #[tokio::test]
+    async fn test_session_cache_invalid_not_persisted_across_ttl() {
+        use std::collections::HashMap;
+        use std::sync::Arc;
+        use std::time::{Duration, Instant};
+        use tokio::sync::Mutex;
+
+        let cache: Arc<Mutex<HashMap<String, (Instant, bool)>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+        {
+            let mut c = cache.lock().await;
+            // Simulate a cache entry that is 2 seconds old (exceeds invalid TTL of 1 s).
+            let old_instant = Instant::now() - Duration::from_secs(2);
+            c.insert("sid-invalid".to_owned(), (old_instant, false));
+        }
+
+        // After invalid TTL (1 s), the entry should be treated as expired.
+        let c = cache.lock().await;
+        let &(checked_at, _is_valid) = c.get("sid-invalid").unwrap();
+        let ttl_invalid: u64 = 1;
+        assert!(checked_at.elapsed().as_secs() >= ttl_invalid, "expired entry should be treated as a cache miss");
+    }
+
+    #[tokio::test]
+    async fn test_session_cache_miss_after_valid_ttl() {
+        use std::collections::HashMap;
+        use std::sync::Arc;
+        use std::time::{Duration, Instant};
+        use tokio::sync::Mutex;
+
+        let cache: Arc<Mutex<HashMap<String, (Instant, bool)>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+        {
+            let mut c = cache.lock().await;
+            // Simulate a valid cache entry that is 6 seconds old (exceeds valid TTL of 5 s).
+            let old_instant = Instant::now() - Duration::from_secs(6);
+            c.insert("sid-valid-expired".to_owned(), (old_instant, true));
+        }
+
+        let c = cache.lock().await;
+        let &(checked_at, _is_valid) = c.get("sid-valid-expired").unwrap();
+        let ttl_valid: u64 = 5;
+        assert!(checked_at.elapsed().as_secs() >= ttl_valid, "expired valid entry should be treated as a cache miss");
     }
 }
