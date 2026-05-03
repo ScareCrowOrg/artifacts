@@ -637,9 +637,6 @@ export default defineConfig({
       },
     },
 
-    // Artifacts path rewriting
-    artifactsRewritePlugin,
-
     vue({
       include: [/\.vue$/],
     })
