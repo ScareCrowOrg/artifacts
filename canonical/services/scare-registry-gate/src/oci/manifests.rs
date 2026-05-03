@@ -300,6 +300,7 @@ async fn manifest_put_inner(
         "manifest_json": String::from_utf8_lossy(&body_bytes),
         "layers": layers,
         "r2_public_url_base": state.r2.public_url,
+        "build_session_id": reference,
     });
 
     // [it9:payload-r2-url] Log the exact r2_public_url_base value persisted in CentralHub.
