@@ -60,8 +60,10 @@ fn classify_route(path: &str) -> RouteDecision {
         RouteDecision::WssProxy
     } else if path.starts_with("/api/") {
         RouteDecision::BackendProtected
-    } else if path.starts_with("/artifacts/") {
-        // Artifacts are served by Vite but must be session-validated first.
+    } else if path.starts_with("/artifacts/") || path.starts_with("/.vite/") || path.starts_with("/__vite") {
+        // Artifacts and Vite internals are served by Vite but must be session-validated first.
+        // /.vite/deps/ = optimized dependency bundles
+        // /__vite_hmr = Hot Module Replacement WebSocket connection
         // Auth-Proxy is the sole gatekeeper — no direct Traefik route to Vite exists.
         RouteDecision::ViteProtected
     } else {

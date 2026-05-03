@@ -531,6 +531,7 @@ console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-19T18:30 - ALL MIDDLE
 
 export default defineConfig({
   root: '/app',
+  cacheDir: '.vite',  // Cache fica em /app/.vite (relativo ao root)
   plugins: [
     // HMR Debug plugin - auto-enable HMR logging in browser
     {
