@@ -1,6 +1,7 @@
 {
   "id": "planet-chat-cell",
-  "name": "Planet Chat",
+  "name": "planet-chat-cell",
+  "display_name": "Planet Chat",
   "description": "Real-time multi-user chat cell with distributed state via Redis Pub/Sub and WebSocket",
   "version": "1.0.0",
   "category": "communication",
