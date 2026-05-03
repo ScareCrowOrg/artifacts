@@ -5,7 +5,7 @@ services:
     build:
       context: ../../../..
       dockerfile: artifacts/canonical/services/vite/Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-vite:staging20260503T211436
+    image: hub-staging.scareverse.net/registry/staging/scareverse-vite:staging20260503T214635
     ports:
       - 5052:5052
     volumes:
