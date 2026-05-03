@@ -3,8 +3,8 @@
   "name": "redis",
   "description": "Redis cache layer",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-redis:staging20260502T205104",
-  "imageTag": "staging20260502T205104",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-redis:staging20260503T001631",
+  "imageTag": "staging20260503T001631",
   "checksum": "sha256:24f92d1b3ad2bee349ba0435d7be4377507a1e4de6b4a2b1c5fc769f534b5934",
   "dependencies": [],
   "generate_env_file": false,
@@ -23,5 +23,5 @@
       "description": "Admin user password for Redis ACL (from redis:admin:password in vault)"
     }
   ],
-  "lastBuilt": "2026-05-02T20:51:13.751Z"
+  "lastBuilt": "2026-05-03T00:16:40.782Z"
 }
