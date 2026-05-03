@@ -74,6 +74,14 @@ SERVICE_ROUTES: Dict[str, Dict] = {
         "rule": "PathPrefix(`/`)",
         "priority": 100,
     },
+    # Vite is the sovereign artifact host for cell type files.
+    # PathPrefix(`/artifacts/cell_types/`) is more specific than PathPrefix(`/`),
+    # so Traefik picks this route first even at the same priority (longer rule wins).
+    "vite": {
+        "port": 5052,
+        "rule": "PathPrefix(`/artifacts/cell_types/`)",
+        "priority": 100,
+    },
 }
 
 # Backwards-compatible aliases kept for service_discovery helpers
