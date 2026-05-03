@@ -303,6 +303,27 @@ async fn manifest_put_inner(
         "build_session_id": reference,
     });
 
+    // [it2:build-session-id] Flag when build_session_id is a digest (by-digest push) vs a
+    // human-readable tag (by-tag push). CentralHub PASSO 2d only matches by exact equality
+    // against the Builder's image_tag_suffix. A by-digest push stores a sha256 hash as
+    // build_session_id which will NEVER match the session tag → PASSO 2d won't protect it.
+    // The only protection for by-digest docs is PASSO 2b (sub-manifest detection) and PASSO 2c (age).
+    let is_by_digest = reference.starts_with("sha256:");
+    if is_by_digest {
+        warn!(
+            "[manifest-put] [it2:session-id-digest] repo={} ref={} — build_session_id stored as \
+             digest hash (not session tag). PASSO 2d in _gc_run_build_aware() will NOT protect \
+             this doc. Protection relies on PASSO 2b (sub-manifest) or PASSO 2c (24h age).",
+            repo, reference
+        );
+    } else {
+        info!(
+            "[manifest-put] [it2:session-id-tag] repo={} ref={} — build_session_id stored as \
+             tag (session tag). PASSO 2d will protect this doc if cleanup uses same session.",
+            repo, reference
+        );
+    }
+
     // [it9:payload-r2-url] Log the exact r2_public_url_base value persisted in CentralHub.
     let notified_r2_url = payload
         .get("r2_public_url_base")
