@@ -75,11 +75,14 @@ SERVICE_ROUTES: Dict[str, Dict] = {
         "priority": 100,
     },
     # Vite is the sovereign artifact host for cell type files.
-    # PathPrefix(`/artifacts/cell_types/`) is more specific than PathPrefix(`/`),
+    # PathPrefix(`/artifacts/canonical/cell_types/`) is more specific than PathPrefix(`/`),
     # so Traefik picks this route first even at the same priority (longer rule wins).
+    # URL layout: /artifacts/canonical/cell_types/{cellTypeName}/{filePath}
+    # Vite's artifactsRewritePlugin strips /artifacts → /canonical/cell_types/...
+    # resolving to /app/artifacts/canonical/cell_types/{cellTypeName}/{filePath}
     "vite": {
         "port": 5052,
-        "rule": "PathPrefix(`/artifacts/cell_types/`)",
+        "rule": "PathPrefix(`/artifacts/canonical/cell_types/`)",
         "priority": 100,
     },
 }

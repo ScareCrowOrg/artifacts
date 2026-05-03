@@ -16,9 +16,10 @@
  * Import strategy (Edge-Centric):
  * - Static imports use @/ aliases (resolved by Vite to artifacts/shared/)
  * - Dynamic cell loading uses buildArtifactUrl():
- *   - With VITE_TUNNEL_FQDN: https://{FQDN}/artifacts/cell_types/{name}/{file}
- *   - Without (localhost):    /artifacts/cell_types/{name}/{file}
- * - Traefik routes /artifacts/cell_types/ → vite:5052 (priority 100)
+ *   - With VITE_TUNNEL_FQDN: https://{FQDN}/artifacts/canonical/cell_types/{name}/{file}
+ *   - Without (localhost):    /artifacts/canonical/cell_types/{name}/{file}
+ * - Traefik routes /artifacts/canonical/cell_types/ → vite:5052 (priority 100)
+ * - Vite's artifactsRewritePlugin strips /artifacts → /canonical/cell_types/{name}/{file}
  * - Backend is API-only; Vite is the sovereign artifact host
  */
 
@@ -46,18 +47,25 @@ const TUNNEL_FQDN =
  * dynamic imports work correctly in Cloudflare Tunnel environments where
  * same-origin is not guaranteed.
  *
- * Traefik routes PathPrefix(`/artifacts/cell_types/`) → vite:5052 (priority 100).
+ * URL structure: /artifacts/canonical/cell_types/{cellTypeName}/{filePath}
+ * - Traefik routes PathPrefix(`/artifacts/canonical/cell_types/`) → vite:5052
+ * - Vite's artifactsRewritePlugin strips `/artifacts` → `/canonical/cell_types/...`
+ * - Vite resolves to /app/artifacts/canonical/cell_types/{cellTypeName}/{filePath}
  *
  * @param cellTypeName  Semantic cell-type name (e.g. "calculator-cell")
  * @param filePath      Relative file path within the cell-type directory
  * @returns             Absolute or root-relative URL string
  */
 function buildArtifactUrl(cellTypeName: string, filePath: string): string {
+  if (!cellTypeName || !filePath) {
+    throw new Error(`[useCellViewProvider] Missing artifact path: cellTypeName="${cellTypeName ?? 'undefined'}", filePath="${filePath ?? 'undefined'}"`)
+  }
   if (cellTypeName.includes('..') || filePath.includes('..')) {
     throw new Error(`[useCellViewProvider] Invalid artifact path: cellTypeName="${cellTypeName}", filePath="${filePath}"`)
   }
-  const path = `/artifacts/cell_types/${cellTypeName}/${filePath}`
-  return TUNNEL_FQDN ? `https://${TUNNEL_FQDN}${path}` : path
+  const artifactPath = `/artifacts/canonical/cell_types/${cellTypeName}/${filePath}`
+  log.debug('[useCellViewProvider] buildArtifactUrl', { cellTypeName, filePath, artifactPath, hasTunnelFqdn: !!TUNNEL_FQDN })
+  return TUNNEL_FQDN ? `https://${TUNNEL_FQDN}${artifactPath}` : artifactPath
 }
 
 // ── Composable ────────────────────────────────────────────────────────────────
@@ -132,7 +140,7 @@ export function useCellViewProvider() {
    * Dynamically import the BaseCell class for the given cell type and instantiate it.
    *
    * Requires the cell type's type.json to have default_refs.basecell[0] set.
-   * Import uses buildArtifactUrl(): /artifacts/cell_types/{name}/{basecellPath}
+   * Import uses buildArtifactUrl(): /artifacts/canonical/cell_types/{name}/{basecellPath}
    *
    * @param cellTypeName  Semantic type name (e.g. "calculator-cell") — never UUID
    * @param cellType      Type definition (from getCellTypes or provided externally)
@@ -155,7 +163,14 @@ export function useCellViewProvider() {
       throw new Error(`[useCellViewProvider] Cell type "${cellTypeName}" has no basecell ref in type.json`)
     }
 
-    // Dynamic import via Edge-centric URL (Traefik → vite:5052 → /artifacts/cell_types/)
+    // Dynamic import via Edge-centric URL (Traefik → vite:5052 → /artifacts/canonical/cell_types/)
+    // TODO: Remove typeof diagnostics below after this fix is validated in production
+    log.debug('[useCellViewProvider] instantiateCellByType: pre-buildArtifactUrl', {
+      cellTypeName,
+      basecellPath,
+      cellTypeNameType: typeof cellTypeName,
+      basecellPathType: typeof basecellPath,
+    })
     const importUrl = buildArtifactUrl(cellTypeName, basecellPath)
     log.info('[useCellViewProvider] instantiateCellByType: dynamic import', { importUrl })
 
