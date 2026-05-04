@@ -13,15 +13,8 @@
 module.exports = {
   content: [
     './index.html',
-    // With root=/app, content paths are relative to root, not to this config file
-    // So we need to point to /app/artifacts/* where the actual source files are
-    './artifacts/canonical/cell_types/**/*.{vue,jsx,tsx}',
-    './artifacts/canonical/viewers/**/*.{vue,jsx,tsx}',
-    './artifacts/canonical/book_types/**/*.{vue,jsx,tsx}',
-    './artifacts/sandbox/cell_types/**/*.{vue,jsx,tsx}',
-    './artifacts/sandbox/viewers/**/*.{vue,jsx,tsx}',
-    './artifacts/runtime/**/*.{vue,jsx,tsx}',
-    './artifacts/shared/**/*.{vue,jsx,tsx}',
+    // Absolute path to bypass PostCSS resolution ambiguity from root change
+    '/app/artifacts/**/*.{vue,js,ts,jsx,tsx}',
   ],
   theme: {
     extend: {
