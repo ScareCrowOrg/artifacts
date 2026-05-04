@@ -531,8 +531,8 @@ const urlRewritePlugin = {
 console.error('\n🔥 [VITE CONFIG LOADED] Version 2026-04-19T18:30 - ALL MIDDLEWARES RE-ENABLED (HMR WORKING)\n')
 
 export default defineConfig({
-  root: '/app',
-  base: '/artifacts/',  // Vite uses this as base for all asset paths
+  root: '/app/artifacts',  // Actual directory where canonical/, shared/ files are located
+  base: '/artifacts/',  // Requests come as /artifacts/canonical/...; remove /artifacts/ to resolve files
   cacheDir: '/app/artifacts/.vite',  // Absolute path to cache (node_modules fica em /app/artifacts/node_modules)
   plugins: [
     // HMR Debug plugin - auto-enable HMR logging in browser
