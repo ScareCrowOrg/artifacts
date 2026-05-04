@@ -439,10 +439,11 @@ const urlRewritePlugin = {
           return next()
         }
 
-        // Match /artifacts/canonical/viewers/:viewerName (with optional path segments and query string)
-        // Pattern: /artifacts/canonical/viewers/{viewerName}[/arbitrary/path][?query]
-        // Examples: /artifacts/canonical/viewers/dynamic-workspace, /artifacts/canonical/viewers/dynamic-workspace/main.ts
-        const regex = /^\/artifacts\/canonical\/viewers\/([^/?#]+)(\/.*)?(\?.*)?$/
+        // Match /artifacts/canonical/viewers/:viewerName ONLY (root of viewer, not subpaths)
+        // Pattern: /artifacts/canonical/viewers/{viewerName}[?query]
+        // Examples: /artifacts/canonical/viewers/dynamic-workspace, /artifacts/canonical/viewers/dynamic-workspace?v=123
+        // NOT: /artifacts/canonical/viewers/dynamic-workspace/main.ts (let Vite serve files)
+        const regex = /^\/artifacts\/canonical\/viewers\/([^/?#]+)(\?.*)?$/
         console.error(`[url-rewrite] PATTERN: ${regex.source}`)
         console.error(`[url-rewrite] TESTING: ${url} against pattern`)
 
