@@ -439,10 +439,10 @@ const urlRewritePlugin = {
           return next()
         }
 
-        // Match /artifacts/viewers/:viewerName (with optional path segments and query string)
-        // Pattern: /artifacts/viewers/{viewerName}[/arbitrary/path][?query]
-        // Examples: /artifacts/viewers/dynamic-workspace, /artifacts/viewers/dynamic-workspace/main.ts
-        const regex = /^\/artifacts\/viewers\/([^/?#]+)(\/.*)?(\?.*)?$/
+        // Match /artifacts/canonical/viewers/:viewerName (with optional path segments and query string)
+        // Pattern: /artifacts/canonical/viewers/{viewerName}[/arbitrary/path][?query]
+        // Examples: /artifacts/canonical/viewers/dynamic-workspace, /artifacts/canonical/viewers/dynamic-workspace/main.ts
+        const regex = /^\/artifacts\/canonical\/viewers\/([^/?#]+)(\/.*)?(\?.*)?$/
         console.error(`[url-rewrite] PATTERN: ${regex.source}`)
         console.error(`[url-rewrite] TESTING: ${url} against pattern`)
 
