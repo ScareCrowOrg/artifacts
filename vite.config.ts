@@ -439,12 +439,10 @@ const urlRewritePlugin = {
           return next()
         }
 
-        // Match /canonical/viewers/:viewerName (with optional path segments and query string)
-        // NOTE: With base: '/artifacts/', Vite normalizes paths and removes the base prefix
-        // So the middleware sees /canonical/viewers/... not /artifacts/canonical/viewers/...
-        // Pattern: /canonical/viewers/{viewerName}[/arbitrary/path][?query]
-        // Examples: /canonical/viewers/dynamic-workspace, /canonical/viewers/dynamic-workspace/main.ts
-        const regex = /^\/canonical\/viewers\/([^/?#]+)(\/.*)?(\?.*)?$/
+        // Match /artifacts/canonical/viewers/:viewerName (with optional path segments and query string)
+        // Pattern: /artifacts/canonical/viewers/{viewerName}[/arbitrary/path][?query]
+        // Examples: /artifacts/canonical/viewers/dynamic-workspace, /artifacts/canonical/viewers/dynamic-workspace/main.ts
+        const regex = /^\/artifacts\/canonical\/viewers\/([^/?#]+)(\/.*)?(\?.*)?$/
         console.error(`[url-rewrite] PATTERN: ${regex.source}`)
         console.error(`[url-rewrite] TESTING: ${url} against pattern`)
 
@@ -571,75 +569,8 @@ export default defineConfig({
     // Viewer pre-compilation warmup
     viewerWarmupPlugin,
 
-    // URL rewrite middleware (SIMPLIFIED: viewer index.html handled by host shell)
-    {
-      ...urlRewritePlugin,
-      configureServer(server) {
-        console.error(`[url-rewrite] MIDDLEWARE INITIALIZED`)
-        console.error(`[url-rewrite] __dirname: "${__dirname}"`)
-
-        // Debug middleware: Capture headers for artifact paths
-        server.middlewares.use((req, res, next) => {
-          if (req.url.includes('/canonical') || req.url.includes('/sandbox') || req.url.includes('/runtime')) {
-            console.error(`[DEBUG-HEADERS] Request URL: ${req.url}`)
-            console.error(`[DEBUG-HEADERS] Host: ${req.headers.host}`)
-            console.error(`[DEBUG-HEADERS] X-Forwarded-Host: ${req.headers['x-forwarded-host'] || 'NOT SET'}`)
-            console.error(`[DEBUG-HEADERS] X-Forwarded-Proto: ${req.headers['x-forwarded-proto'] || 'NOT SET'}`)
-          }
-
-          // Intercept response to catch 403
-          const originalEnd = res.end
-          res.end = function(chunk, encoding, callback) {
-            if (req.url.includes('/canonical') || req.url.includes('/sandbox') || req.url.includes('/runtime')) {
-              if (res.statusCode === 403) {
-                console.error(`[DEBUG-403] 403 DETECTED for ${req.url}`)
-              }
-            }
-            return originalEnd.call(this, chunk, encoding, callback)
-          }
-
-          next()
-        })
-
-        server.middlewares.use((req, res, next) => {
-          const url = req.url || '/'
-
-          // CRITICAL: Allow WebSocket upgrades to pass through without rewrite
-          if (req.headers.upgrade === 'websocket' || req.headers.connection?.includes('Upgrade')) {
-            console.error(`[url-rewrite] WebSocket upgrade detected, passing through: ${url}`)
-            return next()
-          }
-
-          // Log artifact paths
-          if (url.includes('/canonical') || url.includes('/sandbox') || url.includes('/runtime') || url.includes('/artifacts')) {
-            console.error(`[url-rewrite] ARTIFACT PATH: ${url}`)
-          }
-
-          // NOTE: Viewer index.html serving moved to host shell
-          // No more need to intercept /viewers/:viewerName routes
-          // Requests now come directly as /canonical/viewers/{viewerName}/index.html
-
-          // Fallback: Handle root path (/)
-          if (url === '/' || url === '') {
-            console.error(`[url-rewrite] ROOT REQUEST: Serving fallback`)
-            const indexPath = path.join(__dirname, 'index.html')
-
-            if (fs.existsSync(indexPath)) {
-              try {
-                const html = fs.readFileSync(indexPath, 'utf-8')
-                res.setHeader('Content-Type', 'text/html; charset=utf-8')
-                res.end(html)
-                return
-              } catch (err) {
-                console.error(`[url-rewrite] Error reading index.html: ${err.message}`)
-              }
-            }
-          }
-
-          next()
-        })
-      },
-    },
+    // URL rewrite middleware (handles /artifacts/canonical/viewers/* and root /)
+    urlRewritePlugin,
 
     vue({
       include: [/\.vue$/],
