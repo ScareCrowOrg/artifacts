@@ -81,11 +81,18 @@ export async function loadCellTypeJson(url: string, depth: number = 0): Promise<
       // Convert #artifacts/ to a path that Vite can serve
       // In dev: #artifacts/... → http://localhost:5052/...
       // In prod: #artifacts/... is bundled, use import instead
-      const backendUrl = import.meta.env.VITE_SCARERUNNER_URL || 'http://localhost:5050'
       let fetchUrl = importPath.replace('#artifacts/', '/artifacts/')
 
+      // Use window.location.origin for relative paths (iframe context)
+      // This ensures we fetch from the same origin as the iframe, not from Backend
       if (!fetchUrl.startsWith('http')) {
-        fetchUrl = backendUrl.replace(/\/$/, '') + fetchUrl
+        if (typeof window !== 'undefined') {
+          fetchUrl = window.location.origin + fetchUrl
+        } else {
+          // Fallback for non-browser contexts (SSR, Node.js)
+          const backendUrl = import.meta.env.VITE_SCARERUNNER_URL || 'http://localhost:5050'
+          fetchUrl = backendUrl.replace(/\/$/, '') + fetchUrl
+        }
       }
 
       console.log('📡 [loadCellTypeJson] Fetching as text:', { fetchUrl })
