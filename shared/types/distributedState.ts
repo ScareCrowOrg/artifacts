@@ -138,8 +138,12 @@ export interface UseDistributedStateOptions<S extends Record<string, unknown> = 
    * Unique identifier that scopes this connection to a specific context.
    * Used as the WSS channel query-param value, e.g.:
    *   `/wss/events?channel=planet-chat:${contextId}`
+   *
+   * Accepts a plain string, a `Ref<string>`, or a `ComputedRef<string>`.
+   * When a reactive ref is provided, the composable will automatically
+   * reconnect whenever the value changes (e.g. room switching).
    */
-  contextId: string
+  contextId: string | { readonly value: string }
 
   /**
    * Pinia store instance (return value of the store factory call).

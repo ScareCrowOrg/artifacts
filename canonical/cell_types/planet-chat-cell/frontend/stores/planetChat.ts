@@ -54,8 +54,8 @@ export const usePlanetChatStore = defineStore('planetChat', () => {
   /** Per-sender typing indicators.  Keyed by senderId. */
   const typing = ref<Record<string, TypingIndicator>>({})
 
-  /** Active context / party identifier */
-  const partyId = ref<string | null>(null)
+  /** Active room identifier (e.g. 'global-planet-lobby' or a custom room name) */
+  const currentRoom = ref<string>('global-planet-lobby')
 
   /** Whether the initial snapshot has been received from the server */
   const isHydrated = ref(false)
@@ -96,7 +96,8 @@ export const usePlanetChatStore = defineStore('planetChat', () => {
 
   /**
    * Reset the store to its initial state.
-   * Called when the cell is unmounted or the partyId changes.
+   * Called when the room changes. Does not reset `currentRoom` — the caller
+   * is responsible for updating that ref before or after calling reset().
    */
   function reset(): void {
     messages.value = []
@@ -120,7 +121,7 @@ export const usePlanetChatStore = defineStore('planetChat', () => {
     // state
     messages,
     typing,
-    partyId,
+    currentRoom,
     isHydrated,
     // actions
     addMessage,

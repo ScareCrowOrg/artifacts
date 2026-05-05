@@ -180,7 +180,9 @@ async def _handle_send_message(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     messages.append(msg_obj)
     await _save_snapshot(context_id, messages)
 
-    # Publish JSON Patch (RFC 6902 append operation) to all connected clients
+    # Publish JSON Patch (RFC 6902 append operation) to all connected clients.
+    # path='/-' is correct: useDistributedState passes store[branch] (the array)
+    # as the patch target, so the root-append path '/-' maps to array.push().
     patch_envelope = {
         "type": "patch",
         "contextId": context_id,
@@ -189,7 +191,7 @@ async def _handle_send_message(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         "payload": {
             "branch": "messages",
             "operations": [
-                {"op": "add", "path": "/messages/-", "value": msg_obj}
+                {"op": "add", "path": "/-", "value": msg_obj}
             ],
         },
     }

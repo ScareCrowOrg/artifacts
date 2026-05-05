@@ -22,6 +22,7 @@
   },
   "default_initial_data": {
     "partyId": null,
+    "roomName": null,
     "maxMessages": 200
   },
   "allow_instance_override_refs": false,
@@ -29,7 +30,12 @@
     "partyId": {
       "type": ["string", "null"],
       "default": null,
-      "description": "Party/context ID for channel isolation. Null = auto-generated from cell instance ID."
+      "description": "Legacy party/context ID for channel isolation. Superseded by roomName."
+    },
+    "roomName": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Room name for channel isolation. Null = Global Lobby (global-planet-lobby)."
     },
     "maxMessages": {
       "type": "integer",

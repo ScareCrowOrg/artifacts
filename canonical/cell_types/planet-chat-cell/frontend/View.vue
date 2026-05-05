@@ -7,7 +7,7 @@
           Planet Chat
         </h3>
         <p class="text-xs text-text-secondary dark:text-text-secondary-dark mt-0.5">
-          {{ localContextId || 'No context' }}
+          {{ currentRoomId }}
         </p>
       </div>
       <!-- Connection indicator -->
@@ -29,6 +29,24 @@
       class="px-4 py-2 bg-error-light dark:bg-error-dark text-error-dark dark:text-error-light text-xs"
     >
       {{ connectionError }}
+    </div>
+
+    <!-- Room switcher -->
+    <div class="room-switch flex gap-2 px-4 py-2 border-b border-border dark:border-border-dark">
+      <input
+        v-model="roomInput"
+        type="text"
+        placeholder="Enter room name…"
+        class="flex-1 px-2 py-1 text-xs border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark rounded focus:outline-none focus:ring-1 focus:ring-primary"
+        @keydown.enter.prevent="handleSwitchRoom"
+      />
+      <button
+        :disabled="!roomInput.trim() || roomInput.trim() === currentRoomId"
+        class="px-3 py-1 text-xs bg-primary dark:bg-primary-hover text-white rounded hover:bg-primary-hover transition disabled:opacity-50 disabled:cursor-not-allowed"
+        @click="handleSwitchRoom"
+      >
+        Join
+      </button>
     </div>
 
     <!-- Message list -->
@@ -82,12 +100,12 @@
           v-model="draftMessage"
           type="text"
           placeholder="Type a message…"
-          :disabled="isSending || !localContextId"
+          :disabled="isSending || !currentRoomId"
           class="flex-1 px-3 py-2 text-sm border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark rounded focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           @keydown.enter.prevent="handleSend"
         />
         <button
-          :disabled="!draftMessage.trim() || isSending || !localContextId"
+          :disabled="!draftMessage.trim() || isSending || !currentRoomId"
           class="px-4 py-2 text-sm bg-primary dark:bg-primary-hover text-white rounded hover:bg-primary-hover transition disabled:opacity-50 disabled:cursor-not-allowed"
           @click="handleSend"
         >
@@ -103,7 +121,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { usePlanetChatStore } from './stores/planetChat'
 import { useDistributedState } from '@/composables/useDistributedState'
 import { usePlanetChat } from './composables/usePlanetChat'
@@ -119,6 +137,7 @@ interface CellObject {
   cellId?: string
   initial_data?: {
     partyId?: string | null
+    roomName?: string | null
     maxMessages?: number
   }
   data?: Record<string, unknown>
@@ -140,41 +159,42 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Buffer Local Pattern — Hydration
-// Resolve contextId synchronously from props so it is available immediately
-// when composables are called below.  A watch keeps it in sync for later
-// runtime updates (e.g. when partyId changes dynamically).
+// Buffer Local Pattern — Room resolution
+// Priority: explicit partyId prop > initial_data.roomName > initial_data.partyId
+// Default: 'global-planet-lobby' (Global Lobby, accessible without parameters)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const initialData = computed(() => props.cell?.initial_data ?? props.cell?.data ?? {})
 
-/** Effective cell ID — resolved synchronously from props */
-const effectiveCellId = computed(
-  () => props.cellId ?? props.cell?.id ?? props.cell?.cellId ?? 'unknown',
-)
-
 /**
- * The resolved context ID used for channel isolation.
- * Priority: explicit partyId prop > initial_data.partyId > cell instance id.
- *
- * Initialized synchronously so composables called at setup time receive the
- * correct value (not an empty string from a deferred onMounted call).
+ * Resolve the room identifier from props/initial_data.
+ * Falls back to 'global-planet-lobby' so the cell is always usable without
+ * explicit configuration.
  */
-function resolveContextId(): string {
+function resolveRoomId(): string {
   const raw =
     props.partyId ??
+    (initialData.value as { roomName?: string | null }).roomName ??
     (initialData.value as { partyId?: string | null }).partyId ??
-    effectiveCellId.value ??
-    ''
-  return (typeof raw === 'string' && raw.length > 0) ? raw : effectiveCellId.value
+    null
+  return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : 'global-planet-lobby'
 }
 
-const localContextId = ref<string>(resolveContextId())
+/** The active room name — updated by resolveRoomId() and switchRoom() */
+const currentRoomId = ref<string>(resolveRoomId())
+
+/** Full WSS channel identifier aligned with the backend's planet-chat:{roomId} convention */
+const channelContextId = computed(() => `planet-chat:${currentRoomId.value}`)
 
 // Keep in sync when props change at runtime
 watch(
   () => [props.partyId, props.cell?.initial_data],
-  () => { localContextId.value = resolveContextId() },
+  () => {
+    const resolved = resolveRoomId()
+    if (resolved !== currentRoomId.value) {
+      currentRoomId.value = resolved
+    }
+  },
   { deep: true },
 )
 
@@ -184,14 +204,21 @@ watch(
 
 const chatStore = usePlanetChatStore()
 
+// Initialize store.currentRoom with the resolved value and keep it in sync
+// whenever the room changes (either via props update or handleSwitchRoom).
+chatStore.currentRoom = currentRoomId.value
+watch(currentRoomId, (room) => {
+  chatStore.currentRoom = room
+})
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Distributed state — connect to Redis channel via WSS
-// localContextId is resolved synchronously above, so the correct value is
-// available when useDistributedState is called here at setup time.
+// channelContextId is a ComputedRef<string>; useDistributedState accepts it
+// and will automatically reconnect when the value changes (room switch).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { isConnected, connectionError } = useDistributedState({
-  contextId: localContextId.value,
+  contextId: channelContextId,
   store: chatStore as unknown as Record<string, unknown>,
   branch: 'messages',
   conflictStrategy: 'append',
@@ -199,11 +226,48 @@ const { isConnected, connectionError } = useDistributedState({
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Chat actions
+// usePlanetChat receives the bare roomId (no 'planet-chat:' prefix) because
+// the backend main.py adds that prefix internally when publishing to Redis.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { isSending, sendError, sendMessage } = usePlanetChat({
-  contextId: localContextId.value,
+const { isSending, sendError, sendMessage, requestSnapshot } = usePlanetChat({
+  roomId: currentRoomId,
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hydration — request snapshot on mount so existing messages are displayed
+// immediately, even if the WSS snapshot_request is not handled server-side.
+// ─────────────────────────────────────────────────────────────────────────────
+
+onMounted(async () => {
+  await requestSnapshot()
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Room switching
+// ─────────────────────────────────────────────────────────────────────────────
+
+const roomInput = ref('')
+
+async function handleSwitchRoom() {
+  const name = roomInput.value.trim()
+  if (!name || name === currentRoomId.value) return
+
+  // Reset local chat state before switching rooms
+  chatStore.reset()
+  currentRoomId.value = name
+  roomInput.value = ''
+
+  // Request the snapshot via HTTP POST for the new room.
+  // Note: updating currentRoomId triggers useDistributedState to reconnect
+  // (via its watch on resolvedContextId), but the new WebSocket connection
+  // is established asynchronously.  The POST snapshot request below is
+  // best-effort: if it races ahead of the new WS connection the snapshot
+  // message published by the backend will be missed; the WS onopen handler
+  // will fire a WebSocket-level snapshot_request shortly after, which the
+  // backend will also process.
+  await requestSnapshot()
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed views on the store

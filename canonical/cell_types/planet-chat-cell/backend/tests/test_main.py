@@ -90,7 +90,7 @@ class TestSendMessage:
         operations = payload["payload"]["operations"]
         assert len(operations) == 1
         assert operations[0]["op"] == "add"
-        assert operations[0]["path"] == "/messages/-"
+        assert operations[0]["path"] == "/-"
         assert operations[0]["value"]["text"] == "Hello world"
 
     async def test_send_message_updates_snapshot(self):

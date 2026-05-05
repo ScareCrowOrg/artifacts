@@ -27,7 +27,7 @@
  * - `'lww'`     Last-Write-Wins for scalar / single-value branches.
  */
 
-import { ref, watch, onMounted, onUnmounted, type WatchStopHandle } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted, type WatchStopHandle } from 'vue'
 import type {
   UseDistributedStateOptions,
   DistributedStateMessage,
@@ -163,7 +163,14 @@ export interface UseDistributedStateReturn {
 export function useDistributedState<S extends Record<string, unknown>>(
   options: UseDistributedStateOptions<S>,
 ): UseDistributedStateReturn {
-  const { contextId, store, branch, conflictStrategy = 'lww' } = options
+  const { store, branch, conflictStrategy = 'lww' } = options
+
+  // Resolve contextId to a computed so reactive refs (ComputedRef / Ref) are
+  // supported in addition to plain strings.  When the value changes (e.g. room
+  // switching) the composable automatically disconnects and reconnects.
+  const resolvedContextId = computed(() =>
+    typeof options.contextId === 'string' ? options.contextId : options.contextId.value,
+  )
 
   const isConnected = ref(false)
   const connectionError = ref<string | null>(null)
@@ -181,7 +188,7 @@ export function useDistributedState<S extends Record<string, unknown>>(
   function buildWssUrl(): string {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const host = window.location.host
-    return `${proto}://${host}/wss/events?channel=${encodeURIComponent(contextId)}`
+    return `${proto}://${host}/wss/events?channel=${encodeURIComponent(resolvedContextId.value)}`
   }
 
   function sendJson(msg: Record<string, unknown>): void {
@@ -193,7 +200,7 @@ export function useDistributedState<S extends Record<string, unknown>>(
   function sendSnapshotRequest(): void {
     const msg: DistributedStateMessage<undefined> = {
       type: 'snapshot_request',
-      contextId,
+      contextId: resolvedContextId.value,
       senderId: 'client',
       timestamp: Date.now(),
       payload: undefined,
@@ -211,7 +218,7 @@ export function useDistributedState<S extends Record<string, unknown>>(
 
     if (msg.type === 'heartbeat') return
 
-    if (msg.contextId && msg.contextId !== contextId) return
+    if (msg.contextId && msg.contextId !== resolvedContextId.value) return
 
     if (msg.type === 'snapshot') {
       const payload = msg.payload as DistributedSnapshotPayload<unknown>
@@ -254,7 +261,7 @@ export function useDistributedState<S extends Record<string, unknown>>(
 
         const patchMsg: DistributedStateMessage<DistributedPatchPayload> = {
           type: 'patch',
-          contextId,
+          contextId: resolvedContextId.value,
           senderId: 'client',
           timestamp: now,
           payload: {
@@ -286,7 +293,7 @@ export function useDistributedState<S extends Record<string, unknown>>(
       }
 
       ws.onerror = () => {
-        connectionError.value = `WebSocket error on channel: ${contextId}`
+        connectionError.value = `WebSocket error on channel: ${resolvedContextId.value}`
       }
 
       ws.onclose = () => {
@@ -322,6 +329,14 @@ export function useDistributedState<S extends Record<string, unknown>>(
 
   onUnmounted(() => {
     disconnect()
+  })
+
+  // Reconnect automatically when the resolved contextId changes (e.g. room switch)
+  watch(resolvedContextId, (newId, oldId) => {
+    if (newId !== oldId) {
+      disconnect()
+      connect()
+    }
   })
 
   return { isConnected, connectionError, disconnect }

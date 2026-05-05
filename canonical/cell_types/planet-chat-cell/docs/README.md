@@ -14,33 +14,86 @@ It enables:
 - **Distributed state synchronisation** — every connected client applies the same JSON Patch,
   so no browser needs to poll the server.
 - **Append-only conflict resolution** — two users writing simultaneously keep *both* messages.
+- **Global Lobby** — a shared default room accessible without any configuration.
+- **Dynamic Rooms** — isolated named rooms scoped by `roomName`.
 
 The cell is intentionally ephemeral in v1: history is stored in Redis with a 24-hour TTL
 and is not persisted to a relational database.
 
 ---
 
-## How `contextId` Works
+## Salas Dinâmicas
 
-The `contextId` is the string appended to the Redis channel name:
+Por padrão, a célula conecta ao **Lobby Global** (`global-planet-lobby`),
+onde todos os usuários veem o mesmo chat.
+
+### Criar uma Sala Específica
+
+Para isolar mensagens em uma sala temática, defina `roomName` em `initial_data`:
+
+```json
+{
+  "initial_data": {
+    "roomName": "dev-reuniao"
+  }
+}
+```
+
+Resultado: Mensagens em `dev-reuniao` não aparecem em `global-planet-lobby` e vice-versa.
+
+### Trocar de Sala em Runtime
+
+Use o **Room Switcher** (input no header da célula):
+
+1. Digite o nome da sala
+2. Pressione Enter ou clique **Join**
+3. O histórico da sala anterior é preservado no Redis (TTL 24 h)
+4. O WebSocket reconecta automaticamente no novo canal
+
+### Parâmetros
+
+| Parâmetro | Tipo | Padrão | Descrição |
+|-----------|------|--------|-----------|
+| `roomName` | `string \| null` | `null` | Nome da sala. `null` = Lobby Global (`global-planet-lobby`) |
+| `partyId` | `string \| null` | `null` | **Deprecated** — use `roomName`. Ainda funciona como fallback |
+| `maxMessages` | `integer` | `200` | Limite de mensagens mantidas no histórico local |
+
+### Como o Isolamento Funciona
 
 ```
-WebSocket channel:  /wss/events?channel=planet-chat:{contextId}
-Redis channel:      planet-chat:{contextId}
-Redis snapshot key: planet-chat:snapshot:{contextId}
+Sem parâmetros:
+  resolveRoomId() → 'global-planet-lobby'
+  channelContextId → 'planet-chat:global-planet-lobby'
+  WSS: /wss/events?channel=planet-chat:global-planet-lobby
+
+Com roomName = "dev-reuniao":
+  channelContextId → 'planet-chat:dev-reuniao'
+  Redis channel   → planet-chat:dev-reuniao   ← isolamento completo
 ```
 
-**Isolation guarantee**: two cells with different `contextId` values are completely
-independent — messages for `ctx-A` are never delivered to a client subscribed to `ctx-B`.
+**Segurança**: `roomName` é validado contra `^[\w:._-]{1,256}$` no backend antes de ser
+usado como chave Redis.  Nomes com caracteres inválidos são rejeitados com erro.
 
-`contextId` defaults to the cell instance's unique ID when `partyId` is not supplied.
-To share a chat room between multiple cells (e.g., a party of agents), pass the same
-`partyId` to every `planet-chat-cell` instance.
+---
+
+## How Rooms Map to Channels
+
+The `roomId` (bare room name, e.g. `global-planet-lobby`) maps to a Redis channel by
+prepending the `planet-chat:` prefix:
+
+```
+WebSocket channel:  /wss/events?channel=planet-chat:{roomId}
+Redis channel:      planet-chat:{roomId}
+Redis snapshot key: planet-chat:snapshot:{roomId}
+```
+
+**Isolation guarantee**: two cells with different `roomId` values are completely
+independent — messages for `room-A` are never delivered to a client subscribed to `room-B`.
 
 ### Safe characters
 
-`contextId` must match `^[\w:._-]{1,256}$` — alphanumeric characters, colons, dots,
-underscores, and hyphens.  The backend rejects any contextId that does not conform.
+`roomId` must match `^[\w:._-]{1,256}$` — alphanumeric characters, colons, dots,
+underscores, and hyphens.  The backend rejects any roomId that does not conform.
 
 ---
 
@@ -50,13 +103,14 @@ underscores, and hyphens.  The backend rejects any contextId that does not confo
 
 The message history is **append-only**.  Each message has a unique composite ID
 (`"{timestamp}-{senderId}"`) and a timestamp.  JSON Patch operations always use
-`{ op: "add", path: "/messages/-" }` (append to end of array).
+`{ op: "add", path: "/-" }` (append to end of array — path is relative to the array
+branch received by `applySimplePatch`).
 
 When two users send messages simultaneously:
 
 ```
-User A @ t=100: PUBLISH planet-chat:X { patch: [{ op: "add", path: "/messages/-", value: msgA }] }
-Agent @ t=101:  PUBLISH planet-chat:X { patch: [{ op: "add", path: "/messages/-", value: msgB }] }
+User A @ t=100: PUBLISH planet-chat:X { patch: [{ op: "add", path: "/-", value: msgA }] }
+Agent @ t=101:  PUBLISH planet-chat:X { patch: [{ op: "add", path: "/-", value: msgB }] }
 
 Result: messages = [...existing, msgA, msgB]   ← both preserved
 ```
@@ -72,13 +126,18 @@ ephemeral indicators.
 
 ## Integration with `useDistributedState`
 
-`View.vue` uses the shared `useDistributedState` composable:
+`View.vue` uses the shared `useDistributedState` composable with a reactive
+`ComputedRef<string>` so that room switches trigger automatic WebSocket reconnection:
 
 ```typescript
+import { computed } from 'vue'
 import { useDistributedState } from '@/composables/useDistributedState'
 
+// channelContextId updates reactively when currentRoomId changes
+const channelContextId = computed(() => `planet-chat:${currentRoomId.value}`)
+
 const { isConnected, connectionError } = useDistributedState({
-  contextId: `planet-chat:${partyId}`,
+  contextId: channelContextId,          // ComputedRef<string> — auto-reconnects on change
   store: usePlanetChatStore() as unknown as Record<string, unknown>,
   branch: 'messages',
   conflictStrategy: 'append',
@@ -93,6 +152,7 @@ const { isConnected, connectionError } = useDistributedState({
 | Receives `snapshot` | Replaces `store.messages` with `payload.state` |
 | Receives `patch` | Applies JSON Patch operations to `store.messages` |
 | Local `store.messages` changes | Diffs against last-known-remote and sends patch |
+| `contextId` ref changes | Disconnects old WS → connects new WS (room switch) |
 | Component unmounts | Closes WebSocket, cancels watchers |
 
 ---
@@ -110,8 +170,11 @@ async def execute_cell(cell_data: Dict[str, Any], user_id: Optional[str] = None)
 
 | Action | Input fields | Redis operations |
 |--------|-------------|-----------------|
-| `send_message` | `contextId`, `message`, `senderId?`, `timestamp?` | `GET` snapshot → `SET` snapshot → `PUBLISH` patch |
-| `snapshot_request` | `contextId`, `senderId?` | `GET` snapshot → `PUBLISH` snapshot |
+| `send_message` | `contextId` (roomId), `message`, `senderId?`, `timestamp?` | `GET` snapshot → `SET` snapshot → `PUBLISH` patch |
+| `snapshot_request` | `contextId` (roomId), `senderId?` | `GET` snapshot → `PUBLISH` snapshot |
+
+> **Note**: `contextId` in the POST body is the **bare room name** (e.g. `global-planet-lobby`),
+> not the prefixed channel name.  The backend adds the `planet-chat:` prefix internally.
 
 ---
 
@@ -119,17 +182,17 @@ async def execute_cell(cell_data: Dict[str, Any], user_id: Optional[str] = None)
 
 ```
 planet-chat-cell/
-├── type.json                         # Symlink → ../../notebook_item_types/planet-chat-cell.json
+├── type.json                         # Cell type manifest
 ├── backend/
 │   ├── scripts/main.py               # Redis PUBLISH handler
-│   └── tests/test_main.py            # Backend unit tests
+│   └── tests/test_main.py            # Backend unit tests (14 tests)
 ├── frontend/
 │   ├── PlanetChatCell.ts             # BaseCell implementation (MANDATORY)
 │   ├── View.vue                      # UI with Buffer Local Pattern + useDistributedState
 │   ├── composables/
 │   │   └── usePlanetChat.ts          # User-facing send/receive actions
 │   ├── stores/
-│   │   └── planetChat.ts             # Pinia store (messages, typing, partyId)
+│   │   └── planetChat.ts             # Pinia store (messages, typing, currentRoom)
 │   └── tests/
 │       └── PlanetChatCell.spec.ts    # Frontend unit tests
 └── docs/
@@ -142,10 +205,10 @@ planet-chat-cell/
 
 - WebSocket authentication is performed via the `sessionId` HttpOnly cookie **before**
   the HTTP 101 upgrade is accepted.  An invalid session receives `WS_1008_POLICY_VIOLATION`.
-- The `contextId` provides **logical** isolation, not cryptographic.  A user with a valid
-  session can subscribe to any channel by guessing the `contextId`.  For sensitive chats,
-  consider `contextId = hash(partyId + secret)` (planned for v2).
-- User input (`message` text) is JSON-serialised and never executed.
+- The `roomId`/`contextId` provides **logical** isolation, not cryptographic.  A user with a
+  valid session can subscribe to any channel by guessing the `roomId`.  For sensitive chats,
+  consider `roomId = hash(partyId + secret)` (planned for v2).
+- User input (`message` text, `roomName`) is JSON-serialised and never executed.
 
 ---
 
@@ -157,5 +220,5 @@ planet-chat-cell/
 | End-to-end message encryption | Low |
 | CRDT / Operational Transformation for collaborative editing | Low |
 | User presence indicators (who's online) | Medium |
-| Multiple concurrent channels per cell | Low |
+| Expose `onConnected` callback in `useDistributedState` to eliminate snapshot race on room switch | Low |
 | Message reactions / threads | Low |

@@ -23,15 +23,29 @@ import { ref } from 'vue'
 import { PlanetChatCell } from '../PlanetChatCell'
 
 export interface UsePlanetChatOptions {
-  /** Context / party identifier used to scope the Redis channel */
-  contextId: string
+  /**
+   * Room identifier (without the `planet-chat:` prefix).
+   * Used as the `contextId` in POST requests to execute-ephemeral.
+   * The backend will publish to `planet-chat:{roomId}`.
+   *
+   * Accepts a plain string or a `Ref<string>` so the composable stays
+   * in sync when the room changes (e.g. after switchRoom).
+   */
+  roomId: string | { readonly value: string }
 
   /** Current authenticated user / sender identifier */
   senderId?: string
 }
 
 export function usePlanetChat(options: UsePlanetChatOptions) {
-  const { contextId, senderId = 'anonymous' } = options
+  const { senderId = 'anonymous' } = options
+
+  /** Resolve the current roomId, supporting both plain strings and reactive refs.
+   * Functions that call this (`sendMessage`, `requestSnapshot`) use the value
+   * at call-time — they do not establish reactive dependencies. */
+  function getRoomId(): string {
+    return typeof options.roomId === 'string' ? options.roomId : options.roomId.value
+  }
 
   const cell = new PlanetChatCell()
 
@@ -57,7 +71,7 @@ export function usePlanetChat(options: UsePlanetChatOptions) {
     try {
       const result = await cell.execute({
         action: 'send_message',
-        contextId,
+        contextId: getRoomId(),
         message: trimmed,
         senderId,
         timestamp: Date.now(),
@@ -88,7 +102,7 @@ export function usePlanetChat(options: UsePlanetChatOptions) {
     try {
       await cell.execute({
         action: 'snapshot_request',
-        contextId,
+        contextId: getRoomId(),
         senderId,
       })
     } catch {
