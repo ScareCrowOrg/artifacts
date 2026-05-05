@@ -27,7 +27,7 @@ import { createLogger } from '@/utils/logger'
 // Import the i18n instance directly to access .global
 // In vue-i18n with legacy: false, useI18n() returns Composer (local instance)
 // To access .global (root instance), we need the exported i18n instance
-import i18nInstance from '../i18n'
+import i18nInstance from '@/i18n'
 import type { GridCell } from '../types'
 
 const log = createLogger('composable:cell-i18n-auto')
