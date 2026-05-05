@@ -15,22 +15,22 @@
     <button
       class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
       :disabled="isSaving"
-      :title="$t('layout.toolbar.saveLayoutTooltip')"
-      :aria-label="$t('layout.toolbar.saveLayoutTooltip')"
+      :title="t('layout.toolbar.saveLayoutTooltip')"
+      :aria-label="t('layout.toolbar.saveLayoutTooltip')"
       @click="$emit('save-layout')"
     >
       <span aria-hidden="true">💾</span>
-      <span class="hidden sm:inline">{{ $t('layout.toolbar.saveLayout') }}</span>
+      <span class="hidden sm:inline">{{ t('layout.toolbar.saveLayout') }}</span>
     </button>
 
     <!-- Unsaved changes indicator -->
     <span
       v-if="hasUnsaved"
       class="flex items-center gap-1 text-xs text-amber-500 dark:text-amber-400"
-      :title="$t('layout.toolbar.unsavedChangesTooltip')"
+      :title="t('layout.toolbar.unsavedChangesTooltip')"
     >
       <span>●</span>
-      <span class="hidden sm:inline">{{ $t('layout.toolbar.unsavedChanges') }}</span>
+      <span class="hidden sm:inline">{{ t('layout.toolbar.unsavedChanges') }}</span>
     </span>
 
     <!-- Spacer -->
@@ -41,7 +41,7 @@
       v-if="isSaving"
       class="text-xs text-gray-400 dark:text-gray-500 animate-pulse"
     >
-      {{ $t('layout.toolbar.saving') }}
+      {{ t('layout.toolbar.saving') }}
     </span>
   </div>
 </template>
@@ -54,6 +54,10 @@
  * Provides Save Layout button and an unsaved-changes indicator.
  * The LayoutBookSelector (load) is integrated into the FooterWindowManager.
  */
+
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 defineProps<{
   /** Whether there are unsaved grid changes */

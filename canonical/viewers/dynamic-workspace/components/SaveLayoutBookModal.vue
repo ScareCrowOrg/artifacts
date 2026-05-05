@@ -22,11 +22,11 @@
       <!-- Header -->
       <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
-          {{ $t('layout.saveLayoutBookModal.title') }}
+          {{ t('layout.saveLayoutBookModal.title') }}
         </h2>
         <button
           class="text-2xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-          :title="$t('layout.saveLayoutBookModal.close')"
+          :title="t('layout.saveLayoutBookModal.close')"
           @click="handleClose"
         >✕</button>
       </div>
@@ -36,7 +36,7 @@
         <!-- Name -->
         <div>
           <label for="layout-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {{ $t('layout.saveLayoutBookModal.nameLabel') }}
+            {{ t('layout.saveLayoutBookModal.nameLabel') }}
             <span class="text-red-500">*</span>
           </label>
           <input
@@ -46,7 +46,7 @@
             maxlength="100"
             class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             :class="{ 'border-red-500': nameError }"
-            :placeholder="$t('layout.saveLayoutBookModal.namePlaceholder')"
+            :placeholder="t('layout.saveLayoutBookModal.namePlaceholder')"
             @input="nameError = null"
           />
           <p v-if="nameError" class="text-sm text-red-500 mt-1">{{ nameError }}</p>
@@ -55,7 +55,7 @@
         <!-- Description -->
         <div>
           <label for="layout-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {{ $t('layout.saveLayoutBookModal.descriptionLabel') }}
+            {{ t('layout.saveLayoutBookModal.descriptionLabel') }}
           </label>
           <textarea
             id="layout-description"
@@ -63,17 +63,17 @@
             rows="3"
             maxlength="500"
             class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            :placeholder="$t('layout.saveLayoutBookModal.descriptionPlaceholder')"
+            :placeholder="t('layout.saveLayoutBookModal.descriptionPlaceholder')"
           />
         </div>
 
         <!-- Cell summary -->
         <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
           <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            {{ $t('layout.saveLayoutBookModal.cellPreviewTitle') }}
+            {{ t('layout.saveLayoutBookModal.cellPreviewTitle') }}
           </h3>
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            {{ $t('layout.saveLayoutBookModal.totalCells') }}: <strong>{{ cells.length }}</strong>
+            {{ t('layout.saveLayoutBookModal.totalCells') }}: <strong>{{ cells.length }}</strong>
           </p>
         </div>
       </div>
@@ -85,14 +85,14 @@
           :disabled="isSaving"
           @click="handleClose"
         >
-          {{ $t('layout.saveLayoutBookModal.cancel') }}
+          {{ t('layout.saveLayoutBookModal.cancel') }}
         </button>
         <button
           class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
           :disabled="isSaving || !formData.name.trim()"
           @click="handleSave"
         >
-          {{ isSaving ? $t('layout.saveLayoutBookModal.saving') : $t('layout.saveLayoutBookModal.save') }}
+          {{ isSaving ? t('layout.saveLayoutBookModal.saving') : t('layout.saveLayoutBookModal.save') }}
         </button>
       </div>
     </div>

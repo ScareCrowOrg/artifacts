@@ -23,17 +23,17 @@
             class="btn btn-primary flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
             :disabled="isMaxCellsReached"
             :title="isMaxCellsReached
-              ? $t('layout.footerWindowManager.maxCellsReached', { max: maxCells })
-              : $t('layout.footerWindowManager.addNewCell')"
+              ? t('layout.footerWindowManager.maxCellsReached', { max: maxCells })
+              : t('layout.footerWindowManager.addNewCell')"
             @click="handleAddCell"
           >
             <span class="text-base">➕</span>
-            <span class="hidden sm:inline">{{ $t('layout.footerWindowManager.addCell') }}</span>
+            <span class="hidden sm:inline">{{ t('layout.footerWindowManager.addCell') }}</span>
           </button>
 
           <!-- Cell count -->
           <span class="text-xs text-gray-400 dark:text-gray-500">
-            {{ $t('layout.footerWindowManager.cellsCount', { count: cellCount, max: maxCells }) }}
+            {{ t('layout.footerWindowManager.cellsCount', { count: cellCount, max: maxCells }) }}
           </span>
         </div>
 
@@ -43,7 +43,7 @@
             v-if="cellTabs.length === 0"
             class="text-sm text-gray-400 dark:text-gray-500 italic"
           >
-            {{ $t('layout.footerWindowManager.noCellsOpen') }}
+            {{ t('layout.footerWindowManager.noCellsOpen') }}
           </div>
           <div
             v-for="tab in cellTabs"
@@ -54,7 +54,7 @@
             <span class="truncate max-w-[100px]">{{ tab.name }}</span>
             <button
               class="ml-1 text-xs opacity-60 hover:opacity-100 transition-opacity"
-              :title="$t('layout.footerWindowManager.closeCell', { title: tab.name })"
+              :title="t('layout.footerWindowManager.closeCell', { title: tab.name })"
               @click="$emit('close-cell', tab.cellId)"
             >✕</button>
           </div>

@@ -30,12 +30,12 @@
       <!-- Modal Header -->
       <div class="modal-header px-6 py-4 border-b border-border dark:border-gray-700 flex items-center justify-between">
         <h2 id="add-cell-modal-title" class="text-xl font-bold text-text-primary dark:text-white">
-          ➕ {{ $t('layout.addCellModal.title') }}
+          ➕ {{ t('layout.addCellModal.title') }}
         </h2>
         <button
           class="btn-icon hover:bg-red-500 hover:text-white transition-colors rounded p-1"
-          :title="$t('layout.addCellModal.close')"
-          :aria-label="$t('layout.addCellModal.closeModal')"
+          :title="t('layout.addCellModal.close')"
+          :aria-label="t('layout.addCellModal.closeModal')"
           @click="handleClose"
         >
           <span class="text-lg">✕</span>
@@ -49,7 +49,7 @@
           <div class="text-center">
             <div class="spinner mb-3"></div>
             <p class="text-sm text-gray-500 dark:text-gray-400">
-              {{ $t('layout.addCellModal.loadingCellTypes') }}
+              {{ t('layout.addCellModal.loadingCellTypes') }}
             </p>
           </div>
         </div>
@@ -57,10 +57,10 @@
         <!-- Error State -->
         <div v-else-if="error" class="text-center py-12">
           <span class="text-5xl mb-4 block">⚠️</span>
-          <p class="text-red-500 font-semibold mb-2">{{ $t('layout.addCellModal.failedToLoad') }}</p>
+          <p class="text-red-500 font-semibold mb-2">{{ t('layout.addCellModal.failedToLoad') }}</p>
           <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{ error }}</p>
           <button class="btn btn-primary" @click="$emit('retry')">
-            {{ $t('layout.addCellModal.retry') }}
+            {{ t('layout.addCellModal.retry') }}
           </button>
         </div>
 
@@ -72,15 +72,15 @@
               v-model="searchQuery"
               type="text"
               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              :placeholder="$t('layout.addCellModal.searchPlaceholder')"
-              :aria-label="$t('layout.addCellModal.searchAriaLabel')"
+              :placeholder="t('layout.addCellModal.searchPlaceholder')"
+              :aria-label="t('layout.addCellModal.searchAriaLabel')"
             />
           </div>
 
           <!-- No Results -->
           <div v-if="filteredCellTypes.length === 0" class="text-center py-8">
             <p class="text-gray-500 dark:text-gray-400">
-              {{ $t('layout.addCellModal.noResults', { query: searchQuery }) }}
+              {{ t('layout.addCellModal.noResults', { query: searchQuery }) }}
             </p>
           </div>
 
@@ -111,7 +111,7 @@
                     {{ cellType.name }}
                   </h3>
                   <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                    {{ cellType.description || $t('layout.addCellModal.noDescription') }}
+                    {{ cellType.description || t('layout.addCellModal.noDescription') }}
                   </p>
                   <div class="flex items-center gap-2 mt-2">
                     <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
@@ -137,10 +137,10 @@
       <div class="modal-footer px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <div class="text-sm text-gray-500 dark:text-gray-400">
           <span v-if="selectedCellType">
-            {{ $t('layout.addCellModal.selected', { name: selectedCellType.name }) }}
+            {{ t('layout.addCellModal.selected', { name: selectedCellType.name }) }}
           </span>
           <span v-else>
-            {{ $t('layout.addCellModal.selectCellType') }}
+            {{ t('layout.addCellModal.selectCellType') }}
           </span>
         </div>
         <div class="flex gap-2">
@@ -148,14 +148,14 @@
             class="btn btn-secondary px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             @click="handleClose"
           >
-            {{ $t('layout.addCellModal.cancel') }}
+            {{ t('layout.addCellModal.cancel') }}
           </button>
           <button
             class="btn btn-primary px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             :disabled="!selectedCellType"
             @click="handleAddCell"
           >
-            {{ $t('layout.addCellModal.addCell') }}
+            {{ t('layout.addCellModal.addCell') }}
           </button>
         </div>
       </div>

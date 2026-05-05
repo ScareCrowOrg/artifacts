@@ -16,11 +16,11 @@
     <button
       ref="triggerButton"
       class="btn btn-sm flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm transition-colors"
-      :title="$t('layout.layoutBookSelector.tooltip')"
+      :title="t('layout.layoutBookSelector.tooltip')"
       @click="toggleDropdown"
     >
       <span class="text-base">📚</span>
-      <span class="hidden sm:inline">{{ $t('layout.layoutBookSelector.selectBook') }}</span>
+      <span class="hidden sm:inline">{{ t('layout.layoutBookSelector.selectBook') }}</span>
       <span class="text-xs">{{ isOpen ? '▲' : '▼' }}</span>
     </button>
 
@@ -37,14 +37,14 @@
           @click="handleSaveNew"
         >
           <span>💾</span>
-          <span>{{ $t('layout.layoutBookSelector.saveCurrentLayout') }}</span>
+          <span>{{ t('layout.layoutBookSelector.saveCurrentLayout') }}</span>
         </button>
       </div>
 
       <!-- Loading -->
       <div v-if="isLoading" class="p-4 text-center text-gray-400">
         <div class="text-2xl mb-2 animate-spin inline-block">⏳</div>
-        <div class="text-sm">{{ $t('layout.layoutBookSelector.loading') }}</div>
+        <div class="text-sm">{{ t('layout.layoutBookSelector.loading') }}</div>
       </div>
 
       <!-- Content -->
@@ -52,7 +52,7 @@
         <!-- No layouts -->
         <div v-if="layouts.length === 0" class="p-4 text-center text-gray-400">
           <div class="text-2xl mb-2">📚</div>
-          <div class="text-sm">{{ $t('layout.layoutBookSelector.noBooksYet') }}</div>
+          <div class="text-sm">{{ t('layout.layoutBookSelector.noBooksYet') }}</div>
         </div>
 
         <!-- Layout list -->
@@ -72,7 +72,7 @@
                   {{ layout.description }}
                 </p>
                 <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                  {{ layout.cells?.length ?? 0 }} {{ $t('layout.layoutBookSelector.cells') }}
+                  {{ layout.cells?.length ?? 0 }} {{ t('layout.layoutBookSelector.cells') }}
                 </p>
               </div>
             </div>
@@ -82,7 +82,7 @@
         <!-- Footer -->
         <div class="px-4 py-2 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800">
           <p class="text-xs text-gray-400 text-center">
-            {{ $t('layout.layoutBookSelector.totalBooks', { count: layouts.length }) }}
+            {{ t('layout.layoutBookSelector.totalBooks', { count: layouts.length }) }}
           </p>
         </div>
       </div>

@@ -47,8 +47,8 @@
         <!-- Minimize -->
         <button
           class="btn-icon"
-          :title="$t('layout.cellWrapper.minimize')"
-          :aria-label="$t('layout.cellWrapper.minimizeCell')"
+          :title="t('layout.cellWrapper.minimize')"
+          :aria-label="t('layout.cellWrapper.minimizeCell')"
           @click.stop="$emit('minimize', cell.cellId)"
         >
           <span class="text-sm">−</span>
@@ -57,8 +57,8 @@
         <!-- Maximize / Restore -->
         <button
           class="btn-icon"
-          :title="cell.isMaximized ? $t('layout.cellWrapper.restore') : $t('layout.cellWrapper.maximize')"
-          :aria-label="cell.isMaximized ? $t('layout.cellWrapper.restoreCell') : $t('layout.cellWrapper.maximizeCell')"
+          :title="cell.isMaximized ? t('layout.cellWrapper.restore') : t('layout.cellWrapper.maximize')"
+          :aria-label="cell.isMaximized ? t('layout.cellWrapper.restoreCell') : t('layout.cellWrapper.maximizeCell')"
           @click.stop="$emit('maximize', cell.cellId)"
         >
           <span class="text-sm">{{ cell.isMaximized ? '❐' : '□' }}</span>
@@ -67,8 +67,8 @@
         <!-- Close -->
         <button
           class="btn-icon hover:bg-red-500 hover:text-white transition-colors"
-          :title="$t('layout.cellWrapper.close')"
-          :aria-label="$t('layout.cellWrapper.closeCell')"
+          :title="t('layout.cellWrapper.close')"
+          :aria-label="t('layout.cellWrapper.closeCell')"
           @click.stop="$emit('remove', cell.cellId)"
         >
           <span class="text-sm">✕</span>
@@ -83,7 +83,7 @@
         <div class="text-center">
           <div class="spinner mb-2"></div>
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            {{ $t('layout.cellWrapper.loading', { title: cell.cellTypeName }) }}
+            {{ t('layout.cellWrapper.loading', { title: cell.cellTypeName }) }}
           </p>
         </div>
       </div>
@@ -92,7 +92,7 @@
       <div v-else-if="cell.error" class="flex items-center justify-center h-full py-8">
         <div class="text-center text-red-500">
           <span class="text-4xl mb-2 block">⚠️</span>
-          <p class="font-semibold">{{ $t('layout.cellWrapper.errorLoading') }}</p>
+          <p class="font-semibold">{{ t('layout.cellWrapper.errorLoading') }}</p>
           <p class="text-sm mt-1 text-gray-500">{{ cell.error }}</p>
         </div>
       </div>
@@ -115,7 +115,7 @@
       <span>{{ cellIcon }}</span>
       <span class="font-medium">{{ cell.cellType?.name || cell.cellTypeName }}</span>
       <span class="text-blue-500 dark:text-blue-400">
-        {{ $t('layout.cellWrapper.minimizedClickToRestore') }}
+        {{ t('layout.cellWrapper.minimizedClickToRestore') }}
       </span>
     </div>
   </div>

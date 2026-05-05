@@ -15,13 +15,13 @@
     >
       <div class="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-xl shadow max-w-lg">
         <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-4">
-          🚀 {{ $t('layout.dynamicWorkspace.title') }}
+          🚀 {{ t('layout.dynamicWorkspace.title') }}
         </h2>
         <p class="text-gray-500 dark:text-gray-400 mb-2">
-          {{ $t('layout.dynamicWorkspace.welcomeMessage') }}
+          {{ t('layout.dynamicWorkspace.welcomeMessage') }}
         </p>
         <p class="text-sm text-gray-400 dark:text-gray-500">
-          {{ $t('layout.dynamicWorkspace.clickAddCell', { button: '➕' }) }}
+          {{ t('layout.dynamicWorkspace.clickAddCell', { button: '➕' }) }}
         </p>
       </div>
     </div>
@@ -81,10 +81,13 @@
  */
 
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { GridLayout, GridItem } from 'vue3-grid-layout-next'
 import CellItem from './CellItem.vue'
 import { useGridLayout } from '../composables/useGridLayout'
 import type { GridCell, GridPosition } from '../types'
+
+const { t } = useI18n()
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 const props = defineProps<{
