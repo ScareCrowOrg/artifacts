@@ -85,7 +85,7 @@ class TestSendMessage:
 
         payload = json.loads(raw_payload)
         assert payload["type"] == "patch"
-        assert payload["contextId"] == "room-abc"
+        assert payload["contextId"] == "planet-chat:room-abc"
         assert payload["payload"]["branch"] == "messages"
         operations = payload["payload"]["operations"]
         assert len(operations) == 1
@@ -201,7 +201,7 @@ class TestSnapshotRequest:
 
         payload = json.loads(raw_payload)
         assert payload["type"] == "snapshot"
-        assert payload["contextId"] == "room-snap"
+        assert payload["contextId"] == "planet-chat:room-snap"
         assert len(payload["payload"]["state"]) == 2
 
     async def test_snapshot_request_empty_channel(self):

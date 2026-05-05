@@ -183,9 +183,12 @@ async def _handle_send_message(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     # Publish JSON Patch (RFC 6902 append operation) to all connected clients.
     # path='/-' is correct: useDistributedState passes store[branch] (the array)
     # as the patch target, so the root-append path '/-' maps to array.push().
+    # contextId in the envelope MUST match the full channel name so that the
+    # frontend's resolvedContextId filter (msg.contextId === resolvedContextId.value)
+    # passes. resolvedContextId.value = `planet-chat:{roomId}` (prefixed).
     patch_envelope = {
         "type": "patch",
-        "contextId": context_id,
+        "contextId": _channel_name(context_id),
         "senderId": sender_id,
         "timestamp": timestamp,
         "payload": {
@@ -201,6 +204,15 @@ async def _handle_send_message(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         "[planet-chat] send_message: contextId=%s sender=%s",
         context_id,
         sender_id,
+    )
+    # [DEBUG planet-chat B1] Log the full patch envelope and channel name for comparison
+    logger.info(
+        "[planet-chat][DEBUG] Published to channel='%s' with envelope.contextId='%s'. "
+        "Frontend resolvedContextId = 'planet-chat:%s'. MATCH=%s",
+        _channel_name(context_id),
+        patch_envelope["contextId"],
+        context_id,
+        patch_envelope["contextId"] == f"planet-chat:{context_id}",
     )
 
     return {
@@ -234,7 +246,7 @@ async def _handle_snapshot_request(cell_data: Dict[str, Any]) -> Dict[str, Any]:
 
     snapshot_envelope = {
         "type": "snapshot",
-        "contextId": context_id,
+        "contextId": _channel_name(context_id),
         "senderId": sender_id,
         "timestamp": timestamp,
         "payload": {
@@ -247,6 +259,14 @@ async def _handle_snapshot_request(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         "[planet-chat] snapshot_request: contextId=%s messages=%d",
         context_id,
         len(messages),
+    )
+    # [DEBUG planet-chat B1] Log snapshot envelope contextId vs channel name
+    logger.info(
+        "[planet-chat][DEBUG] Snapshot published to channel='%s' with envelope.contextId='%s'. "
+        "MATCH=%s",
+        _channel_name(context_id),
+        snapshot_envelope["contextId"],
+        snapshot_envelope["contextId"] == f"planet-chat:{context_id}",
     )
 
     return {
@@ -284,6 +304,14 @@ async def execute_cell(
         cell_data = {**cell_data, "senderId": user_id}
 
     logger.debug("[planet-chat] execute_cell action=%s user_id=%s", action, user_id)
+    # [DEBUG planet-chat B2] Log effective senderId after possible user_id injection
+    logger.info(
+        "[planet-chat][DEBUG] execute_cell — action=%s user_id=%s cell_data.senderId=%s injection_applied=%s",
+        action,
+        user_id,
+        cell_data.get("senderId"),
+        bool(user_id and not cell_data.get("senderId")),
+    )
 
     if action == "send_message":
         return await _handle_send_message(cell_data)

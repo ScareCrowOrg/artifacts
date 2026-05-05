@@ -68,6 +68,9 @@ export function usePlanetChat(options: UsePlanetChatOptions) {
     isSending.value = true
     sendError.value = null
 
+    // [DEBUG planet-chat B2] Log senderId and contextId at send time
+    console.log('[usePlanetChat][DEBUG] sendMessage — roomId:', getRoomId(), 'senderId:', senderId, 'text length:', trimmed.length)
+
     try {
       const result = await cell.execute({
         action: 'send_message',

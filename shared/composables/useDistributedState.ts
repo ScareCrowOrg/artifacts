@@ -218,11 +218,32 @@ export function useDistributedState<S extends Record<string, unknown>>(
 
     if (msg.type === 'heartbeat') return
 
-    if (msg.contextId && msg.contextId !== resolvedContextId.value) return
+    // [DEBUG planet-chat B1] Log every non-heartbeat message received and the contextId comparison
+    console.log(
+      '[useDistributedState][DEBUG] handleMessage received',
+      {
+        msgType: msg.type,
+        msgContextId: msg.contextId,
+        resolvedContextId: resolvedContextId.value,
+        contextIdMatch: msg.contextId === resolvedContextId.value,
+        rawPreview: raw.slice(0, 200),
+      },
+    )
+
+    if (msg.contextId && msg.contextId !== resolvedContextId.value) {
+      // [DEBUG planet-chat B1] Explicit log when message is discarded due to contextId mismatch
+      console.warn(
+        '[useDistributedState][DEBUG] ⚠️ Message DISCARDED — contextId mismatch',
+        { msgContextId: msg.contextId, expected: resolvedContextId.value },
+      )
+      return
+    }
 
     if (msg.type === 'snapshot') {
       const payload = msg.payload as DistributedSnapshotPayload<unknown>
       if (payload && 'state' in payload) {
+        // [DEBUG planet-chat B1] Log snapshot application
+        console.log('[useDistributedState][DEBUG] Applying snapshot to store branch', branch, 'items:', Array.isArray(payload.state) ? (payload.state as unknown[]).length : payload.state)
         lastKnownRemote = payload.state
         ;(store as Record<string, unknown>)[branch] = payload.state
       }
@@ -237,7 +258,11 @@ export function useDistributedState<S extends Record<string, unknown>>(
       if (conflictStrategy === 'lww' && msg.timestamp < lastSentTimestamp) return
 
       const currentBranchValue = (store as Record<string, unknown>)[branch]
+      // [DEBUG planet-chat B1] Log patch application
+      console.log('[useDistributedState][DEBUG] Applying patch to branch', branch, 'ops:', JSON.stringify(payload.operations))
       const patched = applySimplePatch(currentBranchValue, payload.operations)
+      // [DEBUG planet-chat B1] Log result after patch
+      console.log('[useDistributedState][DEBUG] After patch — branch', branch, 'length:', Array.isArray(patched) ? (patched as unknown[]).length : patched)
 
       lastKnownRemote = patched
       ;(store as Record<string, unknown>)[branch] = patched
@@ -279,7 +304,10 @@ export function useDistributedState<S extends Record<string, unknown>>(
 
   function connect(): void {
     try {
-      ws = new WebSocket(buildWssUrl())
+      // [DEBUG planet-chat B1] Log WSS URL and resolved contextId before connecting
+      const url = buildWssUrl()
+      console.log('[useDistributedState][DEBUG] connect() — resolvedContextId:', resolvedContextId.value, 'wssUrl:', url)
+      ws = new WebSocket(url)
 
       ws.onopen = () => {
         isConnected.value = true
