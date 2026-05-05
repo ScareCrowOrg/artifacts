@@ -1398,6 +1398,27 @@
       "errorNameRequired": "Name is required",
       "errorNameTooLong": "Name cannot exceed 100 characters",
       "errorSaveFailed": "Failed to save layout book"
+    },
+    "toolbar": {
+      "saveLayout": "Save Layout",
+      "saveLayoutTooltip": "Save current workspace layout",
+      "unsavedChanges": "Unsaved changes",
+      "unsavedChangesTooltip": "You have unsaved workspace changes",
+      "saving": "Saving…"
+    },
+    "persistence": {
+      "saveSuccess": "Layout saved successfully",
+      "saveError": "Failed to save layout",
+      "loadSuccess": "Layout loaded successfully",
+      "loadError": "Failed to load layout",
+      "listError": "Failed to load saved layouts",
+      "deleteSuccess": "Layout deleted",
+      "deleteError": "Failed to delete layout",
+      "autoSaveEnabled": "Auto-save enabled",
+      "autoSaveDisabled": "Auto-save disabled",
+      "hydratingCells": "Restoring cells…",
+      "hydrationError": "Failed to restore cell: {type}",
+      "noLayouts": "No saved layouts"
     }
   },
   "fragmentsManager": {

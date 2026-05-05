@@ -1398,6 +1398,27 @@
       "errorNameRequired": "Nome é obrigatório",
       "errorNameTooLong": "Nome não pode exceder 100 caracteres",
       "errorSaveFailed": "Falha ao salvar layout book"
+    },
+    "toolbar": {
+      "saveLayout": "Salvar Layout",
+      "saveLayoutTooltip": "Salvar layout do workspace atual",
+      "unsavedChanges": "Alterações não salvas",
+      "unsavedChangesTooltip": "Você tem alterações não salvas no workspace",
+      "saving": "Salvando…"
+    },
+    "persistence": {
+      "saveSuccess": "Layout salvo com sucesso",
+      "saveError": "Falha ao salvar layout",
+      "loadSuccess": "Layout carregado com sucesso",
+      "loadError": "Falha ao carregar layout",
+      "listError": "Falha ao carregar layouts salvos",
+      "deleteSuccess": "Layout deletado",
+      "deleteError": "Falha ao deletar layout",
+      "autoSaveEnabled": "Auto-save ativado",
+      "autoSaveDisabled": "Auto-save desativado",
+      "hydratingCells": "Restaurando células…",
+      "hydrationError": "Falha ao restaurar célula: {type}",
+      "noLayouts": "Nenhum layout salvo"
     }
   },
   "fragmentsManager": {

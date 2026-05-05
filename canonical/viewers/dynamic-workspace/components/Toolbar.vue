@@ -56,8 +56,32 @@
  */
 
 import { useI18n } from 'vue-i18n'
+import { onMounted } from 'vue'
 
-const { t } = useI18n()
+const { t, locale, messages } = useI18n()
+
+// --- DEBUG OBSERVABILITY: i18n key loading ---
+// Verifica se as chaves layout.toolbar estão presentes no locale ativo.
+// Remover após confirmação do fix (ver docs/debug_iterations/toolbar-i18n-missing-keys/ITERATION_1/).
+onMounted(() => {
+  if (!import.meta.env.DEV) return
+
+  const activeLocale = locale.value
+  const msgs = messages.value as Record<string, unknown>
+  const activeMessages = msgs[activeLocale] as Record<string, unknown> | undefined
+  const layoutSection = activeMessages?.['layout'] as Record<string, unknown> | undefined
+  const toolbarSection = layoutSection?.['toolbar'] as Record<string, unknown> | undefined
+
+  console.group('[Toolbar][i18n-debug] Translation key diagnostic')
+  console.log('Active locale:', activeLocale)
+  console.log('layout section keys:', layoutSection ? Object.keys(layoutSection) : '⚠️ layout not found')
+  console.log('layout.toolbar section:', toolbarSection ?? '⚠️ toolbar NOT FOUND — chave ausente no locale ativo!')
+  console.log('layout.toolbar.saveLayout:', toolbarSection?.['saveLayout'] ?? '⚠️ MISSING')
+  console.log('layout.toolbar.saveLayoutTooltip:', toolbarSection?.['saveLayoutTooltip'] ?? '⚠️ MISSING')
+  console.log('layout.toolbar.unsavedChanges:', toolbarSection?.['unsavedChanges'] ?? '⚠️ MISSING')
+  console.log('layout.toolbar.saving:', toolbarSection?.['saving'] ?? '⚠️ MISSING')
+  console.groupEnd()
+})
 
 defineProps<{
   /** Whether there are unsaved grid changes */
