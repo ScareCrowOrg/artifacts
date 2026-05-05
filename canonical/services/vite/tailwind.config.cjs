@@ -13,8 +13,15 @@
 module.exports = {
   content: [
     './index.html',
-    // Absolute path to bypass PostCSS resolution ambiguity from root change
-    '/app/artifacts/**/*.{vue,js,ts,jsx,tsx}',
+    // With root=/app/artifacts, content paths are relative to vite.config root
+    // Scans specific artifact types, not all files (performance optimization)
+    './canonical/cell_types/**/*.{vue,jsx,tsx}',
+    './canonical/viewers/**/*.{vue,jsx,tsx}',
+    './canonical/book_types/**/*.{vue,jsx,tsx}',
+    './sandbox/cell_types/**/*.{vue,jsx,tsx}',
+    './sandbox/viewers/**/*.{vue,jsx,tsx}',
+    './runtime/**/*.{vue,jsx,tsx}',
+    './shared/**/*.{vue,jsx,tsx}',
   ],
   theme: {
     extend: {
