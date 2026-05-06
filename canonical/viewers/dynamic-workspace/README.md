@@ -32,25 +32,33 @@ It is loaded by `ViewerShell.vue` (Cockpit) as an isolated micro-frontend contex
 Cockpit-Vue (shell host)
   └── ViewerShell.vue
         └── <iframe src="http://localhost:5052/viewers/dynamic-workspace">
-              └── App.vue  ← Phase 2 orchestration
+              └── App.vue  ← Phase 4 orchestration
                     ├── useWorkspaceHandshake  (Phase 1)
                     ├── useGridLayout          (Phase 2 — grid state)
                     ├── useCellViewProvider    (Phase 2 — BaseCell + ViewSpec)
                     ├── GridContainer          (Phase 2 — CSS grid)
                     ├── CellItem               (Phase 2 — cell wrapper + toolbar)
                     ├── FooterWindowManager    (Phase 2 — add cell button)
-                    └── AddCellModal           (Phase 2 — cell type picker)
+                    └── artifacts-explorer-cell (Phase 4 — cell type picker, replaces AddCellModal)
 ```
 
-## Phase 2 Data Flow
+## Phase 4 Data Flow
 
 ```
-User clicks "Add Cell"
+User clicks "Add Cell" (➕)
   ↓
-AddCellModal opens (dark mode + i18n, adapted from v1)
-  ├── Shows available cell types (from HybridDatabase/canonical JSONs)
-  └── User selects type
+FooterWindowManager emits 'show-artifacts-explorer'
+  ↓
+App.handleShowArtifactsExplorer()
+  ├── Guard: if explorer already in grid → skip
+  └── handleCellTypeSelected(explorerType)
 
+artifacts-explorer-cell renders (picker mode)
+  ├── Loads cell types via explorerStore.loadCellTypes()
+  └── User clicks a cell type card → explorerStore.selectCellType(cellType)
+
+App.vue watcher (explorerStore.selectedCellType)
+  ↓
 App.handleCellTypeSelected(cellType)
   ├── addCell() → GridCell in loading state
   ├── instantiateCellByType() → dynamic import + new CellClass()

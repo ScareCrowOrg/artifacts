@@ -23,7 +23,7 @@ export interface CellTypeDefinition {
   description: string
   /** Semantic version */
   version: string
-  /** Category for grouping in AddCellModal */
+  /** Category for grouping in artifacts-explorer-cell picker */
   category?: string
   /** Emoji or URL icon */
   icon?: string

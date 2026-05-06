@@ -1,0 +1,30 @@
+{
+  "id": "artifacts-explorer-cell",
+  "name": "artifacts-explorer-cell",
+  "description": "Artifacts Explorer — browse and add cell types to the dynamic workspace. In picker mode, renders a searchable grid of available cell types.",
+  "version": "1.0.0",
+  "category": "workspace",
+  "icon": "🔍",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "basecell": ["frontend/ArtifactsExplorerCell.ts"],
+    "docs": ["README.md"]
+  },
+  "default_initial_data": {
+    "mode": "picker"
+  },
+  "_discovery": {
+    "labels": ["#workspace", "#explorer", "#picker"],
+    "describe": "Ephemeral workspace utility cell. In picker mode, shows a searchable grid of all available cell types so the user can add them to the dynamic workspace.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [],
+    "tags": ["workspace", "explorer", "picker", "utility"],
+    "use_cases": [
+      "Browse and add new cell types to the dynamic workspace"
+    ]
+  },
+  "kind": "cell",
+  "created_at": "2026-05-06T00:00:00",
+  "updated_at": "2026-05-06T00:00:00"
+}

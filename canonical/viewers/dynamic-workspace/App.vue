@@ -1,17 +1,19 @@
 <!--
   App.vue — DynamicWorkspace v2
-  Phase 3: Layout Persistence with HybridDatabase Integration
+  Phase 4: AddCellModal → artifacts-explorer-cell migration
 
   Orchestrates:
   1. Cockpit ↔ Runner handshake (Phase 1, preserved)
-  2. Cell type loading via useCellViewProvider
+  2. Cell instantiation via useCellViewProvider
   3. Grid state via useGridLayout
   4. Layout persistence via usePersistenceManager (Phase 3)
   5. Auto-save via useAutoSave (Phase 3)
-  6. All UI components (Toolbar, AddCellModal, GridContainer, FooterWindowManager, …)
+  6. All UI components (Toolbar, GridContainer, FooterWindowManager, …)
+  7. artifacts-explorer-cell integration via useArtifactsExplorerStore (Phase 4)
 
-  Flow: Handshake → Ready → User adds cell → BaseCell instantiated →
-        show() called → ViewSpec resolved → Grid renders cell
+  Flow: Handshake → Ready → User clicks ➕ → artifacts-explorer-cell rendered →
+        User selects cell type → explorerStore.selectedCellType watcher fires →
+        handleCellTypeSelected(cellType) → BaseCell instantiated → Grid renders cell
         User saves layout → usePersistenceManager.saveLayout() → HybridDatabase
         User loads layout → usePersistenceManager.fetchLayout() → hydrate cells
 -->
@@ -63,21 +65,10 @@
         :cell-tabs="cellTabs"
         :saved-layouts="savedLayouts"
         :is-loading-layouts="isLoadingLayouts"
-        @show-add-modal="showAddModal = true"
+        @show-artifacts-explorer="handleShowArtifactsExplorer"
         @close-cell="handleRemoveCell"
         @load-layout="handleLoadLayout"
         @save-layout="showSaveLayoutModal = true"
-      />
-
-      <!-- AddCell Modal -->
-      <AddCellModal
-        :is-open="showAddModal"
-        :cell-types="availableCellTypes"
-        :is-loading="isLoadingCellTypes"
-        :error="cellTypesError"
-        @close="showAddModal = false"
-        @cell-type-selected="handleCellTypeSelected"
-        @retry="loadCellTypes"
       />
 
       <!-- SaveLayout Modal -->
@@ -113,13 +104,11 @@
 
 <script setup lang="ts">
 /**
- * Phase 3 orchestration:
- *  - All Phase 2 functionality preserved
- *  - Layout persistence via usePersistenceManager
- *  - Background auto-save via useAutoSave
- *  - Toolbar with Save button and unsaved-changes indicator
- *  - LayoutBookSelector in footer for loading saved layouts
- *  - Asynchronous cell hydration when loading a layout
+ * Phase 4 orchestration:
+ *  - All Phase 2 + Phase 3 functionality preserved
+ *  - AddCellModal removed; replaced by artifacts-explorer-cell
+ *  - useArtifactsExplorerStore bridges explorer cell selection → handleCellTypeSelected
+ *  - loadCellTypes() delegated to the explorer store (lazy, on cell mount)
  */
 
 // ── Tailwind CSS & Design System ──────────────────────────────────────────────
@@ -137,10 +126,10 @@ import { useAutoLoadCellI18n } from './composables/useAutoLoadCellI18n'
 import { useThemeSync } from './composables/useThemeSync'
 import GridContainer from './components/GridContainer.vue'
 import FooterWindowManager from './components/FooterWindowManager.vue'
-import AddCellModal from './components/AddCellModal.vue'
 import SaveLayoutBookModal from './components/SaveLayoutBookModal.vue'
 import Toolbar from './components/Toolbar.vue'
 import { createLogger } from '@/utils/logger'
+import { useArtifactsExplorerStore } from '../../cell_types/artifacts-explorer-cell/frontend/store'
 import type { CellTypeDefinition, LayoutBook } from './types'
 
 const log = createLogger('workspace:app')
@@ -163,7 +152,11 @@ useAutoLoadCellI18n(cells)
 useThemeSync()
 
 // ── Cell View Provider ────────────────────────────────────────────────────────
-const { getCellTypes, instantiateCellByType, resolveViewSpec } = useCellViewProvider()
+const { instantiateCellByType, resolveViewSpec } = useCellViewProvider()
+
+// ── Artifacts Explorer Store (Phase 4) ────────────────────────────────────────
+// Bridge between artifacts-explorer-cell picker UI and handleCellTypeSelected.
+const explorerStore = useArtifactsExplorerStore()
 
 // ── Persistence (Phase 3) ─────────────────────────────────────────────────────
 const persistence = usePersistenceManager()
@@ -171,16 +164,13 @@ const autoSave = useAutoSave()
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MAX_CELLS = 10
+const EXPLORER_CELL_TYPE_NAME = 'artifacts-explorer-cell'
 
 /** Toast visibility duration (ms) */
 const TOAST_DURATION_MS = 3_000
 
 // ── UI State ──────────────────────────────────────────────────────────────────
-const showAddModal = ref(false)
 const showSaveLayoutModal = ref(false)
-const availableCellTypes = ref<CellTypeDefinition[]>([])
-const isLoadingCellTypes = ref(false)
-const cellTypesError = ref<string | null>(null)
 const savedLayouts = ref<LayoutBook[]>([])
 const isLoadingLayouts = ref(false)
 const isSavingLayout = ref(false)
@@ -213,7 +203,7 @@ const debugInfo = computed(() =>
 const devInfo = computed(() =>
   JSON.stringify({
     cells: cells.value.length,
-    types: availableCellTypes.value.length,
+    explorerTypes: explorerStore.availableCellTypes.length,
     status: store.status,
     unsaved: autoSave.hasUnsavedChanges.value,
     layouts: savedLayouts.value.length,
@@ -245,22 +235,6 @@ function showSaveSuccessToast(message: string): void {
   saveSuccessTimer = setTimeout(() => { saveSuccess.value = null }, TOAST_DURATION_MS)
 }
 
-// ── Cell Type Loading ─────────────────────────────────────────────────────────
-
-async function loadCellTypes(): Promise<void> {
-  isLoadingCellTypes.value = true
-  cellTypesError.value = null
-  try {
-    availableCellTypes.value = await getCellTypes()
-    log.info('[App] Cell types loaded', { count: availableCellTypes.value.length })
-  } catch (err: any) {
-    cellTypesError.value = err?.message || 'Failed to load cell types'
-    log.error('[App] Failed to load cell types', err)
-  } finally {
-    isLoadingCellTypes.value = false
-  }
-}
-
 // ── Saved Layouts Loading ─────────────────────────────────────────────────────
 
 async function loadSavedLayouts(): Promise<void> {
@@ -279,9 +253,9 @@ async function loadSavedLayouts(): Promise<void> {
 // ── Cell CRUD ─────────────────────────────────────────────────────────────────
 
 /**
- * Handle cell type selected in AddCellModal.
+ * Handle cell type selected — either from the explorer cell or any future source.
  *
- * Flow (Requirement 2 — ONE orchestration path):
+ * Flow (ONE orchestration path):
  * 1. addCell() → creates GridCell with isLoading = true
  * 2. instantiateCellByType() → dynamic import + new CellClass()
  * 3. resolveViewSpec() → cellInstance.show() → {component, props}
@@ -303,6 +277,53 @@ async function handleCellTypeSelected(cellType: CellTypeDefinition): Promise<voi
     log.error('[App] Cell loading failed', { cellId, error: errorMsg })
   }
 }
+
+/**
+ * Show the artifacts-explorer-cell in picker mode.
+ * Called when FooterWindowManager emits 'show-artifacts-explorer'.
+ *
+ * Guards against duplicate instances: if the explorer is already in the grid, does nothing.
+ */
+async function handleShowArtifactsExplorer(): Promise<void> {
+  const existing = cells.value.find((c) => c.cellTypeName === EXPLORER_CELL_TYPE_NAME)
+  if (existing) {
+    log.info('[App] artifacts-explorer-cell already in grid, skipping', { cellId: existing.cellId })
+    return
+  }
+
+  const explorerType: CellTypeDefinition = {
+    name: EXPLORER_CELL_TYPE_NAME,
+    id: EXPLORER_CELL_TYPE_NAME,
+    description: 'Artifacts Explorer — browse and add cell types to the workspace.',
+    version: '1.0.0',
+    can_render_dynamically: true,
+    default_refs: {
+      basecell: ['frontend/ArtifactsExplorerCell.ts'],
+      view: ['frontend/View.vue'],
+    },
+  }
+
+  log.info('[App] Instantiating artifacts-explorer-cell in picker mode')
+  await handleCellTypeSelected(explorerType)
+}
+
+// ── Explorer store watcher (Phase 4) ──────────────────────────────────────────
+// When the user clicks a cell type in the explorer, explorerStore.selectedCellType is set.
+// This watcher reacts and adds the selected cell type to the grid.
+watch(
+  () => explorerStore.selectedCellType,
+  async (cellType) => {
+    if (!cellType) return
+    log.info('[App] Explorer selected cell type, adding to grid', { name: cellType.name })
+    try {
+      await handleCellTypeSelected(cellType as CellTypeDefinition)
+    } catch (err: any) {
+      log.error('[App] Failed to add selected cell type from explorer', { name: cellType.name, error: err?.message })
+    } finally {
+      explorerStore.clearSelection()
+    }
+  },
+)
 
 function handleRemoveCell(cellId: string): void {
   removeCell(cellId)
@@ -366,15 +387,24 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
     updateCell(tempId, { isLoading: true })
 
     try {
-      // Find the full CellTypeDefinition from the loaded list (or synthesize a minimal one)
-      const knownType = availableCellTypes.value.find(t => t.name === cellRef.type)
-      const cellType: CellTypeDefinition = knownType ?? {
-        name: cellRef.type,
-        id: cellRef.type,
-        description: '',
-        version: '1.0.0',
-        can_render_dynamically: true,
+      // Ensure cell types are loaded in the explorer store for lookup
+      let knownTypes = explorerStore.availableCellTypes
+      if (knownTypes.length === 0) {
+        await explorerStore.loadCellTypes()
+        knownTypes = explorerStore.availableCellTypes
       }
+
+      // Find the full CellTypeDefinition from the loaded list (or synthesize a minimal one)
+      const knownType = knownTypes.find((t) => t.name === cellRef.type)
+      const cellType: CellTypeDefinition = knownType
+        ? (knownType as CellTypeDefinition)
+        : {
+            name: cellRef.type,
+            id: cellRef.type,
+            description: '',
+            version: '1.0.0',
+            can_render_dynamically: true,
+          }
 
       const cellInstance = await instantiateCellByType(cellRef.type, cellType)
       const viewSpec = await resolveViewSpec(cellInstance, cellRef.type, cellType)
@@ -405,10 +435,9 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  // Defer cell type loading and persistence init until workspace is ready (session token available).
-  // Use a reactive watch so we cleanly respond to the handshake completing.
+  // Defer persistence init until workspace is ready (session token available).
+  // Cell types are loaded lazily by the explorer store when the picker mounts.
   if (store.status === 'ready') {
-    loadCellTypes()
     initPersistence()
   } else {
     const stopWatch = watch(
@@ -416,7 +445,6 @@ onMounted(() => {
       (status) => {
         if (status === 'ready') {
           stopWatch()
-          loadCellTypes()
           initPersistence()
         }
       },

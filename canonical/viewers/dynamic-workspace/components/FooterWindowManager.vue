@@ -8,7 +8,7 @@
  *   "i18n_coverage": 100,
  *   "logger_namespace": "layout:footer-manager",
  *   "source": "Adapted from cockpit-vue/src/components/layout/dynamic/FooterWindowManager.vue",
- *   "changes": "Removed Pinia store injection; emits @show-add-modal; simplified to core Add Cell button. Phase 3: added LayoutBookSelector integration."
+ *   "changes": "Removed Pinia store injection; emits @show-artifacts-explorer; simplified to core Add Cell button. Phase 3: added LayoutBookSelector integration. Phase 4: replaced show-add-modal with show-artifacts-explorer (artifacts-explorer-cell migration)."
  * }
  */
 <template>
@@ -86,7 +86,7 @@
  *
  * Adapted from cockpit-vue v1 FooterWindowManager:
  * - Props: cellCount, maxCells, cellTabs[], savedLayouts[], isLoadingLayouts
- * - Events: @show-add-modal, @close-cell(cellId), @load-layout(layoutId), @save-layout
+ * - Events: @show-artifacts-explorer, @close-cell(cellId), @load-layout(layoutId), @save-layout
  * - Preserved: dark mode, i18n, Add Cell button, cell tabs
  * - Phase 3: Added LayoutBookSelector integration
  */
@@ -110,7 +110,7 @@ const props = defineProps<{
 
 // ── Emits ─────────────────────────────────────────────────────────────────────
 const emit = defineEmits<{
-  'show-add-modal': []
+  'show-artifacts-explorer': []
   'close-cell': [cellId: string]
   'load-layout': [layoutId: string]
   'save-layout': []
@@ -122,7 +122,7 @@ const isMaxCellsReached = props.cellCount >= props.maxCells
 // ── Handlers ──────────────────────────────────────────────────────────────────
 function handleAddCell(): void {
   log.debug('[FooterWindowManager] Add Cell button clicked')
-  emit('show-add-modal')
+  emit('show-artifacts-explorer')
 }
 </script>
 

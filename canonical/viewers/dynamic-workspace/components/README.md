@@ -22,14 +22,15 @@ All components are adapted from `cockpit-vue/src/components/layout/dynamic/` (v1
 
 | Component | Source | Changes |
 |-----------|--------|---------|
-| `AddCellModal.vue` | v1 AddCellModal | Props: `cellTypes[]`; Events: `@cell-type-selected`; no store |
 | `CellItem.vue` | v1 CellWrapper | Props: `cell (GridCell)`; Events: `@remove/@minimize/@maximize`; renders `viewSpec.component` |
 | `GridContainer.vue` | NEW | CSS-Grid wrapper; emits layout events; uses CellItem |
-| `FooterWindowManager.vue` | v1 FooterWindowManager | Events: `@show-add-modal`, `@close-cell`; simplified |
+| `FooterWindowManager.vue` | v1 FooterWindowManager | Events: `@show-artifacts-explorer`, `@close-cell`; simplified |
 | `GeneratedFormView.vue` | NEW | Fallback form renderer from `properties_schema`; calls `cellInstance.execute()` |
 | `CellModal.vue` | v1 CellModal | Props: `cell (GridCell)`; no DynamicCellView dependency |
 | `SaveLayoutBookModal.vue` | v1 SaveLayoutBookModal | Props: `cells[]`; Events: `@save-layout(name, desc)`, `@cancel` |
 | `LayoutBookSelector.vue` | v1 LayoutBookSelector | Props: `layouts[]`; Events: `@load-layout(id)`, `@save-new` |
+
+> **Note (Phase 4)**: `AddCellModal.vue` was removed and replaced by `artifacts-explorer-cell` — a dedicated cell type that renders a searchable picker grid. See `../../cell_types/artifacts-explorer-cell/README.md`.
 
 ## Preserved from v1
 
