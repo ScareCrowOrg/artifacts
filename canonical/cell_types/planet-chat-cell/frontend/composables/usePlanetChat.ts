@@ -38,7 +38,7 @@ export interface UsePlanetChatOptions {
 }
 
 export function usePlanetChat(options: UsePlanetChatOptions) {
-  const { senderId = 'anonymous' } = options
+  const { senderId } = options
 
   /** Resolve the current roomId, supporting both plain strings and reactive refs.
    * Functions that call this (`sendMessage`, `requestSnapshot`) use the value
@@ -59,6 +59,9 @@ export function usePlanetChat(options: UsePlanetChatOptions) {
    * The backend then PUBLISHes the patch to Redis; all connected clients
    * (including the sender) receive the update via WebSocket.
    *
+   * senderId is omitted from the payload when not explicitly provided so
+   * that the backend can inject the authenticated user_id from the session.
+   *
    * @returns `true` on success, `false` on failure.
    */
   async function sendMessage(text: string): Promise<boolean> {
@@ -72,13 +75,19 @@ export function usePlanetChat(options: UsePlanetChatOptions) {
     console.log('[usePlanetChat][DEBUG] sendMessage — roomId:', getRoomId(), 'senderId:', senderId, 'text length:', trimmed.length)
 
     try {
-      const result = await cell.execute({
+      const payload: Record<string, unknown> = {
         action: 'send_message',
         contextId: getRoomId(),
         message: trimmed,
-        senderId,
         timestamp: Date.now(),
-      })
+      }
+      // Only include senderId when explicitly provided; omitting it allows the
+      // backend to inject the authenticated user_id from the session cookie.
+      if (senderId !== undefined) {
+        payload.senderId = senderId
+      }
+
+      const result = await cell.execute(payload)
 
       if (!result.success) {
         sendError.value = result.error ?? 'Failed to send message'
@@ -103,11 +112,14 @@ export function usePlanetChat(options: UsePlanetChatOptions) {
    */
   async function requestSnapshot(): Promise<void> {
     try {
-      await cell.execute({
+      const payload: Record<string, unknown> = {
         action: 'snapshot_request',
         contextId: getRoomId(),
-        senderId,
-      })
+      }
+      if (senderId !== undefined) {
+        payload.senderId = senderId
+      }
+      await cell.execute(payload)
     } catch {
       // Non-critical: useDistributedState will retry on next reconnect
     }

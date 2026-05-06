@@ -125,7 +125,6 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { usePlanetChatStore } from './stores/planetChat'
 import { useDistributedState } from '@/composables/useDistributedState'
 import { usePlanetChat } from './composables/usePlanetChat'
-import { useAuthStore } from '@/stores/auth.js'
 import type { ChatMessage } from './stores/planetChat'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -213,13 +212,6 @@ watch(currentRoomId, (room) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Auth — resolve the current user's ID for use as senderId
-// ─────────────────────────────────────────────────────────────────────────────
-
-const authStore = useAuthStore()
-const currentSenderId = computed<string>(() => authStore.getUserId() ?? 'anonymous')
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Distributed state — connect to Redis channel via WSS
 // channelContextId is a ComputedRef<string>; useDistributedState accepts it
 // and will automatically reconnect when the value changes (room switch).
@@ -236,13 +228,12 @@ const { isConnected, connectionError } = useDistributedState({
 // Chat actions
 // usePlanetChat receives the bare roomId (no 'planet-chat:' prefix) because
 // the backend main.py adds that prefix internally when publishing to Redis.
-// senderId is resolved from the auth store so messages are attributed to the
-// authenticated user instead of the 'anonymous' fallback.
+// senderId is intentionally omitted so the backend injects the authenticated
+// user_id from the session (cells must not import from cockpit-vue stores).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { isSending, sendError, sendMessage, requestSnapshot } = usePlanetChat({
   roomId: currentRoomId,
-  senderId: currentSenderId.value,
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
