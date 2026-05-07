@@ -88,23 +88,23 @@ describe('useArtifactsExplorerStore.loadArtifacts()', () => {
     vi.clearAllMocks()
   })
 
-  it('calls /api/v1/artifacts-map without params when filterMode is "all"', async () => {
+  it('calls /api/artifacts-map without params when filterMode is "all"', async () => {
     mockApiFetch.mockResolvedValueOnce(makeApiResponse([]))
 
     await store.loadArtifacts('all')
 
     expect(mockApiFetch).toHaveBeenCalledTimes(1)
     const [url] = mockApiFetch.mock.calls[0]
-    expect(url).toBe('/api/v1/artifacts-map')
+    expect(url).toBe('/api/artifacts-map')
   })
 
-  it('calls /api/v1/artifacts-map without params when filterMode defaults', async () => {
+  it('calls /api/artifacts-map without params when filterMode defaults', async () => {
     mockApiFetch.mockResolvedValueOnce(makeApiResponse([]))
 
     await store.loadArtifacts()
 
     const [url] = mockApiFetch.mock.calls[0]
-    expect(url).toBe('/api/v1/artifacts-map')
+    expect(url).toBe('/api/artifacts-map')
   })
 
   it('appends ?artifact_type=cell-type when filterMode is "cells_only"', async () => {
@@ -113,7 +113,7 @@ describe('useArtifactsExplorerStore.loadArtifacts()', () => {
     await store.loadArtifacts('cells_only')
 
     const [url] = mockApiFetch.mock.calls[0]
-    expect(url).toBe('/api/v1/artifacts-map?artifact_type=cell-type')
+    expect(url).toBe('/api/artifacts-map?artifact_type=cell-type')
   })
 
   it('uses GET method', async () => {

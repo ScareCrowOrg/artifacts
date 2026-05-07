@@ -22,7 +22,7 @@ dead_docs_found: false
 ## Overview
 
 `artifacts-explorer-cell` is the universal artifact discovery cell for the ScareVerse dynamic workspace.
-It fetches all artifact types (Cells, Services, Workers) from `GET /api/v1/artifacts-map` and renders them in a filterable, searchable grid.
+It fetches all artifact types (Cells, Services, Workers) from `GET /api/artifacts-map` and renders them in a filterable, searchable grid.
 
 - **`filter_mode: "all"`** (default) — displays category tabs (All / Cells / Infrastructure / Intelligence).
 - **`filter_mode: "cells_only"`** — displays only `cell-type` artifacts without tabs (server-side filter).
@@ -43,7 +43,7 @@ artifacts-explorer-cell/
 
 | Method | Description |
 |--------|-------------|
-| `execute(input)` | Fetches artifacts from `GET /api/v1/artifacts-map` (supports `input.filter_mode`) |
+| `execute(input)` | Fetches artifacts from `GET /api/artifacts-map` (supports `input.filter_mode`) |
 | `describe()` | Returns `CellMetadata` (id, name, version, inputs, outputs, tags) |
 | `validate(input)` | Validates `input.filter_mode` is `'all'` or `'cells_only'` |
 | `show(data, options)` | Returns `{ componentPath: 'frontend/View.vue' }` |
@@ -54,14 +54,14 @@ Store ID: `artifactsExplorer`
 
 | State | Type | Description |
 |-------|------|-------------|
-| `availableArtifacts` | `ExplorerArtifact[]` | Loaded from `GET /api/v1/artifacts-map` |
+| `availableArtifacts` | `ExplorerArtifact[]` | Loaded from `GET /api/artifacts-map` |
 | `isLoading` | `boolean` | Loading indicator |
 | `error` | `string \| null` | Error message if load failed |
 | `selectedArtifact` | `ExplorerArtifact \| null` | Set when user clicks a frontend-orchestrated artifact; App.vue watches this |
 
 | Action | Description |
 |--------|-------------|
-| `loadArtifacts(filterMode)` | Calls `GET /api/v1/artifacts-map[?artifact_type=cell-type]` |
+| `loadArtifacts(filterMode)` | Calls `GET /api/artifacts-map[?artifact_type=cell-type]` |
 | `selectArtifact(artifact)` | Sets `selectedArtifact` → triggers App.vue watcher |
 | `clearSelection()` | Resets `selectedArtifact` to null |
 
@@ -139,4 +139,4 @@ interface ExplorerArtifact {
 - [ADDING_NEW_CELL_TYPE.md](../../../../docs/official/ADDING_NEW_CELL_TYPE.md)
 - [RULESET.md](../../../../docs/official/RULESET.md)
 - Issue: `docs/issues/artifacts-explorer-cell-artifact-runtime-map-integration/ISSUE.md`
-- PR #2885: `[FEAT] - Artifact Runtime Map: Virtual Catalog via ArtifactLoader + /api/v1/artifacts-map`
+- PR #2885: `[FEAT] - Artifact Runtime Map: Virtual Catalog via ArtifactLoader + /api/artifacts-map`

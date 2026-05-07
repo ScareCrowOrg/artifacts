@@ -35,7 +35,7 @@ export class ArtifactsExplorerCell extends BaseCell {
       const filterMode: FilterMode =
         input.filter_mode === 'cells_only' ? 'cells_only' : 'all'
       const params = filterMode === 'cells_only' ? '?artifact_type=cell-type' : ''
-      const response = await apiFetch(`/api/v1/artifacts-map${params}`, { method: 'GET' })
+      const response = await apiFetch(`/api/artifacts-map${params}`, { method: 'GET' })
       const data = await response.json()
       const artifacts: any[] = Array.isArray(data) ? data : []
 

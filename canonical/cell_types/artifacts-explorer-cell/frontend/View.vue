@@ -174,7 +174,7 @@
  * @file View.vue
  * @description artifacts-explorer-cell — Phase 2 universal artifact explorer.
  *
- * Renders a filterable, searchable grid of artifacts from GET /api/v1/artifacts-map.
+ * Renders a filterable, searchable grid of artifacts from GET /api/artifacts-map.
  * Category tabs (All / Cells / Infrastructure / Intelligence) are shown when
  * filter_mode !== 'cells_only'.
  * Strategy Interface: frontend-orchestrated artifacts show "Add to Workspace";

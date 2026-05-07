@@ -74,7 +74,7 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
     try {
       const params =
         filterMode === 'cells_only' ? '?artifact_type=cell-type' : ''
-      const response = await apiFetch(`/api/v1/artifacts-map${params}`, { method: 'GET' })
+      const response = await apiFetch(`/api/artifacts-map${params}`, { method: 'GET' })
       const data = await response.json()
       availableArtifacts.value = Array.isArray(data) ? data : []
       log.info('[ArtifactsExplorerStore] Artifacts loaded', {
