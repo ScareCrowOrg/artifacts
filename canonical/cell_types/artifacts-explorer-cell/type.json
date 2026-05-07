@@ -1,8 +1,8 @@
 {
   "id": "artifacts-explorer-cell",
   "name": "artifacts-explorer-cell",
-  "description": "Artifacts Explorer — browse and add cell types to the dynamic workspace. In picker mode, renders a searchable grid of available cell types.",
-  "version": "1.0.0",
+  "description": "Universal artifact discovery cell. Browses Cells, Services and Workers from the Artifact Runtime Map. Supports category filters and stage badges.",
+  "version": "2.0.0",
   "category": "workspace",
   "icon": "🔍",
   "can_render_dynamically": true,
@@ -12,19 +12,21 @@
     "docs": ["README.md"]
   },
   "default_initial_data": {
-    "mode": "picker"
+    "filter_mode": "all"
   },
   "_discovery": {
-    "labels": ["#workspace", "#explorer", "#picker"],
-    "describe": "Ephemeral workspace utility cell. In picker mode, shows a searchable grid of all available cell types so the user can add them to the dynamic workspace.",
+    "labels": ["#workspace", "#explorer", "#picker", "#artifacts"],
+    "describe": "Universal workspace artifact explorer. Displays Cells, Services and Workers from the unified Artifact Runtime Map with category filters and stage badges.",
     "estimated_duration_seconds": 0,
     "required_resources": [],
-    "tags": ["workspace", "explorer", "picker", "utility"],
+    "tags": ["workspace", "explorer", "picker", "utility", "artifacts"],
     "use_cases": [
-      "Browse and add new cell types to the dynamic workspace"
+      "Browse all artifact types in the dynamic workspace",
+      "Add cell-type artifacts to the workspace grid",
+      "Inspect infrastructure services managed by Launcher"
     ]
   },
   "kind": "cell",
   "created_at": "2026-05-06T00:00:00",
-  "updated_at": "2026-05-06T00:00:00"
+  "updated_at": "2026-05-07T00:00:00"
 }

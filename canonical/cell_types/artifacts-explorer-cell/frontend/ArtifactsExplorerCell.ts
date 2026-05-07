@@ -2,7 +2,7 @@
  * ArtifactsExplorerCell — BaseCell Implementation
  *
  * Pure cell logic with NO Vue/UI dependencies.
- * Orchestrates the list of available cell types for the picker UI.
+ * Orchestrates the unified artifact catalog for the explorer UI.
  * View.vue is the presentation layer; it uses useArtifactsExplorerStore for state.
  */
 
@@ -18,24 +18,35 @@ import { apiFetch } from '@/services/apiService'
 
 const log = createLogger('cell:artifacts-explorer')
 
+/** Valid filter modes for the execute() input. */
+type FilterMode = 'all' | 'cells_only'
+
 export class ArtifactsExplorerCell extends BaseCell {
   /**
-   * Execute: returns the list of renderable cell types from the backend API.
+   * Execute: returns all artifacts from the unified Artifact Runtime Map API.
+   * Accepts an optional `filter_mode` input:
+   *   - 'cells_only' → passes ?artifact_type=cell-type query param
+   *   - 'all' (default) → returns all artifact types
    */
   async execute(input: Record<string, any>): Promise<CellResult> {
     const startTime = performance.now()
 
     try {
-      const response = await apiFetch('/api/cells/types/list', { method: 'GET' })
+      const filterMode: FilterMode =
+        input.filter_mode === 'cells_only' ? 'cells_only' : 'all'
+      const params = filterMode === 'cells_only' ? '?artifact_type=cell-type' : ''
+      const response = await apiFetch(`/api/v1/artifacts-map${params}`, { method: 'GET' })
       const data = await response.json()
-      const types: any[] = Array.isArray(data) ? data : (data.types ?? [])
-      const renderable = types.filter((t) => t.can_render_dynamically !== false)
+      const artifacts: any[] = Array.isArray(data) ? data : []
 
-      log.info('[ArtifactsExplorerCell] execute: loaded cell types', { count: renderable.length })
+      log.info('[ArtifactsExplorerCell] execute: loaded artifacts', {
+        count: artifacts.length,
+        filterMode,
+      })
 
       return {
         success: true,
-        output: { cellTypes: renderable },
+        output: { artifacts },
         execution_time: performance.now() - startTime,
       }
     } catch (error) {
@@ -57,24 +68,24 @@ export class ArtifactsExplorerCell extends BaseCell {
     return {
       id: 'artifacts-explorer-cell',
       name: 'Artifacts Explorer',
-      version: '1.0.0',
+      version: '2.0.0',
       description:
-        'Workspace utility cell. In picker mode, shows a searchable grid of available cell types so the user can add them to the dynamic workspace.',
+        'Universal artifact discovery cell. Displays Cells, Services and Workers from the unified Artifact Runtime Map. Supports category filters and stage badges.',
       inputs: {
-        mode: {
+        filter_mode: {
           type: 'string',
-          description: "Display mode: 'picker' (browse/select) or 'view' (reserved for Phase 2)",
+          description: "'all' shows all artifact types with category tabs; 'cells_only' shows only cell-type artifacts without tabs",
           required: false,
-          default: 'picker',
+          default: 'all',
         },
       },
       outputs: {
-        cellTypes: {
+        artifacts: {
           type: 'array',
-          description: 'List of renderable cell type definitions',
+          description: 'List of ArtifactRecord entries from the Artifact Runtime Map',
         },
       },
-      tags: ['workspace', 'explorer', 'picker', 'utility'],
+      tags: ['workspace', 'explorer', 'picker', 'utility', 'artifacts'],
     }
   }
 
@@ -83,10 +94,10 @@ export class ArtifactsExplorerCell extends BaseCell {
    */
   validate(input: Record<string, any>): ValidationError[] {
     const errors: ValidationError[] = []
-    if (input.mode && !['picker', 'view'].includes(input.mode)) {
+    if (input.filter_mode && !['all', 'cells_only'].includes(input.filter_mode)) {
       errors.push({
-        field: 'mode',
-        message: "mode must be 'picker' or 'view'",
+        field: 'filter_mode',
+        message: "filter_mode must be 'all' or 'cells_only'",
       })
     }
     return errors

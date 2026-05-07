@@ -2,8 +2,8 @@
  * @file store.ts
  * @description Pinia store for artifacts-explorer-cell.
  *
- * Manages the list of available cell types and the currently selected cell type.
- * App.vue watches `selectedCellType` to instantiate the selected cell type.
+ * Manages the list of available artifacts and the currently selected artifact.
+ * App.vue watches `selectedArtifact` to instantiate cell-type artifacts.
  *
  * Store ID: 'artifactsExplorer'
  */
@@ -15,88 +15,108 @@ import { apiFetch } from '@/services/apiService'
 
 const log = createLogger('store:artifacts-explorer')
 
-/**
- * Minimal cell type info shape returned by the backend API.
- * Structurally compatible with CellTypeDefinition from the viewer types.
- */
-export interface ExplorerCellType {
+// ── ArtifactRecord interfaces (mirrors backend/app/models/artifact.py) ────────
+
+export interface ArtifactIdentity {
   name: string
-  id: string
-  description?: string
-  version?: string
-  category?: string
-  icon?: string
-  can_render_dynamically?: boolean
-  default_refs?: Record<string, string[]>
-  [key: string]: any
+  description: string
+  icon: string | null
+  author: string
 }
+
+export interface ArtifactRuntime {
+  entry_point: string | null
+  strategy: 'frontend_injection' | 'docker_orchestration' | 'python_subprocess'
+  required_artifacts: string[]
+  env_vars: string[]
+}
+
+export interface ArtifactExecutionModel {
+  orchestrator: 'frontend' | 'launcher'
+  heartbeat_channel: string | null
+  health_check: string | null
+}
+
+export interface ArtifactMetadata {
+  tags: string[]
+}
+
+export interface ExplorerArtifact {
+  artifact_id: string
+  version: string
+  artifact_type: 'cell-type' | 'service' | 'worker' | 'book' | 'job-type'
+  stage: 'canonical' | 'sandbox' | 'runtime'
+  identity: ArtifactIdentity
+  runtime: ArtifactRuntime
+  execution_model: ArtifactExecutionModel
+  metadata: ArtifactMetadata
+}
+
+export type FilterMode = 'all' | 'cells_only'
 
 export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => {
   // ── State ────────────────────────────────────────────────────────────────────
-  const availableCellTypes = ref<ExplorerCellType[]>([])
+  const availableArtifacts = ref<ExplorerArtifact[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-  const selectedCellType = ref<ExplorerCellType | null>(null)
+  const selectedArtifact = ref<ExplorerArtifact | null>(null)
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   /**
-   * Load renderable cell types from the backend API.
-   * Filters out types with can_render_dynamically === false.
+   * Load artifacts from the unified Artifact Runtime Map API.
+   * When filterMode is 'cells_only', passes ?artifact_type=cell-type to the backend
+   * so only cell-type artifacts are fetched (server-side filter, no extra payload).
    */
-  async function loadCellTypes(): Promise<void> {
+  async function loadArtifacts(filterMode: FilterMode = 'all'): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
-      const response = await apiFetch('/api/cells/types/list', { method: 'GET' })
+      const params =
+        filterMode === 'cells_only' ? '?artifact_type=cell-type' : ''
+      const response = await apiFetch(`/api/v1/artifacts-map${params}`, { method: 'GET' })
       const data = await response.json()
-      let types: ExplorerCellType[]
-      if (Array.isArray(data)) {
-        types = data
-      } else if (data && Array.isArray(data.types)) {
-        types = data.types
-      } else {
-        log.warn('[ArtifactsExplorerStore] Unexpected API response format', {
-          keys: Object.keys(data || {}),
-        })
-        types = []
-      }
-      availableCellTypes.value = types.filter((t) => t.can_render_dynamically !== false)
-      log.info('[ArtifactsExplorerStore] Cell types loaded', {
-        count: availableCellTypes.value.length,
+      availableArtifacts.value = Array.isArray(data) ? data : []
+      log.info('[ArtifactsExplorerStore] Artifacts loaded', {
+        count: availableArtifacts.value.length,
+        filterMode,
       })
     } catch (err: any) {
-      error.value = err?.message || 'Failed to load cell types'
-      log.error('[ArtifactsExplorerStore] Failed to load cell types', { error: error.value })
+      error.value = err?.message || 'Failed to load artifacts'
+      log.error('[ArtifactsExplorerStore] Failed to load artifacts', { error: error.value })
     } finally {
       isLoading.value = false
     }
   }
 
   /**
-   * Select a cell type. Triggers the App.vue watcher to instantiate it.
+   * Select an artifact. For orchestrator === 'frontend' artifacts, triggers the
+   * App.vue watcher to instantiate the cell type in the grid.
    */
-  function selectCellType(cellType: ExplorerCellType): void {
-    log.info('[ArtifactsExplorerStore] Cell type selected', { name: cellType.name })
-    selectedCellType.value = cellType
+  function selectArtifact(artifact: ExplorerArtifact): void {
+    log.info('[ArtifactsExplorerStore] Artifact selected', {
+      name: artifact.identity.name,
+      orchestrator: artifact.execution_model.orchestrator,
+    })
+    selectedArtifact.value = artifact
   }
 
   /**
-   * Clear the selection after App.vue has processed the selected cell type.
+   * Clear the selection after App.vue has processed the selected artifact.
    */
   function clearSelection(): void {
     log.debug('[ArtifactsExplorerStore] Selection cleared')
-    selectedCellType.value = null
+    selectedArtifact.value = null
   }
 
   // ── Return ───────────────────────────────────────────────────────────────────
   return {
-    availableCellTypes,
+    availableArtifacts,
     isLoading,
     error,
-    selectedCellType,
-    loadCellTypes,
-    selectCellType,
+    selectedArtifact,
+    loadArtifacts,
+    selectArtifact,
     clearSelection,
   }
 })

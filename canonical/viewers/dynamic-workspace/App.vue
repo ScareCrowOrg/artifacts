@@ -130,6 +130,7 @@ import SaveLayoutBookModal from './components/SaveLayoutBookModal.vue'
 import Toolbar from './components/Toolbar.vue'
 import { createLogger } from '@/utils/logger'
 import { useArtifactsExplorerStore } from '../../cell_types/artifacts-explorer-cell/frontend/store'
+import type { ExplorerArtifact } from '../../cell_types/artifacts-explorer-cell/frontend/store'
 import type { CellTypeDefinition, LayoutBook } from './types'
 
 const log = createLogger('workspace:app')
@@ -203,7 +204,7 @@ const debugInfo = computed(() =>
 const devInfo = computed(() =>
   JSON.stringify({
     cells: cells.value.length,
-    explorerTypes: explorerStore.availableCellTypes.length,
+    explorerArtifacts: explorerStore.availableArtifacts.length,
     status: store.status,
     unsaved: autoSave.hasUnsavedChanges.value,
     layouts: savedLayouts.value.length,
@@ -307,18 +308,41 @@ async function handleShowArtifactsExplorer(): Promise<void> {
   await handleCellTypeSelected(explorerType)
 }
 
-// ── Explorer store watcher (Phase 4) ──────────────────────────────────────────
-// When the user clicks a cell type in the explorer, explorerStore.selectedCellType is set.
-// This watcher reacts and adds the selected cell type to the grid.
+// ── Explorer store watcher (Phase 4 → Phase 2 upgrade) ───────────────────────
+// When the user clicks a frontend-orchestrated artifact in the explorer,
+// explorerStore.selectedArtifact is set. This watcher reacts and adds it to the grid.
+// Guard: only orchestrator === 'frontend' artifacts are instantiated as cells.
 watch(
-  () => explorerStore.selectedCellType,
-  async (cellType) => {
-    if (!cellType) return
-    log.info('[App] Explorer selected cell type, adding to grid', { name: cellType.name })
+  () => explorerStore.selectedArtifact,
+  async (artifact: ExplorerArtifact | null) => {
+    if (!artifact) return
+    if (artifact.execution_model.orchestrator !== 'frontend') {
+      log.info('[App] Ignoring non-frontend artifact selection', {
+        name: artifact.identity.name,
+        orchestrator: artifact.execution_model.orchestrator,
+      })
+      explorerStore.clearSelection()
+      return
+    }
+    log.info('[App] Explorer selected artifact, adding to grid', { name: artifact.identity.name })
+    // Map ArtifactRecord → CellTypeDefinition shape expected by handleCellTypeSelected.
+    // default_refs are intentionally omitted here: instantiateCellByType discovers them
+    // at runtime via the cell's type.json (loaded by buildArtifactUrl from artifact_id).
+    const cellTypeDef: CellTypeDefinition = {
+      name: artifact.artifact_id,
+      id: artifact.artifact_id,
+      description: artifact.identity.description,
+      version: artifact.version,
+      icon: artifact.identity.icon ?? undefined,
+      can_render_dynamically: true,
+    }
     try {
-      await handleCellTypeSelected(cellType as CellTypeDefinition)
+      await handleCellTypeSelected(cellTypeDef)
     } catch (err: any) {
-      log.error('[App] Failed to add selected cell type from explorer', { name: cellType.name, error: err?.message })
+      log.error('[App] Failed to add selected artifact from explorer', {
+        name: artifact.identity.name,
+        error: err?.message,
+      })
     } finally {
       explorerStore.clearSelection()
     }
