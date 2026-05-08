@@ -225,6 +225,18 @@ const categoryTabs = [
 const filteredArtifacts = computed<ExplorerArtifact[]>(() => {
   let list = explorerStore.availableArtifacts
 
+  // [DEBUG-2887] Log filteredArtifacts inputs
+  log.info('[DEBUG-2887][ArtifactsExplorerView] filteredArtifacts computed', {
+    totalInStore: list.length,
+    filterMode: filterMode.value,
+    activeCategory: activeCategory.value,
+    searchQuery: searchQuery.value,
+    typeBreakdown: list.reduce((acc: Record<string, number>, a) => {
+      acc[a.artifact_type] = (acc[a.artifact_type] || 0) + 1
+      return acc
+    }, {}),
+  })
+
   // When cells_only mode, only cell-type artifacts are shown.
   // The server already filters via ?artifact_type=cell-type, but we guard
   // client-side too for data integrity (e.g. stale cache from a previous 'all' load).
@@ -282,11 +294,33 @@ function loadArtifacts(): void {
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────────
 onMounted(async () => {
+  // [DEBUG-2887] Log mount context: props, filterMode, store state
+  log.info('[DEBUG-2887][ArtifactsExplorerView] onMounted', {
+    filterMode: filterMode.value,
+    cellProp: !!props.cell,
+    cellInstance: !!props.cellInstance,
+    defaultInitialData: props.cell?.cellType?.default_initial_data ?? null,
+    storeArtifactsCount: explorerStore.availableArtifacts.length,
+    storeIsLoading: explorerStore.isLoading,
+    storeError: explorerStore.error,
+  })
   if (explorerStore.availableArtifacts.length === 0) {
     log.debug('[ArtifactsExplorerView] Loading artifacts on mount', {
       filterMode: filterMode.value,
     })
     await explorerStore.loadArtifacts(filterMode.value)
+    // [DEBUG-2887] Log post-load state
+    log.info('[DEBUG-2887][ArtifactsExplorerView] After loadArtifacts', {
+      artifactsLoaded: explorerStore.availableArtifacts.length,
+      error: explorerStore.error,
+      isLoading: explorerStore.isLoading,
+      filteredCount: filteredArtifacts.value.length,
+      activeCategory: activeCategory.value,
+    })
+  } else {
+    log.info('[DEBUG-2887][ArtifactsExplorerView] Store already populated, skipping load', {
+      count: explorerStore.availableArtifacts.length,
+    })
   }
 })
 </script>
