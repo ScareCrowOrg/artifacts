@@ -326,8 +326,8 @@ watch(
     }
     log.info('[App] Explorer selected artifact, adding to grid', { name: artifact.identity.name })
     // Map ArtifactRecord → CellTypeDefinition shape expected by handleCellTypeSelected.
-    // default_refs are intentionally omitted here: instantiateCellByType discovers them
-    // at runtime via the cell's type.json (loaded by buildArtifactUrl from artifact_id).
+    // default_refs are populated from artifact.metadata.default_refs (preserved by ArtifactLoader
+    // from type.json) so instantiateCellByType can locate the basecell entry point.
     const cellTypeDef: CellTypeDefinition = {
       name: artifact.artifact_id,
       id: artifact.artifact_id,
@@ -335,6 +335,7 @@ watch(
       version: artifact.version,
       icon: artifact.identity.icon ?? undefined,
       can_render_dynamically: true,
+      default_refs: artifact.metadata.default_refs,
     }
     try {
       await handleCellTypeSelected(cellTypeDef)

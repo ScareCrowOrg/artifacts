@@ -40,6 +40,8 @@ export interface ArtifactExecutionModel {
 
 export interface ArtifactMetadata {
   tags: string[]
+  /** File refs from type.json (e.g. basecell, view). Populated for cell-type artifacts. */
+  default_refs?: Record<string, string[]>
 }
 
 export interface ExplorerArtifact {
