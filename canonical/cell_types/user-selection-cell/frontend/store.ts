@@ -22,8 +22,7 @@ const log = createLogger('store:user-selection')
 export interface SelectableUser {
   id: string
   username: string
-  email: string
-  role?: string
+  avatar_url?: string | null
 }
 
 export const useUserSelectionStore = defineStore('userSelection', () => {
@@ -33,6 +32,7 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
   const users = ref<SelectableUser[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  const searchQuery = ref('')
 
   /** Internal Promise resolver — set by open(), consumed by selectUser/cancel */
   let _resolve: ((user: SelectableUser | null) => void) | null = null
@@ -40,19 +40,20 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   /**
-   * Load users from GET /api/users/ (admin-only endpoint).
-   * Handles 403 (non-admin access) with a descriptive error message.
+   * Load users from GET /api/users/public.
+   * Accessible to any authenticated user — no 403 for non-admins.
+   *
+   * @param query - Optional username search filter (passed as `?q=`)
    */
-  async function loadUsers(): Promise<void> {
+  async function loadUsers(query?: string): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
-      const response = await apiFetch('/api/users/', { method: 'GET' })
-      if (response.status === 403) {
-        error.value = 'Access denied: admin role required to list users.'
-        log.warn('[UserSelectionStore] 403 loading users — not admin')
-        return
-      }
+      const params = new URLSearchParams()
+      if (query) params.set('q', query)
+      params.set('limit', '50')
+      const url = `/api/users/public?${params.toString()}`
+      const response = await apiFetch(url, { method: 'GET' })
       if (!response.ok) {
         error.value = `Failed to load users (HTTP ${response.status})`
         log.error('[UserSelectionStore] Non-ok response', { status: response.status })
@@ -76,10 +77,12 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
    *
    * @param overlayTitle - Title shown in the overlay header
    * @param resolve - Promise resolver to call with the selected user or null
+   * @param query - Optional initial search query
    */
   async function open(
     overlayTitle: string,
     resolve: (user: SelectableUser | null) => void,
+    query?: string,
   ): Promise<void> {
     // Auto-cancel any orphaned pending selection before opening a new one
     if (_resolve) {
@@ -89,10 +92,11 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
       orphanedResolve(null)
     }
     title.value = overlayTitle
+    searchQuery.value = query ?? ''
     _resolve = resolve
     isOpen.value = true
     log.debug('[UserSelectionStore] Overlay opened', { title: overlayTitle })
-    await loadUsers()
+    await loadUsers(searchQuery.value || undefined)
   }
 
   /**
@@ -130,6 +134,7 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
     users,
     isLoading,
     error,
+    searchQuery,
     loadUsers,
     open,
     selectUser,
