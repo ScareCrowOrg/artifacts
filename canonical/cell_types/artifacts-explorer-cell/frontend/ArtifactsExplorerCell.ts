@@ -15,6 +15,8 @@ import type {
 } from '@/types/BaseCell'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
+import { UserSelectionCell } from '../user-selection-cell/frontend/UserSelectionCell'
+import type { SelectableUser } from '../user-selection-cell/frontend/store'
 
 const log = createLogger('cell:artifacts-explorer')
 
@@ -22,6 +24,8 @@ const log = createLogger('cell:artifacts-explorer')
 type FilterMode = 'all' | 'cells_only'
 
 export class ArtifactsExplorerCell extends BaseCell {
+  /** UserSelectionCell instance — created once and reused for all allowArtifact() calls. */
+  private readonly _userSelectionCell = new UserSelectionCell()
   /**
    * Execute: returns all artifacts from the unified Artifact Runtime Map API.
    * Accepts an optional `filter_mode` input:
@@ -112,6 +116,30 @@ export class ArtifactsExplorerCell extends BaseCell {
     return {
       componentPath: 'frontend/View.vue',
     }
+  }
+
+  /**
+   * Allow an artifact: opens the user-selection overlay and returns the
+   * selected user, or null if the selection was cancelled.
+   *
+   * Phase 1 (this issue): captures the user selection and returns it to the
+   * View for feedback display. Persisting the allowance mapping (artifact_id → user)
+   * to the backend is out of scope and tracked in a future Allowances issue.
+   *
+   * @param artifactId - The ID of the artifact to grant allowance for
+   * @returns The selected user, or null on cancel
+   */
+  async allowArtifact(artifactId: string): Promise<SelectableUser | null> {
+    log.info('[ArtifactsExplorerCell] allowArtifact() called', { artifactId })
+    const user = await this._userSelectionCell.show({}, {
+      mode: 'pick-one',
+      title: 'Select user for allowance',
+    })
+    log.info('[ArtifactsExplorerCell] allowArtifact() resolved', {
+      artifactId,
+      selected: user ? user.username : null,
+    })
+    return user
   }
 }
 

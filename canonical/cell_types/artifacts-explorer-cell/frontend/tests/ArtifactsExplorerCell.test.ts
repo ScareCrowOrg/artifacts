@@ -45,11 +45,24 @@ const mockApiFetch = vi.mocked(apiFetch)
 
 type FilterMode = 'all' | 'cells_only'
 
+interface SelectableUser {
+  id: string
+  username: string
+  email: string
+  role?: string
+}
+
 const log = createLogger('cell:artifacts-explorer')
 
 class ArtifactsExplorerCell {
+  /** Injected UserSelectionCell mock for testing allowArtifact() */
+  private _userCell: { show: (_d: any, _o: any) => Promise<SelectableUser | null> } | null = null
+
+  constructor(userCell?: { show: (_d: any, _o: any) => Promise<SelectableUser | null> }) {
+    this._userCell = userCell ?? null
+  }
+
   async execute(input: Record<string, any>) {
-    const startTime = performance.now()
     try {
       const filterMode: FilterMode =
         input.filter_mode === 'cells_only' ? 'cells_only' : 'all'
@@ -111,6 +124,17 @@ class ArtifactsExplorerCell {
 
   async show(_data: Record<string, any>, _options: any) {
     return { componentPath: 'frontend/View.vue' }
+  }
+
+  async allowArtifact(artifactId: string): Promise<SelectableUser | null> {
+    if (!this._userCell) {
+      throw new Error('No userCell injected')
+    }
+    const user = await this._userCell.show({}, {
+      mode: 'pick-one',
+      title: 'Select user for allowance',
+    })
+    return user
   }
 }
 
@@ -342,5 +366,57 @@ describe('ArtifactsExplorerCell.show()', () => {
   it('returns componentPath pointing to View.vue', async () => {
     const spec = await cell.show({}, {})
     expect(spec.componentPath).toBe('frontend/View.vue')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// allowArtifact()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ArtifactsExplorerCell.allowArtifact()', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('calls userCell.show() with pick-one mode and allowance title', async () => {
+    const mockUserCell = {
+      show: vi.fn().mockResolvedValue(null),
+    }
+    const cell = new ArtifactsExplorerCell(mockUserCell)
+
+    await cell.allowArtifact('artifact-123')
+
+    expect(mockUserCell.show).toHaveBeenCalledTimes(1)
+    const [_data, options] = mockUserCell.show.mock.calls[0]
+    expect(options.mode).toBe('pick-one')
+    expect(options.title).toContain('allowance')
+  })
+
+  it('returns the selected user when user is picked', async () => {
+    const selectedUser: SelectableUser = {
+      id: 'user-99',
+      username: 'carol',
+      email: 'carol@example.com',
+    }
+    const mockUserCell = {
+      show: vi.fn().mockResolvedValue(selectedUser),
+    }
+    const cell = new ArtifactsExplorerCell(mockUserCell)
+
+    const result = await cell.allowArtifact('artifact-abc')
+
+    expect(result).toEqual(selectedUser)
+    expect(result?.username).toBe('carol')
+  })
+
+  it('returns null when selection is cancelled', async () => {
+    const mockUserCell = {
+      show: vi.fn().mockResolvedValue(null),
+    }
+    const cell = new ArtifactsExplorerCell(mockUserCell)
+
+    const result = await cell.allowArtifact('artifact-xyz')
+
+    expect(result).toBeNull()
   })
 })

@@ -136,7 +136,7 @@
               </div>
 
               <!-- Strategy Interface -->
-              <div class="mt-2">
+              <div class="mt-2 flex items-center gap-2 flex-wrap">
                 <!-- Frontend-orchestrated: add to workspace -->
                 <button
                   v-if="artifact.execution_model.orchestrator === 'frontend'"
@@ -160,13 +160,34 @@
                     {{ artifact.execution_model.heartbeat_channel }}
                   </span>
                 </div>
+
+                <!-- Allow button (cell-type artifacts only) -->
+                <button
+                  v-if="artifact.artifact_type === 'cell-type'"
+                  class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-600 text-white rounded text-xs font-medium hover:bg-emerald-700 transition-colors"
+                  :aria-label="`Allow user access to ${artifact.identity.name}`"
+                  @click="handleAllowArtifact(artifact)"
+                >
+                  🔐 Allow
+                </button>
               </div>
+
+              <!-- Allowance feedback message -->
+              <p
+                v-if="allowanceFeedback[artifact.artifact_id]"
+                class="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium"
+              >
+                {{ allowanceFeedback[artifact.artifact_id] }}
+              </p>
             </div>
           </div>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- UserSelectionCell overlay (mounted via Teleport inside View.vue) -->
+  <UserSelectionView />
 </template>
 
 <script setup lang="ts">
@@ -179,16 +200,18 @@
  * filter_mode !== 'cells_only'.
  * Strategy Interface: frontend-orchestrated artifacts show "Add to Workspace";
  * launcher-orchestrated show "Managed by Launcher" with optional heartbeat_channel.
+ * Cell-type artifacts also show a "🔐 Allow" button that opens the user-selection overlay.
  *
  * Props:
  *  - cellInstance: BaseCell instance (from resolveViewSpec)
  *  - cell: { cellTypeName, cellType, initialData } (from resolveViewSpec)
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { useArtifactsExplorerStore } from './store'
 import type { ExplorerArtifact, FilterMode } from './store'
+import UserSelectionView from '../user-selection-cell/frontend/View.vue'
 
 const log = createLogger('cell:artifacts-explorer:view')
 
@@ -204,6 +227,12 @@ const searchQuery = ref('')
 
 /** Active category tab key. Defaults to 'all'. */
 const activeCategory = ref<'all' | 'cell-type' | 'service' | 'job-type'>('all')
+
+/** Allowance feedback messages per artifact_id (auto-cleared after 3s). */
+const allowanceFeedback = ref<Record<string, string>>({})
+
+/** Track active feedback timeouts so they can be cleared on unmount. */
+const feedbackTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
 // ── Derived filter_mode from cell initialData / props ─────────────────────────
 const filterMode = computed<FilterMode>(() => {
@@ -288,11 +317,51 @@ function handleSelectArtifact(artifact: ExplorerArtifact): void {
   explorerStore.selectArtifact(artifact)
 }
 
+async function handleAllowArtifact(artifact: ExplorerArtifact): Promise<void> {
+  log.info('[ArtifactsExplorerView] Allow clicked', { artifactId: artifact.artifact_id })
+  if (!props.cellInstance) {
+    log.warn('[ArtifactsExplorerView] No cellInstance available for allowArtifact()')
+    return
+  }
+  const user = await props.cellInstance.allowArtifact(artifact.artifact_id)
+  if (user) {
+    const msg = `User ${user.username} added to allowance list`
+    allowanceFeedback.value[artifact.artifact_id] = msg
+    log.info('[ArtifactsExplorerView] Allowance granted', {
+      artifactId: artifact.artifact_id,
+      username: user.username,
+    })
+    // Clear feedback after 3 seconds; track the timeout ID for cleanup on unmount.
+    // Cancel any prior timeout for the same artifact before creating the new one
+    // to avoid two concurrent timeouts for the same artifact_id.
+    const prior = feedbackTimeouts.get(artifact.artifact_id)
+    if (prior !== undefined) {
+      clearTimeout(prior)
+      feedbackTimeouts.delete(artifact.artifact_id)
+    }
+    const tid = setTimeout(() => {
+      delete allowanceFeedback.value[artifact.artifact_id]
+      feedbackTimeouts.delete(artifact.artifact_id)
+    }, 3000)
+    feedbackTimeouts.set(artifact.artifact_id, tid)
+  } else {
+    log.debug('[ArtifactsExplorerView] Allow cancelled', { artifactId: artifact.artifact_id })
+  }
+}
+
 function loadArtifacts(): void {
   explorerStore.loadArtifacts(filterMode.value)
 }
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────────
+onBeforeUnmount(() => {
+  // Clear all pending feedback timeouts to prevent memory leaks on unmount
+  for (const tid of feedbackTimeouts.values()) {
+    clearTimeout(tid)
+  }
+  feedbackTimeouts.clear()
+})
+
 onMounted(async () => {
   // [DEBUG-2887] Log mount context: props, filterMode, store state
   log.info('[DEBUG-2887][ArtifactsExplorerView] onMounted', {
