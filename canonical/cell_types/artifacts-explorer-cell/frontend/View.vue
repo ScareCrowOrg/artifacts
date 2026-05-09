@@ -211,7 +211,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { useArtifactsExplorerStore } from './store'
 import type { ExplorerArtifact, FilterMode } from './store'
-import UserSelectionView from '../user-selection-cell/frontend/View.vue'
+import UserSelectionView from '../../user-selection-cell/frontend/View.vue'
 
 const log = createLogger('cell:artifacts-explorer:view')
 
