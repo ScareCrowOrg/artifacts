@@ -40,7 +40,7 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   /**
-   * Load users from GET /api/users/public.
+   * Load users from GET /api/users/ (backend proxy to CentralHub).
    * Accessible to any authenticated user — no 403 for non-admins.
    *
    * @param query - Optional username search filter (passed as `?q=`)
@@ -52,7 +52,7 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
       const params = new URLSearchParams()
       if (query) params.set('q', query)
       params.set('limit', '50')
-      const url = `/api/users/public?${params.toString()}`
+      const url = `/api/users/?${params.toString()}`
       const response = await apiFetch(url, { method: 'GET' })
       if (!response.ok) {
         error.value = `Failed to load users (HTTP ${response.status})`
