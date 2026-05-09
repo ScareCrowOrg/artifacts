@@ -17,7 +17,7 @@ import { apiFetch } from '@/services/apiService'
 
 const log = createLogger('store:user-selection')
 
-// ── User interface (mirrors backend User model fields used here) ──────────
+// ── User interface (mirrors CentralHub PublicUser fields) ──────────────────
 
 export interface SelectableUser {
   id: string
@@ -53,15 +53,21 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
       if (query) params.set('q', query)
       params.set('limit', '50')
       const url = `/api/users/?${params.toString()}`
+      log.debug('[UserSelectionStore] loadUsers — requesting', { url, query })
       const response = await apiFetch(url, { method: 'GET' })
+      log.debug('[UserSelectionStore] loadUsers — response received', { status: response.status, ok: response.ok })
       if (!response.ok) {
         error.value = `Failed to load users (HTTP ${response.status})`
         log.error('[UserSelectionStore] Non-ok response', { status: response.status })
         return
       }
       const data = await response.json()
+      log.debug('[UserSelectionStore] loadUsers — raw data', { isArray: Array.isArray(data), length: Array.isArray(data) ? data.length : 'N/A', sample: Array.isArray(data) && data.length > 0 ? JSON.stringify(data[0]) : null })
       users.value = Array.isArray(data) ? data : []
-      log.info('[UserSelectionStore] Users loaded', { count: users.value.length })
+      log.info('[UserSelectionStore] Users loaded', {
+        count: users.value.length,
+        firstUser: users.value[0] ? { id: users.value[0].id, name: users.value[0].name } : null,
+      })
     } catch (err: any) {
       error.value = err?.message || 'Failed to load users'
       log.error('[UserSelectionStore] loadUsers error', { error: error.value })
@@ -106,7 +112,7 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
    * @param user - The user that was selected
    */
   function selectUser(user: SelectableUser): void {
-    log.info('[UserSelectionStore] User selected', { name: user.name })
+    log.info('[UserSelectionStore] User selected', { name: user.name, id: user.id })
     if (_resolve) {
       _resolve(user)
       _resolve = null

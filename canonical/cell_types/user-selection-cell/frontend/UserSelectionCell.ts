@@ -129,7 +129,7 @@ export class UserSelectionCell extends BaseCell {
       store.open(overlayTitle, (user) => {
         // Register completed fragment
         log.debug('[UserSelectionCell] Fragment: completed pick-user', {
-          selected: user ? user.username : null,
+          selected: user ? user.name : null,
         })
         resolve(user)
       })

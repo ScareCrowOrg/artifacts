@@ -24,7 +24,7 @@ const user = await userCell.show({}, {
 })
 
 if (user) {
-  console.log(`Selected: ${user.name}`)
+  console.log(`Selected: ${user.username}`)
 } else {
   // User cancelled
 }

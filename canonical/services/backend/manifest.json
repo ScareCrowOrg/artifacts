@@ -3,8 +3,8 @@
   "name": "backend",
   "description": "ScareVerse Backend - FastAPI/uvicorn service",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-backend:staging20260509T232842",
-  "imageTag": "staging20260509T232842",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-backend:staging20260509T235338",
+  "imageTag": "staging20260509T235338",
   "checksum": "sha256:7474f57639e8d654ec71a2b85002956447f56eebf5865c32bb91528dee4dc6ec",
   "dependencies": [
     "backend/"
@@ -12,12 +12,6 @@
   "generate_env_file": false,
   "totp_seed": true,
   "injected_env_vars": [
-    {
-      "name": "PLANET_NAME",
-      "source": "vault",
-      "required": false,
-      "description": "Planet subdomain name for CORS and routing (e.g., 'scare' for 'scare.scareverse.net')"
-    },
     {
       "name": "TUNNEL_FQDN",
       "source": "config",
@@ -45,5 +39,5 @@
       "path": "/wss/events"
     }
   },
-  "lastBuilt": "2026-05-09T23:28:56.181Z"
+  "lastBuilt": "2026-05-09T23:53:52.947Z"
 }
