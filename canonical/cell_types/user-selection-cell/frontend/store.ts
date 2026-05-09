@@ -21,7 +21,7 @@ const log = createLogger('store:user-selection')
 
 export interface SelectableUser {
   id: string
-  username: string
+  name: string
   avatar_url?: string | null
 }
 
@@ -106,7 +106,7 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
    * @param user - The user that was selected
    */
   function selectUser(user: SelectableUser): void {
-    log.info('[UserSelectionStore] User selected', { username: user.username })
+    log.info('[UserSelectionStore] User selected', { name: user.name })
     if (_resolve) {
       _resolve(user)
       _resolve = null

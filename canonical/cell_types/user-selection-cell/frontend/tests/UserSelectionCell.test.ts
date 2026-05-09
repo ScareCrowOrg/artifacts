@@ -37,9 +37,8 @@ vi.mock('@/services/apiService', () => ({
 
 export interface SelectableUser {
   id: string
-  username: string
-  email: string
-  role?: string
+  name: string
+  avatar_url?: string | null
 }
 
 /** Minimal stub replicating UserSelectionCell logic for unit testing. */

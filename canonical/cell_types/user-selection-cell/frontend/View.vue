@@ -46,7 +46,7 @@
           <input
             v-model="store.searchQuery"
             type="text"
-            placeholder="Search by username…"
+            placeholder="Search by name…"
             class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Search users"
             @input="handleSearch"
@@ -100,7 +100,7 @@
             v-for="user in store.users"
             :key="user.id"
             class="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-            :aria-label="`Select user ${user.username}`"
+            :aria-label="`Select user ${user.name}`"
             @click="handleSelectUser(user)"
           >
             <!-- Avatar: real image or initial fallback -->
@@ -108,19 +108,19 @@
               <img
                 v-if="user.avatar_url"
                 :src="user.avatar_url"
-                :alt="user.username"
+                :alt="user.name"
                 class="w-full h-full object-cover"
               />
               <div
                 v-else
-                class="w-full h-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-semibold text-sm"
+                class="w-full h-8 bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-semibold text-sm"
               >
-                {{ avatarInitial(user.username) }}
+                {{ avatarInitial(user.name) }}
               </div>
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                {{ user.username }}
+                {{ user.name }}
               </p>
             </div>
           </button>
@@ -165,8 +165,8 @@ const store = useUserSelectionStore()
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function avatarInitial(username: string): string {
-  return username ? username.charAt(0).toUpperCase() : '?'
+function avatarInitial(name: string): string {
+  return name ? name.charAt(0).toUpperCase() : '?'
 }
 
 // ── Search debounce ───────────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ function handleSearch(): void {
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 function handleSelectUser(user: SelectableUser): void {
-  log.info('[UserSelectionView] User selected', { username: user.username })
+  log.info('[UserSelectionView] User selected', { name: user.name })
   store.selectUser(user)
 }
 
