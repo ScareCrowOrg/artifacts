@@ -46,7 +46,7 @@
           <input
             v-model="store.searchQuery"
             type="text"
-            placeholder="Search by username…"
+            placeholder="Search by name…"
             class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Search users"
             @input="handleSearch"
@@ -113,7 +113,7 @@
               />
               <div
                 v-else
-                class="w-full h-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-semibold text-sm"
+                class="w-full h-8 bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-semibold text-sm"
               >
                 {{ avatarInitial(user.name) }}
               </div>
