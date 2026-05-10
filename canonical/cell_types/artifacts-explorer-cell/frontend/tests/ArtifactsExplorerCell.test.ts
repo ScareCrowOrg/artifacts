@@ -47,7 +47,7 @@ type FilterMode = 'all' | 'cells_only'
 
 interface SelectableUser {
   id: string
-  username: string
+  name: string
   email: string
   role?: string
 }
@@ -63,6 +63,7 @@ class ArtifactsExplorerCell {
   }
 
   async execute(input: Record<string, any>) {
+    const startTime = performance.now()
     try {
       const filterMode: FilterMode =
         input.filter_mode === 'cells_only' ? 'cells_only' : 'all'
@@ -134,6 +135,21 @@ class ArtifactsExplorerCell {
       mode: 'pick-one',
       title: 'Select user for allowance',
     })
+
+    if (!user) {
+      return null
+    }
+
+    const response = await apiFetch('/api/local/allowance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artifact_id: artifactId, user_id: user.id }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to grant permission (${response.status})`)
+    }
+
     return user
   }
 }
@@ -392,24 +408,7 @@ describe('ArtifactsExplorerCell.allowArtifact()', () => {
     expect(options.title).toContain('allowance')
   })
 
-  it('returns the selected user when user is picked', async () => {
-    const selectedUser: SelectableUser = {
-      id: 'user-99',
-      username: 'carol',
-      email: 'carol@example.com',
-    }
-    const mockUserCell = {
-      show: vi.fn().mockResolvedValue(selectedUser),
-    }
-    const cell = new ArtifactsExplorerCell(mockUserCell)
-
-    const result = await cell.allowArtifact('artifact-abc')
-
-    expect(result).toEqual(selectedUser)
-    expect(result?.username).toBe('carol')
-  })
-
-  it('returns null when selection is cancelled', async () => {
+  it('returns null when selection is cancelled without calling backend', async () => {
     const mockUserCell = {
       show: vi.fn().mockResolvedValue(null),
     }
@@ -418,5 +417,62 @@ describe('ArtifactsExplorerCell.allowArtifact()', () => {
     const result = await cell.allowArtifact('artifact-xyz')
 
     expect(result).toBeNull()
+    expect(mockApiFetch).not.toHaveBeenCalled()
+  })
+
+  it('calls POST /api/local/allowance with correct artifact_id and user_id when user is selected', async () => {
+    const selectedUser: SelectableUser = {
+      id: 'user-99',
+      name: 'carol',
+      email: 'carol@example.com',
+    }
+    const mockUserCell = {
+      show: vi.fn().mockResolvedValue(selectedUser),
+    }
+    mockApiFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, added: true }) } as unknown as Response)
+    const cell = new ArtifactsExplorerCell(mockUserCell)
+
+    await cell.allowArtifact('artifact-abc')
+
+    expect(mockApiFetch).toHaveBeenCalledTimes(1)
+    const [url, options] = mockApiFetch.mock.calls[0]
+    expect(url).toBe('/api/local/allowance')
+    expect((options as RequestInit).method).toBe('POST')
+    const body = JSON.parse((options as RequestInit).body as string)
+    expect(body.artifact_id).toBe('artifact-abc')
+    expect(body.user_id).toBe('user-99')
+  })
+
+  it('returns the selected user when backend call succeeds', async () => {
+    const selectedUser: SelectableUser = {
+      id: 'user-99',
+      name: 'carol',
+      email: 'carol@example.com',
+    }
+    const mockUserCell = {
+      show: vi.fn().mockResolvedValue(selectedUser),
+    }
+    mockApiFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, added: true }) } as unknown as Response)
+    const cell = new ArtifactsExplorerCell(mockUserCell)
+
+    const result = await cell.allowArtifact('artifact-abc')
+
+    expect(result).toEqual(selectedUser)
+    expect(result?.name).toBe('carol')
+  })
+
+  it('throws an Error when backend returns non-ok response', async () => {
+    const selectedUser: SelectableUser = {
+      id: 'user-99',
+      name: 'carol',
+      email: 'carol@example.com',
+    }
+    const mockUserCell = {
+      show: vi.fn().mockResolvedValue(selectedUser),
+    }
+    mockApiFetch.mockResolvedValueOnce({ ok: false, status: 403, text: async () => 'Forbidden' } as unknown as Response)
+    const cell = new ArtifactsExplorerCell(mockUserCell)
+
+    await expect(cell.allowArtifact('artifact-abc')).rejects.toThrow(/Failed to grant permission/)
   })
 })

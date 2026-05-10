@@ -164,20 +164,27 @@
                 <!-- Allow button (cell-type artifacts only) -->
                 <button
                   v-if="artifact.artifact_type === 'cell-type'"
-                  class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-600 text-white rounded text-xs font-medium hover:bg-emerald-700 transition-colors"
+                  class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-600 text-white rounded text-xs font-medium hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   :aria-label="`Allow user access to ${artifact.identity.name}`"
+                  :disabled="allowanceLoading[artifact.artifact_id]"
                   @click="handleAllowArtifact(artifact)"
                 >
-                  🔐 Allow
+                  <span v-if="allowanceLoading[artifact.artifact_id]">⏳ Saving…</span>
+                  <span v-else>🔐 Allow</span>
                 </button>
               </div>
 
               <!-- Allowance feedback message -->
               <p
                 v-if="allowanceFeedback[artifact.artifact_id]"
-                class="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium"
+                class="mt-1.5 text-xs font-medium"
+                :class="
+                  allowanceFeedback[artifact.artifact_id]?.type === 'error'
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-emerald-600 dark:text-emerald-400'
+                "
               >
-                {{ allowanceFeedback[artifact.artifact_id] }}
+                {{ allowanceFeedback[artifact.artifact_id].message }}
               </p>
             </div>
           </div>
@@ -229,7 +236,10 @@ const searchQuery = ref('')
 const activeCategory = ref<'all' | 'cell-type' | 'service' | 'job-type'>('all')
 
 /** Allowance feedback messages per artifact_id (auto-cleared after 3s). */
-const allowanceFeedback = ref<Record<string, string>>({})
+const allowanceFeedback = ref<Record<string, { type: 'success' | 'error'; message: string }>>({})
+
+/** Loading state per artifact_id while the allowance backend call is in flight. */
+const allowanceLoading = ref<Record<string, boolean>>({})
 
 /** Track active feedback timeouts so they can be cleared on unmount. */
 const feedbackTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
@@ -323,17 +333,37 @@ async function handleAllowArtifact(artifact: ExplorerArtifact): Promise<void> {
     log.warn('[ArtifactsExplorerView] No cellInstance available for allowArtifact()')
     return
   }
-  const user = await props.cellInstance.allowArtifact(artifact.artifact_id)
-  if (user) {
-    const msg = `User ${user.username} added to allowance list`
-    allowanceFeedback.value[artifact.artifact_id] = msg
-    log.info('[ArtifactsExplorerView] Allowance granted', {
+
+  allowanceLoading.value[artifact.artifact_id] = true
+  try {
+    const user = await props.cellInstance.allowArtifact(artifact.artifact_id)
+    if (user) {
+      allowanceFeedback.value[artifact.artifact_id] = {
+        type: 'success',
+        message: `User ${user.name} added to allowance list`,
+      }
+      log.info('[ArtifactsExplorerView] Allowance granted', {
+        artifactId: artifact.artifact_id,
+        name: user.name,
+      })
+    } else {
+      log.debug('[ArtifactsExplorerView] Allow cancelled', { artifactId: artifact.artifact_id })
+    }
+  } catch (error) {
+    allowanceFeedback.value[artifact.artifact_id] = {
+      type: 'error',
+      message: 'Failed to grant permission',
+    }
+    log.error('[ArtifactsExplorerView] Allowance error', {
       artifactId: artifact.artifact_id,
-      username: user.username,
+      error: error instanceof Error ? error.message : String(error),
     })
-    // Clear feedback after 3 seconds; track the timeout ID for cleanup on unmount.
-    // Cancel any prior timeout for the same artifact before creating the new one
-    // to avoid two concurrent timeouts for the same artifact_id.
+  } finally {
+    allowanceLoading.value[artifact.artifact_id] = false
+  }
+
+  // Schedule feedback clearance after 3 s (only when a message was set)
+  if (allowanceFeedback.value[artifact.artifact_id]) {
     const prior = feedbackTimeouts.get(artifact.artifact_id)
     if (prior !== undefined) {
       clearTimeout(prior)
@@ -344,8 +374,6 @@ async function handleAllowArtifact(artifact: ExplorerArtifact): Promise<void> {
       feedbackTimeouts.delete(artifact.artifact_id)
     }, 3000)
     feedbackTimeouts.set(artifact.artifact_id, tid)
-  } else {
-    log.debug('[ArtifactsExplorerView] Allow cancelled', { artifactId: artifact.artifact_id })
   }
 }
 

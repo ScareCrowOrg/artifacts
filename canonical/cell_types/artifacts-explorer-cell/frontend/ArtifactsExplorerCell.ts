@@ -119,12 +119,14 @@ export class ArtifactsExplorerCell extends BaseCell {
   }
 
   /**
-   * Allow an artifact: opens the user-selection overlay and returns the
-   * selected user, or null if the selection was cancelled.
+   * Allow an artifact: opens the user-selection overlay, and if the user
+   * confirms, persists the allowance via POST /api/local/allowance.
    *
-   * Phase 1 (this issue): captures the user selection and returns it to the
-   * View for feedback display. Persisting the allowance mapping (artifact_id → user)
-   * to the backend is out of scope and tracked in a future Allowances issue.
+   * Phase 1: captures the user selection, calls the backend, and returns
+   * the selected user on success.
+   *
+   * - If the user cancels (null): returns null without calling the backend.
+   * - If the backend call fails: throws an Error so the View can handle it.
    *
    * @param artifactId - The ID of the artifact to grant allowance for
    * @returns The selected user, or null on cancel
@@ -135,9 +137,35 @@ export class ArtifactsExplorerCell extends BaseCell {
       mode: 'pick-one',
       title: 'Select user for allowance',
     })
-    log.info('[ArtifactsExplorerCell] allowArtifact() resolved', {
+
+    if (!user) {
+      log.debug('[ArtifactsExplorerCell] allowArtifact() cancelled', { artifactId })
+      return null
+    }
+
+    log.info('[ArtifactsExplorerCell] allowArtifact() user selected, persisting', {
       artifactId,
-      selected: user ? user.username : null,
+      selected: user.name,
+    })
+
+    const response = await apiFetch('/api/local/allowance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artifact_id: artifactId, user_id: user.id }),
+    })
+
+    if (!response.ok) {
+      const detail = await response.text()
+      log.error('[ArtifactsExplorerCell] allowArtifact() backend error', {
+        status: response.status,
+        detail,
+      })
+      throw new Error(`Failed to grant permission (${response.status}): ${detail}`)
+    }
+
+    log.info('[ArtifactsExplorerCell] allowArtifact() persisted successfully', {
+      artifactId,
+      userId: user.id,
     })
     return user
   }
