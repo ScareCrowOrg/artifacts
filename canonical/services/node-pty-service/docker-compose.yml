@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-node-pty-service:staging20260502T162916
+    image: hub-staging.scareverse.net/registry/staging/scareverse-node-pty-service:staging20260509T235902
     container_name: scareverse-node-pty-worker
     environment:
       PORT: ${PORT:-8000}
