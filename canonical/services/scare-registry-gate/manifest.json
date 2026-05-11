@@ -2,7 +2,7 @@
   "version": "0.1",
   "name": "scare-registry-gate",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-scare-registry-gate:staging20260510T161455",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-scare-registry-gate:staging20260511T044055",
   "generate_env_file": false,
   "totp_seed": false,
   "injected_env_vars": [
@@ -50,6 +50,6 @@
     }
   ],
   "dependencies": [],
-  "imageTag": "staging20260510T161455",
-  "lastBuilt": "2026-05-10T16:16:24.355Z"
+  "imageTag": "staging20260511T044055",
+  "lastBuilt": "2026-05-11T04:41:56.065Z"
 }
