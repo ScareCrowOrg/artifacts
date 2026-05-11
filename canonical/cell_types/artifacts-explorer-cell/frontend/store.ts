@@ -12,7 +12,6 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
-import { useWorkspaceStore } from '@/stores/workspaceStore'
 
 const log = createLogger('store:artifacts-explorer')
 
@@ -77,38 +76,9 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
     try {
       const params =
         filterMode === 'cells_only' ? '?artifact_type=cell-type' : ''
-      // [DEBUG-2887] Log the full URL being called and current token state
-      const wsStore = useWorkspaceStore()
-      const hasToken = !!wsStore.sessionToken
-      log.info('[DEBUG-2887][ArtifactsExplorerStore] loadArtifacts called', {
-        filterMode,
-        url: `/api/artifacts-map${params}`,
-        hasToken,
-      })
       const response = await apiFetch(`/api/artifacts-map${params}`, { method: 'GET' })
-      // [DEBUG-2887] Log response status
-      log.info('[DEBUG-2887][ArtifactsExplorerStore] Response received', {
-        status: response.status,
-        ok: response.ok,
-        url: response.url,
-      })
       const data = await response.json()
-      // [DEBUG-2887] Log raw response structure
-      const isArray = Array.isArray(data)
-      const count = isArray ? data.length : -1
-      const firstItem = isArray && data.length > 0 ? {
-        artifact_id: data[0]?.artifact_id,
-        artifact_type: data[0]?.artifact_type,
-        stage: data[0]?.stage,
-        identity_type: typeof data[0]?.identity,
-        has_execution_model: !!data[0]?.execution_model,
-      } : null
-      log.info('[DEBUG-2887][ArtifactsExplorerStore] Raw data', {
-        isArray,
-        count,
-        firstItem,
-      })
-      availableArtifacts.value = isArray ? data : []
+      availableArtifacts.value = Array.isArray(data) ? data : []
       log.info('[ArtifactsExplorerStore] Artifacts loaded', {
         count: availableArtifacts.value.length,
         filterMode,
