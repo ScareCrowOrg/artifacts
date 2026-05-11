@@ -22,6 +22,5 @@
       "required": true,
       "description": "Admin user password for Redis ACL (from redis:admin:password in vault)"
     }
-  ],
-  "lastBuilt": "2026-05-10T20:34:55.466Z"
+  ]
 }
