@@ -3,9 +3,13 @@
  *   "theme_validated": true,
  *   "theme_validated_date": "2026-05-07",
  *   "dark_mode_support": "full",
- *   "i18n_validated": false,
+ *   "i18n_validated": true,
  *   "logger_namespace": "cell:artifacts-explorer:view",
- *   "validation_status": "phase2"
+ *   "validation_status": "phase2",
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>

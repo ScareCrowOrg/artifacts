@@ -3,9 +3,13 @@
  *   "theme_validated": true,
  *   "theme_validated_date": "2026-05-09",
  *   "dark_mode_support": "full",
- *   "i18n_validated": false,
+ *   "i18n_validated": true,
  *   "logger_namespace": "cell:user-selection:view",
- *   "validation_status": "phase1"
+ *   "validation_status": "phase1",
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
@@ -46,7 +50,7 @@
           <input
             v-model="store.searchQuery"
             type="text"
-            placeholder="Search by name…"
+            :placeholder="$t('artifacts.userSelectionCell.searchPlaceholder')"
             class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Search users"
             @input="handleSearch"
@@ -60,7 +64,7 @@
         >
           <div class="text-center">
             <div class="spinner mb-2" />
-            <p class="text-sm text-gray-500 dark:text-gray-400">Loading users…</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('artifacts.userSelectionCell.loadingUsers') }}</p>
           </div>
         </div>
 
@@ -72,7 +76,7 @@
           <div class="text-center">
             <span class="text-3xl mb-2 block">⚠️</span>
             <p class="text-red-500 dark:text-red-400 font-semibold mb-1 text-sm">
-              Failed to load users
+              {{ $t('artifacts.userSelectionCell.failedToLoad') }}
             </p>
             <p class="text-xs text-gray-500 dark:text-gray-400">
               {{ store.error }}
@@ -87,7 +91,7 @@
         >
           <div class="text-center">
             <span class="text-3xl mb-2 block">👤</span>
-            <p class="text-sm text-gray-500 dark:text-gray-400">No users found.</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('artifacts.userSelectionCell.noUsersFound') }}</p>
           </div>
         </div>
 

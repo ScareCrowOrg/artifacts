@@ -5,7 +5,12 @@
  *   "theme_compliance": 100,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <script setup lang="ts">
@@ -169,8 +174,8 @@ const triggerFileInput = () => {
       <!-- Text -->
       <div class="text-center">
         <p class="text-text-primary dark:text-text-primary-dark font-medium mb-1">
-          <span v-if="isDragging">Drop GLB file here</span>
-          <span v-else>Drop GLB file or click to browse</span>
+          <span v-if="isDragging">{{ $t('artifacts.meshPrototypingCell.uploader.dropActive') }}</span>
+          <span v-else>{{ $t('artifacts.meshPrototypingCell.uploader.dropIdle') }}</span>
         </p>
         <p class="text-sm text-text-secondary dark:text-text-secondary-dark">
           Supported format: .glb (GLTF Binary)
@@ -190,7 +195,8 @@ const triggerFileInput = () => {
 
     <!-- Info Note -->
     <p class="text-xs text-text-secondary dark:text-text-secondary-dark mt-2">
-      💡 <strong>Tip:</strong> Upload your own GLB models for instant preview in the 3D viewport
+      💡 <strong>{{ $t('artifacts.meshPrototypingCell.uploader.tipLabel') }}</strong>
+      {{ $t('artifacts.meshPrototypingCell.uploader.tipMessage') }}
     </p>
   </div>
 </template>

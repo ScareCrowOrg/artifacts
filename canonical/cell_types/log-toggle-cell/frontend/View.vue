@@ -5,7 +5,12 @@
  *   "theme_compliance": 100,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
@@ -59,7 +64,7 @@
       <input
         v-model="searchFilter"
         type="text"
-        placeholder="Search namespaces..."
+        :placeholder="$t('artifacts.logToggleCell.searchPlaceholder')"
         class="w-full px-3 py-2 border border-border rounded bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
         :disabled="namespacesLoading"
       />
@@ -67,7 +72,7 @@
 
     <!-- Loading State -->
     <div v-if="namespacesLoading" class="text-center py-8 text-text-secondary">
-      <div class="animate-pulse">Loading namespaces...</div>
+      <div class="animate-pulse">{{ $t('artifacts.logToggleCell.loadingNamespaces') }}</div>
     </div>
 
     <!-- Error State -->
@@ -111,7 +116,7 @@
 
     <!-- Current Pattern Display -->
     <div class="mt-4 p-3 bg-hover rounded border border-border">
-      <div class="text-xs text-text-secondary mb-1">Current DEBUG Pattern:</div>
+      <div class="text-xs text-text-secondary mb-1">{{ $t('artifacts.logToggleCell.currentDebugPattern') }}</div>
       <div class="font-mono text-sm text-text-primary break-all">
         {{ currentPattern || '(none - all logs disabled)' }}
       </div>

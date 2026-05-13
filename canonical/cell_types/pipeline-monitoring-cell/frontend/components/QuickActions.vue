@@ -5,7 +5,12 @@
  *   "theme_compliance": 90,
  *   "theme_status": "good",
  *   "theme_issues": 1,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>

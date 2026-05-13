@@ -1,0 +1,37 @@
+{
+  "version": "0.1",
+  "name": "planet-beacon",
+  "build": false,
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-planet-beacon:staging20260513T195727",
+  "imageTag": "staging20260513T195727",
+  "dependencies": [],
+  "generate_env_file": false,
+  "totp_seed": false,
+  "injected_env_vars": [
+    {
+      "name": "PLANET_ID",
+      "source": "config",
+      "required": true,
+      "description": "Unique planet identifier (UUID). Injected by Launcher from local planet config."
+    },
+    {
+      "name": "PLANET_NAME",
+      "source": "config",
+      "required": true,
+      "description": "Human-readable planet name (e.g. 'andromeda'). Injected by Launcher."
+    },
+    {
+      "name": "TUNNEL_FQDN",
+      "source": "config",
+      "required": true,
+      "description": "Fully-qualified domain name of the Cloudflare tunnel (e.g. planet.scareverse.net). Injected by Launcher."
+    },
+    {
+      "name": "CENTRALHUB_SERVICE_TOKEN",
+      "source": "vault",
+      "required": true,
+      "description": "Bearer token for authenticating requests to CentralHub. Injected by Launcher from vault."
+    }
+  ],
+  "lastBuilt": "2026-05-13T19:59:39.955Z"
+}

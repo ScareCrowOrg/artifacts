@@ -5,7 +5,12 @@
  *   "theme_compliance": 98,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <script setup lang="ts">
@@ -88,7 +93,7 @@ const optimizationBadge = computed(() => {
   >
     <div class="flex items-center gap-2">
       <div v-if="jobStatus === 'processing'" class="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
-      <strong>Status:</strong> {{ statusLabel }}
+      <strong>{{ $t('artifacts.meshPrototypingCell.jobStatus.statusLabel') }}</strong> {{ statusLabel }}
       
       <!-- Optimization Status Badge -->
       <span
@@ -100,7 +105,7 @@ const optimizationBadge = computed(() => {
       </span>
     </div>
     
-    <div v-if="jobId" class="text-xs mt-1 opacity-75">Job ID: {{ jobId }}</div>
+    <div v-if="jobId" class="text-xs mt-1 opacity-75">{{ $t('artifacts.meshPrototypingCell.jobStatus.jobIdLabel') }} {{ jobId }}</div>
     
     <!-- Warning message if Blender failed -->
     <div v-if="message && blenderOptimized === false" class="text-xs mt-2 opacity-90 flex items-start gap-1">
@@ -110,7 +115,7 @@ const optimizationBadge = computed(() => {
     
     <!-- Blender error details (collapsible) -->
     <details v-if="blenderError && blenderOptimized === false" class="mt-2 text-xs">
-      <summary class="cursor-pointer opacity-75 hover:opacity-100">View optimization error details</summary>
+      <summary class="cursor-pointer opacity-75 hover:opacity-100">{{ $t('artifacts.meshPrototypingCell.viewport.viewOptimizationError') }}</summary>
       <pre class="mt-1 p-2 bg-surface-dark/30 dark:bg-black/30 rounded text-xs overflow-x-auto">{{ blenderError }}</pre>
     </details>
   </div>

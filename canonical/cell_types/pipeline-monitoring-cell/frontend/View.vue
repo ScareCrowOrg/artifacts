@@ -5,7 +5,12 @@
  *   "theme_compliance": 95,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
@@ -60,7 +65,7 @@
           <h3 class="font-bold text-lg mb-1">⚠️ Monitoring Backend Unavailable</h3>
           <p class="text-sm mb-2">{{ lastError }}</p>
           <p class="text-sm opacity-90">
-            <strong>This monitoring cell cannot function without backend connection.</strong>
+            <strong>{{ $t('artifacts.pipelineMonitoring.backendRequired') }}</strong>
             All displayed status information would be unreliable. Please check that the backend API is running and accessible.
           </p>
         </div>

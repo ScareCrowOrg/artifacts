@@ -5,7 +5,12 @@
  *   "theme_compliance": 95,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <script setup lang="ts">
@@ -574,7 +579,7 @@ onUnmounted(() => {
 
     <!-- Error Display -->
     <div v-if="error" class="bg-error/10 dark:bg-error/20 border border-error text-error dark:text-error-light px-4 py-3 rounded mb-4">
-      <strong>Error:</strong> {{ error }}
+      <strong>{{ $t('artifacts.meshPrototypingCell.errorLabel') }}</strong> {{ error }}
     </div>
 
     <!-- Generation Mode Switcher -->

@@ -5,7 +5,12 @@
  *   "theme_compliance": 98,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <script setup lang="ts">
@@ -32,7 +37,7 @@ const props = defineProps<{
         <div class="flex items-center gap-2">
           <span class="text-lg">✓</span>
           <div>
-            <strong>Optimized Mesh</strong>
+            <strong>{{ $t('artifacts.meshPrototypingCell.meshMetadata.optimizedMesh') }}</strong>
             <p class="text-xs opacity-75">Processed with Blender optimization + Draco compression</p>
           </div>
         </div>
@@ -41,7 +46,7 @@ const props = defineProps<{
         <div class="flex items-center gap-2">
           <span class="text-lg">⚠</span>
           <div>
-            <strong>Raw Mesh (Optimization Skipped)</strong>
+            <strong>{{ $t('artifacts.meshPrototypingCell.meshMetadata.rawMesh') }}</strong>
             <p class="text-xs opacity-75">Blender optimization failed - delivered raw SF3D output</p>
             <p v-if="metadata.blenderError" class="text-xs mt-1 opacity-60">
               Reason: {{ metadata.blenderError }}
@@ -52,9 +57,9 @@ const props = defineProps<{
     </div>
     
     <div class="grid grid-cols-2 gap-2 text-sm text-text-primary dark:text-text-primary-dark">
-      <div><strong>Vertices:</strong> {{ metadata.vertices?.toLocaleString() || 'N/A' }}</div>
-      <div><strong>Faces:</strong> {{ metadata.faces?.toLocaleString() || 'N/A' }}</div>
-      <div><strong>File Size:</strong> {{ metadata.fileSizeBytes ? (metadata.fileSizeBytes / 1024).toFixed(2) + ' KB' : 'N/A' }}</div>
+      <div><strong>{{ $t('artifacts.meshPrototypingCell.meshMetadata.vertices') }}</strong> {{ metadata.vertices?.toLocaleString() || 'N/A' }}</div>
+      <div><strong>{{ $t('artifacts.meshPrototypingCell.meshMetadata.faces') }}</strong> {{ metadata.faces?.toLocaleString() || 'N/A' }}</div>
+      <div><strong>{{ $t('artifacts.meshPrototypingCell.meshMetadata.fileSize') }}</strong> {{ metadata.fileSizeBytes ? (metadata.fileSizeBytes / 1024).toFixed(2) + ' KB' : 'N/A' }}</div>
       <div><strong>Format:</strong> {{ metadata.blenderOptimized ? 'GLB (optimized)' : 'OBJ (raw)' }}</div>
       <div><strong>Compression:</strong> {{ metadata.blenderOptimized ? 'Draco (enabled)' : 'None' }}</div>
       

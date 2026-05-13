@@ -2,12 +2,15 @@
  * @metadata {
  *   "theme_validated": true,
  *   "theme_validated_date": "2026-01-22",
- *   "i18n_validated": false,
- *   "i18n_validated_date": null,
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2026-05-13",
  *   "theme_compliance": 96,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>

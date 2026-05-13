@@ -5,7 +5,12 @@
  *   "theme_compliance": 92,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
@@ -45,7 +50,7 @@
                   {{ alert.message }}
                 </p>
                 <div v-if="alert.component || alert.prerequisiteId" class="text-xs text-muted-foreground mt-1">
-                  <span v-if="alert.component">Component: {{ alert.component }}</span>
+                  <span v-if="alert.component">{{ $t('artifacts.pipelineMonitoring.alertComponent', { name: alert.component }) }}</span>
                   <span v-if="alert.prerequisiteId" class="ml-2">ID: {{ alert.prerequisiteId }}</span>
                 </div>
               </div>

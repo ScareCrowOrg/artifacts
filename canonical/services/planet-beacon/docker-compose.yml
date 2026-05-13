@@ -1,0 +1,38 @@
+services:
+  planet-beacon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hub-staging.scareverse.net/registry/staging/scareverse-planet-beacon:staging20260513T195727
+    container_name: scareverse-planet-beacon
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PLANET_ID: ${PLANET_ID:-}
+      PLANET_NAME: ${PLANET_NAME:-}
+      TUNNEL_FQDN: ${TUNNEL_FQDN:-}
+      CENTRALHUB_URL: ${CENTRALHUB_URL:-https://hub.scareverse.net}
+      CENTRALHUB_SERVICE_TOKEN: ${CENTRALHUB_SERVICE_TOKEN:-}
+      BEACON_INTERVAL: ${BEACON_INTERVAL:-60}
+      PRESENCE_TTL: ${PRESENCE_TTL:-90}
+      VIEWERS_BASE_DIR: ${VIEWERS_BASE_DIR:-/app/artifacts/canonical/viewers}
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis-local}
+      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
+      REDIS_L1_DB: ${REDIS_L1_DB:-0}
+      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
+      PYTHONPATH: /app/artifacts
+      SCARE_LOG_DESTINATION: /app/logs/service.log
+    volumes:
+      - ../../../../artifacts:/app/artifacts:ro
+      - C:\Users\flavi\.scareverse\staging\logs\planet-beacon:/app/logs:rw
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - scareverse-net
+networks:
+  scareverse-net:
+    external: true

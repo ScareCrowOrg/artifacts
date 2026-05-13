@@ -5,7 +5,12 @@
  *   "theme_compliance": 100,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated": true,
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 95,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
@@ -45,7 +50,7 @@
 
     <!-- Error Display -->
     <div v-if="error" class="mb-4 p-3 bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-700 rounded text-red-700 dark:text-red-400">
-      <strong>Error:</strong> {{ error }}
+      <strong>{{ $t('artifacts.redisExplorer.errorLabel') }}</strong> {{ error }}
     </div>
 
     <!-- Content Area -->
@@ -53,7 +58,7 @@
       <!-- Left Panel: Tree Navigation -->
       <div class="w-1/2 flex flex-col border border-border dark:border-border-dark rounded bg-surface/50 dark:bg-surface-dark/50">
         <div class="p-3 border-b border-border dark:border-border-dark bg-surface/80 dark:bg-surface-dark/80">
-          <h4 class="font-semibold theme-text-primary">Navigation</h4>
+          <h4 class="font-semibold theme-text-primary">{{ $t('artifacts.redisExplorer.navigation') }}</h4>
         </div>
         
         <div class="flex-1 overflow-y-auto p-3">
@@ -61,14 +66,14 @@
           <div v-if="loading" class="flex items-center justify-center h-full">
             <div class="text-center">
               <div class="spinner mb-2"></div>
-              <p class="text-sm theme-text-secondary">Scanning keys...</p>
+              <p class="text-sm theme-text-secondary">{{ $t('artifacts.redisExplorer.scanningKeys') }}</p>
             </div>
           </div>
 
           <!-- Nodes (Branch Prefixes) -->
           <div v-else-if="scanResult">
             <div v-if="scanResult.nodes.length > 0" class="mb-4">
-              <h5 class="text-sm font-semibold theme-text-secondary mb-2">Branches ({{ scanResult.nodes.length }})</h5>
+              <h5 class="text-sm font-semibold theme-text-secondary mb-2">{{ $t('artifacts.redisExplorer.branches', { count: scanResult.nodes.length }) }}</h5>
               <div class="space-y-1">
                 <button
                   v-for="node in scanResult.nodes"
@@ -84,7 +89,7 @@
 
             <!-- Final Keys -->
             <div v-if="scanResult.keys.length > 0">
-              <h5 class="text-sm font-semibold theme-text-secondary mb-2">Keys ({{ scanResult.keys.length }})</h5>
+              <h5 class="text-sm font-semibold theme-text-secondary mb-2">{{ $t('artifacts.redisExplorer.keys', { count: scanResult.keys.length }) }}</h5>
               <div class="space-y-1">
                 <button
                   v-for="key in scanResult.keys"
@@ -101,7 +106,7 @@
 
             <!-- Empty State -->
             <div v-if="scanResult.nodes.length === 0 && scanResult.keys.length === 0" class="text-center py-8">
-              <p class="theme-text-secondary">No keys or branches found at this level</p>
+              <p class="theme-text-secondary">{{ $t('artifacts.redisExplorer.noKeysFound') }}</p>
             </div>
 
             <!-- Actions for Current Level -->
@@ -120,7 +125,7 @@
       <!-- Right Panel: Key Value Viewer -->
       <div class="w-1/2 flex flex-col border border-border dark:border-border-dark rounded bg-surface/50 dark:bg-surface-dark/50">
         <div class="p-3 border-b border-border dark:border-border-dark bg-surface/80 dark:bg-surface-dark/80">
-          <h4 class="font-semibold theme-text-primary">Key Inspector</h4>
+          <h4 class="font-semibold theme-text-primary">{{ $t('artifacts.redisExplorer.keyInspector') }}</h4>
         </div>
         
         <div class="flex-1 overflow-y-auto p-3">
@@ -128,7 +133,7 @@
           <div v-if="!selectedKey && !keyValue" class="flex items-center justify-center h-full text-center">
             <div>
               <span class="text-5xl mb-3 block">🔍</span>
-              <p class="theme-text-secondary">Select a key to inspect its value</p>
+              <p class="theme-text-secondary">{{ $t('artifacts.redisExplorer.selectKey') }}</p>
             </div>
           </div>
 
@@ -136,7 +141,7 @@
           <div v-else-if="loadingKeyValue" class="flex items-center justify-center h-full">
             <div class="text-center">
               <div class="spinner mb-2"></div>
-              <p class="text-sm theme-text-secondary">Loading key value...</p>
+              <p class="text-sm theme-text-secondary">{{ $t('artifacts.redisExplorer.loadingValue') }}</p>
             </div>
           </div>
 
@@ -146,7 +151,7 @@
             <div class="space-y-2">
               <div class="flex justify-between items-start">
                 <div class="flex-1">
-                  <label class="text-xs font-semibold theme-text-secondary uppercase">Key</label>
+                  <label class="text-xs font-semibold theme-text-secondary uppercase">{{ $t('artifacts.redisExplorer.keyLabel') }}</label>
                   <p class="font-mono text-sm theme-text-primary break-all">{{ keyValue.key }}</p>
                 </div>
                 <button
@@ -160,15 +165,15 @@
 
               <div class="grid grid-cols-3 gap-2 text-xs">
                 <div>
-                  <label class="font-semibold theme-text-secondary uppercase">Type</label>
+                  <label class="font-semibold theme-text-secondary uppercase">{{ $t('artifacts.redisExplorer.typeLabel') }}</label>
                   <p class="theme-text-primary">{{ keyValue.type }}</p>
                 </div>
                 <div>
-                  <label class="font-semibold theme-text-secondary uppercase">TTL</label>
+                  <label class="font-semibold theme-text-secondary uppercase">{{ $t('artifacts.redisExplorer.ttlLabel') }}</label>
                   <p class="theme-text-primary">{{ formatTTL(keyValue.ttl) }}</p>
                 </div>
                 <div v-if="keyValue.size">
-                  <label class="font-semibold theme-text-secondary uppercase">Size</label>
+                  <label class="font-semibold theme-text-secondary uppercase">{{ $t('artifacts.redisExplorer.sizeLabel') }}</label>
                   <p class="theme-text-primary">{{ formatBytes(keyValue.size) }}</p>
                 </div>
               </div>
@@ -177,7 +182,7 @@
             <!-- Value Display -->
             <div>
               <div class="flex justify-between items-center mb-2">
-                <label class="text-xs font-semibold theme-text-secondary uppercase">Value</label>
+                <label class="text-xs font-semibold theme-text-secondary uppercase">{{ $t('artifacts.redisExplorer.valueLabel') }}</label>
                 <button
                   class="px-2 py-1 text-xs rounded hover:bg-surface-dark/10 dark:hover:bg-surface/10 theme-text-primary"
                   title="Copy value to clipboard"
@@ -212,14 +217,14 @@
           
           <div v-if="deletePreview" class="text-sm">
             <p class="theme-text-secondary mb-2">
-              <strong>{{ deletePreview.keys_found }}</strong> key(s) will be deleted:
+              <strong>{{ deletePreview.keys_found }}</strong> {{ $t('artifacts.redisExplorer.keysWillBeDeleted', { count: deletePreview.keys_found }) }}
             </p>
             <div v-if="deletePreview.sample_keys.length > 0" class="max-h-32 overflow-y-auto p-2 bg-surface-dark/10 dark:bg-surface/10 rounded">
               <ul class="space-y-1 font-mono text-xs theme-text-primary">
                 <li v-for="key in deletePreview.sample_keys" :key="key">• {{ key }}</li>
               </ul>
               <p v-if="deletePreview.keys_found > deletePreview.sample_keys.length" class="mt-2 theme-text-secondary italic">
-                ... and {{ deletePreview.keys_found - deletePreview.sample_keys.length }} more
+                ... {{ $t('artifacts.redisExplorer.andMore', { count: deletePreview.keys_found - deletePreview.sample_keys.length }) }}
               </p>
             </div>
           </div>
@@ -247,10 +252,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '#shared/utils/logger.js'
 import { apiFetch } from '@/services/apiService'
 import { RedisExplorerCell } from './RedisExplorerCell'
 const logger = createLogger('cell:redis-explorer')
+const { t } = useI18n()
 
 // Initialize BaseCell instance for headless execution support
 const cellInstance = new RedisExplorerCell()

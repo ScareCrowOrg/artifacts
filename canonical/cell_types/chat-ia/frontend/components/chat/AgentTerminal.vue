@@ -1,7 +1,7 @@
 /**
  * @metadata {
  *   "theme_validated": true,
- *   "i18n_validated": false,
+ *   "i18n_validated": true,
  *   "component": "AgentTerminal",
  *   "purpose": "Real-time Agent Mode log terminal with xterm.js",
  *   "mvp": "MVP 4 - Agent Mode Live-Wire",
@@ -9,7 +9,11 @@
  *   "theme_compliance": 98,
  *   "theme_status": "excellent",
  *   "theme_issues": 0,
- *   "dark_mode_support": "full"
+ *   "dark_mode_support": "full",
+ *   "i18n_validated_date": "2026-05-13",
+ *   "i18n_coverage": 100,
+ *   "i18n_status": "excellent",
+ *   "i18n_issues_found": 0
  * }
  */
 <template>
