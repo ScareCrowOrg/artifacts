@@ -5,7 +5,7 @@ services:
     build:
       context: ../../../..
       dockerfile: artifacts/canonical/services/backend/Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-backend:staging20260513T001715
+    image: hub-staging.scareverse.net/registry/staging/scareverse-backend:staging20260513T011938
     ports:
       - 5050:5050
     volumes:
