@@ -2,7 +2,7 @@ version: "3.8"
 services:
   redis:
     build: .
-    image: hub-staging.scareverse.net/registry/staging/scareverse-redis:staging20260514T073523
+    image: hub-staging.scareverse.net/registry/staging/scareverse-redis:staging20260514T074507
     container_name: scareverse-redis-local
     ports:
       - 6380:6380
