@@ -48,7 +48,7 @@ enum RouteDecision {
     BackendBypass,
     BackendProtected,
     ViteProtected,
-    /// Path starts with `/wss/` — alias lookup in `AppState::wss_aliases`.
+    /// Path starts with `/wss/` — resolved via Redis SCAN at request time.
     WssProxy,
     Deny,
 }
@@ -123,36 +123,93 @@ pub fn parse_wss_routing_value(raw_json: &str, alias: &str) -> Result<String, St
     Ok(format!("http://{}:{}", alias, upstream_port))
 }
 
-/// Resolve the upstream URL for a WSS alias via a live Redis GET.
+/// Resolve the upstream URL for a WSS alias by scanning Redis for the
+/// matching `state:service:{service_name}:routing` key.
 ///
-/// Queries `state:service:{alias}:routing` in Redis L1.
+/// Scans all keys matching ``state:service:*:routing`` and finds the one
+/// whose ``wss.alias`` equals the requested *alias*. This avoids relying on
+/// ``state:service:{alias}:routing``, which fails when alias ≠ service_name.
 ///
-/// Returns `Ok(upstream_url)` on success.
-/// Returns `Err(404)` if the key is absent or `wss.enabled` is false.
-/// Returns `Err(503)` if Redis is temporarily unavailable.
+/// Returns ``Ok(upstream_url)`` on success (e.g. ``http://node-pty-service:8000``).
+/// Returns ``Err(404)`` if no service advertises the requested alias.
+/// Returns ``Err(503)`` if Redis is temporarily unavailable.
 async fn resolve_wss_upstream(
     state: &AppState,
     alias: &str,
 ) -> Result<String, axum::http::StatusCode> {
-    let routing_key = format!("state:service:{}:routing", alias);
-
+    let pattern = "state:service:*:routing".to_string();
     let mut conn = state.redis_cm.clone();
-    let value: Option<String> = redis::cmd("GET")
-        .arg(&routing_key)
-        .query_async(&mut conn)
-        .await
-        .map_err(|e| {
-            warn!("[WSSProxy] Redis error for key '{}': {}", routing_key, e);
-            axum::http::StatusCode::SERVICE_UNAVAILABLE
-        })?;
 
-    match value {
-        None => {
-            warn!("[WSSProxy] Routing key '{}' not found in Redis", routing_key);
-            Err(axum::http::StatusCode::NOT_FOUND)
+    let mut cursor: u64 = 0;
+    loop {
+        let result: (u64, Vec<String>) = redis::cmd("SCAN")
+            .arg(cursor)
+            .arg("MATCH")
+            .arg(&pattern)
+            .arg("COUNT")
+            .arg(100)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| {
+                warn!("[WSSProxy] Redis SCAN error: {}", e);
+                axum::http::StatusCode::SERVICE_UNAVAILABLE
+            })?;
+
+        cursor = result.0;
+        let keys = result.1;
+
+        for key in &keys {
+            let value: Option<String> = redis::cmd("GET")
+                .arg(key.as_str())
+                .query_async(&mut conn)
+                .await
+                .map_err(|e| {
+                    warn!("[WSSProxy] Redis GET error for key '{}': {}", key, e);
+                    axum::http::StatusCode::SERVICE_UNAVAILABLE
+                })?;
+
+            if let Some(raw) = value {
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(&raw) {
+                    let wss = match data.get("wss") {
+                        Some(v) => v,
+                        None => continue,
+                    };
+                    let enabled = wss.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
+                    if !enabled {
+                        continue;
+                    }
+                    let wss_alias = wss.get("alias").and_then(|v| v.as_str()).unwrap_or("");
+                    if wss_alias != alias {
+                        continue;
+                    }
+                    // Match found — extract service_name from key and build URL.
+                    let parts: Vec<&str> = key.split(':').collect();
+                    if parts.len() < 4 {
+                        warn!("[WSSProxy] Unexpected key format '{}' for alias '{}'", key, alias);
+                        continue;
+                    }
+                    let service_name = parts[2];
+                    let upstream_port = wss.get("upstream_port").and_then(|v| v.as_u64()).ok_or_else(|| {
+                        warn!("[WSSProxy] Missing upstream_port for alias '{}'", alias);
+                        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                    })?;
+
+                    debug!(
+                        "[WSSProxy] Resolved alias '{}' → service '{}' port {}",
+                        alias, service_name, upstream_port
+                    );
+                    return Ok(format!("http://{}:{}", service_name, upstream_port));
+                }
+            }
         }
-        Some(raw) => parse_wss_routing_value(&raw, alias),
+
+        if cursor == 0 {
+            break;
+        }
     }
+
+    warn!("[WSSProxy] No service found for WSS alias '{}' in Redis", alias);
+    Err(axum::http::StatusCode::NOT_FOUND)
 }
 
 

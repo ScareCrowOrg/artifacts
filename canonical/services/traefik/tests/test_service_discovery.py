@@ -361,7 +361,53 @@ class TestDiscoveryLoopIdempotency:
 
 
 # ---------------------------------------------------------------------------
-# Tests – WSS routing (scan_wss_routes + _build_traefik_config with wss_routes)
+# Tests – Artifact Sovereignty (no direct Vite route)
+# ---------------------------------------------------------------------------
+
+
+class TestArtifactSovereignty:
+    """Validate that auth-proxy is the sole Traefik gatekeeper (no direct Vite route)."""
+
+    def test_vite_healthy_produces_no_direct_route(self):
+        """Even when Vite reports port_opened=True, no direct Vite route is emitted."""
+        config = sd._build_traefik_config({"auth-proxy", "vite"})
+        routers = config["http"]["routers"]
+        assert "vite" not in routers, (
+            "Vite must NOT have a direct Traefik route — all traffic must pass through auth-proxy"
+        )
+
+    def test_auth_proxy_is_only_base_route(self):
+        """Only auth-proxy has a base HTTP route — no other service gets one."""
+        config = sd._build_traefik_config({"auth-proxy", "vite", "backend"})
+        base_routes = list(config["http"]["routers"].keys())
+        assert base_routes == ["auth-proxy"], (
+            f"Expected only auth-proxy as base route, got: {base_routes}"
+        )
+
+    def test_artifacts_path_covered_by_auth_proxy_catch_all(self):
+        """auth-proxy catch-all (PathPrefix `/`) covers /artifacts/* paths."""
+        config = sd._build_traefik_config({"auth-proxy"})
+        router = config["http"]["routers"]["auth-proxy"]
+        assert "PathPrefix(`/`)" in router["rule"], (
+            "auth-proxy must use PathPrefix(`/`) to cover /artifacts/* and all other paths"
+        )
+
+    @pytest.mark.asyncio
+    async def test_vite_healthy_scan_produces_no_route(self):
+        """Integration: when Vite is healthy in Redis, no Vite route appears in YAML."""
+        redis = _make_redis_mock({
+            "state:service:auth-proxy:available": {"port_opened": True, "timestamp": 1.0},
+            "state:service:vite:available": {"port_opened": True, "timestamp": 1.0},
+        })
+        healthy = await sd.scan_healthy_services(redis)
+        assert "vite" in healthy  # Vite IS discovered as healthy...
+        config = sd._build_traefik_config(healthy)
+        assert "vite" not in config["http"]["routers"]  # ...but gets NO route
+        assert "auth-proxy" in config["http"]["routers"]  # auth-proxy is the sole gatekeeper
+
+
+# ---------------------------------------------------------------------------
+# Tests – WSS scan_wss_routes (preserved for observability)
 # ---------------------------------------------------------------------------
 
 
@@ -446,125 +492,4 @@ class TestScanWssRoutes:
         assert result == {}
 
 
-class TestBuildTraefikConfigWss:
-    def test_wss_route_has_priority_110(self):
-        """WSS routes are generated with priority 110."""
-        wss_routes = {
-            "backend": {"enabled": True, "alias": "events", "upstream_port": 5050, "path": "/wss/events"}
-        }
-        config = sd._build_traefik_config(set(), wss_routes)
-        routers = config["http"]["routers"]
-        assert "backend-wss-events" in routers
-        assert routers["backend-wss-events"]["priority"] == 110
-
-    def test_wss_route_rule_uses_path_prefix(self):
-        """WSS route rule uses PathPrefix with the configured path."""
-        wss_routes = {
-            "backend": {"enabled": True, "alias": "events", "upstream_port": 5050, "path": "/wss/events"}
-        }
-        config = sd._build_traefik_config(set(), wss_routes)
-        router = config["http"]["routers"]["backend-wss-events"]
-        assert "PathPrefix(`/wss/events`)" in router["rule"]
-
-    def test_wss_service_points_to_correct_upstream(self):
-        """WSS service loadBalancer points to correct service:port."""
-        wss_routes = {
-            "backend": {"enabled": True, "alias": "events", "upstream_port": 5050, "path": "/wss/events"}
-        }
-        config = sd._build_traefik_config(set(), wss_routes)
-        services = config["http"]["services"]
-        assert "backend-wss-events" in services
-        url = services["backend-wss-events"]["loadBalancer"]["servers"][0]["url"]
-        assert url == "http://backend:5050"
-
-    def test_wss_and_base_routes_coexist(self):
-        """WSS routes coexist with base auth-proxy route."""
-        wss_routes = {
-            "backend": {"enabled": True, "alias": "events", "upstream_port": 5050, "path": "/wss/events"}
-        }
-        config = sd._build_traefik_config({"auth-proxy"}, wss_routes)
-        routers = config["http"]["routers"]
-        assert "auth-proxy" in routers
-        assert "backend-wss-events" in routers
-        # auth-proxy has lower priority
-        assert routers["auth-proxy"]["priority"] < routers["backend-wss-events"]["priority"]
-
-    def test_wss_route_skipped_if_missing_alias(self):
-        """WSS route with empty alias is skipped."""
-        wss_routes = {
-            "backend": {"enabled": True, "alias": "", "upstream_port": 5050, "path": "/wss/events"}
-        }
-        config = sd._build_traefik_config(set(), wss_routes)
-        assert config["http"]["routers"] == {}
-
-    def test_wss_route_skipped_if_missing_upstream_port(self):
-        """WSS route without upstream_port is skipped."""
-        wss_routes = {
-            "backend": {"enabled": True, "alias": "events", "path": "/wss/events"}
-        }
-        config = sd._build_traefik_config(set(), wss_routes)
-        assert config["http"]["routers"] == {}
-
-    def test_no_wss_routes_when_none_passed(self):
-        """Passing None for wss_routes generates no WSS entries."""
-        config = sd._build_traefik_config(set(), None)
-        assert config["http"]["routers"] == {}
-
-    def test_backward_compat_no_wss_routes_arg(self):
-        """Calling _build_traefik_config without wss_routes arg (backward compat)."""
-        config = sd._build_traefik_config({"auth-proxy"})
-        assert "auth-proxy" in config["http"]["routers"]
-        # No WSS routes generated
-        assert not any(k.endswith("-wss-events") for k in config["http"]["routers"])
-
-
-# ---------------------------------------------------------------------------
-# Tests – Artifact Sovereignty (no direct Vite route)
-# ---------------------------------------------------------------------------
-
-
-class TestArtifactSovereignty:
-    """Validate that auth-proxy is the sole Traefik gatekeeper (no direct Vite route)."""
-
-    def test_vite_healthy_produces_no_direct_route(self):
-        """Even when Vite reports port_opened=True, no direct Vite route is emitted."""
-        # Simulate both auth-proxy and vite healthy.
-        config = sd._build_traefik_config({"auth-proxy", "vite"})
-        routers = config["http"]["routers"]
-        assert "vite" not in routers, (
-            "Vite must NOT have a direct Traefik route — all traffic must pass through auth-proxy"
-        )
-
-    def test_auth_proxy_is_only_base_route(self):
-        """Only auth-proxy has a base HTTP route — no other service gets one."""
-        config = sd._build_traefik_config({"auth-proxy", "vite", "backend"})
-        base_routes = [
-            name for name in config["http"]["routers"]
-            if not name.endswith(tuple(f"-wss-{a}" for a in ["events", "logs"]))
-        ]
-        assert base_routes == ["auth-proxy"], (
-            f"Expected only auth-proxy as base route, got: {base_routes}"
-        )
-
-    def test_artifacts_path_covered_by_auth_proxy_catch_all(self):
-        """auth-proxy catch-all (PathPrefix `/`) covers /artifacts/* paths."""
-        config = sd._build_traefik_config({"auth-proxy"})
-        router = config["http"]["routers"]["auth-proxy"]
-        # PathPrefix(`/`) matches all paths including /artifacts/*
-        assert "PathPrefix(`/`)" in router["rule"], (
-            "auth-proxy must use PathPrefix(`/`) to cover /artifacts/* and all other paths"
-        )
-
-    @pytest.mark.asyncio
-    async def test_vite_healthy_scan_produces_no_route(self):
-        """Integration: when Vite is healthy in Redis, no Vite route appears in YAML."""
-        redis = _make_redis_mock({
-            "state:service:auth-proxy:available": {"port_opened": True, "timestamp": 1.0},
-            "state:service:vite:available": {"port_opened": True, "timestamp": 1.0},
-        })
-        healthy = await sd.scan_healthy_services(redis)
-        assert "vite" in healthy  # Vite IS discovered as healthy...
-        config = sd._build_traefik_config(healthy)
-        assert "vite" not in config["http"]["routers"]  # ...but gets NO route
-        assert "auth-proxy" in config["http"]["routers"]  # auth-proxy is the sole gatekeeper
 

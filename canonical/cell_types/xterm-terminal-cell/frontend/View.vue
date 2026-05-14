@@ -94,6 +94,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { usePTYConnection, useTerminalResize } from './composables'
+import { resolveWsUrl } from './resolveWsUrl'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -117,7 +118,7 @@ const emit = defineEmits<{
 
 // ─── Derived config ───────────────────────────────────────────────────────────
 
-const wsUrl = computed(() => props.cell.initial_data?.ws_url ?? 'ws://node-pty-service:8000/ws')
+const wsUrl = computed(() => props.cell.initial_data?.ws_url ?? resolveWsUrl())
 const fontSize = computed(() => props.cell.initial_data?.font_size ?? 14)
 
 // ─── Template refs ────────────────────────────────────────────────────────────

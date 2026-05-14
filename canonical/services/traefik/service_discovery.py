@@ -15,12 +15,11 @@ Invoked by:
 
 Redis key patterns scanned:
     state:service:{name}:available  →  JSON  {"port_opened": true|false|null, "timestamp": float}
-    state:service:{name}:routing    →  JSON  {"wss": {"enabled": bool, "alias": str,
-                                                       "upstream_port": int, "path": str}}
 
 Services with ``port_opened: true`` are added to the Traefik config.
-Services that also have a ``state:service:{name}:routing`` key with
-``routing.wss.enabled: true`` get an additional WSS route with priority 110.
+All ``/wss/*`` traffic is handled by the auth-proxy catch-all at request time
+(auth-proxy resolves WSS upstreams dynamically via Redis).
+
 Config is written atomically (temp file + os.replace) and only when routes
 actually change to avoid unnecessary Traefik hot-reloads.
 """
@@ -98,20 +97,17 @@ logger = logging.getLogger("service-discovery")
 # ---------------------------------------------------------------------------
 
 
-def _build_traefik_config(healthy_services: Set[str], wss_routes: Optional[Dict[str, Dict]] = None) -> dict:
+def _build_traefik_config(healthy_services: Set[str]) -> dict:
     """
     Build a Traefik dynamic YAML config dict from the set of healthy services.
 
     Services not present in SERVICE_ROUTES are logged and skipped.
-    For each entry in *wss_routes* (service_name → routing.wss dict), an
-    additional router/service is generated with priority 110 so it takes
-    precedence over the auth-proxy catch-all (priority 100).
+    WSS routes are NOT generated here — all `/wss/*` traffic is handled by the
+    auth-proxy catch-all (``PathPrefix('/')`` priority 100). Auth-proxy resolves
+    WSS upstreams dynamically via Redis at request time.
 
     Args:
         healthy_services: Set of service names with ``port_opened: true``.
-        wss_routes: Optional mapping of service_name → routing.wss config dict.
-                    Example: {"backend": {"alias": "events", "upstream_port": 5050,
-                                          "path": "/wss/events"}}
 
     Returns:
         Dict suitable for ``yaml.dump()`` as a Traefik File provider config.
@@ -143,37 +139,6 @@ def _build_traefik_config(healthy_services: Set[str], wss_routes: Optional[Dict[
             services[name] = {
                 "loadBalancer": {
                     "servers": [{"url": f"http://{name}:{route_cfg['port']}"}]
-                }
-            }
-
-    # ── WSS dynamic routes (priority 110) ────────────────────────────────────
-    if wss_routes:
-        for service_name, wss_cfg in sorted(wss_routes.items()):
-            alias = wss_cfg.get("alias", "")
-            upstream_port = wss_cfg.get("upstream_port")
-            wss_path = wss_cfg.get("path", f"/wss/{alias}")
-
-            if not alias or not upstream_port:
-                logger.warning(
-                    "  ⚠️  WSS config for '%s' missing alias or upstream_port – skipping",
-                    service_name,
-                )
-                continue
-
-            router_name = f"{service_name}-wss-{alias}"
-            logger.debug(
-                "  ➕ Adding WSS route '%s': PathPrefix(%s) → %s:%d (priority 110)",
-                router_name, wss_path, service_name, upstream_port,
-            )
-            routers[router_name] = {
-                "rule": f"PathPrefix(`{wss_path}`)",
-                "service": router_name,
-                "entryPoints": ["http", "websecure"],
-                "priority": 110,
-            }
-            services[router_name] = {
-                "loadBalancer": {
-                    "servers": [{"url": f"http://{service_name}:{upstream_port}"}]
                 }
             }
 
@@ -447,22 +412,14 @@ async def discovery_loop() -> None:
                 logger.debug("✓ Redis connection established")
 
             healthy_services = await scan_healthy_services(redis_client)
-            wss_routes = await scan_wss_routes(redis_client)
 
             # Build the canonical set of router names that *should* exist
-            # (base services + WSS sub-routes) so change detection is accurate.
-            # This logic must mirror the validation inside _build_traefik_config()
-            # so expected_router_names matches the config file that will be written.
+            # for change detection. WSS routes are NOT generated here — auth-proxy
+            # handles all `/wss/*` traffic dynamically at request time.
             expected_router_names: Set[str] = set()
             for name in healthy_services:
                 if name in SERVICE_ROUTES:
                     expected_router_names.add(name)
-            for svc_name, wss_cfg in wss_routes.items():
-                alias = wss_cfg.get("alias", "")
-                upstream_port = wss_cfg.get("upstream_port")
-                # Only count this WSS route if _build_traefik_config() would generate it.
-                if alias and upstream_port:
-                    expected_router_names.add(f"{svc_name}-wss-{alias}")
 
             current_services = _load_current_services(TRAEFIK_CONFIG_PATH)
             logger.debug("Current config routes: %s", sorted(current_services))
@@ -476,7 +433,7 @@ async def discovery_loop() -> None:
                     sorted(removed),
                 )
                 logger.debug("Building config for services: %s", sorted(healthy_services))
-                config = _build_traefik_config(healthy_services, wss_routes)
+                config = _build_traefik_config(healthy_services)
                 logger.debug("Config built, attempting atomic write to %s", TRAEFIK_CONFIG_PATH)
                 try:
                     _write_config_atomic(config, TRAEFIK_CONFIG_PATH)

@@ -31,7 +31,7 @@ pub struct AppState {
     /// Backend upstream base URL (e.g. `http://backend:5050`).
     pub backend_upstream: String,
     /// Redis connection manager used for dynamic WSS alias lookup at request time.
-    /// Queries `state:service:{alias}:routing` in Redis L1 per `/wss/*` request.
+    /// SCANs `state:service:*:routing` in Redis L1 to map alias → service_name.
     pub redis_cm: redis::aio::ConnectionManager,
     /// In-memory session validation cache (sessionId → (checked_at, is_valid)).
     ///
