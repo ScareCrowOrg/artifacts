@@ -5,7 +5,7 @@ services:
     build:
       context: ../../../..
       dockerfile: artifacts/canonical/services/vite/Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-vite:staging20260514T174111
+    image: hub-staging.scareverse.net/registry/staging/scareverse-vite:staging20260514T191020
     ports:
       - 5052:5052
     volumes:
@@ -24,7 +24,7 @@ services:
       - VITE_HMR_PORT=${VITE_HMR_PORT:-5052}
       - VITE_HMR_PROTOCOL=${VITE_HMR_PROTOCOL:-ws}
       - VITE_CORS_ORIGINS=${VITE_CORS_ORIGINS:-http://localhost:8000,http://localhost:5173,http://localhost:5050}
-      - TUNNEL_FQDN=${TUNNEL_FQDN:-}
+      - VITE_TUNNEL_FQDN=${TUNNEL_FQDN:-}
       - VITE_BASE_URL=${VITE_BASE_URL:-/}
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api}
       - VITE_SCARERUNNER_URL=${VITE_SCARERUNNER_URL}
