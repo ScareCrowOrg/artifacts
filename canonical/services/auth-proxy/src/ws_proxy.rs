@@ -128,6 +128,11 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
         .get("origin")
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
+    let cookie_header = req
+        .headers()
+        .get(header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
 
     // Extract the OnUpgrade future that hyper inserts when it receives an upgrade request.
     // This MUST be extracted before we construct and return the 101 response; the future
@@ -162,6 +167,7 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
     // Clone values needed after spawn for header calculation
     let ws_key_for_spawn = ws_key.clone();
     let ws_protocol_for_spawn = ws_protocol.clone();
+    let cookie_for_spawn = cookie_header.clone();
 
     // Spawn the tunnel task *before* returning 101 so that hyper can
     // start draining the upgraded connection as soon as the response is sent.
@@ -198,6 +204,9 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                         }
                         if let Some(ref orig) = origin {
                             handshake.push_str(&format!("Origin: {orig}\r\n"));
+                        }
+                        if let Some(ref cookie) = cookie_for_spawn {
+                            handshake.push_str(&format!("Cookie: {cookie}\r\n"));
                         }
                         handshake.push_str("\r\n");
 
