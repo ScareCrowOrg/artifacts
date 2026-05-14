@@ -198,7 +198,18 @@ async fn resolve_wss_upstream(
                         "[WSSProxy] Resolved alias '{}' → service '{}' port {}",
                         alias, service_name, upstream_port
                     );
-                    return Ok(format!("http://{}:{}", service_name, upstream_port));
+                    let upstream_path = wss.get("upstream_path")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+
+                    if !upstream_path.is_empty() {
+                        info!(
+                            "[WSSProxy] Using upstream path '{}' for alias '{}' (original request path was '/wss/{}')",
+                            upstream_path, alias, alias
+                        );
+                    }
+
+                    return Ok(format!("http://{}:{}{}", service_name, upstream_port, upstream_path));
                 }
             }
         }

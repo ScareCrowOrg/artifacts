@@ -77,6 +77,22 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
         .unwrap_or_else(|| path.clone());
     let full_path = path_and_query.clone();
 
+    // Check if the upstream_base URL includes a path component.
+    // If so, use it instead of the original request path. This allows WSS
+    // routing to map public paths (e.g. /wss/pty) to upstream paths (e.g.
+    // /ws) while preserving the original path for non-WSS WebSocket proxying
+    // (e.g. Vite HMR where public path == upstream path).
+    let upstream_request_path = extract_upstream_path(upstream_base);
+    let effective_path: String = if !upstream_request_path.is_empty() {
+        info!(
+            "[WS] Path override for upstream: '{}' -> '{}' (upstream_base has explicit path)",
+            full_path, upstream_request_path
+        );
+        upstream_request_path.to_owned()
+    } else {
+        full_path.clone()
+    };
+
     info!("[WS] 🚀 UPGRADE REQUEST DETECTED");
     info!("[WS] Path only: {}", path);
     info!("[WS] Path + Query: {}", full_path);
@@ -188,13 +204,13 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
 
                         // Build the HTTP/1.1 WebSocket upgrade request for upstream.
                         let mut handshake = format!(
-                            "GET {full_path} HTTP/1.1\r\n\
+                            "GET {upstream_req_path} HTTP/1.1\r\n\
                              Host: {host}\r\n\
                              Upgrade: websocket\r\n\
                              Connection: Upgrade\r\n\
                              Sec-WebSocket-Key: {key}\r\n\
                              Sec-WebSocket-Version: {version}\r\n",
-                            full_path = full_path,
+                            upstream_req_path = effective_path,
                             host = original_host,
                             key = ws_key_for_spawn,
                             version = ws_version,
@@ -432,6 +448,26 @@ fn build_ws_error_response(status: StatusCode) -> Response {
     resp
 }
 
+/// Extract the path component from an HTTP upstream base URL, if present.
+///
+/// Returns `""` (empty string) when the URL has no explicit path.
+///
+/// Examples:
+/// - `"http://node-pty-service:8000/ws"` → `"/ws"`
+/// - `"http://vite:5052"`                 → `""`
+/// - `"http://backend:5050"`              → `""`
+/// - `"http://node-pty-service:8000"`     → `""`
+fn extract_upstream_path(url: &str) -> &str {
+    // Find the authority/path boundary: first "/" after "://"
+    if let Some(scheme_end) = url.find("://") {
+        let after_scheme = &url[scheme_end + 3..];
+        if let Some(path_start) = after_scheme.find('/') {
+            return &after_scheme[path_start..];
+        }
+    }
+    ""
+}
+
 // ─── Unit tests ───────────────────────────────────────────────────────────────
 #[cfg(test)]
 mod tests {
@@ -519,6 +555,42 @@ mod tests {
     #[test]
     fn test_extract_tcp_addr_trailing_slash() {
         assert_eq!(extract_tcp_addr("http://vite:5052/"), "vite:5052");
+    }
+
+    // ── extract_upstream_path ────────────────────────────────────────────────
+
+    #[test]
+    fn test_extract_upstream_path_with_explicit_path() {
+        assert_eq!(
+            extract_upstream_path("http://node-pty-service:8000/ws"),
+            "/ws"
+        );
+    }
+
+    #[test]
+    fn test_extract_upstream_path_no_path() {
+        assert_eq!(extract_upstream_path("http://vite:5052"), "");
+    }
+
+    #[test]
+    fn test_extract_upstream_path_trailing_slash() {
+        assert_eq!(extract_upstream_path("http://vite:5052/"), "/");
+    }
+
+    #[test]
+    fn test_extract_upstream_path_with_query() {
+        assert_eq!(
+            extract_upstream_path("http://backend:5050/wss/events?token=xyz"),
+            "/wss/events?token=xyz"
+        );
+    }
+
+    #[test]
+    fn test_extract_upstream_path_https_with_path() {
+        assert_eq!(
+            extract_upstream_path("https://example.com:443/ws"),
+            "/ws"
+        );
     }
 
     // ── proxy_ws_to_upstream: missing OnUpgrade returns 426 ─────────────────
