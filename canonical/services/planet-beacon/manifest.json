@@ -2,8 +2,8 @@
   "version": "0.1",
   "name": "planet-beacon",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-planet-beacon:staging20260514T074507",
-  "imageTag": "staging20260514T074507",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-planet-beacon:staging20260514T174111",
+  "imageTag": "staging20260514T174111",
   "dependencies": [],
   "generate_env_file": false,
   "totp_seed": false,
@@ -27,11 +27,17 @@
       "description": "Fully-qualified domain name of the Cloudflare tunnel (e.g. planet.scareverse.net). Injected by Launcher."
     },
     {
+      "name": "CENTRALHUB_URL",
+      "source": "config",
+      "required": true,
+      "description": "CentralHub base URL (e.g. https://hub-staging.scareverse.net). Injected by Launcher from centralhub.url config."
+    },
+    {
       "name": "CENTRALHUB_SERVICE_TOKEN",
       "source": "vault",
       "required": true,
       "description": "Bearer token for authenticating requests to CentralHub. Injected by Launcher from vault."
     }
   ],
-  "lastBuilt": "2026-05-14T07:46:40.250Z"
+  "lastBuilt": "2026-05-14T17:44:13.470Z"
 }
