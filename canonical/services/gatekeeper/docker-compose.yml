@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-gatekeeper:staging20260513T033217
+    image: hub-staging.scareverse.net/registry/staging/scareverse-gatekeeper:staging20260514T011401
     container_name: scareverse-gatekeeper-service
     restart: unless-stopped
     volumes:
