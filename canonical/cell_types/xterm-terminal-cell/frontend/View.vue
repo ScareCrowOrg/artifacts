@@ -136,6 +136,8 @@ async function initTerminal() {
   if (!terminalRef.value) return
 
   try {
+    await import('@xterm/xterm/css/xterm.css')
+
     const { Terminal } = await import('@xterm/xterm')
     const { FitAddon } = await import('@xterm/addon-fit')
 
