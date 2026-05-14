@@ -2,8 +2,8 @@
   "version": "0.1",
   "name": "vite",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-vite:staging20260514T070844",
-  "imageTag": "staging20260514T070844",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-vite:staging20260514T073523",
+  "imageTag": "staging20260514T073523",
   "checksum": "sha256:c4cabc1cddf7ee4e8173bf88ac1c644bb19009ab6a6226d58af9741978e54596",
   "dependencies": [
     "artifacts/package.json",
@@ -27,5 +27,5 @@
       "description": "ScareRunner base URL for frontend (translations, cell types, API). Resolved from settings.vite.scarerunner.url"
     }
   ],
-  "lastBuilt": "2026-05-14T07:13:27.323Z"
+  "lastBuilt": "2026-05-14T07:36:52.375Z"
 }

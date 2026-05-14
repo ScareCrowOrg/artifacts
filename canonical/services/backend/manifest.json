@@ -3,8 +3,8 @@
   "name": "backend",
   "description": "ScareVerse Backend - FastAPI/uvicorn service",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-backend:staging20260514T070844",
-  "imageTag": "staging20260514T070844",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-backend:staging20260514T073523",
+  "imageTag": "staging20260514T073523",
   "checksum": "sha256:7474f57639e8d654ec71a2b85002956447f56eebf5865c32bb91528dee4dc6ec",
   "dependencies": [
     "backend/"
@@ -51,5 +51,5 @@
       "path": "/wss/events"
     }
   },
-  "lastBuilt": "2026-05-14T07:13:27.299Z"
+  "lastBuilt": "2026-05-14T07:36:52.354Z"
 }
