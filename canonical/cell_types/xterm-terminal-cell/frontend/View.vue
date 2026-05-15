@@ -37,6 +37,21 @@
         <span class="text-sm font-medium text-text-primary dark:text-text-primary-dark">
           Terminal
         </span>
+        <!-- Service selector (shown when multiple PTY services available) -->
+        <select
+          v-if="availableServices.length > 1"
+          class="text-xs rounded bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark px-1 py-0.5"
+          @change="onServiceSelect"
+        >
+          <option
+            v-for="svc in availableServices"
+            :key="svc.name"
+            :value="svc.url"
+            :selected="svc.url === selectedServiceUrl"
+          >
+            {{ svc.alias || svc.name }}
+          </option>
+        </select>
         <span
           v-if="cwd"
           class="text-xs text-text-secondary dark:text-text-secondary-dark font-mono truncate max-w-[200px]"
@@ -94,7 +109,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { usePTYConnection, useTerminalResize } from './composables'
-import { resolveWsUrl } from './resolveWsUrl'
+import { discoverServices } from './useWssPtyDiscovery'
+import type { WssPtyService } from './useWssPtyDiscovery'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -119,6 +135,8 @@ const emit = defineEmits<{
 // ─── Derived config ───────────────────────────────────────────────────────────
 
 const wsUrl = ref<string | null>(null)
+const availableServices = ref<WssPtyService[]>([])
+const selectedServiceUrl = ref<string | null>(null)
 const fontSize = computed(() => props.cell.initial_data?.font_size ?? 14)
 
 // ─── Template refs ────────────────────────────────────────────────────────────
@@ -222,11 +240,21 @@ useTerminalResize({
 
 onMounted(async () => {
   // Resolve WS URL: prefer instance override, then discover dynamically
-  wsUrl.value = props.cell.initial_data?.ws_url ?? await resolveWsUrl()
-  if (wsUrl.value) {
-    connect(wsUrl.value)
+  const overrideUrl = props.cell.initial_data?.ws_url
+  if (overrideUrl) {
+    wsUrl.value = overrideUrl
+    connect(overrideUrl)
   } else {
-    errorMessage.value = 'No PTY service available'
+    const services = await discoverServices()
+    availableServices.value = services
+    if (services.length === 1) {
+      wsUrl.value = services[0].url
+      selectedServiceUrl.value = services[0].url
+      connect(wsUrl.value)
+    } else if (services.length === 0) {
+      errorMessage.value = 'No PTY service available'
+    }
+    // if > 1: user must select via dropdown (no auto-connect)
   }
   initTerminal()
 })
@@ -246,6 +274,15 @@ function handleConnect() {
 
 function handleDisconnect() {
   disconnect()
+}
+
+function onServiceSelect(event: Event) {
+  const url = (event.target as HTMLSelectElement).value
+  selectedServiceUrl.value = url
+  wsUrl.value = url
+  errorMessage.value = null
+  disconnect()
+  connect(url)
 }
 
 // Watch font size changes
