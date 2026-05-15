@@ -11,7 +11,6 @@
     "docs": ["docs/README.md"]
   },
   "default_initial_data": {
-    "ws_url": "ws://node-pty-service:8000/ws",
     "cols": 120,
     "rows": 40,
     "font_size": 14,
@@ -21,8 +20,7 @@
   "properties_schema": {
     "ws_url": {
       "type": "string",
-      "default": "ws://node-pty-service:8000/ws",
-      "description": "WebSocket endpoint of the Node-PTY service"
+      "description": "WebSocket endpoint (auto-discovered if empty)"
     },
     "cols": {
       "type": "integer",

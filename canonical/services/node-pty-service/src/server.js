@@ -206,7 +206,12 @@ async function startHeartbeat() {
 
     async function beat() {
       try {
-        await redisClient.set(key, '1', 'EX', config.HEARTBEAT_TTL)
+        const value = JSON.stringify({
+          port_opened: true,
+          wss_pty: true,
+          timestamp: Date.now() / 1000,
+        })
+        await redisClient.set(key, value, 'EX', config.HEARTBEAT_TTL)
         log('DEBUG', `Heartbeat: set ${key} (TTL=${config.HEARTBEAT_TTL}s)`)
       } catch (err) {
         log('ERROR', `Heartbeat failed: ${err.message}`)

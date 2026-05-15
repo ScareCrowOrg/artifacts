@@ -92,11 +92,11 @@ export function usePTYConnection(opts: PTYConnectionOptions): PTYConnection {
 
   let ws: WebSocket | null = null
 
-  function connect() {
+  function connect(url?: string) {
     if (ws && ws.readyState === WebSocket.OPEN) return
     status.value = 'connecting'
 
-    ws = new WebSocket(opts.wsUrl)
+    ws = new WebSocket(url ?? opts.wsUrl)
 
     ws.onopen = () => {
       status.value = 'connected'

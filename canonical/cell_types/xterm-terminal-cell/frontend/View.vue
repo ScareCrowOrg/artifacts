@@ -92,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { usePTYConnection, useTerminalResize } from './composables'
 import { resolveWsUrl } from './resolveWsUrl'
 
@@ -118,7 +118,7 @@ const emit = defineEmits<{
 
 // ─── Derived config ───────────────────────────────────────────────────────────
 
-const wsUrl = computed(() => props.cell.initial_data?.ws_url ?? resolveWsUrl())
+const wsUrl = ref<string | null>(null)
 const fontSize = computed(() => props.cell.initial_data?.font_size ?? 14)
 
 // ─── Template refs ────────────────────────────────────────────────────────────
@@ -184,7 +184,7 @@ const cwd = ref<string | null>(null)
 const sessionId = ref<string | null>(null)
 
 const { status, connect, disconnect, sendInput, sendResize } = usePTYConnection({
-  wsUrl: wsUrl.value,
+  wsUrl: '',  // placeholder — real URL passed to connect() after async resolution
   onOutput: (data: string) => {
     terminal?.write(data)
   },
@@ -220,9 +220,14 @@ useTerminalResize({
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 
-onMounted(() => {
-  // Connect WebSocket immediately, then initialize terminal UI in parallel
-  connect()
+onMounted(async () => {
+  // Resolve WS URL: prefer instance override, then discover dynamically
+  wsUrl.value = props.cell.initial_data?.ws_url ?? await resolveWsUrl()
+  if (wsUrl.value) {
+    connect(wsUrl.value)
+  } else {
+    errorMessage.value = 'No PTY service available'
+  }
   initTerminal()
 })
 

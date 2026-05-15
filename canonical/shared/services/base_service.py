@@ -82,6 +82,9 @@ class BaseService:
         key_ttl:        Redis TTL in seconds for the availability key.  Defaults to
                         ``HEARTBEAT_TTL`` (Launcher-injected) or ``heartbeat_interval * 3`` when ``None``.
         logger:         Optional logger.  Defaults to the module logger.
+        wss_capable:    When ``True``, the heartbeat JSON includes ``wss_pty: true``
+                        to advertise WSS PTY capability.  Defaults to ``None`` (no
+                        capability advertised).
     """
 
     def __init__(
@@ -95,8 +98,10 @@ class BaseService:
         heartbeat_interval: Optional[int] = None,
         key_ttl: Optional[int] = None,
         logger: Optional[logging.Logger] = None,
+        wss_capable: Optional[bool] = None,
     ) -> None:
         self.service_name = service_name
+        self._wss_capable = wss_capable
 
         # Resolve service port: explicit arg → WORKER_PORT env var → None
         if service_port is not None:
@@ -224,9 +229,13 @@ class BaseService:
                     client = aioredis.Redis(**connect_kwargs)
 
                 port_opened = await self._check_port_health()
-                value = json.dumps(
-                    {"port_opened": port_opened, "timestamp": time.time()}
-                )
+                value_dict = {
+                    "port_opened": port_opened,
+                    "timestamp": time.time(),
+                }
+                if self._wss_capable:
+                    value_dict["wss_pty"] = True
+                value = json.dumps(value_dict)
                 await client.set(self._availability_key, value, ex=self._key_ttl)
                 self._logger.debug(
                     "Heartbeat: %s refreshed (TTL %ds, port_opened=%s)",

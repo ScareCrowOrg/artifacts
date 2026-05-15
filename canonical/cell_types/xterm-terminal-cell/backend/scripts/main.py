@@ -27,15 +27,15 @@ def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         Dict with ui_only flag and WebSocket connection parameters.
 
     Example:
-        >>> execute_cell({"ws_url": "ws://node-pty-service:8000/ws"})
+        >>> execute_cell({})
         {
             "success": True,
             "ui_only": True,
-            "ws_url": "ws://node-pty-service:8000/ws",
+            "ws_url": "",
             "message": "xterm-terminal-cell is a UI-only cell..."
         }
     """
-    ws_url = cell_data.get("ws_url", "ws://node-pty-service:8000/ws")
+    ws_url = cell_data.get("ws_url", "")
 
     return {
         "success": True,
