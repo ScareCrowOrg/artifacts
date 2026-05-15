@@ -302,7 +302,7 @@ const viewerWarmupPlugin = {
         for (const viewer of viewers) {
           // Pre-compile main.ts (TypeScript compilation)
           // This triggers: TS → Vue template processing → CSS compilation (JIT)
-          const mainTsUrl = `http://localhost:5052/canonical/viewers/${viewer}/main.ts`
+          const mainTsUrl = `http://localhost:5052/artifacts/canonical/viewers/${viewer}/main.ts`
 
           try {
             const start = performance.now()
@@ -379,7 +379,7 @@ const cellTypeWarmupPlugin = {
           // This triggers: Vue template → TypeScript → CSS compilation (JIT)
           // Imports inside View.vue (composables, stores, BaseCell types) are
           // resolved transitively by Vite's normal pipeline
-          const viewUrl = `http://localhost:5052/canonical/cell_types/${cell}/frontend/View.vue`
+          const viewUrl = `http://localhost:5052/artifacts/canonical/cell_types/${cell}/frontend/View.vue`
 
           try {
             const start = performance.now()
