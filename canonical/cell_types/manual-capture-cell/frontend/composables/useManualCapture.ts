@@ -1,12 +1,10 @@
 /**
  * @file useManualCapture.ts
  * @description Composable for manual-capture-cell ephemeral cell functionality
- * 
- * This composable provides the core logic for the manual capture cell, including:
- * - Content capture functionality
- * - Wireframe generation from HTML
- * - Creating file-editor-v2 cells with captured/generated content
- * 
+ *
+ * Delegates data logic to ManualCaptureCell (BaseCell) and handles
+ * UI-side effects (creating file-editor-v2 cells in the layout).
+ *
  * Key Behaviors:
  * - This is an EPHEMERAL cell - no state is persisted
  * - Actions create NEW file-editor-v2 cells instead of persisting
@@ -15,6 +13,7 @@
 
 import { ref, type Ref } from 'vue'
 import type { ManualCaptureCellData } from '../types'
+import type { ManualCaptureCell } from '../ManualCaptureCell'
 
 export interface UseManualCaptureReturn {
   inputContent: Ref<string>
@@ -22,102 +21,55 @@ export interface UseManualCaptureReturn {
   captureContent: (createCellFn: (content: string, fileName: string, language: string) => Promise<void>) => Promise<void>
   generateWireframe: (createCellFn: (content: string, fileName: string, language: string) => Promise<void>) => Promise<void>
   insertContent: (content: string) => void
+  validationErrors: Ref<string[]>
 }
 
 /**
  * Composable for manual capture cell functionality
  * @param cellData - Cell data (ephemeral - not persisted)
+ * @param cellInstance - ManualCaptureCell instance for validation and execution
  * @returns Manual capture interface
  */
-export function useManualCapture(cellData: Ref<ManualCaptureCellData>): UseManualCaptureReturn {
+export function useManualCapture(
+  cellData: Ref<ManualCaptureCellData>,
+  cellInstance: ManualCaptureCell
+): UseManualCaptureReturn {
   const inputContent = ref<string>('')
   const isProcessing = ref<boolean>(false)
+  const validationErrors = ref<string[]>([])
 
   /**
-   * Generate ASCII wireframe from HTML string
-   * @param htmlString - HTML content to parse
-   * @returns ASCII wireframe representation
-   */
-  function generateWireframeAscii(htmlString: string): string {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(htmlString, 'text/html')
-
-    // Generate element signature (tag + classes)
-    function getSignature(elemento: Element): string {
-      return elemento.tagName.toLowerCase() + '|' + (elemento.className || '')
-    }
-
-    // Draw box for element
-    function drawBox(conteudo: string, nivel: number): string {
-      const indent = '  '.repeat(nivel)
-      return `${indent}+--- ${conteudo} ---+`
-    }
-
-    // Traverse DOM tree recursively
-    function traverse(elemento: Element, nivel: number = 0): string {
-      if (elemento.nodeType !== 1) return ''
-
-      const tag = elemento.tagName.toLowerCase()
-      const classes = elemento.className
-        ? `.${elemento.className.split(' ').join(' .')}`
-        : ''
-      const texto = elemento.textContent?.trim() || ''
-      let conteudo = `<${tag}${classes}>`
-      if (texto && texto.length < 40) conteudo += ` "${texto}"`
-
-      let resultado = drawBox(conteudo, nivel)
-
-      // Group children by signature
-      const filhos = Array.from(elemento.children)
-      const grupos: Record<string, Element[]> = {}
-      filhos.forEach((child) => {
-        const sig = getSignature(child)
-        if (!grupos[sig]) grupos[sig] = []
-        grupos[sig].push(child)
-      })
-
-      for (const sig in grupos) {
-        const grupo = grupos[sig]
-        if (grupo.length > 1) {
-          // Show first and indicate repetitions
-          resultado += '\n' + traverse(grupo[0], nivel + 1)
-          resultado += `\n${'  '.repeat(nivel + 1)}... (${grupo.length - 1} repetidos)`
-        } else {
-          resultado += '\n' + traverse(grupo[0], nivel + 1)
-        }
-      }
-
-      return resultado
-    }
-
-    let resultado = ''
-    for (const child of Array.from(doc.body.children)) {
-      resultado += traverse(child) + '\n'
-    }
-
-    return resultado
-  }
-
-  /**
-   * Capture content and create a file-editor-v2 cell with it
+   * Capture content using BaseCell and create a file-editor-v2 cell
    * @param createCellFn - Function to create a new file-editor-v2 cell
    */
   async function captureContent(
     createCellFn: (content: string, fileName: string, language: string) => Promise<void>
   ): Promise<void> {
     const content = inputContent.value.trim()
-    if (!content) {
-      throw new Error('No content to capture')
+
+    // Validate via BaseCell
+    validationErrors.value = []
+    const errors = cellInstance.validate({ action: 'capture', content })
+    if (errors.length > 0) {
+      validationErrors.value = errors.map(e => e.message)
+      throw new Error(errors[0].message)
     }
 
     isProcessing.value = true
     try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19)
-      const fileName = `captured-content-${timestamp}.md`
-      
-      await createCellFn(content, fileName, 'markdown')
-      
-      // Clear input after successful capture
+      // Execute via BaseCell
+      const result = await cellInstance.execute({ action: 'capture', content })
+      if (!result.success) {
+        throw new Error(result.error || 'Capture failed')
+      }
+
+      // Create file-editor-v2 cell with the result
+      await createCellFn(
+        result.output.content,
+        result.output.fileName,
+        result.output.language
+      )
+
       inputContent.value = ''
     } finally {
       isProcessing.value = false
@@ -125,26 +77,36 @@ export function useManualCapture(cellData: Ref<ManualCaptureCellData>): UseManua
   }
 
   /**
-   * Generate wireframe and create a file-editor-v2 cell with it
+   * Generate wireframe using BaseCell and create a file-editor-v2 cell
    * @param createCellFn - Function to create a new file-editor-v2 cell
    */
   async function generateWireframe(
     createCellFn: (content: string, fileName: string, language: string) => Promise<void>
   ): Promise<void> {
     const htmlContent = inputContent.value.trim()
-    if (!htmlContent) {
-      throw new Error('No HTML content to generate wireframe from')
+
+    // Validate via BaseCell
+    validationErrors.value = []
+    const errors = cellInstance.validate({ action: 'wireframe', content: htmlContent })
+    if (errors.length > 0) {
+      validationErrors.value = errors.map(e => e.message)
+      throw new Error(errors[0].message)
     }
 
     isProcessing.value = true
     try {
-      const wireframeAscii = generateWireframeAscii(htmlContent)
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19)
-      const fileName = `wireframe-${timestamp}.txt`
-      
-      await createCellFn(wireframeAscii, fileName, 'plaintext')
-      
-      // Clear input after successful generation
+      // Execute via BaseCell (wireframe generation logic lives in the cell)
+      const result = await cellInstance.execute({ action: 'wireframe', content: htmlContent })
+      if (!result.success) {
+        throw new Error(result.error || 'Wireframe generation failed')
+      }
+
+      await createCellFn(
+        result.output.content,
+        result.output.fileName,
+        result.output.language
+      )
+
       inputContent.value = ''
     } finally {
       isProcessing.value = false
@@ -165,5 +127,6 @@ export function useManualCapture(cellData: Ref<ManualCaptureCellData>): UseManua
     captureContent,
     generateWireframe,
     insertContent,
+    validationErrors,
   }
 }

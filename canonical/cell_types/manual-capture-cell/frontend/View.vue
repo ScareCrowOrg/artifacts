@@ -44,6 +44,19 @@
       </div>
     </div>
 
+    <!-- Validation Errors -->
+    <div
+      v-if="validationErrors.length > 0"
+      class="px-4 py-2 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800"
+      data-testid="validation-errors"
+    >
+      <ul class="text-sm text-red-600 dark:text-red-400 list-disc list-inside">
+        <li v-for="(error, index) in validationErrors" :key="index">
+          {{ error }}
+        </li>
+      </ul>
+    </div>
+
     <!-- Actions Footer -->
     <div
       class="flex items-center gap-2 px-4 py-3 bg-surface dark:bg-surface-dark border-t border-border dark:border-border-dark"
@@ -83,13 +96,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, type Ref } from 'vue'
+import { ref, computed, onMounted, nextTick, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useLayoutStore } from '@/stores/layout'
 import { useDynamicLayout } from '@/composables/useDynamicLayout'
+import { ManualCaptureCell } from './ManualCaptureCell'
 import { useManualCapture } from './composables/useManualCapture'
 import type { CellProps, ManualCaptureCellData } from './types'
+import type { HealthCheckResult } from '@/types/BaseCell'
+
+// BaseCell instance for headless execution, validation, and health checks
+const cellInstance = new ManualCaptureCell()
 
 // Props
 const props = defineProps<CellProps>()
@@ -114,7 +132,10 @@ const cellData = computed<ManualCaptureCellData>(() => {
   }
 })
 
-// Use composable
+// Health status
+const healthStatus = ref<HealthCheckResult | null>(null)
+
+// Use composable with BaseCell instance
 const cellDataRef: Ref<ManualCaptureCellData> = ref(cellData.value)
 const {
   inputContent,
@@ -122,7 +143,13 @@ const {
   captureContent,
   generateWireframe,
   insertContent,
-} = useManualCapture(cellDataRef)
+  validationErrors,
+} = useManualCapture(cellDataRef, cellInstance)
+
+// Check health on mount (BaseCell pattern)
+onMounted(async () => {
+  healthStatus.value = await cellInstance.health_check()
+})
 
 // Get user ID from auth store (fallback to default if not authenticated)
 const userId = computed(() => (authStore.currentUser?.value)?.id || 'default-user-id')

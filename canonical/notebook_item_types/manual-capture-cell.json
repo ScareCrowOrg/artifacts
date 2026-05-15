@@ -14,6 +14,9 @@
     ],
     "composables": [
       "frontend/composables/useManualCapture.ts"
+    ],
+    "scripts": [
+      "frontend/ManualCaptureCell.ts"
     ]
   },
   "default_initial_data": {
@@ -37,10 +40,7 @@
       "type": "string",
       "default": "Enter content to capture or HTML to generate wireframe...",
       "description": "Placeholder text for the textarea"
-    ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+    }
   },
   "_discovery": {
     "labels": [
@@ -66,8 +66,7 @@
       "Create forms for data validation"
     ]
   },
-  "kind": "cell"
-,
-  "updated_at": "2026-02-24T00:00:00",
+  "kind": "cell",
+  "updated_at": "2026-05-15T00:00:00",
   "created_at": "2026-02-24T00:00:00"
 }
