@@ -332,6 +332,83 @@ const viewerWarmupPlugin = {
   },
 }
 
+// Cell Type Warmup Plugin - Pre-compile cell type View.vue on startup
+// Prevents cold-start delay when cells are added to notebook for the first time
+// Scan is automatic: discovers cell types from canonical/cell_types/ directory
+const cellTypeWarmupPlugin = {
+  name: 'cell-type-warmup',
+  apply: 'serve',
+  enforce: 'post',
+
+  async configureServer(server) {
+    // Schedule warmup after viewer warmup completes (3.5s vs viewer's 2s)
+    setTimeout(async () => {
+      try {
+        const cellTypesDir = path.resolve(__dirname, 'canonical/cell_types')
+
+        // Check if cell types directory exists
+        if (!fs.existsSync(cellTypesDir)) {
+          console.error('❌ [Cell Type Warmup] Directory not found:', cellTypesDir)
+          return
+        }
+
+        const cellTypes = fs.readdirSync(cellTypesDir).filter(f => {
+          return fs.statSync(path.join(cellTypesDir, f)).isDirectory()
+        })
+
+        console.error('\n' + '━'.repeat(100))
+        console.error('🔥 CELL TYPE WARMUP STARTED')
+        console.error(`   Found ${cellTypes.length} cell types`)
+        console.error('━'.repeat(100) + '\n')
+
+        let successCount = 0
+        let skippedCount = 0
+        let failCount = 0
+
+        for (const cell of cellTypes) {
+          const viewPath = path.join(cellTypesDir, cell, 'frontend', 'View.vue')
+
+          // Skip cells without frontend/View.vue (headless or type.json only)
+          if (!fs.existsSync(viewPath)) {
+            console.error(`  ⏭️  ${cell.padEnd(30)} No frontend/View.vue, skipping`)
+            skippedCount++
+            continue
+          }
+
+          // Pre-compile View.vue (Vue SFC compilation)
+          // This triggers: Vue template → TypeScript → CSS compilation (JIT)
+          // Imports inside View.vue (composables, stores, BaseCell types) are
+          // resolved transitively by Vite's normal pipeline
+          const viewUrl = `http://localhost:5052/canonical/cell_types/${cell}/frontend/View.vue`
+
+          try {
+            const start = performance.now()
+            const response = await fetch(viewUrl)
+            const duration = (performance.now() - start).toFixed(2)
+
+            if (response.ok) {
+              console.error(`  ✅ ${cell.padEnd(30)} View.vue compiled in ${duration.padStart(5)}ms`)
+              successCount++
+            } else {
+              console.error(`  ⚠️  ${cell.padEnd(30)} View.vue returned HTTP ${response.status}`)
+              failCount++
+            }
+          } catch (error) {
+            console.error(`  ❌ ${cell.padEnd(30)} ${error.message}`)
+            failCount++
+          }
+        }
+
+        console.error('\n' + '─'.repeat(100))
+        console.error(`✅ CELL TYPE WARMUP COMPLETED: ${successCount} compiled, ${skippedCount} skipped, ${failCount} failed`)
+        console.error('─'.repeat(100) + '\n')
+      } catch (error) {
+        console.error('❌ [Cell Type Warmup] Error:', error.message)
+      }
+    }, 3500) // Wait 3.5s (after viewer warmup at 2s) for server readiness
+  },
+}
+
 // Request Logger Plugin - Logs all HTTP requests processed by Vite
 const requestLoggerPlugin = {
   name: 'request-logger',
@@ -569,6 +646,9 @@ export default defineConfig({
 
     // Viewer pre-compilation warmup
     viewerWarmupPlugin,
+
+    // Cell type pre-compilation warmup (avoids cold-start on first cell load)
+    cellTypeWarmupPlugin,
 
     // URL rewrite middleware (handles /artifacts/canonical/viewers/* and root /)
     urlRewritePlugin,
