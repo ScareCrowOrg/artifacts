@@ -39,15 +39,15 @@
         </span>
         <!-- Service selector (shown when multiple PTY services available) -->
         <select
-          v-if="availableServices.length > 1"
+          v-if="availableServices.length > 0"
           class="text-xs rounded bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark px-1 py-0.5"
           @change="onServiceSelect"
         >
           <option
             v-for="svc in availableServices"
             :key="svc.name"
-            :value="svc.url"
-            :selected="svc.url === selectedServiceUrl"
+            :value="resolveWsUrl(svc)"
+            :selected="resolveWsUrl(svc) === selectedServiceUrl"
           >
             {{ svc.alias || svc.name }}
           </option>
@@ -138,6 +138,29 @@ const wsUrl = ref<string | null>(null)
 const availableServices = ref<WssPtyService[]>([])
 const selectedServiceUrl = ref<string | null>(null)
 const fontSize = computed(() => props.cell.initial_data?.font_size ?? 14)
+
+// Tunnel FQDN from Vite env — injected by Launcher in tunnel mode
+// Empty string = Docker local mode (direct container-to-container)
+const tunnelFqdn =
+  (typeof import.meta !== 'undefined' &&
+    (import.meta as any).env?.VITE_TUNNEL_FQDN) ||
+  ''
+
+/**
+ * Resolve a service's WebSocket URL for the current environment.
+ *
+ * - **Tunnel mode** (FQDN set): uses ``wss://{fqdn}{service.path}``
+ *   so the connection routes through Traefik → Auth-Proxy → upstream.
+ * - **Docker mode** (no FQDN): uses ``service.url`` (direct container
+ *   networking, e.g. ``ws://node-pty-service:8000/ws``).
+ */
+function resolveWsUrl(svc: WssPtyService): string {
+  if (tunnelFqdn && svc.path) {
+    return `wss://${tunnelFqdn}${svc.path}`
+  }
+  // Fallback: use the Docker-net URL (also covers missing path)
+  return svc.url
+}
 
 // ─── Template refs ────────────────────────────────────────────────────────────
 
@@ -248,8 +271,8 @@ onMounted(async () => {
     const services = await discoverServices()
     availableServices.value = services
     if (services.length === 1) {
-      wsUrl.value = services[0].url
-      selectedServiceUrl.value = services[0].url
+      wsUrl.value = resolveWsUrl(services[0])
+      selectedServiceUrl.value = resolveWsUrl(services[0])
       connect(wsUrl.value)
     } else if (services.length === 0) {
       errorMessage.value = 'No PTY service available'
