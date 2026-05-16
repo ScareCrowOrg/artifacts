@@ -2,15 +2,11 @@
   "version": "0.1",
   "name": "ollama",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-ollama:staging20260515T215834",
-  "imageTag": "staging20260515T215834",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-ollama:staging20260516T035858",
+  "imageTag": "staging20260516T035858",
   "checksum": "sha256:ded44d1012f9e7c1e39a7c3192c583c21c3438e0ec6dff1fe840bb88a7095fae",
-  "dependencies": [
-    "artifacts/canonical/services/ollama/Dockerfile",
-    "artifacts/canonical/services/ollama/heartbeat.py",
-    "artifacts/canonical/services/ollama/entrypoint-raw.sh"
-  ],
+  "dependencies": [],
   "generate_env_file": false,
   "totp_seed": false,
-  "lastBuilt": "2026-05-15T22:01:07.497Z"
+  "lastBuilt": "2026-05-16T03:59:19.809Z"
 }
