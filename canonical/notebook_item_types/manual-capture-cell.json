@@ -9,14 +9,14 @@
     "view": [
       "frontend/View.vue"
     ],
+    "basecell": [
+      "frontend/ManualCaptureCell.ts"
+    ],
     "docs": [
       "docs/README.md"
     ],
     "composables": [
       "frontend/composables/useManualCapture.ts"
-    ],
-    "scripts": [
-      "frontend/ManualCaptureCell.ts"
     ]
   },
   "default_initial_data": {
