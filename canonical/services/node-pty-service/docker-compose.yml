@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-node-pty-service:staging20260516T035323
+    image: hub-staging.scareverse.net/registry/staging/scareverse-node-pty-service:staging20260516T051806
     container_name: scareverse-node-pty-worker
     environment:
       PORT: ${PORT:-8000}
@@ -20,7 +20,10 @@ services:
       HEARTBEAT_TTL: ${HEARTBEAT_TTL:-60}
       SCARE_LOG_DESTINATION: /app/logs/service.log
     volumes:
-      - ./volumes/artifacts:/app/artifacts:rw
+      - ../../../../artifacts/shared:/app/artifacts/shared:ro
+      - ../../../../artifacts/canonical:/app/artifacts/canonical:ro
+      - ../../../../artifacts/runtime:/app/artifacts/runtime:ro
+      - ../../../../artifacts/sandbox:/app/artifacts/sandbox:ro
       - C:\Users\flavi\.scareverse\staging\logs\node-pty-service:/app/logs:rw
     expose:
       - "8000"

@@ -4,12 +4,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-claude-code-service:staging20260516T050553
+    image: hub-staging.scareverse.net/registry/staging/scareverse-claude-code-service:staging20260516T051806
     container_name: scareverse-claude-code-service
     environment:
       PORT: ${PORT:-8000}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      CLAUDE_HOME: /app/claude-home
+      CLAUDE_HOME: /app/artifacts
       REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
       REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
       REDIS_L1_DB: ${REDIS_L1_DB:-0}
@@ -26,7 +26,9 @@ services:
       CLAUDE_AUTO_COMPACT_PCT_OVERRIDE: ${CLAUDE_AUTO_COMPACT_PCT_OVERRIDE:-95}
       SCARE_LOG_DESTINATION: /app/logs/service.log
     volumes:
-      - claude-code-home:/app/claude-home:rw
+      - ../../../../artifacts:/app/artifacts:rw
+      - ../../../../artifacts/runtime:/app/artifacts/runtime:rw
+      - ../../../../artifacts/sandbox:/app/artifacts/sandbox:rw
       - C:\Users\flavi\.scareverse\staging\logs\claude-code-service:/app/logs:rw
     expose:
       - "8000"
@@ -38,8 +40,6 @@ services:
         max-file: "3"
     networks:
       - scareverse-net
-volumes:
-  claude-code-home: null
 networks:
   scareverse-net:
     external: true

@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Substitui entrypoint e server para Claude Code
 COPY entrypoint.sh /app/entrypoint.sh
 COPY src/server.js /app/src/server.js
-RUN chmod +x /app/entrypoint.sh && mkdir -p /app/claude-home
+RUN chmod +x /app/entrypoint.sh && mkdir -p /app/artifacts
 
 EXPOSE 8000
 
