@@ -3,6 +3,9 @@
  * @description Claude Code Service main entry point.
  *
  * Starts an Express HTTP server and a WebSocket server on the same port.
+ * Uses node-pty to spawn the Claude Code CLI in a pseudo-terminal so it
+ * runs in interactive (TTY) mode — without a PTY the Claude CLI auto-detects
+ * non-TTY, enters --print (one-shot) mode, and exits after one response.
  *
  * HTTP endpoints:
  *   GET  /health  - Liveness check
@@ -10,8 +13,8 @@
  * WebSocket endpoint:
  *   ws://<host>:<port>/ws  - Interactive Claude Code session
  *
- * Each WebSocket connection spawns a `claude` subprocess and pipes
- * stdin/stdout between the WebSocket and the Claude Code CLI.
+ * Each WebSocket connection spawns a `claude` subprocess via node-pty and
+ * pipes terminal I/O between the WebSocket and the Claude Code CLI.
  *
  * Message protocol (JSON):
  *   Client → Server: { type: "input"|"resize"|"close", data?, cols?, rows? }
@@ -29,7 +32,7 @@ require('dotenv').config()
 const http = require('http')
 const express = require('express')
 const { WebSocketServer, WebSocket } = require('ws')
-const { spawn } = require('child_process')
+const pty = require('node-pty')
 const Redis = require('ioredis')
 const crypto = require('crypto')
 const config = require('../config/env')
@@ -70,45 +73,50 @@ const activeProcesses = new Map()
 
 wss.on('connection', (ws) => {
   const sessionId = crypto.randomUUID()
-  let claudeProcess = null
+  let ptyProcess = null
 
   try {
     log('INFO', `WebSocket connected → session ${sessionId}`)
 
-    const env = { ...process.env, HOME: process.env.CLAUDE_HOME || '/app/claude-home' }
+    const cols = config.PTY_COLS || 80
+    const rows = config.PTY_ROWS || 24
 
-    claudeProcess = spawn('claude', [], {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const env = {
+      ...process.env,
+      HOME: process.env.CLAUDE_HOME || '/app/claude-home',
+      TERM: 'xterm-256color',
+    }
+
+    // Spawn Claude CLI in a PTY so it runs interactively (TTY mode).
+    // Without a PTY, Claude auto-detects non-TTY stdin/stdout, enters
+    // --print (one-shot) mode, and exits after a single response.
+    ptyProcess = pty.spawn('claude', [], {
+      name: 'xterm-256color',
+      cols,
+      rows,
       env,
+      cwd: process.env.CLAUDE_HOME || '/app/claude-home',
     })
 
-    activeProcesses.set(sessionId, claudeProcess)
+    activeProcesses.set(sessionId, ptyProcess)
 
-    send(ws, {
-      type: 'init',
-      session_id: sessionId,
+    // PTY output → WebSocket (includes both stdout and stderr)
+    ptyProcess.onData((data) => {
+      send(ws, { type: 'output', data })
     })
 
-    claudeProcess.stdout.on('data', (data) => {
-      send(ws, { type: 'output', data: data.toString() })
-    })
-
-    claudeProcess.stderr.on('data', (data) => {
-      send(ws, { type: 'error', message: data.toString() })
-    })
-
-    claudeProcess.on('exit', (exitCode, signal) => {
+    // PTY exit → WebSocket closed
+    ptyProcess.onExit(({ exitCode, signal }) => {
       activeProcesses.delete(sessionId)
       log('INFO', `Claude process exited (session=${sessionId}, code=${exitCode}, signal=${signal})`)
       send(ws, { type: 'closed', reason: `Claude process exited (code=${exitCode}, signal=${signal})` })
       try { ws.close() } catch {}
     })
 
-    claudeProcess.on('error', (err) => {
-      activeProcesses.delete(sessionId)
-      log('ERROR', `Claude process error (session=${sessionId}): ${err.message}`)
-      send(ws, { type: 'error', message: `Claude process error: ${err.message}` })
-      try { ws.close() } catch {}
+    // Send init — the PTY is ready immediately after spawn
+    send(ws, {
+      type: 'init',
+      session_id: sessionId,
     })
   } catch (err) {
     log('ERROR', `Failed to spawn claude process: ${err.message}`)
@@ -129,18 +137,20 @@ wss.on('connection', (ws) => {
     try {
       switch (msg.type) {
         case 'input':
-          if (typeof msg.data === 'string' && claudeProcess && claudeProcess.stdin.writable) {
-            claudeProcess.stdin.write(msg.data)
+          if (typeof msg.data === 'string' && ptyProcess) {
+            ptyProcess.write(msg.data)
           }
           break
 
         case 'resize':
-          // Claude Code CLI does not use terminal dimensions; silently ignore
+          if (typeof msg.cols === 'number' && typeof msg.rows === 'number' && ptyProcess) {
+            ptyProcess.resize(msg.cols, msg.rows)
+          }
           break
 
         case 'close':
-          if (claudeProcess) {
-            claudeProcess.kill('SIGTERM')
+          if (ptyProcess) {
+            ptyProcess.kill()
             send(ws, { type: 'closed', reason: 'User closed session' })
             try { ws.close() } catch {}
           }
@@ -157,9 +167,9 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     log('INFO', `WebSocket closed → session ${sessionId}`)
-    if (claudeProcess) {
+    if (ptyProcess) {
       activeProcesses.delete(sessionId)
-      try { claudeProcess.kill('SIGTERM') } catch {}
+      try { ptyProcess.kill() } catch {}
     }
   })
 
@@ -237,7 +247,7 @@ function shutdown(signal) {
 
   // Kill all active claude processes
   for (const [sessionId, proc] of activeProcesses) {
-    try { proc.kill('SIGTERM') } catch {}
+    try { proc.kill() } catch {}
   }
   activeProcesses.clear()
 
