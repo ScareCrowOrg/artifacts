@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-claude-code-service:staging20260516T051806
+    image: hub-staging.scareverse.net/registry/staging/scareverse-claude-code-service:staging20260516T052534
     container_name: scareverse-claude-code-service
     environment:
       PORT: ${PORT:-8000}
@@ -26,7 +26,8 @@ services:
       CLAUDE_AUTO_COMPACT_PCT_OVERRIDE: ${CLAUDE_AUTO_COMPACT_PCT_OVERRIDE:-95}
       SCARE_LOG_DESTINATION: /app/logs/service.log
     volumes:
-      - ../../../../artifacts:/app/artifacts:rw
+      - ../../../../artifacts/shared:/app/artifacts/shared:ro
+      - ../../../../artifacts/canonical:/app/artifacts/canonical:ro
       - ../../../../artifacts/runtime:/app/artifacts/runtime:rw
       - ../../../../artifacts/sandbox:/app/artifacts/sandbox:rw
       - C:\Users\flavi\.scareverse\staging\logs\claude-code-service:/app/logs:rw
