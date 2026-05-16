@@ -10,9 +10,15 @@ if ! command -v claude &> /dev/null; then
 
     # Verificação de rede antes do download (evita crash loop silencioso)
     if ! curl -s --max-time 10 https://registry.npmjs.org > /dev/null 2>&1; then
-        echo "[entrypoint] ERROR: No internet connection detected."
-        echo "[entrypoint] Cannot download Claude Code without network access."
-        echo "[entrypoint] Ensure the container has internet access and try again."
+        # Diagnóstico: HTTP funciona mas HTTPS não = CA certs faltando
+        if curl -s --max-time 10 http://registry.npmjs.org > /dev/null 2>&1; then
+            echo "[entrypoint] ERROR: HTTPS fails but HTTP works — missing CA certificates."
+            echo "[entrypoint] Run: apt-get install -y ca-certificates && update-ca-certificates"
+        else
+            echo "[entrypoint] ERROR: No internet connection detected."
+            echo "[entrypoint] Cannot download Claude Code without network access."
+            echo "[entrypoint] Ensure the container has internet access and try again."
+        fi
         exit 1
     fi
 
