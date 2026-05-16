@@ -98,9 +98,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
 import { useLayoutStore } from '@/stores/layout'
-import { useDynamicLayout } from '@/composables/useDynamicLayout'
 import { ManualCaptureCell } from './ManualCaptureCell'
 import { useManualCapture } from './composables/useManualCapture'
 import type { CellProps, ManualCaptureCellData } from './types'
@@ -112,15 +110,11 @@ const cellInstance = new ManualCaptureCell()
 // Props
 const props = defineProps<CellProps>()
 
-// Stores
-const authStore = useAuthStore() as unknown as import('@/types/stores').AuthStore
+// Layout store for cell creation and status messages (no auth dependency)
 const layoutStore = useLayoutStore()
 
 // i18n
 const { t } = useI18n()
-
-// Use dynamic layout composable (standard pattern - same as file-manager-cell)
-const { addCell: addCellToLayout } = useDynamicLayout() as import('@/types/stores').UseDynamicLayoutReturn
 
 // Get cell data with defaults
 const cellData = computed<ManualCaptureCellData>(() => {
@@ -151,8 +145,7 @@ onMounted(async () => {
   healthStatus.value = await cellInstance.health_check()
 })
 
-// Get user ID from auth store (fallback to default if not authenticated)
-const userId = computed(() => (authStore.currentUser?.value)?.id || 'default-user-id')
+// Default user ID for ephemeral cells (no auth dependency in shared artifacts)
 
 /**
  * Create a file-editor-v2 cell with the given content
@@ -163,12 +156,6 @@ async function createFileEditorCell(
   fileName: string,
   language: string
 ): Promise<void> {
-  // DEBUG ITERATION 2: Verify useDynamicLayout is available
-  console.group('[ManualCaptureCell] 🔍 DEBUG ITERATION 2 - useDynamicLayout Check')
-  console.log('✅ addCellToLayout available:', !!addCellToLayout)
-  console.log('✅ Using standard pattern (same as file-manager-cell)')
-  console.groupEnd()
-
   // Generate ephemeral ID for the new file-editor-v2 cell
   const tempCellId = `ephemeral-file-editor-v2-${Date.now()}`
 
@@ -180,7 +167,7 @@ async function createFileEditorCell(
       cellInstance: {
         id: tempCellId,
         notebook_item_type_id: 'file-editor-v2',
-        assignee_id: userId.value,
+        assignee_id: 'default-user-id',
         initial_data: {
           fileName: fileName,
           filePath: 'captured',
@@ -188,7 +175,7 @@ async function createFileEditorCell(
           readOnly: false,
           category: 'ephemeral',
           icon: '📄',
-          content: content, // Pre-populate with captured content
+          content: content,
         },
         status: 'PENDING',
         fragments: [],
@@ -210,26 +197,7 @@ async function createFileEditorCell(
     },
   }
 
-  console.log('[ManualCaptureCell] Creating file-editor-v2 cell:', cellData)
-  
-  // DEBUG ITERATION 1: Detailed logging of cellData structure
-  console.group('[ManualCaptureCell] 🔍 DEBUG ITERATION 1 - cellData Analysis')
-  console.log('Complete cellData object:', JSON.stringify(cellData, null, 2))
-  console.log('cellData.state.cellInstance.initial_data:', cellData.state.cellInstance.initial_data)
-  console.log('  ↳ content:', cellData.state.cellInstance.initial_data.content?.substring(0, 50) + '...')
-  console.log('  ↳ language:', cellData.state.cellInstance.initial_data.language)
-  console.log('  ↳ fileName:', cellData.state.cellInstance.initial_data.fileName)
-  console.log('cellData.state.cellType.default_initial_data:', cellData.state.cellType.default_initial_data)
-  console.log('cellData.state.initial_data:', cellData.state.initial_data)
-  console.groupEnd()
-  
-  const success = addCellToLayout(cellData)
-  
-  if (!success) {
-    throw new Error('Failed to add file editor cell to layout')
-  }
-
-  console.log('[ManualCaptureCell] ✅ File editor cell created successfully')
+  layoutStore.addCell(cellData)
 }
 
 /**
