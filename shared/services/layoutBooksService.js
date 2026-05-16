@@ -18,7 +18,7 @@
  * Part of Layout Books implementation (Issue #1539, Phase 2)
  */
 
-import { apiFetch } from './apiService.js'
+import { apiFetch } from '@/services/apiService.js'
 import { createLogger } from '@/utils/logger'
 import { API_BASE_URL } from '@/config/endpoints.js'
 

@@ -21,7 +21,7 @@
  */
 
 import { ENDPOINTS } from '../config/endpoints.js'
-import apiService from './apiService.js'
+import apiService from '@/services/apiService.js'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('layout:persistence')
