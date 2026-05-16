@@ -138,8 +138,8 @@ import FooterWindowManager from './components/FooterWindowManager.vue'
 import SaveLayoutBookModal from './components/SaveLayoutBookModal.vue'
 import Toolbar from './components/Toolbar.vue'
 import { createLogger } from '@/utils/logger'
-import { useArtifactsExplorerStore } from '../../cell_types/artifacts-explorer-cell/frontend/store'
-import type { ExplorerArtifact } from '../../cell_types/artifacts-explorer-cell/frontend/store'
+import { useArtifactsExplorerStore } from '#canonical/cell_types/artifacts-explorer-cell/frontend/store'
+import type { ExplorerArtifact } from '#canonical/cell_types/artifacts-explorer-cell/frontend/store'
 import type { CellTypeDefinition, LayoutBook } from './types'
 
 const log = createLogger('workspace:app')

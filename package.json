@@ -4,6 +4,12 @@
   "description": "Vite compilation service for ScareVerse dynamic cell types and book types",
   "private": true,
   "type": "module",
+  "imports": {
+    "#shared/*": "./shared/*",
+    "#canonical/*": "./canonical/*",
+    "#runtime/*": "./runtime/*",
+    "#sandbox/*": "./sandbox/*"
+  },
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0 --port 5052",
     "build": "vite build --config vite.config.ts",

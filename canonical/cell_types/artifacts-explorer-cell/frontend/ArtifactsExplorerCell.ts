@@ -15,8 +15,8 @@ import type {
 } from '@/types/BaseCell'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
-import { UserSelectionCell } from '../../user-selection-cell/frontend/UserSelectionCell'
-import type { SelectableUser } from '../../user-selection-cell/frontend/store'
+import { UserSelectionCell } from '#canonical/cell_types/user-selection-cell/frontend/UserSelectionCell'
+import type { SelectableUser } from '#canonical/cell_types/user-selection-cell/frontend/store'
 
 const log = createLogger('cell:artifacts-explorer')
 

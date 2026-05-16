@@ -735,11 +735,21 @@ export default defineConfig({
       // In container: /app/artifacts
       // In local/test: __dirname
 
-      // Map #artifacts to artifacts root (for all cell types and composition)
+      // DEPRECATED: Use #canonical/ instead of #artifacts/canonical/
+      // Mantido temporariamente para compatibilidade durante migração
       '#artifacts': __dirname,
 
       // Map #shared to shared infrastructure mirror (isolated utilities)
       '#shared': path.resolve(__dirname, 'shared'),
+
+      // Map #canonical to canonical artifacts (core global)
+      '#canonical': path.resolve(__dirname, 'canonical'),
+
+      // Map #runtime to runtime artifacts (user/state)
+      '#runtime': path.resolve(__dirname, 'runtime'),
+
+      // Map #sandbox to sandbox artifacts (scratch/development)
+      '#sandbox': path.resolve(__dirname, 'sandbox'),
 
       // Map @/ to #shared for shared utilities (apiService, authService, etc)
       // This allows files that import @/utils/logger to resolve to #shared/utils/logger

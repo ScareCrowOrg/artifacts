@@ -28,7 +28,11 @@
         "./shared/*",
         "../cockpit-vue/src/shared/*"
       ],
-      "#artifacts/*": ["./*"]
+      "#artifacts/*": ["./*"],
+      "#shared/*": ["./shared/*"],
+      "#canonical/*": ["./canonical/*"],
+      "#runtime/*": ["./runtime/*"],
+      "#sandbox/*": ["./sandbox/*"]
     },
     "types": ["node", "vite/client", "vue", "vue-i18n"],
     "forceConsistentCasingInFileNames": true,
