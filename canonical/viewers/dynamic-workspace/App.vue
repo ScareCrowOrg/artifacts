@@ -271,14 +271,17 @@ async function loadSavedLayouts(): Promise<void> {
  * 3. resolveViewSpec() → cellInstance.show() → {component, props}
  * 4. updateCell() → sets cellInstance, viewSpec, isLoading = false
  */
-async function handleCellTypeSelected(cellType: CellTypeDefinition): Promise<void> {
+async function handleCellTypeSelected(
+  cellType: CellTypeDefinition,
+  initialData?: Record<string, any>,
+): Promise<void> {
   log.info('[App] handleCellTypeSelected', { cellTypeName: cellType.name })
 
   const cellId = addCell(cellType.name, cellType)
 
   try {
     const cellInstance = await instantiateCellByType(cellType.name, cellType)
-    const viewSpec = await resolveViewSpec(cellInstance, cellType.name, cellType)
+    const viewSpec = await resolveViewSpec(cellInstance, cellType.name, cellType, initialData)
     updateCell(cellId, { cellInstance, viewSpec, isLoading: false })
     log.info('[App] Cell ready', { cellId, cellTypeName: cellType.name })
   } catch (err: any) {

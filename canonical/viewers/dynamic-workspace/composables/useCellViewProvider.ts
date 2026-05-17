@@ -244,13 +244,16 @@ export function useCellViewProvider() {
     cellInstance: any,
     cellTypeName: string,
     cellType: CellTypeDefinition,
+    initialData?: Record<string, any>,
   ): Promise<ViewSpec> {
     log.debug('[useCellViewProvider] resolveViewSpec: calling show()', { cellTypeName })
+
+    const data = initialData ?? {}
 
     let showResult: any
 
     try {
-      showResult = await cellInstance.show({}, { mode: 'dynamicworkspace' })
+      showResult = await cellInstance.show(data, { mode: 'dynamicworkspace' })
       log.info('[useCellViewProvider] resolveViewSpec: show() returned', {
         hasResult: !!showResult,
         resultKeys: showResult ? Object.keys(showResult) : [],

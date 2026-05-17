@@ -590,6 +590,11 @@ export abstract class BaseCell {
    * ```
    */
   async show(data: Record<string, any>, options: ShowConfig): Promise<any> {
+    // Store data on instance so View.vue can access via props.cellInstance.__initialData
+    if (data && Object.keys(data).length > 0) {
+      ;(this as any).__initialData = data
+    }
+
     // Default implementation: Check for custom View.vue first
     // Framework will use this to load cell UI with proper context
 
