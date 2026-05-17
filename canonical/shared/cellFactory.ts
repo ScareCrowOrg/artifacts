@@ -19,6 +19,7 @@ import type { InjectionKey } from 'vue'
 
 export interface CellFactory {
   addChildCell(type: string, initialData?: Record<string, any>): Promise<string | undefined>
+  closeCell(cellId: string): Promise<void>
 }
 
 export const CELL_FACTORY_KEY: InjectionKey<CellFactory> = Symbol('cellFactory')

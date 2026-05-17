@@ -245,6 +245,7 @@ export function useCellViewProvider() {
     cellTypeName: string,
     cellType: CellTypeDefinition,
     initialData?: Record<string, any>,
+    cellId?: string,
   ): Promise<ViewSpec> {
     log.debug('[useCellViewProvider] resolveViewSpec: calling show()', { cellTypeName })
 
@@ -301,7 +302,7 @@ export function useCellViewProvider() {
           component: markRaw(ViewComponent),
           props: {
             cellInstance,
-            cell: { cellTypeName, cellType },
+            cell: { cellTypeName, cellType, cellId },
           },
         }
       } catch (err) {
@@ -357,7 +358,7 @@ export function useCellViewProvider() {
           component: markRaw(ViewComponent),
           props: {
             cellInstance,
-            cell: { cellTypeName, cellType },
+            cell: { cellTypeName, cellType, cellId },
           },
         }
       } catch (err) {

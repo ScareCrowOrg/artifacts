@@ -85,7 +85,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   function buildTreeFromFlatList(items: any[]): FileTreeNode[] {
     const nodeMap = new Map<string, FileTreeNode>()
     const root: FileTreeNode[] = []
-    
+
     // Create all nodes and map by path
     for (const item of items) {
       // Skip actions-runner directories
@@ -206,7 +206,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
         
         // Step 2: Load fresh tree data
         console.log('📡 Step 2: Loading tree data...')
-        const url = `${ENDPOINTS.tree}?format=flat&include_hidden=true`
+        const url = `${ENDPOINTS.tree}?format=flat&include_hidden=true&path=artifacts`
         const response = await apiService.fetch(url)
         const data = await response.json()
         

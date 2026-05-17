@@ -134,30 +134,37 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, toRef, computed } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from './components/MarkdownEditor.vue'
 import FileConfigDialog from './components/FileConfigDialog.vue'
 import { useFileEditor } from './composables/useFileEditor'
-import { useCellsStore } from '@/stores/cells'
-import type { FileEditorCell } from '@/types'
+import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
 
 const { t: $t } = useI18n()
 
 /**
  * Props interface for File Editor View
+ * DynamicWorkspace passes { cellInstance, cell: { cellTypeName, cellType } }.
+ * cellInstance.__initialData contains the data set by cellFactory.addChildCell().
  */
 interface Props {
-  /** The file editor cell instance */
-  cell: FileEditorCell
+  cell?: Record<string, any>
+  cellInstance?: Record<string, any>
 }
 
 const props = defineProps<Props>()
 
-// Stores
-const cellsStore = useCellsStore()
+// Inject cellFactory for closeCell functionality
+const cellFactory = inject<CellFactory>(CELL_FACTORY_KEY)
 
-// Use file editor composable - pass the cell as a ref using toRef to maintain reactivity
+// Create a local cell ref with initial_data sourced from cellInstance.__initialData
+// (set by BaseCell.show() when cellFactory.addChildCell() passes initial data)
+const cellRef = ref<{ id?: string; initial_data?: Record<string, any> }>({
+  initial_data: {},
+})
+
+// Use file editor composable with the local cell ref
 const {
   fileContent,
   isLoading,
@@ -171,7 +178,7 @@ const {
   saveFile,
   deleteEphemeral,
   sendToChat,
-} = useFileEditor(toRef(props, 'cell'))
+} = useFileEditor(cellRef)
 
 // Editable filename and path (separate from readonly computed values)
 const editableFileName = ref<string>(fileName.value)
@@ -186,7 +193,7 @@ let copyTimeoutId: ReturnType<typeof setTimeout> | null = null
 
 // Check if this is a new file creation
 const isNewFile = computed<boolean>(() => {
-  const data = props.cell?.initial_data as any
+  const data = cellRef.value?.initial_data as any
   return data?.isNewFile === true
 })
 
@@ -211,50 +218,14 @@ watch(filePath, (newValue) => {
   }
 })
 
-// Sync file content to cell object for CellToolbar access
-watch(fileContent, (newContent) => {
-  if (props.cell) {
-    // Update cell via store instead of mutating props
-    cellsStore.updateCellData(props.cell.id, {
-      content: newContent,
-      filename: editableFileName.value,
-    })
-  }
-})
-
-// Watch editable fields and update cell initial_data
+// Watch editable fields and update cellRef so saveFile() reads current values
 watch([editableFileName, editableFilePath], ([newFileName, newFilePath]) => {
-  if (props.cell) {
-    console.log('[FILE-EDITOR] Watcher triggered - updating cell data:', {
-      cellId: props.cell.id,
-      newFileName,
-      newFilePath,
-      oldInitialData: { ...props.cell.initial_data }
-    })
-    
-    // INTENTIONAL PROPS MUTATION:
-    // We directly update cell's initial_data to ensure saveFile() reads the new values.
-    // This is necessary because:
-    // 1. The cell object comes from a Pinia store (not a pure Vue prop)
-    // 2. cellsStore.updateCellData() stores changes separately in cellDataUpdates
-    // 3. The composable's saveFile() reads from cellRef.value?.initial_data
-    // 4. Without this direct update, the old values would be used when saving
-    // Alternative: Refactor entire cell management (out of scope for minimal fix)
-    if (props.cell.initial_data) {
-      props.cell.initial_data.fileName = newFileName
-      props.cell.initial_data.filePath = newFilePath
+  if (cellRef.value) {
+    if (!cellRef.value.initial_data) {
+      cellRef.value.initial_data = {}
     }
-    
-    console.log('[FILE-EDITOR] Cell initial_data updated:', {
-      cellId: props.cell.id,
-      updatedInitialData: { ...props.cell.initial_data }
-    })
-    
-    // Also update via store for other consumers
-    cellsStore.updateCellData(props.cell.id, {
-      fileName: newFileName,
-      filePath: newFilePath,
-    })
+    cellRef.value.initial_data.fileName = newFileName
+    cellRef.value.initial_data.filePath = newFilePath
   }
 })
 
@@ -262,23 +233,18 @@ watch([editableFileName, editableFilePath], ([newFileName, newFilePath]) => {
  * Handle delete ephemeral button click
  */
 function handleDeleteEphemeral(): void {
-  deleteEphemeral()
+  const cellId = props.cell?.cellId
+  if (cellId && cellFactory) {
+    cellFactory.closeCell(cellId)
+  }
 }
 
 /**
  * Handle send to chat (exposed for CellToolbar)
  */
 function handleSendToChat(): void {
-  console.group('[FILE-EDITOR] 📤 handleSendToChat - DEBUG ITERATION 1')
-  console.log('Cell data:', {
-    cellId: props.cell?.id,
-    fileName: editableFileName.value,
-    contentLength: fileContent.value?.length,
-  })
   console.log('[FILE-EDITOR] Calling sendToChat() from composable...')
   sendToChat()
-  console.log('[FILE-EDITOR] ✅ sendToChat() completed')
-  console.groupEnd()
 }
 
 /**
@@ -341,23 +307,36 @@ async function handleCopyPath(): Promise<void> {
 
 // Load file on mount
 onMounted(async () => {
-  console.log('[FILE-EDITOR] Component mounted, cell data:', {
-    cellId: props.cell?.id,
-    cellType: props.cell?.notebook_item_type_id,
-    initial_data: props.cell?.initial_data,
-    fileName: fileName.value,
-    filePath: filePath.value,
-    fullPath: fullPath.value
-  })
-  console.log('[FILE-EDITOR] 📋 Exposing methods via defineExpose:', {
-    onSave: 'function',
-    onSendToChat: 'function'
-  })
-  await loadFile()
-  
-  // Initialize editable fields after loading
+  // Read initialData from cellInstance.__initialData (set by BaseCell.show()
+  // when cellFactory.addChildCell() passes initial data from file-manager)
+  const initialData = ((props.cellInstance as any)?.__initialData || {}) as Record<string, any>
+
+  // Populate cellRef with data from cellInstance (file-manager → addChildCell flow)
+  cellRef.value = {
+    initial_data: {
+      fileName: initialData.fileName || 'untitled.md',
+      filePath: initialData.filePath || 'docs',
+      content: initialData.content,
+      language: initialData.language,
+      readOnly: initialData.readOnly,
+      isNewFile: initialData.isNewFile,
+      icon: initialData.icon,
+    },
+  }
+
+  // Initialize editable fields from the hydrated cell data
   editableFileName.value = fileName.value
   editableFilePath.value = filePath.value
+
+  console.log('[FILE-EDITOR] Component mounted, hydrated from cellInstance.__initialData:', {
+    initialData,
+    fileName: fileName.value,
+    filePath: filePath.value,
+    fullPath: fullPath.value,
+    hasPreProvidedContent: !!initialData.content,
+  })
+
+  await loadFile()
 })
 
 // Cleanup on unmount

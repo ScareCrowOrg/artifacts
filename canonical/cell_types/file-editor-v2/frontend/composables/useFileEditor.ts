@@ -8,7 +8,6 @@
 import { ref, computed, watch, type Ref } from 'vue'
 import apiService from '@/services/apiService.js'
 import { ENDPOINTS } from '@/config/endpoints.js'
-import { useCellsStore } from '@/stores/cells.js'
 import { useChatStore } from '@/stores/chat.js'
 import type { FileEditorCell, FileEditorCellData } from '@/types'
 
@@ -53,7 +52,6 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
   const cellRef = cell
   
   // Stores
-  const cellsStore = useCellsStore()
   const chatStore = useChatStore()
   
   // State
@@ -94,21 +92,7 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
       
       if (cellData?.content !== undefined && cellData?.content !== null) {
         // Content was pre-provided - use it directly without backend call
-        // This supports creating new files with initial content (manual-capture-cell use case)
-        console.log('[FILE-EDITOR] 🔍 DEBUG ITERATION 3 - Using pre-provided content')
-        console.log('[FILE-EDITOR] Pre-provided content length:', cellData.content.length)
-        console.log('[FILE-EDITOR] Skipping backend load for new file creation')
-        
         fileContent.value = cellData.content
-        
-        // Sync to cell object via store for CellToolbar access
-        if (cellRef.value) {
-          cellsStore.updateCellData(cellRef.value.id, {
-            content: fileContent.value,
-            filename: fileName.value,
-          })
-        }
-        
         isLoading.value = false
         return  // Early return - skip backend load
       }
@@ -145,14 +129,7 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
       const responseData = await response.json()
       console.log('[FILE-EDITOR] File loaded successfully, content length:', responseData.content?.length || 0)
       fileContent.value = responseData.content || ''
-      
-      // Sync to cell object via store for CellToolbar access
-      if (cellRef.value) {
-        cellsStore.updateCellData(cellRef.value.id, {
-          content: fileContent.value,
-          filename: fileName.value,
-        })
-      }
+
     } catch (error) {
       const err = error as Error
       console.error('Erro ao carregar arquivo:', err)
@@ -209,10 +186,7 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
       }
       
       successMessage.value = 'Arquivo salvo com sucesso!'
-      
-      // Notify file saved through store
-      cellsStore.notifyFileSaved()
-      
+
       // Clear success message after 3 seconds
       setTimeout(() => {
         successMessage.value = null
@@ -228,16 +202,11 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
   
   /**
    * Delete ephemeral cell (close editor, doesn't delete file)
+   * Cell close is now handled by View.vue via cellFactory.closeCell().
+   * This function is kept for BaseCell compliance but no longer used by View.vue.
    */
   function deleteEphemeral(): void {
-    if (!confirm(`Fechar o editor do arquivo "${fileName.value}"? (O arquivo não será excluído)`)) {
-      return
-    }
-    
-    // Close cell view through store
-    if (cellRef.value) {
-      cellsStore.closeCellView(cellRef.value.id)
-    }
+    console.log('[FILE-EDITOR] close requested — delegated to View.vue via cellFactory.closeCell')
   }
   
   /**

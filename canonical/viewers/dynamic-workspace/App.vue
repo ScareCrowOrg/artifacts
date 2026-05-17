@@ -282,7 +282,7 @@ async function handleCellTypeSelected(
 
   try {
     const cellInstance = await instantiateCellByType(cellType.name, cellType)
-    const viewSpec = await resolveViewSpec(cellInstance, cellType.name, cellType, initialData)
+    const viewSpec = await resolveViewSpec(cellInstance, cellType.name, cellType, initialData, cellId)
     updateCell(cellId, { cellInstance, viewSpec, isLoading: false })
     log.info('[App] Cell ready', { cellId, cellTypeName: cellType.name })
   } catch (err: any) {
@@ -371,6 +371,10 @@ const cellFactory: CellFactory = {
       return undefined
     }
     return await handleCellTypeSelected(cellTypeDef, initialData)
+  },
+  async closeCell(cellId: string) {
+    log.info('[App] closeCell: removing cell', { cellId })
+    removeCell(cellId)
   },
 }
 
@@ -500,7 +504,7 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
           }
 
       const cellInstance = await instantiateCellByType(cellRef.type, cellType)
-      const viewSpec = await resolveViewSpec(cellInstance, cellRef.type, cellType)
+      const viewSpec = await resolveViewSpec(cellInstance, cellRef.type, cellType, undefined, tempId)
 
       updateCell(tempId, {
         cellInstance,
