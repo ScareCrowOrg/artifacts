@@ -74,19 +74,21 @@
             </p>
           </div>
 
-          <!-- Directory Picker -->
+          <!-- Directory Input -->
           <div>
             <label
-              for="directory-picker"
+              for="directory-input"
               class="block text-sm font-medium text-text-primary dark:text-text-primary-dark mb-2"
             >
               {{ $t('fileConfigDialog.directoryLabel') }}
               <span class="text-error">*</span>
             </label>
-            <DirectoryPicker
-              id="directory-picker"
+            <input
+              id="directory-input"
               v-model="directory"
+              type="text"
               :placeholder="$t('fileConfigDialog.directoryPlaceholder')"
+              class="w-full px-3 py-2 border border-border dark:border-border-dark rounded-md bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark placeholder:text-text-secondary dark:placeholder:text-text-secondary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-mono text-sm"
             />
             <p class="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark">
               {{ $t('fileConfigDialog.directoryHint') }}
@@ -134,7 +136,6 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/logger'
-import DirectoryPicker from './DirectoryPicker.vue'
 
 const { t: $t } = useI18n()
 const log = createLogger('components:file-config')
