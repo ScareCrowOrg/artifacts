@@ -96,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, inject, type Ref } from 'vue'
+import { ref, computed, onMounted, nextTick, inject, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ManualCaptureCell } from './ManualCaptureCell'
 import { useManualCapture } from './composables/useManualCapture'
@@ -106,6 +106,12 @@ import type { HealthCheckResult } from '@/types/BaseCell'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('cell:manual-capture')
+
+// 🚨 DEBUG: Force log to verify logger works
+console.log('🔴🔴🔴 [cell:manual-capture] View.vue script setup EXECUTED 🔴🔴🔴', {
+  timestamp: Date.now(),
+  hasCreateLogger: typeof createLogger === 'function',
+})
 
 // Props
 const props = defineProps<CellProps>()
@@ -143,6 +149,35 @@ const {
   validationErrors,
 } = useManualCapture(cellDataRef, cellInstance)
 
+// 🚨 DEBUG: Log initial state after setup
+console.log('🔴 [cell:manual-capture] Initial state:', {
+  inputContentValue: inputContent.value,
+  inputContentType: typeof inputContent.value,
+  inputContentTrimEmpty: !inputContent.value.trim(),
+  isProcessing: isProcessing.value,
+  cellFactoryDefined: typeof cellFactory !== 'undefined',
+  cellFactoryValue: cellFactory,
+})
+
+// 🚨 DEBUG: Watch inputContent for v-model updates
+watch(inputContent, (newVal, oldVal) => {
+  console.log('🔴 [cell:manual-capture] inputContent CHANGED:', {
+    oldVal,
+    newVal,
+    newValType: typeof newVal,
+    trimEmpty: !newVal.trim(),
+    timestamp: Date.now(),
+  })
+})
+
+watch(isProcessing, (newVal, oldVal) => {
+  console.log('🔴 [cell:manual-capture] isProcessing CHANGED:', {
+    oldVal,
+    newVal,
+    timestamp: Date.now(),
+  })
+})
+
 // Check health on mount (BaseCell pattern)
 onMounted(async () => {
   healthStatus.value = await cellInstance.health_check()
@@ -159,21 +194,48 @@ async function createFileEditorCell(
   fileName: string,
   language: string
 ): Promise<void> {
+  console.log('🔴 [cell:manual-capture] createFileEditorCell CALLED', {
+    contentLength: content?.length,
+    fileName,
+    language,
+    cellFactoryDefined: typeof cellFactory !== 'undefined',
+    cellFactoryIsNull: cellFactory === null,
+    cellFactoryKeys: cellFactory ? Object.keys(cellFactory) : [],
+    timestamp: Date.now(),
+  })
   if (cellFactory) {
     log.info('[ManualCaptureCell] Creating file-editor-v2 via cellFactory', { fileName, language })
-    const cellId = await cellFactory.addChildCell('file-editor-v2', {
-      fileName: fileName,
-      filePath: 'captured',
-      language: language,
-      readOnly: false,
-      icon: '📄',
-      content: content,
-    })
-    if (!cellId) {
-      log.warn('[ManualCaptureCell] addChildCell returned undefined', { type: 'file-editor-v2' })
+    try {
+      const cellId = await cellFactory.addChildCell('file-editor-v2', {
+        fileName: fileName,
+        filePath: 'captured',
+        language: language,
+        readOnly: false,
+        icon: '📄',
+        content: content,
+      })
+      console.log('🔴 [cell:manual-capture] addChildCell RESULT:', {
+        cellId,
+        cellIdType: typeof cellId,
+        timestamp: Date.now(),
+      })
+      if (!cellId) {
+        log.warn('[ManualCaptureCell] addChildCell returned undefined', { type: 'file-editor-v2' })
+      }
+    } catch (err) {
+      console.error('🔴 [cell:manual-capture] addChildCell THREW:', {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        timestamp: Date.now(),
+      })
     }
   } else {
     log.warn('[ManualCaptureCell] cellFactory not available — running outside workspace', { fileName, language })
+    console.warn('🔴 [cell:manual-capture] cellFactory NOT AVAILABLE - running outside workspace context', {
+      fileName,
+      language,
+      timestamp: Date.now(),
+    })
   }
 }
 
@@ -181,6 +243,15 @@ async function createFileEditorCell(
  * Handle capture content button click
  */
 async function handleCaptureContent(): Promise<void> {
+  console.log('🔴🔴🔴 [cell:manual-capture] handleCaptureContent CLICKED 🔴🔴🔴', {
+    inputContent: inputContent.value,
+    inputContentTrimmed: inputContent.value?.trim?.(),
+    inputContentType: typeof inputContent.value,
+    isProcessing: isProcessing.value,
+    cellFactoryDefined: typeof cellFactory !== 'undefined',
+    cellFactoryValue: cellFactory,
+    timestamp: Date.now(),
+  })
   try {
     await captureContent(createFileEditorCell)
     log.info('Content captured successfully')
@@ -193,6 +264,13 @@ async function handleCaptureContent(): Promise<void> {
  * Handle generate wireframe button click
  */
 async function handleGenerateWireframe(): Promise<void> {
+  console.log('🔴🔴🔴 [cell:manual-capture] handleGenerateWireframe CLICKED 🔴🔴🔴', {
+    inputContent: inputContent.value,
+    inputContentTrimmed: inputContent.value?.trim?.(),
+    isProcessing: isProcessing.value,
+    cellFactoryDefined: typeof cellFactory !== 'undefined',
+    timestamp: Date.now(),
+  })
   try {
     await generateWireframe(createFileEditorCell)
     log.info('Wireframe generated successfully')

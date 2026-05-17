@@ -9,7 +9,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
 
@@ -111,13 +111,45 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
     selectedArtifact.value = null
   }
 
+  // ── Computed (derived from availableArtifacts) ────────────────────────────────
+
+  /**
+   * Cell-type definitions derived from availableArtifacts.
+   * Used by App.vue's findCellTypeByName() and handleLoadLayout() for cell lookup.
+   * Filters artifacts where artifact_type === 'cell-type' and maps to CellTypeDefinition shape.
+   */
+  const availableCellTypes = computed(() => {
+    return availableArtifacts.value
+      .filter(a => a.artifact_type === 'cell-type')
+      .map(a => ({
+        name: a.artifact_id,
+        id: a.artifact_id,
+        description: a.identity.description,
+        version: a.version,
+        icon: a.identity.icon ?? undefined,
+        can_render_dynamically: true,
+        default_refs: a.metadata.default_refs as Record<string, string[]> | undefined,
+      }))
+  })
+
+  /**
+   * Load cell types by fetching cell-type artifacts only.
+   * Wraps loadArtifacts('cells_only') and resets the selection.
+   */
+  async function loadCellTypes(): Promise<void> {
+    await loadArtifacts('cells_only')
+    clearSelection()
+  }
+
   // ── Return ───────────────────────────────────────────────────────────────────
   return {
     availableArtifacts,
     isLoading,
     error,
     selectedArtifact,
+    availableCellTypes,
     loadArtifacts,
+    loadCellTypes,
     selectArtifact,
     clearSelection,
   }

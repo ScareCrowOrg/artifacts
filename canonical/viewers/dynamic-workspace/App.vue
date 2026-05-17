@@ -328,15 +328,46 @@ async function handleShowArtifactsExplorer(): Promise<void> {
 // Veja: #canonical/shared/cellFactory.ts para a definicao da interface e chave
 
 function findCellTypeByName(type: string): CellTypeDefinition | null {
+  // 🚨 DEBUG: Log availableCellTypes state
+  console.log('🔴 [workspace:app] findCellTypeByName CALLED', {
+    type,
+    availableCellTypesExists: 'availableCellTypes' in explorerStore,
+    availableCellTypesValue: explorerStore.availableCellTypes,
+    availableCellTypesType: typeof explorerStore.availableCellTypes,
+    availableCellTypesIsArray: Array.isArray(explorerStore.availableCellTypes),
+    availableCellTypesLength: Array.isArray(explorerStore.availableCellTypes) ? explorerStore.availableCellTypes.length : 'N/A',
+    availableArtifactsLength: explorerStore.availableArtifacts?.length,
+    availableArtifacts: explorerStore.availableArtifacts?.map(a => a.artifact_id),
+    timestamp: Date.now(),
+  })
   const known = explorerStore.availableCellTypes as CellTypeDefinition[]
-  return known.find(t => t.name === type) ?? null
+  const result = known?.find(t => t.name === type) ?? null
+  console.log('🔴 [workspace:app] findCellTypeByName RESULT:', {
+    type,
+    found: result !== null,
+    resultName: result?.name,
+    timestamp: Date.now(),
+  })
+  return result
 }
 
 const cellFactory: CellFactory = {
   async addChildCell(type: string, initialData?: Record<string, any>) {
-    const cellTypeDef = findCellTypeByName(type)
+    let cellTypeDef = findCellTypeByName(type)
+
+    // Lazy-load cell types if not yet loaded
     if (!cellTypeDef) {
-      log.error('[App] addChildCell: unknown cell type', { type })
+      log.info('[App] addChildCell: cell type not found, lazy-loading artifacts', { type })
+      try {
+        await explorerStore.loadCellTypes()
+        cellTypeDef = findCellTypeByName(type)
+      } catch (err) {
+        log.error('[App] addChildCell: failed to lazy-load cell types', { type, error: err })
+      }
+    }
+
+    if (!cellTypeDef) {
+      log.error('[App] addChildCell: unknown cell type after load', { type })
       return undefined
     }
     return await handleCellTypeSelected(cellTypeDef, initialData)
@@ -501,6 +532,10 @@ onMounted(() => {
   // Cell types are loaded lazily by the explorer store when the picker mounts.
   if (store.status === 'ready') {
     initPersistence()
+    // 🚨 DEBUG: Pre-load cell-type artifacts so cellFactory lookups work
+    explorerStore.loadCellTypes().catch((err: any) => {
+      console.warn('[App] Could not pre-load cell-type artifacts:', err?.message)
+    })
   } else {
     const stopWatch = watch(
       () => store.status,
@@ -508,6 +543,10 @@ onMounted(() => {
         if (status === 'ready') {
           stopWatch()
           initPersistence()
+          // 🚨 DEBUG: Pre-load cell-type artifacts so cellFactory lookups work
+          explorerStore.loadCellTypes().catch((err: any) => {
+            console.warn('[App] Could not pre-load cell-type artifacts:', err?.message)
+          })
         }
       },
     )
