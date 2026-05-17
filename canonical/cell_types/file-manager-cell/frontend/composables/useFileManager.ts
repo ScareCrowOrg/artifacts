@@ -16,7 +16,6 @@ import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactor
 import { ENDPOINTS } from '@/config/endpoints'
 import apiService, { SessionExpiredError } from '@/services/apiService'
 import { useNotebookStore } from '@/stores/useNotebookStore'
-import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 
 // Global state to prevent concurrent refresh operations across all FileManagerCell instances
@@ -35,7 +34,6 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   // Composables & Stores
   const notebookStore = useNotebookStore()
   const cellFactory = inject(CELL_FACTORY_KEY)
-  const authStore = useAuthStore() as unknown as import('@/types/stores').AuthStore
   
   // State
   const tree = ref<FileTreeNode[]>([])
@@ -334,7 +332,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     
     try {
       // Get current user ID
-      const userId = (authStore.currentUser?.value)?.id || notebookStore.getUserId()
+      const userId = notebookStore.getUserId()
       
       if (!userId) {
         throw new Error('User not authenticated')
@@ -462,7 +460,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     
     try {
       // Get current user ID
-      const userId = (authStore.currentUser?.value)?.id || notebookStore.getUserId()
+      const userId = notebookStore.getUserId()
       
       if (!userId) {
         throw new Error('User not authenticated')
@@ -644,7 +642,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
   async function createNewFileEditor(): Promise<void> {
     try {
       // Get current user ID
-      const userId = (authStore.currentUser?.value)?.id || notebookStore.getUserId()
+      const userId = notebookStore.getUserId()
       
       if (!userId) {
         throw new Error('User not authenticated')

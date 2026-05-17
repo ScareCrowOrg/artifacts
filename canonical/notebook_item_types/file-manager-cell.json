@@ -6,6 +6,9 @@
   "category": "file-management",
   "can_render_dynamically": true,
   "default_refs": {
+    "basecell": [
+      "frontend/FileManagerCell.ts"
+    ],
     "view": [
       "frontend/View.vue"
     ],
