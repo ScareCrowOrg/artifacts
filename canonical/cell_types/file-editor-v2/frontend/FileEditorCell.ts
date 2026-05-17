@@ -12,7 +12,8 @@
  * - File path configuration
  */
 
-import type { BaseCell, CellResult, CellMetadata, ValidationError, EnvironmentConfig } from '@/types/BaseCell'
+import type { CellResult, CellMetadata, ValidationError, EnvironmentConfig } from '@/types/BaseCell'
+import { BaseCell } from '@/types/BaseCell'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('cell:file-editor')
@@ -23,8 +24,11 @@ const log = createLogger('cell:file-editor')
  * Interactive cell for editing files in the workspace.
  * Delegates actual API calls to the useFileEditor composable.
  * Provides execute(), describe(), and validate() for BaseCell compliance.
+ *
+ * Extends BaseCell to inherit show(), which stores initial_data on
+ * cellInstance.__initialData for View.vue to read on mount.
  */
-export class FileEditorCell implements BaseCell {
+export class FileEditorCell extends BaseCell {
   /**
    * Execute file editor operations
    *

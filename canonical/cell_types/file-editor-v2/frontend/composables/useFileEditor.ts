@@ -117,11 +117,19 @@ export function useFileEditor(cell: Ref<FileEditorCell>): UseFileEditorReturn {
       const response = await apiService.fetch(url)
       
       if (!response.ok) {
+        // 404 = file doesn't exist yet (new file, not yet saved)
+        if (response.status === 404) {
+          console.log('[FILE-EDITOR] File not found (404) — treating as new/empty file')
+          fileContent.value = ''
+          isLoading.value = false
+          return
+        }
+
         const errorText = await response.text()
-        console.error('[FILE-EDITOR] ❌ File load failed:', { 
-          status: response.status, 
+        console.error('[FILE-EDITOR] ❌ File load failed:', {
+          status: response.status,
           statusText: response.statusText,
-          errorText 
+          errorText
         })
         throw new Error('Falha ao carregar arquivo')
       }
