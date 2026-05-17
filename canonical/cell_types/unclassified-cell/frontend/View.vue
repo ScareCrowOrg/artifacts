@@ -213,18 +213,25 @@
       class="bg-background border border-border rounded-lg p-3"
     >
       <div class="flex justify-between items-center">
-        <span class="text-sm text-text-secondary dark:text-text-secondary-dark" v-html="$t('unclassifiedCell.fragmentSummary', { 
+        <span class="text-sm text-text-secondary dark:text-text-secondary-dark" v-html="$t('unclassifiedCell.fragmentSummary', {
           count: fragmentCount,
           fragmentText: fragmentCount === 1 ? $t('unclassifiedCell.fragmentSingular') : $t('unclassifiedCell.fragmentPlural')
         })"></span>
         <button
           class="px-3 py-1 border border-primary rounded-md bg-surface dark:bg-surface-dark text-primary text-xs font-medium cursor-pointer transition-all hover:bg-primary hover:text-white"
-          @click="handleShowFragmentsManager"
+          @click="showFragmentsManager = true"
         >
           {{ $t('unclassifiedCell.viewFragments') }}
         </button>
       </div>
     </div>
+
+    <!-- Fragments Manager Modal -->
+    <BaseFragmentsManager
+      v-if="showFragmentsManager"
+      :cell="props.cell"
+      @close="showFragmentsManager = false"
+    />
 
     <!-- Footer Actions -->
     <div class="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -261,13 +268,13 @@ import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import SandboxPreview from '@/components/SandboxPreview.vue'
 import BookContainer from '@/components/BookContainer.vue'
 import { useUnclassifiedCell, type UnclassifiedCell } from './composables/useUnclassifiedCell'
-import { useBaseCellFeatures } from '#canonical/base_cell_components/frontend/composables/useBaseCellFeatures'
+import BaseFragmentsManager from '#canonical/base_cell_components/frontend/views/BaseFragmentsManager.vue'
 import { useCellFactory } from '@/composables/useCellFactory.js'
 import { useTransmutation } from '@/composables/useTransmutation.js'
 import { useCellsStore } from '@/stores/cells.js'
+import { apiFetch } from '@/services/apiService'
 import { createLogger } from '#shared/logger.js'
-import type { UseCellFactoryReturn, UseTransmutationReturn, UseBaseCellFeaturesReturn } from '@/types/composables'
-import type { CompleteCell } from '@/types/cell'
+import type { UseCellFactoryReturn, UseTransmutationReturn } from '@/types/composables'
 
 const log = createLogger('component:UnclassifiedCellView')
 const { t: $t } = useI18n()
@@ -334,14 +341,8 @@ const {
   formatDate,
 } = useUnclassifiedCell(ref(props.cell))
 
-// Use base cell features for common cell operations
-// ARCHITECTURE PRINCIPLE: Pass cell instance to avoid store lookup
-const baseCellApi: UseBaseCellFeaturesReturn = useBaseCellFeatures(
-  computed(() => props.cell?.id || ''),
-  computed(() => 'unclassified-cell'),
-  {}, // options
-  ref(props.cell) as Ref<CompleteCell> // Type assertion for compatibility
-)
+// Fragments manager visibility
+const showFragmentsManager = ref(false)
 
 // DEBUG ITERATION 3 - LOG #4: Template render tracking
 const renderCount = ref(0)
@@ -464,18 +465,16 @@ function onBookToggleExpanded({ bookId, expanded }: { bookId: string; expanded: 
 
 /**
  * Handle save button click
- * 
- * FIX for Issue #1206: Now orchestrates save between useUnclassifiedCell
- * and useBaseCellFeatures, passing the cell instance directly to avoid
- * dependency on global "active cell" state.
+ *
+ * Saves the updated cell data via direct API call.
  */
 async function handleSave(): Promise<void> {
   console.group('[UnclassifiedCellView] 💾 Save button clicked')
-  
+
   try {
     // Step 1: Start saving state (show loading indicator)
     startSaving()
-    
+
     // Step 2: Prepare updated cell data from useUnclassifiedCell
     const updatedCell = prepareForSave()
     console.log('📦 Cell data prepared:', {
@@ -483,12 +482,15 @@ async function handleSave(): Promise<void> {
       hasInitialData: !!updatedCell.initial_data,
       fragmentsCount: updatedCell.fragments?.length || 0,
     })
-    
-    // Step 3: Save via baseCellApi with the updated cell instance
-    // This calls the backend PUT API directly with the cell context
-    console.log('📤 Calling baseCellApi.saveCell with cell instance')
-    await baseCellApi.saveCell(updatedCell)
-    
+
+    // Step 3: Save via direct API call
+    console.log('📤 Saving cell via API')
+    await apiFetch(`/api/cells/${updatedCell.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedCell),
+    })
+
     // Step 4: Notify success
     console.log('✅ Save completed successfully')
     onSaveComplete()
@@ -513,7 +515,7 @@ async function onSave(): Promise<void> {
  */
 function handleShowFragmentsManager(): void {
   console.log('[UnclassifiedCellView] 📚 Show fragments manager clicked')
-  baseCellApi.showCellFragmentsManager()
+  showFragmentsManager.value = true
 }
 
 /**
@@ -521,9 +523,7 @@ function handleShowFragmentsManager(): void {
  */
 function handleAddFragment(): void {
   console.log('[UnclassifiedCellView] ➕ Add fragment clicked')
-  // For now, just open the fragments manager
-  // In the future, this could open a dedicated "add fragment" modal
-  baseCellApi.showCellFragmentsManager()
+  showFragmentsManager.value = true
 }
 
 /**

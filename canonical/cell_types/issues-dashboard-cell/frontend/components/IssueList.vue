@@ -49,9 +49,7 @@ import IssueCard from './IssueCard.vue'
 import { useIssuesStore } from '../stores/issuesStore'
 
 // Props
-defineProps<{
-  hasWritePermission: boolean
-}>()
+defineProps<{}>()
 
 const store = useIssuesStore()
 </script>

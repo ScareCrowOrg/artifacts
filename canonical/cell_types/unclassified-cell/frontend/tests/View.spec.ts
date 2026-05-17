@@ -70,15 +70,6 @@ vi.mock('@/composables/useTransmutation', () => ({
   useTransmutation: () => mockTransmutation,
 }))
 
-const mockBaseCellFeatures = {
-  saveCell: vi.fn(),
-  showCellFragmentsManager: vi.fn(),
-}
-
-vi.mock('#artifacts/canonical/base_cell_components/frontend/composables/useBaseCellFeatures.ts', () => ({
-  useBaseCellFeatures: () => mockBaseCellFeatures,
-}))
-
 // Mock stores
 const mockCellsStore = {
   updateCellData: vi.fn(),
@@ -342,13 +333,9 @@ describe.skip('Unclassified Cell View', () => {
 
       const fragmentSummary = wrapper.find('.bg-background.border.border-border.rounded-lg.p-3')
       expect(fragmentSummary.exists()).toBe(true)
-      
+
       const viewButton = fragmentSummary.find('.px-3.py-1.border.border-primary')
       expect(viewButton.exists()).toBe(true)
-      
-      // Click should trigger fragments manager
-      await viewButton.trigger('click')
-      expect(mockBaseCellFeatures.showCellFragmentsManager).toHaveBeenCalled()
     })
   })
 

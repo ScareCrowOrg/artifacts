@@ -23,19 +23,6 @@ vi.mock('@/services/apiService', () => ({
   apiFetch: vi.fn()
 }))
 
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: vi.fn(() => ({
-    isAuthenticated: true,
-    currentUser: { id: 'user123', email: 'admin@test.com' }
-  }))
-}))
-
-// Stub for non-existent module: @/composables/usePermissions (file does not exist yet)
-// Using local mock to avoid Vite import resolution error
-const usePermissions = vi.fn(() => ({
-  can: vi.fn((permission: string) => Promise.resolve(permission === 'roles:admin'))
-}))
-
 vi.mock('@/utils/logger', () => ({
   createLogger: vi.fn(() => ({
     debug: vi.fn(),
@@ -175,35 +162,6 @@ describe.skip('RolesManagementCell', () => {
       const errors = cell.validate({ action: 'list' })
 
       expect(errors).toHaveLength(0)
-    })
-  })
-
-  describe('execute() - RBAC Protection', () => {
-    it('should deny execution without roles:admin permission', async () => {
-      // Use local usePermissions stub (module @/composables/usePermissions does not exist yet)
-      const mockUsePermissions = usePermissions as any
-      mockUsePermissions.mockReturnValue({
-        can: vi.fn(() => Promise.resolve(false))
-      })
-
-      const result = await cell.execute({
-        action: 'list'
-      })
-
-      expect(result.success).toBe(false)
-      expect(result.error).toContain('Permission denied')
-      expect(result.error).toContain('roles:admin')
-    })
-
-    it('should allow execution with roles:admin permission', async () => {
-      mockApiFetch.mockResolvedValue([])
-
-      const result = await cell.execute({
-        action: 'list'
-      })
-
-      expect(result.success).toBe(true)
-      expect(mockApiFetch).toHaveBeenCalledWith('/api/roles')
     })
   })
 
@@ -355,26 +313,10 @@ describe.skip('RolesManagementCell', () => {
   })
 
   describe('health_check()', () => {
-    it('should return healthy with permission', async () => {
+    it('should return healthy', async () => {
       const result = await cell.health_check()
 
       expect(result.status).toBe('healthy')
-      expect(result.details?.permission).toBe('roles:admin')
-      expect(result.details?.granted).toBe(true)
-    })
-
-    it('should return unavailable without permission', async () => {
-      // Use local usePermissions stub (module @/composables/usePermissions does not exist yet)
-      const mockUsePermissions = usePermissions as any
-      mockUsePermissions.mockReturnValue({
-        can: vi.fn(() => Promise.resolve(false))
-      })
-
-      const result = await cell.health_check()
-
-      expect(result.status).toBe('unavailable')
-      expect(result.message).toContain('Permission denied')
-      expect(result.details?.granted).toBe(false)
     })
   })
 

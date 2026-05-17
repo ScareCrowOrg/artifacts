@@ -29,7 +29,6 @@ import type {
 } from '@/types/BaseCell'
 import { apiFetch } from '@/services/apiService'
 import { createLogger } from '@/utils/logger'
-import { usePermissionsStore } from '@/stores/permissions'
 
 const log = createLogger('cells:IssuesDashboard')
 
@@ -133,19 +132,6 @@ export class IssuesDashboardCell extends BaseCell {
     const { action, issueId, filters, data } = input
 
     try {
-      // RBAC Check - issues:read is required for all operations
-      const hasReadPermission = this.checkPermission('issues:read')
-      
-      if (!hasReadPermission) {
-        log.warn('Permission denied: issues:read required', { action })
-        return {
-          success: false,
-          output: {},
-          execution_time: performance.now() - startTime,
-          error: 'Permission denied: issues:read required to access issues dashboard'
-        }
-      }
-
       // Execute based on action type
       switch (action) {
         case 'list':
@@ -245,19 +231,6 @@ export class IssuesDashboardCell extends BaseCell {
     data: any,
     startTime: number
   ): Promise<CellResult> {
-    // Check write permission
-    const hasWritePermission = this.checkPermission('issues:write')
-    
-    if (!hasWritePermission) {
-      log.warn('Permission denied: issues:write required', { action: 'create' })
-      return {
-        success: false,
-        output: {},
-        execution_time: performance.now() - startTime,
-        error: 'Permission denied: issues:write required to create issues'
-      }
-    }
-    
     log.debug('Creating issue', { data })
     
     const response = await apiFetch('/api/issues', {
@@ -294,20 +267,7 @@ export class IssuesDashboardCell extends BaseCell {
         error: 'issueId is required for update action'
       }
     }
-    
-    // Check write permission
-    const hasWritePermission = this.checkPermission('issues:write')
-    
-    if (!hasWritePermission) {
-      log.warn('Permission denied: issues:write required', { action: 'update', issueId })
-      return {
-        success: false,
-        output: {},
-        execution_time: performance.now() - startTime,
-        error: 'Permission denied: issues:write required to update issues'
-      }
-    }
-    
+
     log.debug('Updating issue', { issueId, data })
     
     const response = await apiFetch(`/api/issues/${issueId}`, {
@@ -343,20 +303,7 @@ export class IssuesDashboardCell extends BaseCell {
         error: 'issueId is required for delete action'
       }
     }
-    
-    // Check write permission
-    const hasWritePermission = this.checkPermission('issues:write')
-    
-    if (!hasWritePermission) {
-      log.warn('Permission denied: issues:write required', { action: 'delete', issueId })
-      return {
-        success: false,
-        output: {},
-        execution_time: performance.now() - startTime,
-        error: 'Permission denied: issues:write required to delete issues'
-      }
-    }
-    
+
     log.debug('Deleting issue', { issueId })
     
     const response = await apiFetch(`/api/issues/${issueId}`, {
@@ -497,17 +444,6 @@ export class IssuesDashboardCell extends BaseCell {
    */
   async health_check(): Promise<HealthCheckResult> {
     try {
-      // Check if user has read permission
-      const hasReadPermission = this.checkPermission('issues:read')
-      
-      if (!hasReadPermission) {
-        return {
-          status: 'unavailable',
-          can_execute: false,
-          reason: 'Missing required permission: issues:read'
-        }
-      }
-
       // Try to ping the issues API
       const response = await apiFetch('/api/issues/health', {
         method: 'GET'
@@ -532,19 +468,4 @@ export class IssuesDashboardCell extends BaseCell {
     }
   }
 
-  /**
-   * Helper method to check user permissions
-   * 
-   * @param permission - Permission to check (e.g., 'issues:read')
-   * @returns True if user has the permission, false otherwise
-   */
-  private checkPermission(permission: string): boolean {
-    try {
-      const permissionsStore = usePermissionsStore()
-      return permissionsStore.hasPermission(permission)
-    } catch (error) {
-      log.error('Error checking permission', { permission, error })
-      return false
-    }
-  }
 }

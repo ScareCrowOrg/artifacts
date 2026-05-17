@@ -86,8 +86,7 @@
         {{ $t('issues.filters.refresh') }}
       </button>
 
-      <!-- Monitoring Control (Write permission required) -->
-      <template v-if="hasWritePermission">
+      <!-- Monitoring & Processing Controls -->
         <button
           v-if="!store.monitoringStatus.active"
           class="px-4 py-2 text-sm rounded-md bg-success dark:bg-success border border-success dark:border-success text-white dark:text-white hover:bg-success/80 dark:hover:bg-success-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -157,7 +156,6 @@
         >
           {{ $t('issues.filters.newCell') }}
         </button>
-      </template>
     </div>
   </div>
 </template>
@@ -180,9 +178,7 @@ const log = createLogger('cells:IssuesDashboard:IssueFilters')
 const store = useIssuesStore()
 
 // Props
-defineProps<{
-  hasWritePermission: boolean
-}>()
+defineProps<{}>()
 
 const emit = defineEmits<{
   (e: 'toggle-ingest'): void

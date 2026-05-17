@@ -37,7 +37,7 @@ describe.skip('IssueList', () => {
     issuesStore.issues = []
 
     const wrapper = mount(IssueList, {
-      props: { hasWritePermission: true },
+      props: {},
       global: {
         plugins: [pinia],
         mocks: {
@@ -61,7 +61,7 @@ describe.skip('IssueList', () => {
     issuesStore.issues = []
 
     const wrapper = mount(IssueList, {
-      props: { hasWritePermission: true },
+      props: {},
       global: {
         plugins: [pinia],
         mocks: {
@@ -90,7 +90,7 @@ describe.skip('IssueList', () => {
     ]
 
     const wrapper = mount(IssueList, {
-      props: { hasWritePermission: true },
+      props: {},
       global: {
         plugins: [pinia],
         mocks: {
@@ -114,32 +114,6 @@ describe.skip('IssueList', () => {
     expect(container.exists()).toBe(true)
   })
 
-  it('should pass hasWritePermission prop to component', () => {
-    issuesStore.isLoading = false
-    issuesStore.issues = [
-      { id: '1', title: 'Issue 1', status: 'pending' }
-    ]
-
-    const wrapper = mount(IssueList, {
-      props: { hasWritePermission: false },
-      global: {
-        plugins: [pinia],
-        mocks: {
-          $t: (key: string) => key
-        },
-        stubs: {
-          IssueCard: {
-            name: 'IssueCard',
-            props: ['cell', 'isSelected'],
-            template: '<div data-testid="issue-card" :data-cell-id="cell?.id"></div>'
-          }
-        }
-      }
-    })
-
-    expect(wrapper.props('hasWritePermission')).toBe(false)
-  })
-
   it('should render with custom scrollbar styles', () => {
     issuesStore.isLoading = false
     issuesStore.issues = [
@@ -147,7 +121,7 @@ describe.skip('IssueList', () => {
     ]
 
     const wrapper = mount(IssueList, {
-      props: { hasWritePermission: true },
+      props: {},
       global: {
         plugins: [pinia],
         mocks: {

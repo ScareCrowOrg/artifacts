@@ -8,20 +8,37 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 // import View from '../View.vue' // Component has unresolvable dependencies
 // import { useIssuesStore } from '../stores/issuesStore' // Module has unresolvable BaseCell dependency
-import { usePermissionsStore } from '@/stores/permissions'
 
 // Stub for component: ../View.vue
 const View = { name: 'View', template: '<div />' }
-// Stub for non-existent module: ../stores/issuesStore
-class useIssuesStore {
-  async setup() { return { status: 'ok' } }
-  async execute(input) { return { status: 'ok', output: {} } }
-  async save(output) {}
-  async healthCheck() { return { healthy: true } }
-  getMetadata() { return { cellType: 'useIssuesStore', version: '1.0.0' } }
-  validate(input) { return [] }
-}
-
+// Stub for useIssuesStore (used in skipped test blocks)
+const useIssuesStore = () => ({
+  loadIssues: vi.fn(),
+  loadMonitoringStatus: vi.fn(),
+  loadProcessingStatus: vi.fn(),
+  loadNotebookItemTypes: vi.fn(),
+  connectSSE: vi.fn(),
+  startPipelineStream: vi.fn(),
+  disconnectSSE: vi.fn(),
+  stopPipelineStream: vi.fn(),
+  error: null,
+  monitoringStatus: { active: false },
+  processingStatus: { paused: false },
+  filteredIssues: [],
+  selectedIssue: null,
+  pipelineItemsHistory: [],
+  isLoadingPipelineHistory: false,
+  isLoading: false,
+  pipelineActivityFeed: [],
+  issuesByState: {},
+  clearSelection: vi.fn(),
+  loadIssues: vi.fn(),
+  loadMonitoringStatus: vi.fn(),
+  loadProcessingStatus: vi.fn(),
+  loadNotebookItemTypes: vi.fn(),
+  connectSSE: vi.fn(),
+  startPipelineStream: vi.fn(),
+})
 
 // Mock child components
 vi.mock('../components/IssueStats.vue', () => ({
@@ -94,38 +111,6 @@ describe.skip('Issues Dashboard View', () => {
     await closeButton.trigger('click')
 
     expect(wrapper.emitted('close')).toBeTruthy()
-  })
-
-  it('should show read-only warning without write permission', () => {
-    const permissionsStore = usePermissionsStore()
-    vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(false)
-
-    const wrapper = mount(View, {
-      global: {
-        plugins: [pinia],
-        mocks: {
-          $t: (key: string) => key
-        }
-      }
-    })
-
-    expect(wrapper.text()).toContain('issues.dashboard.readOnlyMode')
-  })
-
-  it('should not show read-only warning with write permission', () => {
-    const permissionsStore = usePermissionsStore()
-    vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
-
-    const wrapper = mount(View, {
-      global: {
-        plugins: [pinia],
-        mocks: {
-          $t: (key: string) => key
-        }
-      }
-    })
-
-    expect(wrapper.text()).not.toContain('issues.dashboard.readOnlyMode')
   })
 
   it('should render IssueStats component', () => {
@@ -269,29 +254,7 @@ describe.skip('Issues Dashboard View', () => {
     expect(wrapper.text()).toContain('issues.dashboard.processingPaused')
   })
 
-  it('should not show IngestForm without write permission', () => {
-    const permissionsStore = usePermissionsStore()
-    vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(false)
-
-    const wrapper = mount(View, {
-      global: {
-        plugins: [pinia],
-        mocks: {
-          $t: (key: string) => key
-        }
-      }
-    })
-
-    wrapper.vm.showIngestForm = true
-    wrapper.vm.$forceUpdate()
-
-    expect(wrapper.find('[data-testid="ingest-form"]').exists()).toBe(false)
-  })
-
-  it('should show IngestForm with write permission', async () => {
-    const permissionsStore = usePermissionsStore()
-    vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
-
+  it('should show IngestForm when toggled', async () => {
     const wrapper = mount(View, {
       global: {
         plugins: [pinia],

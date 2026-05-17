@@ -124,7 +124,7 @@
 import '@/styles/index.css'
 // See: VITE_SLOWNESS_ROOT_CAUSE.md
 
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkspaceHandshake } from './composables/useWorkspaceHandshake'
 import { useGridLayout } from './composables/useGridLayout'
@@ -138,6 +138,7 @@ import FooterWindowManager from './components/FooterWindowManager.vue'
 import SaveLayoutBookModal from './components/SaveLayoutBookModal.vue'
 import Toolbar from './components/Toolbar.vue'
 import { createLogger } from '@/utils/logger'
+import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
 import { useArtifactsExplorerStore } from '#canonical/cell_types/artifacts-explorer-cell/frontend/store'
 import type { ExplorerArtifact } from '#canonical/cell_types/artifacts-explorer-cell/frontend/store'
 import type { CellTypeDefinition, LayoutBook } from './types'
@@ -319,6 +320,30 @@ async function handleShowArtifactsExplorer(): Promise<void> {
   log.info('[App] Instantiating artifacts-explorer-cell in picker mode')
   await handleCellTypeSelected(explorerType)
 }
+
+// ── Cell Factory (provide/inject) ─────────────────────────────────────────
+// Permite que qualquer celula filha crie novas celulas na workspace
+// Uso: const cellFactory = inject(CELL_FACTORY_KEY)
+//       cellFactory?.addChildCell('file-editor-v2', { fileName, filePath, language })
+// Veja: #canonical/shared/cellFactory.ts para a definicao da interface e chave
+
+function findCellTypeByName(type: string): CellTypeDefinition | null {
+  const known = explorerStore.availableCellTypes as CellTypeDefinition[]
+  return known.find(t => t.name === type) ?? null
+}
+
+const cellFactory: CellFactory = {
+  async addChildCell(type: string, initialData?: Record<string, any>) {
+    const cellTypeDef = findCellTypeByName(type)
+    if (!cellTypeDef) {
+      log.error('[App] addChildCell: unknown cell type', { type })
+      return undefined
+    }
+    return await handleCellTypeSelected(cellTypeDef, initialData)
+  },
+}
+
+provide(CELL_FACTORY_KEY, cellFactory)
 
 // ── Explorer store watcher (Phase 4 → Phase 2 upgrade) ───────────────────────
 // When the user clicks a frontend-orchestrated artifact in the explorer,

@@ -16,7 +16,6 @@ import type {
   HealthCheckResult
 } from '@/types/BaseCell'
 import { apiFetch } from '@/services/apiService'
-import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('cells:RolesManagement')
@@ -53,54 +52,11 @@ export interface RolesManagementInput {
  */
 export class RolesManagementCell extends BaseCell {
   /**
-   * Check if user has required permission
-   * @private
-   */
-  private async checkPermission(permission: string): Promise<boolean> {
-    const authStore = useAuthStore()
-    
-    if (!authStore.isAuthenticated || !authStore.currentUser) {
-      log.warn('Permission check failed: User not authenticated')
-      return false
-    }
-    
-    try {
-      const { usePermissions } = await import('@/composables/usePermissions')
-      const permissions = usePermissions()
-      const hasPermission = await permissions.can(permission)
-      
-      log.debug('Permission check', {
-        permission,
-        hasPermission,
-        user: authStore.currentUser.email
-      })
-      
-      return hasPermission
-    } catch (error) {
-      log.error('Permission check error', error)
-      return false
-    }
-  }
-
-  /**
    * Execute roles management action
    */
   async execute(input: Record<string, any>): Promise<CellResult> {
     const startTime = Date.now()
-    
-    // MANDATORY: Check permission FIRST
-    const hasPermission = await this.checkPermission('roles:admin')
-    if (!hasPermission) {
-      return {
-        success: false,
-        output: {
-          message: 'Permission denied: roles:admin required'
-        },
-        error: 'Permission denied: roles:admin required',
-        execution_time: Date.now() - startTime
-      }
-    }
-    
+
     // Validate input
     const errors = this.validate(input)
     if (errors.length > 0) {
@@ -353,26 +309,9 @@ export class RolesManagementCell extends BaseCell {
    */
   async health_check(): Promise<HealthCheckResult> {
     try {
-      const hasPermission = await this.checkPermission('roles:admin')
-      
-      if (!hasPermission) {
-        return {
-          status: 'unavailable',
-          message: 'Permission denied: roles:admin required',
-          details: {
-            permission: 'roles:admin',
-            granted: false
-          }
-        }
-      }
-      
       return {
         status: 'healthy',
         message: 'Cell ready to execute',
-        details: {
-          permission: 'roles:admin',
-          granted: true
-        }
       }
     } catch (error: any) {
       return {

@@ -18,18 +18,8 @@
  */
 <template>
   <div class="roles-management-cell">
-    <!-- Permission Denied -->
-    <div v-if="!hasPermission" class="permission-denied">
-      <div class="denied-icon">🔒</div>
-      <h2>{{ $t('cells.rolesManagement.permissionDenied') }}</h2>
-      <p>{{ $t('cells.rolesManagement.permissionDeniedMessage') }}</p>
-      <button class="btn-close" @click="$emit('close')">
-        {{ $t('common.close') }}
-      </button>
-    </div>
-
     <!-- Main Content -->
-    <div v-else class="roles-content">
+    <div class="roles-content">
       <!-- Header -->
       <div class="cell-header">
         <h1 class="cell-title">
@@ -113,9 +103,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { usePermissions } from '@/composables/usePermissions'
 import { useRolesManagement } from './composables/useRolesManagement'
 import type { Role } from './composables/useRolesManagement'
 import type { RoleData } from './RolesManagementCell'
@@ -141,10 +130,6 @@ const emit = defineEmits<{
 
 // I18n
 const { t } = useI18n()
-
-// Permissions
-const permissions = usePermissions()
-const hasPermission = computed(() => permissions.can('roles:admin'))
 
 // Roles management
 const {
@@ -245,9 +230,7 @@ async function handleAssigned(): Promise<void> {
 
 // Load roles on mount
 onMounted(async () => {
-  if (hasPermission.value) {
-    await fetchRoles()
-  }
+  await fetchRoles()
 })
 </script>
 

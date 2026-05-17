@@ -33,23 +33,11 @@
       </button>
     </div>
 
-    <!-- RBAC Permission Warning (Read-Only Mode) -->
-    <div
-      v-if="!hasWritePermission"
-      class="flex items-center gap-2 px-6 py-3 bg-warning/20 border-b border-border dark:border-border-dark"
-    >
-      <span class="text-xl leading-none text-warning">🔒</span>
-      <span class="text-sm text-text-secondary dark:text-text-secondary-dark">
-        {{ $t('issues.dashboard.readOnlyMode') }} - {{ $t('issues.dashboard.needsWritePermission') }}
-      </span>
-    </div>
-
     <!-- Stats Bar -->
     <IssueStats :stats="store.issuesByState" />
 
     <!-- Filters and Actions -->
     <IssueFilters
-      :has-write-permission="hasWritePermission"
       @toggle-ingest="showIngestForm = !showIngestForm"
       @toggle-create-cell="showCreateCellForm = !showCreateCellForm"
     />
@@ -79,15 +67,15 @@
       </span>
     </div>
 
-    <!-- Ingest Form (Only if has write permission) -->
-    <IngestForm 
-      v-if="showIngestForm && hasWritePermission" 
-      @close="showIngestForm = false" 
+    <!-- Ingest Form -->
+    <IngestForm
+      v-if="showIngestForm"
+      @close="showIngestForm = false"
     />
 
-    <!-- Create Cell Form (Only if has write permission) -->
+    <!-- Create Cell Form -->
     <CreateCellForm
-      v-if="showCreateCellForm && hasWritePermission"
+      v-if="showCreateCellForm"
       @close="showCreateCellForm = false"
     />
 
@@ -110,7 +98,7 @@
     <div class="flex flex-1 overflow-hidden">
       <!-- Issues List -->
       <div class="flex flex-col flex-1 border-r border-border dark:border-border-dark">
-        <IssueList :has-write-permission="hasWritePermission" />
+        <IssueList />
 
         <!-- Pagination -->
         <Pagination
@@ -130,7 +118,6 @@
         :issue="store.selectedIssue"
         :pipeline-items-history="store.pipelineItemsHistory"
         :is-loading-pipeline-history="store.isLoadingPipelineHistory"
-        :has-write-permission="hasWritePermission"
         @close="store.clearSelection()"
       />
     </div>
@@ -152,7 +139,7 @@
  * 
  * Uses Pinia store directly. All styling uses Tailwind CSS.
  */
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import IssueStats from './components/IssueStats.vue'
 import IssueFilters from './components/IssueFilters.vue'
 import IssueList from './components/IssueList.vue'
@@ -162,7 +149,6 @@ import CreateCellForm from './components/CreateCellForm.vue'
 import PipelineActivityFeed from './components/PipelineActivityFeed.vue'
 import IssueDetails from './components/IssueDetails.vue'
 import { useIssuesStore } from './stores/issuesStore'
-import { usePermissionsStore } from '@/stores/permissions'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('cells:IssuesDashboard:View')
@@ -172,18 +158,6 @@ defineEmits(['close'])
 
 // Store
 const store = useIssuesStore()
-const permissionsStore = usePermissionsStore()
-
-// RBAC: Check permissions
-const hasWritePermission = computed(() => {
-  return permissionsStore.hasPermission('issues:write')
-})
-
-// Log permission status
-log.debug('Permission status', {
-  hasWrite: hasWritePermission.value,
-  userPermissions: permissionsStore.userPermissions
-})
 
 // Local state
 const showIngestForm = ref(false)

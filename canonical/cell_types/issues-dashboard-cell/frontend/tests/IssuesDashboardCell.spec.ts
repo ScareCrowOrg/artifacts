@@ -6,7 +6,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // import { IssuesDashboardCell } from '../IssuesDashboardCell' // Module has unresolvable BaseCell dependency
 import { setActivePinia, createPinia } from 'pinia'
-import { usePermissionsStore } from '@/stores/permissions'
 
 // Mock the apiService
 vi.mock('@/services/apiService', () => ({
@@ -39,13 +38,11 @@ vi.mock('@/utils/logger', () => ({
 
 describe.skip('IssuesDashboardCell', () => {
   let cell: IssuesDashboardCell
-  let permissionsStore: ReturnType<typeof usePermissionsStore>
 
   beforeEach(() => {
     // Create a fresh Pinia instance for each test
     setActivePinia(createPinia())
-    permissionsStore = usePermissionsStore()
-    
+
     // Create cell instance
     cell = new IssuesDashboardCell()
   })
@@ -163,105 +160,9 @@ describe.skip('IssuesDashboardCell', () => {
     })
   })
 
-  describe('execute() - RBAC', () => {
-    beforeEach(() => {
-      vi.mocked(apiFetch).mockResolvedValue({
-        json: async () => ({ success: true })
-      })
-    })
-
-    it('should deny execution without issues:read permission', async () => {
-      // Mock user with no permissions
-      vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(false)
-
-      const result = await cell.execute({ action: 'list' })
-
-      expect(result.success).toBe(false)
-      expect(result.error).toContain('issues:read required')
-    })
-
-    it('should allow list action with issues:read permission', async () => {
-      // Mock user with read permission
-      vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
-      
-      vi.mocked(apiFetch).mockResolvedValue({
-        json: async () => ({ issues: [] })
-      })
-
-      const result = await cell.execute({ action: 'list' })
-
-      expect(result.success).toBe(true)
-      expect(permissionsStore.hasPermission).toHaveBeenCalledWith('issues:read')
-    })
-
-    it('should deny create action without issues:write permission', async () => {
-      // Mock user with only read permission
-      vi.spyOn(permissionsStore, 'hasPermission').mockImplementation((perm) => {
-        return perm === 'issues:read'
-      })
-
-      const result = await cell.execute({
-        action: 'create',
-        data: { title: 'Test' }
-      })
-
-      expect(result.success).toBe(false)
-      expect(result.error).toContain('issues:write required')
-    })
-
-    it('should allow create action with issues:write permission', async () => {
-      // Mock user with write permission
-      vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
-      
-      vi.mocked(apiFetch).mockResolvedValue({
-        json: async () => ({ id: '123', title: 'Test' })
-      })
-
-      const result = await cell.execute({
-        action: 'create',
-        data: { title: 'Test Issue' }
-      })
-
-      expect(result.success).toBe(true)
-      expect(result.output.action).toBe('create')
-    })
-
-    it('should deny update action without issues:write permission', async () => {
-      // Mock user with only read permission
-      vi.spyOn(permissionsStore, 'hasPermission').mockImplementation((perm) => {
-        return perm === 'issues:read'
-      })
-
-      const result = await cell.execute({
-        action: 'update',
-        issueId: '123',
-        data: { title: 'Updated' }
-      })
-
-      expect(result.success).toBe(false)
-      expect(result.error).toContain('issues:write required')
-    })
-
-    it('should deny delete action without issues:write permission', async () => {
-      // Mock user with only read permission
-      vi.spyOn(permissionsStore, 'hasPermission').mockImplementation((perm) => {
-        return perm === 'issues:read'
-      })
-
-      const result = await cell.execute({
-        action: 'delete',
-        issueId: '123'
-      })
-
-      expect(result.success).toBe(false)
-      expect(result.error).toContain('issues:write required')
-    })
-  })
-
   describe('execute() - Actions', () => {
     beforeEach(() => {
       // Mock full permissions
-      vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
     })
 
     it('should execute list action', async () => {
@@ -338,19 +239,7 @@ describe.skip('IssuesDashboardCell', () => {
   })
 
   describe('health_check()', () => {
-    it('should return unavailable without issues:read permission', async () => {
-      vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(false)
-
-      const result = await cell.health_check()
-
-      expect(result.status).toBe('unavailable')
-      expect(result.can_execute).toBe(false)
-      expect(result.reason).toContain('issues:read')
-    })
-
-    it('should return healthy with issues:read permission', async () => {
-      vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
-      
+    it('should return healthy when API is available', async () => {
       vi.mocked(apiFetch).mockResolvedValue({ ok: true })
 
       const result = await cell.health_check()
@@ -360,8 +249,6 @@ describe.skip('IssuesDashboardCell', () => {
     })
 
     it('should return degraded if API is unavailable', async () => {
-      vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
-      
       vi.mocked(apiFetch).mockRejectedValue(new Error('API unavailable'))
 
       const result = await cell.health_check()
@@ -374,8 +261,6 @@ describe.skip('IssuesDashboardCell', () => {
 
   describe('Integration Tests', () => {
     it('should have execution_time in result', async () => {
-      vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
-      
       vi.mocked(apiFetch).mockResolvedValue({
         json: async () => []
       })
@@ -388,8 +273,6 @@ describe.skip('IssuesDashboardCell', () => {
     })
 
     it('should handle filters in list action', async () => {
-      vi.spyOn(permissionsStore, 'hasPermission').mockReturnValue(true)
-      
       vi.mocked(apiFetch).mockResolvedValue({
         json: async () => []
       })

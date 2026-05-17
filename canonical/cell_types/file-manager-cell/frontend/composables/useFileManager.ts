@@ -5,16 +5,16 @@
  * Handles file tree loading, selection, search, and file operations.
  */
 
-import { ref, computed, type Ref } from 'vue'
+import { ref, computed, inject, type Ref } from 'vue'
 import type {
   FileManagerCell,
   FileTreeNode,
   UseFileManagerReturn,
   FileOperationResult
 } from '../types'
+import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
 import { ENDPOINTS } from '@/config/endpoints'
 import apiService, { SessionExpiredError } from '@/services/apiService'
-import { useDynamicLayout } from '@/composables/useDynamicLayout'
 import { useNotebookStore } from '@/stores/useNotebookStore'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
@@ -33,8 +33,8 @@ let cachedTreeData: FileTreeNode[] = []
  */
 export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn {
   // Composables & Stores
-  const { addCell } = useDynamicLayout() as import('@/types/stores').UseDynamicLayoutReturn
   const notebookStore = useNotebookStore()
+  const cellFactory = inject(CELL_FACTORY_KEY)
   const authStore = useAuthStore() as unknown as import('@/types/stores').AuthStore
   
   // State
@@ -391,24 +391,16 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
             initial_data: ephemeralCell.initial_data
           })
           
-          // Add to local layout
-          const cellData = {
-            cellId: ephemeralCell.id,
-            type: ephemeralCell.notebook_item_type_id,
-            title: fileName,
-            state: {
-              cellInstance: ephemeralCell,
-              initial_data: ephemeralCell.initial_data,
+          // Add to workspace via cell factory
+          if (cellFactory) {
+            const cellId = await cellFactory.addChildCell('file-editor-v2', ephemeralCell.initial_data)
+            if (!cellId) {
+              console.warn('[useFileManager] openSelectedFiles: addChildCell returned undefined', { type: 'file-editor-v2' })
             }
           }
-          
-          addCell(cellData)
-          
-          // Add to notebook store (in-memory only, not persisted)
-          ;(notebookStore.cells as Record<string, any>)[ephemeralCell.id] = ephemeralCell
         }
       }
-      
+
       successMessage.value = `✅ ${selectedFiles.value.length} arquivo(s) aberto(s)`
       setTimeout(() => {
         successMessage.value = ''
@@ -504,23 +496,15 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
       }
       
       const newCell = await createResponse.json()
-      
-      // Step 2: Add to local layout
-      const cellData = {
-        cellId: newCell.id,
-        type: newCell.notebook_item_type_id,
-        title: fileName.trim(),
-        state: {
-          cellInstance: newCell,
-          initial_data: newCell.initial_data || {},
+
+      // Step 2: Add to workspace via cell factory
+      if (cellFactory) {
+        const cellId = await cellFactory.addChildCell('file-editor-v2', newCell.initial_data || {})
+        if (!cellId) {
+          console.warn('[useFileManager] createNewFile: addChildCell returned undefined', { type: 'file-editor-v2' })
         }
       }
-      
-      addCell(cellData)
-      
-      // Step 3: Add to notebook store
-      ;(notebookStore.cells as Record<string, any>)[newCell.id] = newCell
-      
+
       successMessage.value = `✅ Célula criada para ${fileName}`
       setTimeout(() => {
         successMessage.value = ''
@@ -696,22 +680,14 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
         initial_data: ephemeralCell.initial_data
       })
       
-      // Add to local layout
-      const cellData = {
-        cellId: ephemeralCell.id,
-        type: ephemeralCell.notebook_item_type_id,
-        title: '📄 Novo Arquivo',
-        state: {
-          cellInstance: ephemeralCell,
-          initial_data: ephemeralCell.initial_data,
+      // Add to workspace via cell factory
+      if (cellFactory) {
+        const cellId = await cellFactory.addChildCell('file-editor-v2', ephemeralCell.initial_data)
+        if (!cellId) {
+          console.warn('[useFileManager] createNewFileEditor: addChildCell returned undefined', { type: 'file-editor-v2' })
         }
       }
-      
-      addCell(cellData)
-      
-      // Add to notebook store (in-memory only, not persisted)
-      ;(notebookStore.cells as Record<string, any>)[ephemeralCell.id] = ephemeralCell
-      
+
       successMessage.value = '✅ Editor de novo arquivo aberto'
       setTimeout(() => {
         successMessage.value = ''
