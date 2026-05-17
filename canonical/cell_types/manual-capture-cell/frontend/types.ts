@@ -47,4 +47,7 @@ export interface CellProps {
       initial_data?: ManualCaptureCellData
     }
   }
+  cellInstance?: {
+    __initialData?: ManualCaptureCellData
+  }
 }

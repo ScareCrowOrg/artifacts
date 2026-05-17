@@ -96,18 +96,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, type Ref } from 'vue'
+import { ref, computed, onMounted, nextTick, inject, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ManualCaptureCell } from './ManualCaptureCell'
 import { useManualCapture } from './composables/useManualCapture'
+import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
 import type { CellProps, ManualCaptureCellData } from './types'
 import type { HealthCheckResult } from '@/types/BaseCell'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('cell:manual-capture')
-
-// BaseCell instance for headless execution, validation, and health checks
-const cellInstance = new ManualCaptureCell()
 
 // Props
 const props = defineProps<CellProps>()
@@ -115,9 +113,15 @@ const props = defineProps<CellProps>()
 // i18n
 const { t } = useI18n()
 
-// Get cell data with defaults
+// Cell factory inject for creating child cells
+const cellFactory = inject<CellFactory>(CELL_FACTORY_KEY)
+
+// BaseCell instance — use cellInstance from props (workspace mode) or create one locally (standalone mode)
+const cellInstance: ManualCaptureCell = new ManualCaptureCell()
+
+// Get cell data with defaults — prefer __initialData from show() pattern, then cell.initial_data
 const cellData = computed<ManualCaptureCellData>(() => {
-  const initial_data = (props.cell?.state?.initial_data || props.cell?.initial_data || {}) as Partial<ManualCaptureCellData>
+  const initial_data = (props.cellInstance?.__initialData || props.cell?.state?.initial_data || props.cell?.initial_data || {}) as Partial<ManualCaptureCellData>
   return {
     category: initial_data.category || 'efemera',
     icon: initial_data.icon || '✍️',
@@ -148,55 +152,29 @@ onMounted(async () => {
 
 /**
  * Create a file-editor-v2 cell with the given content
- * This is the key integration point - manual-capture-cell creates file-editor-v2 instances
+ * Uses cellFactory inject when in workspace mode, falls back to logging
  */
 async function createFileEditorCell(
   content: string,
   fileName: string,
   language: string
 ): Promise<void> {
-  // Generate ephemeral ID for the new file-editor-v2 cell
-  const tempCellId = `ephemeral-file-editor-v2-${Date.now()}`
-
-  const cellData = {
-    cellId: tempCellId,
-    type: 'file-editor-v2',
-    title: fileName,
-    state: {
-      cellInstance: {
-        id: tempCellId,
-        notebook_item_type_id: 'file-editor-v2',
-        assignee_id: 'default-user-id',
-        initial_data: {
-          fileName: fileName,
-          filePath: 'captured',
-          language: language,
-          readOnly: false,
-          category: 'ephemeral',
-          icon: '📄',
-          content: content,
-        },
-        status: 'PENDING',
-        fragments: [],
-      },
-      cellType: {
-        id: 'file-editor-v2',
-        name: 'File Editor',
-        default_initial_data: {
-          fileName: fileName,
-          language: language,
-          content: content,
-        },
-      },
-      initial_data: {
-        fileName: fileName,
-        language: language,
-        content: content,
-      },
-    },
+  if (cellFactory) {
+    log.info('[ManualCaptureCell] Creating file-editor-v2 via cellFactory', { fileName, language })
+    const cellId = await cellFactory.addChildCell('file-editor-v2', {
+      fileName: fileName,
+      filePath: 'captured',
+      language: language,
+      readOnly: false,
+      icon: '📄',
+      content: content,
+    })
+    if (!cellId) {
+      log.warn('[ManualCaptureCell] addChildCell returned undefined', { type: 'file-editor-v2' })
+    }
+  } else {
+    log.warn('[ManualCaptureCell] cellFactory not available — running outside workspace', { fileName, language })
   }
-
-  log.info('Cell data prepared for file-editor-v2 creation', { fileName, language })
 }
 
 /**
