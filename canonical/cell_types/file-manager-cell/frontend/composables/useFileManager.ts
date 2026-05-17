@@ -15,8 +15,6 @@ import type {
 import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
 import { ENDPOINTS } from '@/config/endpoints'
 import apiService, { SessionExpiredError } from '@/services/apiService'
-import { useNotebookStore } from '@/stores/useNotebookStore'
-import { useChatStore } from '@/stores/chat'
 
 // Global state to prevent concurrent refresh operations across all FileManagerCell instances
 // This prevents infinite loops when async component loading causes component re-creation
@@ -32,7 +30,6 @@ let cachedTreeData: FileTreeNode[] = []
  */
 export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn {
   // Composables & Stores
-  const notebookStore = useNotebookStore()
   const cellFactory = inject(CELL_FACTORY_KEY)
   
   // State
@@ -329,69 +326,29 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
       errorMessage.value = '❌ Nenhum arquivo selecionado'
       return
     }
-    
+
     try {
-      // Get current user ID
-      const userId = notebookStore.getUserId()
-      
-      if (!userId) {
-        throw new Error('User not authenticated')
-      }
-      
       console.log('[FILE-MANAGER] Opening files:', selectedFiles.value)
-      
-      // Create ephemeral FileEditorCell instances for each selected file (client-side only)
-      // Note: file-editor-v2 cells are ephemeral - they are UI components for editing files,
-      // not persistent entities. The Save button saves FILE content, not the cell itself.
+
       for (const filePath of selectedFiles.value) {
         console.log('[FILE-MANAGER] Processing file path:', filePath)
-        
-        // Extract file name and directory
+
         const parts = filePath.split('/')
         const fileName = parts[parts.length - 1]
         const dirPath = parts.slice(0, -1).join('/')
-        
-        console.log('[FILE-MANAGER] Path extraction:', { 
-          filePath, 
-          parts, 
-          fileName, 
-          dirPath,
-          dirPathLength: dirPath.length 
-        })
-        
-        // Only open files, not directories
+
         const node = findNodeByPath(tree.value, filePath)
         if (node && !node.isDirectory) {
-          // Create ephemeral cell client-side (no backend call, no DB persistence)
-          const ephemeralCellId = `ephemeral-file-editor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-          
           const initial_data = {
             fileName,
-            filePath: dirPath,  // Use actual directory path (empty string for root)
+            filePath: dirPath,
             language: getLanguageFromExtension(fileName),
             readOnly: false,
             icon: '📄'
           }
-          
-          const ephemeralCell = {
-            id: ephemeralCellId,
-            notebook_item_type_id: 'file-editor-v2',
-            assignee_id: userId,
-            initial_data,
-            category: 'ephemeral',
-            status: 'PENDING',
-            fragments: [],
-            refs: {},
-          }
-          
-          console.log('[FILE-MANAGER] Created ephemeral cell (client-side, not persisted):', {
-            cellId: ephemeralCell.id,
-            initial_data: ephemeralCell.initial_data
-          })
-          
-          // Add to workspace via cell factory
+
           if (cellFactory) {
-            const cellId = await cellFactory.addChildCell('file-editor-v2', ephemeralCell.initial_data)
+            const cellId = await cellFactory.addChildCell('file-editor-v2', initial_data)
             if (!cellId) {
               console.warn('[useFileManager] openSelectedFiles: addChildCell returned undefined', { type: 'file-editor-v2' })
             }
@@ -400,11 +357,7 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
       }
 
       successMessage.value = `✅ ${selectedFiles.value.length} arquivo(s) aberto(s)`
-      setTimeout(() => {
-        successMessage.value = ''
-      }, 2000)
-      
-      // Clear selection after opening
+      setTimeout(() => { successMessage.value = '' }, 2000)
       clearSelection()
     } catch (err) {
       errorMessage.value = '❌ Erro ao abrir arquivos'
@@ -459,24 +412,17 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
     }
     
     try {
-      // Get current user ID
-      const userId = notebookStore.getUserId()
-      
-      if (!userId) {
-        throw new Error('User not authenticated')
-      }
-      
       // Step 1: Create cell in backend
       // Note: FileEditorCell is persistent (NOT ephemeral) so users can resume
       // editing after page refresh. The `category` field is intentionally omitted.
+      // Backend identifies the user via JWT token — no userId needed in body.
       const createResponse = await apiService.fetch(ENDPOINTS.createCell, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           notebook_item_type_id: 'file-editor-v2',
-          assignee_id: userId,
           initial_data: {
             fileName: fileName.trim(),
             filePath: folder,
@@ -548,56 +494,62 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
       return
     }
     
-    const chatStore = useChatStore()
     let successCount = 0
     let failCount = 0
-    
+
     try {
       for (const filePath of selectedFiles.value) {
         console.log(`📄 Processing file: ${filePath}`)
-        
+
         try {
           // Parse folder and filename from filePath
           const pathParts = filePath.split('/')
           const fileName = pathParts.pop() || filePath
           const folder = pathParts.join('/') || ''
-          
+
           console.log(`📂 Parsed path:`, {
             filePath,
             folder,
             fileName
           })
-          
+
           // Read file content from backend using loadFile endpoint
           // Format: /api/files/load?folder=...&filename=...
           const url = `${ENDPOINTS.loadFile}?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(fileName)}`
-          
+
           console.log(`🔗 Fetching from:`, url)
-          
-          // ITERATION 4 FIX: Use apiService.fetch instead of apiService.get
+
           const response = await apiService.fetch(url, { method: 'GET' })
-          
+
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
           }
-          
+
           const content = await response.text()
-          
+
           console.log(`🚀 Sending to chat:`, {
             filename: fileName,
             contentLength: content.length,
             type: 'text'
           })
-          
-          // Send to chat with correct API signature
-          const success = chatStore.addAttachment(fileName, content, 'text')
-          
-          if (success) {
+
+          // Send file content to chat via API directly (no store dependency)
+          const chatResponse = await apiService.fetch(ENDPOINTS.chatProcess, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: fileName,
+              content,
+              type: 'text',
+            })
+          })
+
+          if (chatResponse.ok) {
             successCount++
             console.log(`✅ File sent: ${fileName}`)
           } else {
             failCount++
-            console.warn(`⚠️ Failed to send: ${fileName}`)
+            console.warn(`⚠️ Failed to send: ${fileName} (${chatResponse.status})`)
           }
         } catch (fileError: any) {
           failCount++
@@ -641,17 +593,8 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
    */
   async function createNewFileEditor(): Promise<void> {
     try {
-      // Get current user ID
-      const userId = notebookStore.getUserId()
-      
-      if (!userId) {
-        throw new Error('User not authenticated')
-      }
-      
       // Create an ephemeral file-editor-v2 cell with default/empty values
       // The user will configure filename and directory within the editor itself
-      const ephemeralCellId = `ephemeral-file-editor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      
       const initial_data = {
         fileName: 'novo_arquivo.md',  // Default filename, editable in editor
         filePath: 'docs',  // Default directory, editable in editor
@@ -661,26 +604,12 @@ export function useFileManager(cell: Ref<FileManagerCell>): UseFileManagerReturn
         icon: '📄',
         isNewFile: true  // Flag to indicate this is a new file creation
       }
-      
-      const ephemeralCell = {
-        id: ephemeralCellId,
-        notebook_item_type_id: 'file-editor-v2',
-        assignee_id: userId,
-        initial_data,
-        category: 'ephemeral',
-        status: 'PENDING',
-        fragments: [],
-        refs: {},
-      }
-      
-      console.log('[FILE-MANAGER] Created ephemeral cell for new file (editable filename/path):', {
-        cellId: ephemeralCell.id,
-        initial_data: ephemeralCell.initial_data
-      })
-      
+
+      console.log('[FILE-MANAGER] Creating ephemeral file editor cell:', { initial_data })
+
       // Add to workspace via cell factory
       if (cellFactory) {
-        const cellId = await cellFactory.addChildCell('file-editor-v2', ephemeralCell.initial_data)
+        const cellId = await cellFactory.addChildCell('file-editor-v2', initial_data)
         if (!cellId) {
           console.warn('[useFileManager] createNewFileEditor: addChildCell returned undefined', { type: 'file-editor-v2' })
         }
