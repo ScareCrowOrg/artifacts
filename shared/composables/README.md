@@ -15,7 +15,6 @@ This directory provides a single source of truth for reusable Vue composition fu
 | `useActionDiscovery.js` | Discovers available AgenteLab actions from the backend registry |
 | `useActionRegistry.js` | Registers and resolves actions at runtime (canonical version) |
 | `useActionRegistry-old.js` | Legacy action registry (kept for backward compatibility) |
-| `useBaseCellFeatures.ts` | Complete implementation of the `RenderableCell` interface; foundational composable for all cells |
 | `useBookTypeDiscovery.ts` | Discovers available book types from the backend |
 | `useBookTypeLoader.ts` | Loads and caches book type definitions |
 | `useCellClassLoader.ts` | Dynamically loads cell class modules |
@@ -29,7 +28,6 @@ This directory provides a single source of truth for reusable Vue composition fu
 | `useCellView.js` | Manages the view state of an individual cell |
 | `useCellViewLoader.js` | Asynchronously loads cell view components |
 | `useCellViewResolver.js` | Resolves the correct Vue view component for a cell type |
-| `useDynamicLayout.js` | Manages dynamic workspace layout (resizing, reordering) |
 | `useFileBrowser.js` | File-browser state and operations for cells that access the filesystem |
 | `useFilenameSuggestion.js` | Generates filename suggestions based on cell content |
 | `useFragmentManagement.js` | Manages cell fragments (sub-content within a cell) |
@@ -41,7 +39,6 @@ This directory provides a single source of truth for reusable Vue composition fu
 | `useLogin.js` | Authentication login flow |
 | `useModal.js` | Modal dialog lifecycle management |
 | `useParentCellContext.ts` | Provides access to parent cell context from nested components |
-| `usePermissions.js` | Permission checking for RBAC-controlled actions |
 | `useRequestOrchestrator.js` | Deduplicates and orchestrates concurrent API requests |
 | `useServiceConfig.js` | Reads and exposes service configuration from the platform |
 | `useSettings.js` | User/workspace settings read and write |

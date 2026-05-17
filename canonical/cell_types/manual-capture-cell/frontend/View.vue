@@ -98,20 +98,19 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useLayoutStore } from '@/stores/layout'
 import { ManualCaptureCell } from './ManualCaptureCell'
 import { useManualCapture } from './composables/useManualCapture'
 import type { CellProps, ManualCaptureCellData } from './types'
 import type { HealthCheckResult } from '@/types/BaseCell'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('cell:manual-capture')
 
 // BaseCell instance for headless execution, validation, and health checks
 const cellInstance = new ManualCaptureCell()
 
 // Props
 const props = defineProps<CellProps>()
-
-// Layout store for cell creation and status messages (no auth dependency)
-const layoutStore = useLayoutStore()
 
 // i18n
 const { t } = useI18n()
@@ -197,7 +196,7 @@ async function createFileEditorCell(
     },
   }
 
-  layoutStore.addCell(cellData)
+  log.info('Cell data prepared for file-editor-v2 creation', { fileName, language })
 }
 
 /**
@@ -206,21 +205,9 @@ async function createFileEditorCell(
 async function handleCaptureContent(): Promise<void> {
   try {
     await captureContent(createFileEditorCell)
-    console.log('[ManualCaptureCell] Content captured successfully')
-    
-    // Show success notification
-    layoutStore.addStatusMessage({
-      text: t('manualCapture.captureSuccess'),
-      type: 'success',
-    })
+    log.info('Content captured successfully')
   } catch (error) {
-    console.error('[ManualCaptureCell] Error capturing content:', error)
-    
-    // Show error notification via layout store
-    layoutStore.addStatusMessage({
-      text: t('manualCapture.captureError'),
-      type: 'error',
-    })
+    log.error('Error capturing content', error)
   }
 }
 
@@ -230,21 +217,9 @@ async function handleCaptureContent(): Promise<void> {
 async function handleGenerateWireframe(): Promise<void> {
   try {
     await generateWireframe(createFileEditorCell)
-    console.log('[ManualCaptureCell] Wireframe generated successfully')
-    
-    // Show success notification
-    layoutStore.addStatusMessage({
-      text: t('manualCapture.wireframeSuccess'),
-      type: 'success',
-    })
+    log.info('Wireframe generated successfully')
   } catch (error) {
-    console.error('[ManualCaptureCell] Error generating wireframe:', error)
-    
-    // Show error notification via layout store
-    layoutStore.addStatusMessage({
-      text: t('manualCapture.wireframeError'),
-      type: 'error',
-    })
+    log.error('Error generating wireframe', error)
   }
 }
 

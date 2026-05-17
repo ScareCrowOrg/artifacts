@@ -17,8 +17,6 @@ This directory provides a centralized layer of HTTP/API service functions so tha
 | `cellTypesService.js` | Fetches and caches the list of available cell types from the backend registry |
 | `issuesDashboardService.js` | Data operations for the Issues Dashboard cell (fetch, filter, paginate issues) |
 | `issuesService.js` | Generic issue CRUD: create, read, update, close GitHub-linked issues |
-| `layoutBooksService.js` | Persists and retrieves book layout configurations |
-| `layoutPersistence.js` | Low-level layout persistence helpers (IndexedDB / backend sync) |
 | `notebookCellsService.js` | Notebook cell CRUD: create, read, update, delete, reorder cells within a notebook |
 | `systemService.js` | System-level operations: health checks, version info, platform metadata |
 

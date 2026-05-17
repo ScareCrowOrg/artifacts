@@ -20,10 +20,8 @@ This directory contains Pinia stores that manage global and cross-cell state. In
 | `globalEvents.js` | Legacy global event bus (JS version; prefer `globalEvents.ts`) |
 | `globalEvents.ts` | Typed global event bus for cross-component communication |
 | `issues.js` | GitHub issues state: list, filters, selected issue, pagination |
-| `layout.js` | Workspace layout state: panel sizes, collapsed panels, grid configuration |
 | `modals.js` | Modal stack management: open/close modals with payload and result callbacks |
 | `notebookCells.js` | Ordered list of notebook cells (display order, visibility, grouping) |
-| `permissions.js` | Current user's RBAC permissions and role assignments |
 | `services.js` | Service registry state: available backend services and their health status |
 | `settings.js` | User and workspace settings (theme, locale, feature flags) |
 | `ui.js` | Legacy UI state (JS version; prefer `ui.ts`) |
@@ -37,19 +35,12 @@ This directory contains Pinia stores that manage global and cross-cell state. In
 ```ts
 import { useCellsStore } from '@artifacts/shared/stores/cells'
 import { useWorkspaceStore } from '@artifacts/shared/stores/workspaceStore'
-import { usePermissionsStore } from '@artifacts/shared/stores/permissions'
 
 const cellsStore = useCellsStore()
 const workspaceStore = useWorkspaceStore()
-const permissionsStore = usePermissionsStore()
 
 // Access active notebook
 const notebookId = workspaceStore.activeNotebookId
-
-// Check permission
-if (permissionsStore.can('cells:delete')) {
-  await cellsStore.deleteCell(cellId)
-}
 ```
 
 ## Notes
