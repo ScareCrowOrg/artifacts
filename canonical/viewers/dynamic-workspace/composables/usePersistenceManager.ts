@@ -192,15 +192,39 @@ export function usePersistenceManager() {
   }
 
   /**
+   * Find an existing auto-save layout book by name.
+   * Returns the book id, or null if none exists.
+   */
+  async function findAutoSaveBook(): Promise<string | null> {
+    try {
+      const layouts = await listLayouts(0, 100)
+      const existing = layouts.find(b => b.name === '__auto-save__')
+      return existing?.id ?? null
+    } catch {
+      return null
+    }
+  }
+
+  /**
    * Save the current grid state to an existing auto-save layout book (update),
    * or create a new one if no auto-save book exists yet.
    *
-   * @param autoSaveBookId  If provided, PUT to update; otherwise POST to create.
+   * Strategy (idempotent):
+   * 1. If autoSaveBookId is known, try to update it directly.
+   * 2. If update fails or no ID known, search for existing __auto-save__ book by name.
+   * 3. If found, update that book and return its ID.
+   * 4. If nothing found, create a new __auto-save__ book.
+   *
+   * This ensures the auto-save always targets the SAME book across page reloads,
+   * and recovers gracefully if the book was deleted externally.
+   *
+   * @param autoSaveBookId  Hint: previously known auto-save book ID (may be stale).
    * @returns               The id of the auto-save book (for subsequent saves).
    */
   async function autoSaveWorkspaceState(autoSaveBookId: string | null): Promise<string> {
     const serializedCells = serializeCells()
 
+    // ── Case 1: Known book ID → try direct update ──────────────────────────
     if (autoSaveBookId) {
       try {
         await updateLayout(autoSaveBookId, {
@@ -213,14 +237,34 @@ export function usePersistenceManager() {
         })
         return autoSaveBookId
       } catch (err: any) {
-        // If the update fails (e.g. book was deleted), fall through to create a new one
-        log.warn('[PersistenceManager] Auto-save update failed, creating new', {
+        log.warn('[PersistenceManager] Auto-save update failed, will look for existing book', {
           autoSaveBookId,
           error: err.message,
         })
       }
     }
 
+    // ── Case 2: Look for an existing __auto-save__ book by name ────────────
+    try {
+      const existingId = await findAutoSaveBook()
+      if (existingId) {
+        await updateLayout(existingId, {
+          cells: serializedCells,
+          grid_config: DEFAULT_GRID_CONFIG,
+        })
+        log.info('[PersistenceManager] Auto-save updated (via name lookup)', {
+          autoSaveBookId: existingId,
+          cellCount: serializedCells.length,
+        })
+        return existingId
+      }
+    } catch (err: any) {
+      log.warn('[PersistenceManager] Auto-save name lookup/update failed', {
+        error: err.message,
+      })
+    }
+
+    // ── Case 3: No existing auto-save book → create one ────────────────────
     const book = await saveLayout('__auto-save__', 'Automatic workspace state backup')
     log.info('[PersistenceManager] Auto-save created', {
       layoutId: book.id,
