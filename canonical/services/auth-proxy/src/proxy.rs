@@ -87,6 +87,71 @@ fn extract_wss_alias(path: &str) -> Option<&str> {
     }
 }
 
+/// Extract the viewer name from a `/viewers/{viewerName}[/...]` path.
+///
+/// Returns `None` if the path does not start with `/viewers/` or has no viewer name.
+fn extract_viewer_id(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix("/viewers/")?;
+    let viewer_id = rest.split('/').next()?;
+    if viewer_id.is_empty() { None } else { Some(viewer_id) }
+}
+
+/// Check if a session has access to a specific viewer.
+///
+/// Reads Redis state keys written by `auth_session_router.py:bind_session()`:
+/// - `state:session:{sessionId}:is_owner` → if "true", owner has access to all viewers.
+/// - `state:session:{sessionId}:allowed_artifacts` → SISMEMBER check for guest allowances.
+///
+/// **Fail-closed**: If Redis errors, access is denied.
+async fn check_viewer_access(
+    state: &AppState,
+    session_id: &str,
+    viewer_id: &str,
+) -> bool {
+    let mut conn = state.redis_cm.clone();
+
+    // Check if user is the planet owner (has access to all viewers)
+    let is_owner_key = format!("state:session:{}:is_owner", session_id);
+    let is_owner: Option<String> = redis::cmd("GET")
+        .arg(&is_owner_key)
+        .query_async(&mut conn)
+        .await
+        .unwrap_or(None);
+
+    if let Some(ref val) = is_owner {
+        if val == "true" {
+            debug!("[AuthProxy] Viewer '{}' allowed: session owner", viewer_id);
+            return true;
+        }
+    }
+
+    // Check guest allowance via Redis Set membership
+    let allowances_key = format!("state:session:{}:allowed_artifacts", session_id);
+    let is_allowed: bool = redis::cmd("SISMEMBER")
+        .arg(&allowances_key)
+        .arg(viewer_id)
+        .query_async(&mut conn)
+        .await
+        .unwrap_or(false);  // fail-closed: Redis error → deny
+
+    debug!(
+        "[AuthProxy] Viewer '{}' check: is_allowed={} (session={})",
+        viewer_id, is_allowed, session_id
+    );
+    is_allowed
+}
+
+/// Build a 302 redirect response to the given location.
+fn build_redirect_response(location: &str) -> Response {
+    let mut resp = Response::new(Body::empty());
+    *resp.status_mut() = StatusCode::FOUND;
+    resp.headers_mut().insert(
+        HeaderName::from_static("location"),
+        HeaderValue::from_str(location).unwrap(),
+    );
+    resp
+}
+
 /// Parse a routing JSON value stored in Redis and extract the upstream URL.
 ///
 /// Expected JSON format:
@@ -419,6 +484,19 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                 proxy_to_backend(state, req, &full_path, false).await
             }
             RouteDecision::ViteProtected => {
+                // Viewer access check for /viewers/* paths
+                if let Some(viewer_id) = extract_viewer_id(&path) {
+                    let session_id = cookie_header.as_deref().and_then(extract_session_id);
+                    if let Some(ref sid) = session_id {
+                        if !check_viewer_access(&state, sid, viewer_id).await {
+                            info!(
+                                "[AuthProxy] Viewer '{}' denied for session {}, redirecting to PlanetHall",
+                                viewer_id, sid
+                            );
+                            return build_redirect_response("/planet/planethall");
+                        }
+                    }
+                }
                 debug!(
                     "[AuthProxy] Auth OK for {} (SessionID={}), proxying to Vite",
                     path, has_cookie
@@ -1020,6 +1098,41 @@ mod tests {
         let result = parse_wss_routing_value(raw, "events");
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // ── extract_viewer_id tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_extract_viewer_id_viewers_gallery() {
+        assert_eq!(extract_viewer_id("/viewers/gallery"), Some("gallery"));
+    }
+
+    #[test]
+    fn test_extract_viewer_id_with_extra_path() {
+        assert_eq!(
+            extract_viewer_id("/viewers/gallery/extra/path"),
+            Some("gallery")
+        );
+    }
+
+    #[test]
+    fn test_extract_viewer_id_non_viewer_path() {
+        assert_eq!(extract_viewer_id("/artifacts/canonical/..."), None);
+    }
+
+    #[test]
+    fn test_extract_viewer_id_root() {
+        assert_eq!(extract_viewer_id("/"), None);
+    }
+
+    #[test]
+    fn test_extract_viewer_id_viewers_only() {
+        assert_eq!(extract_viewer_id("/viewers/"), None);
+    }
+
+    #[test]
+    fn test_extract_viewer_id_api_path() {
+        assert_eq!(extract_viewer_id("/api/v1/auth/session-check"), None);
     }
 
     // ── extract_session_id tests ───────────────────────────────────────────────
