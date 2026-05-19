@@ -2,8 +2,8 @@
   "version": "0.1",
   "name": "planet-beacon",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-planet-beacon:staging20260519T020046",
-  "imageTag": "staging20260519T020046",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-planet-beacon:staging20260518T230016",
+  "imageTag": "staging20260518T230016",
   "dependencies": [],
   "generate_env_file": false,
   "totp_seed": false,
@@ -39,5 +39,5 @@
       "description": "Bearer token for authenticating requests to CentralHub. Injected by Launcher from vault."
     }
   ],
-  "lastBuilt": "2026-05-19T02:03:29.608Z"
+  "lastBuilt": "2026-05-18T23:03:10.431Z"
 }

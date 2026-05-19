@@ -87,11 +87,19 @@ fn extract_wss_alias(path: &str) -> Option<&str> {
     }
 }
 
-/// Extract the viewer name from a `/viewers/{viewerName}[/...]` path.
+/// Extract the viewer name from a path containing `/viewers/{viewerName}[/...]`.
 ///
-/// Returns `None` if the path does not start with `/viewers/` or has no viewer name.
+/// Matches the first occurrence of `/viewers/` anywhere in the path, supporting
+/// multiple staging contexts:
+/// - `/viewers/{viewerName}` (Vue Router SPA route)
+/// - `/artifacts/canonical/viewers/{viewerName}` (canonical viewer)
+/// - `/artifacts/sandbox/viewers/{viewerName}` (sandbox draft)
+/// - `/artifacts/runtime/user/{id}/viewers/{viewerName}` (user runtime)
+///
+/// Returns `None` if the path contains no `/viewers/` segment or has no viewer name.
 fn extract_viewer_id(path: &str) -> Option<&str> {
-    let rest = path.strip_prefix("/viewers/")?;
+    let pos = path.find("/viewers/")?;
+    let rest = &path[pos + "/viewers/".len()..];
     let viewer_id = rest.split('/').next()?;
     if viewer_id.is_empty() { None } else { Some(viewer_id) }
 }
@@ -1133,6 +1141,44 @@ mod tests {
     #[test]
     fn test_extract_viewer_id_api_path() {
         assert_eq!(extract_viewer_id("/api/v1/auth/session-check"), None);
+    }
+
+    #[test]
+    fn test_extract_viewer_id_canonical_artifact() {
+        assert_eq!(
+            extract_viewer_id("/artifacts/canonical/viewers/dynamic-workspace"),
+            Some("dynamic-workspace")
+        );
+    }
+
+    #[test]
+    fn test_extract_viewer_id_sandbox_artifact() {
+        assert_eq!(
+            extract_viewer_id("/artifacts/sandbox/viewers/my-viewer"),
+            Some("my-viewer")
+        );
+    }
+
+    #[test]
+    fn test_extract_viewer_id_runtime_artifact() {
+        assert_eq!(
+            extract_viewer_id("/artifacts/runtime/user/550e8400/viewers/my-viewer"),
+            Some("my-viewer")
+        );
+    }
+
+    #[test]
+    fn test_extract_viewer_id_canonical_asset_subpath() {
+        assert_eq!(
+            extract_viewer_id("/artifacts/canonical/viewers/gallery/main.js"),
+            Some("gallery")
+        );
+    }
+
+    #[test]
+    fn test_extract_viewer_id_non_viewer_segment() {
+        // "viewers-images" contains "viewers-" not "/viewers/" — no match
+        assert_eq!(extract_viewer_id("/artifacts/viewers-images/cell.png"), None);
     }
 
     // ── extract_session_id tests ───────────────────────────────────────────────
