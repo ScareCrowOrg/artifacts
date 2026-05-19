@@ -240,8 +240,10 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// Use relative paths in production (through Traefik/Auth-Proxy), localhost in dev
-const API_BASE = import.meta.env?.DEV ? 'http://localhost:5050' : ''
+// VITE_API_BASE_URL is already configured/passed to Vite (see vite docker-compose.yml).
+// In production (Traefik), this is typically empty/same-origin so requests go through
+// Auth-Proxy. In dev, it falls back to empty string for same-origin behavior.
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 // ── Buffer Locals (REACTIVITY_ISOLATION.md) ──────────────────────────────
 const messagesBuffer = ref<any[]>([])
