@@ -105,7 +105,7 @@ async function parseResponse(response: Response): Promise<any> {
  * @param path Request path or URL
  * @returns Complete URL
  */
-function normalizePath(path: string): string {
+export function normalizePath(path: string): string {
   // If doesn't start with /, assume it's already a complete URL
   if (!path.startsWith('/')) {
     return path
@@ -123,40 +123,51 @@ function normalizePath(path: string): string {
 }
 
 /**
- * Authenticated fetch that lazy-reads the session token from workspaceStore.
+ * Resilient authenticated fetch.
  *
- * The token is read at call time (not at import time), so it always reflects
- * the current session even when the store hydrates after module load.
+ * Auth strategy (automatic):
+ * 1. If workspaceStore (Pinia) is available with a sessionToken → Bearer token
+ * 2. Otherwise → cookie-based (`credentials: 'include'`)
+ *
+ * This single function serves both cell types (which use Pinia/Bearer) and
+ * standalone viewers (which use cookies). Callers always get a raw `Response`
+ * and handle `.json()` / error parsing themselves.
  *
  * Path normalization:
  * - `/layout-books` → http://localhost:5050/api/layout-books
  * - `/api/ai-models/config` → http://localhost:5050/api/ai-models/config
  * - `http://localhost:5050/api/...` → used as-is
- *
- * Returns the raw `Response` — callers handle `.json()` and error parsing.
- *
- * @throws {Error} if no session token is available when called.
  */
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  // Called inside the function body (not at module scope) to ensure Pinia is
-  // already installed and to avoid potential circular dependency issues.
-  const store = useWorkspaceStore()
-  const token = store.sessionToken
-
-  if (!token) {
-    throw new Error('[apiService] No session token available')
+  // Try to read Bearer token from workspaceStore (Pinia).
+  // If Pinia isn't installed (standalone viewer context), fall through to cookie auth.
+  let token: string | null = null
+  try {
+    const store = useWorkspaceStore()
+    token = store.sessionToken ?? null
+  } catch {
+    // Pinia not available — standalone viewer, use cookie auth
   }
 
   const url = normalizePath(path)
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  }
 
-  return fetch(url, {
+  const fetchOptions: RequestInit = {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(options.headers ?? {}),
-    },
-  })
+    headers,
+  }
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  } else {
+    // No Bearer token — rely on httpOnly session cookie (standalone viewer)
+    ;(fetchOptions as any).credentials = 'include'
+  }
+
+  return fetch(url, fetchOptions)
 }
 
 // ── Default export (backward compatibility with legacy imports) ────────────────

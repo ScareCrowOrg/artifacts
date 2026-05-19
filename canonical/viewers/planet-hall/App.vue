@@ -237,21 +237,20 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useBaseViewer } from '@/composables/useBaseViewer'
 
 const { t } = useI18n()
 
-// VITE_API_BASE_URL is already configured/passed to Vite (see vite docker-compose.yml).
-// In production (Traefik), this is typically empty/same-origin so requests go through
-// Auth-Proxy. In dev, it falls back to empty string for same-origin behavior.
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+const {
+  loadingState, errorMessage, isAuthenticated,
+  apiFetch, checkAuth, formatDate,
+  loadData,
+} = useBaseViewer()
 
 // ── Buffer Locals (REACTIVITY_ISOLATION.md) ──────────────────────────────
 const messagesBuffer = ref<any[]>([])
 const requestsBuffer = ref<any[]>([])
-const loadingState = ref(true)
-const errorMessage = ref('')
 const planetOwnerId = ref('')
-const isAuthenticated = ref(false)
 
 const messageSending = ref(false)
 const requestSending = ref(false)
@@ -268,16 +267,6 @@ const newRequest = reactive({
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function formatDate(isoStr?: string) {
-  if (!isoStr) return ''
-  try {
-    const d = new Date(isoStr)
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-  } catch {
-    return isoStr
-  }
-}
-
 function statusClass(status?: string) {
   switch (status) {
     case 'pending':
@@ -288,43 +277,6 @@ function statusClass(status?: string) {
       return 'bg-red-900/30 text-red-300'
     default:
       return 'bg-gray-900/30 text-gray-300'
-  }
-}
-
-async function apiFetch(path: string, options: RequestInit = {}) {
-  const url = `${API_BASE}${path}`
-  const defaultHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
-  try {
-    const response = await fetch(url, {
-      credentials: 'include',
-      headers: { ...defaultHeaders, ...(options.headers as Record<string, string>) },
-      ...options,
-    })
-    if (!response.ok) {
-      const text = await response.text().catch(() => '')
-      throw new Error(`HTTP ${response.status}: ${text || response.statusText}`)
-    }
-    return response.json()
-  } catch (err) {
-    errorMessage.value = (err as Error).message
-    throw err
-  }
-}
-
-// ── Auth Detection ───────────────────────────────────────────────────────
-
-async function checkAuth() {
-  try {
-    const response = await fetch(`${API_BASE}/api/inbox/requests?status=pending`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-    })
-    isAuthenticated.value = response.ok
-  } catch {
-    isAuthenticated.value = false
   }
 }
 
@@ -357,10 +309,7 @@ async function loadRequests() {
   }
 }
 
-async function loadData() {
-  loadingState.value = true
-  errorMessage.value = ''
-
+async function loadViewerData() {
   // First check if user has a session
   await checkAuth()
 
@@ -372,7 +321,6 @@ async function loadData() {
   }
 
   await Promise.all(tasks)
-  loadingState.value = false
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────
@@ -440,6 +388,6 @@ async function handleCreateRequest() {
 // ── Lifecycle ────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  loadData()
+  loadData(loadViewerData)
 })
 </script>
