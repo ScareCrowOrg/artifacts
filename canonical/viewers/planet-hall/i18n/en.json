@@ -1,0 +1,27 @@
+{
+  "planetHall": {
+    "title": "Planet Hall",
+    "subtitle": "Welcome, guest. Here you can interact with the planet owner.",
+    "loading": "Loading...",
+    "messages": "Messages from Owner",
+    "noMessages": "No messages yet.",
+    "noSubject": "(no subject)",
+    "sendMessage": "Send a Message",
+    "subject": "Subject",
+    "body": "Message",
+    "send": "Send",
+    "sending": "Sending...",
+    "requests": "Your Requests",
+    "noRequests": "No requests yet.",
+    "unknownRequest": "Request",
+    "createRequest": "Request Access",
+    "requestType": "Request Type",
+    "allowance": "Artifact Allowance",
+    "access": "Viewer Access",
+    "message": "Message",
+    "submit": "Submit",
+    "loginPrompt": "Log in to send messages and request viewer access.",
+    "loginButton": "Log In",
+    "notAuthenticated": "You are viewing the Planet Hall as a guest. Log in to interact."
+  }
+}

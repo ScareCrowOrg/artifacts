@@ -1,0 +1,27 @@
+{
+  "planetHall": {
+    "title": "Salão do Planeta",
+    "subtitle": "Bem-vindo, visitante. Aqui você pode interagir com o dono do planeta.",
+    "loading": "Carregando...",
+    "messages": "Mensagens do Dono",
+    "noMessages": "Nenhuma mensagem ainda.",
+    "noSubject": "(sem assunto)",
+    "sendMessage": "Enviar Mensagem",
+    "subject": "Assunto",
+    "body": "Mensagem",
+    "send": "Enviar",
+    "sending": "Enviando...",
+    "requests": "Seus Pedidos",
+    "noRequests": "Nenhum pedido ainda.",
+    "unknownRequest": "Pedido",
+    "createRequest": "Solicitar Acesso",
+    "requestType": "Tipo de Pedido",
+    "allowance": "Permissão de Artefato",
+    "access": "Acesso ao Visualizador",
+    "message": "Mensagem",
+    "submit": "Enviar",
+    "loginPrompt": "Faça login para enviar mensagens e solicitar acesso a visualizadores.",
+    "loginButton": "Entrar",
+    "notAuthenticated": "Você está vendo o Salão do Planeta como convidado. Faça login para interagir."
+  }
+}

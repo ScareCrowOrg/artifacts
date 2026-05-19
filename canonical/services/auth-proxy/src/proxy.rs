@@ -35,6 +35,14 @@ use crate::AppState;
 /// Redis heartbeat key registered by Auth Proxy to signal readiness.
 pub const HEARTBEAT_KEY: &str = "state:service:auth-proxy:available";
 
+/// Viewer paths that are publicly accessible without authentication.
+///
+/// These are standalone viewers served directly by Vite that do not require
+/// any session validation (e.g. Planet Hall — a public landing viewer).
+pub const PUBLIC_PREFIXES: &[&str] = &[
+    "/artifacts/canonical/viewers/planet-hall",
+];
+
 /// Health check handler — always returns 200 OK.
 ///
 /// Used by docker-compose `healthcheck` and by Traefik service discovery.
@@ -102,6 +110,15 @@ fn extract_viewer_id(path: &str) -> Option<&str> {
     let rest = &path[pos + "/viewers/".len()..];
     let viewer_id = rest.split('/').next()?;
     if viewer_id.is_empty() { None } else { Some(viewer_id) }
+}
+
+/// Check whether a request path matches any public prefix.
+///
+/// Public prefixes bypass all auth checks and are proxied directly to Vite.
+/// This enables standalone viewers (e.g. Planet Hall) to serve unauthenticated
+/// users without requiring a session or viewer allowance.
+fn is_public_path(path: &str) -> bool {
+    PUBLIC_PREFIXES.iter().any(|prefix| path.starts_with(prefix))
 }
 
 /// Check if a session has access to a specific viewer.
@@ -473,6 +490,12 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
 
+    // Public paths bypass all auth — proxy directly to Vite.
+    if is_public_path(&path) {
+        debug!("[AuthProxy] Public path '{}' — proxying to Vite without auth", path);
+        return proxy_to_vite(state, req, &full_path).await;
+    }
+
     // Step 2 – validate session via Backend.
     let has_cookie = cookie_header.is_some();
     if let Some(ref cookie) = cookie_header {
@@ -498,10 +521,10 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                     if let Some(ref sid) = session_id {
                         if !check_viewer_access(&state, sid, viewer_id).await {
                             info!(
-                                "[AuthProxy] Viewer '{}' denied for session {}, redirecting to PlanetHall",
+                                "[AuthProxy] Viewer '{}' denied for session {}, redirecting to /artifacts/canonical/viewers/planet-hall",
                                 viewer_id, sid
                             );
-                            return build_redirect_response("/planet/planethall");
+                            return build_redirect_response("/artifacts/canonical/viewers/planet-hall");
                         }
                     }
                 }
