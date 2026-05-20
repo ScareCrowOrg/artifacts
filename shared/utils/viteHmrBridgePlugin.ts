@@ -12,8 +12,8 @@ import type { Plugin, ViteDevServer } from 'vite'
 const ALLOWED_BASE = '/app/artifacts/'
 
 function isPathSafe(filePath: string): boolean {
-  // Reject paths with parent-directory traversal
-  if (filePath.includes('..')) {
+  // Reject empty or parent-directory traversal
+  if (!filePath || filePath.includes('..')) {
     return false
   }
   // Reject paths outside allowed base
@@ -27,7 +27,8 @@ export function viteHmrBridgePlugin(): Plugin {
     apply: 'serve',
 
     configureServer(server: ViteDevServer) {
-      console.error('\n🔌 [HMR Bridge Plugin] configured\n')
+      const logger = server.config.logger
+      logger.info('\n🔌 [HMR Bridge Plugin] configured\n')
 
       server.middlewares.use((req, res, next) => {
         const url = req.url || ''
@@ -49,13 +50,13 @@ export function viteHmrBridgePlugin(): Plugin {
 
         // Path sanitization: must be within /app/artifacts/
         if (!isPathSafe(filePath)) {
-          console.error(`⚠️  [HMR Bridge] rejected unsafe path: ${filePath}`)
+          logger.warn(`⚠️  [HMR Bridge] rejected unsafe path: ${filePath}`)
           res.statusCode = 403
           res.end('Forbidden')
           return
         }
 
-        console.error(`🔌 [HMR Bridge] full-reload for: ${filePath}`)
+        logger.info(`🔌 [HMR Bridge] full-reload for: ${filePath}`)
 
         // Send full-reload to all connected browsers
         // This is more robust than server.moduleGraph.invalidateModule()

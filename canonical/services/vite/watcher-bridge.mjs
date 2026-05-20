@@ -66,14 +66,15 @@ function notifyVite(filePath) {
 
   const url = `${VITE_HMR_URL}?file=${encodeURIComponent(filePath)}`
 
-  http.get(url, (res) => {
+  const req = http.get(url, (res) => {
     // Consume response data to free memory
     res.resume()
-  }).on('error', () => {
+    console.error(`🎯 [HMR Bridge] change detected: ${relativePath}`)
+  })
+  req.on('error', () => {
     // Vite might not be ready yet — silently ignore
   })
-
-  console.error(`🎯 [HMR Bridge] change detected: ${relativePath}`)
+  req.setTimeout(2000, () => req.destroy())
 }
 
 /**
