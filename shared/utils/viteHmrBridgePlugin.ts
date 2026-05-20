@@ -27,8 +27,7 @@ export function viteHmrBridgePlugin(): Plugin {
     apply: 'serve',
 
     configureServer(server: ViteDevServer) {
-      const logger = server.config.logger
-      logger.info('\n🔌 [HMR Bridge Plugin] configured\n')
+      console.error('\n🔌 [HMR Bridge Plugin] configured\n')
 
       server.middlewares.use((req, res, next) => {
         const url = req.url || ''
@@ -50,13 +49,13 @@ export function viteHmrBridgePlugin(): Plugin {
 
         // Path sanitization: must be within /app/artifacts/
         if (!isPathSafe(filePath)) {
-          logger.warn(`⚠️  [HMR Bridge] rejected unsafe path: ${filePath}`)
+          console.error(`⚠️  [HMR Bridge] rejected unsafe path: ${filePath}`)
           res.statusCode = 403
           res.end('Forbidden')
           return
         }
 
-        logger.info(`🔌 [HMR Bridge] full-reload for: ${filePath}`)
+        console.error(`🔌 [HMR Bridge] full-reload for: ${filePath}`)
 
         // Send full-reload to all connected browsers
         // This is more robust than server.moduleGraph.invalidateModule()

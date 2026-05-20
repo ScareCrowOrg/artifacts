@@ -436,8 +436,10 @@ async function handleCreateRequest() {
       request_type: newRequest.request_type,
     }
     if (newRequest.request_type === 'access') {
-      body.viewer_id = selectedViewerId.value
-      body.viewer_name = viewerName
+      body.payload = {
+        viewer_id: selectedViewerId.value,
+        viewer_name: viewerName,
+      }
       body.message = `Requesting access for viewer: ${viewerName}`
     } else {
       body.message = newRequest.message
