@@ -672,6 +672,7 @@ export default defineConfig({
         '!**/*.ts',          // EXCEPT: TypeScript files
         '!**/*.vue',         // EXCEPT: Vue components
         '!**/*.js',          // EXCEPT: JavaScript files
+        '!**/*.css',         // EXCEPT: CSS files
       ],
 
       // Chokidar polling for Docker volumes on Windows

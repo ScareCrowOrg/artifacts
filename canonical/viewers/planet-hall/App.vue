@@ -229,6 +229,7 @@
                   <button
                     v-for="viewer in viewersBuffer"
                     :key="viewer.id"
+                    type="button"
                     :class="['viewer-card', { 'viewer-card--selected': selectedViewerId === viewer.id }]"
                     :disabled="viewer.has_allowance"
                     @click="selectedViewerId = viewer.id"
@@ -274,7 +275,10 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBaseViewer } from '@/composables/useBaseViewer'
+import { createLogger } from '@/utils/logger'
 import './planet-hall.css'
+
+const log = createLogger('planet:hall')
 
 const { t } = useI18n()
 
@@ -322,8 +326,8 @@ async function loadPlanetInfo() {
   try {
     const data: any = await apiFetch('/api/v1/auth/planet-info')
     planetOwnerId.value = data.planet_owner_id || ''
-  } catch {
-    // Non-critical: fallback handled at usage site
+  } catch (err) {
+    log.warn('[loadPlanetInfo] failed', err)
   }
 }
 
@@ -331,7 +335,8 @@ async function loadMessages() {
   try {
     const data: any = await apiFetch('/api/inbox/messages')
     messagesBuffer.value = Array.isArray(data) ? data : []
-  } catch {
+  } catch (err) {
+    log.warn('[loadMessages] failed', err)
     messagesBuffer.value = []
   }
 }
@@ -340,7 +345,8 @@ async function loadRequests() {
   try {
     const data: any = await apiFetch('/api/inbox/requests')
     requestsBuffer.value = Array.isArray(data) ? data : []
-  } catch {
+  } catch (err) {
+    log.warn('[loadRequests] failed', err)
     requestsBuffer.value = []
   }
 }
@@ -349,7 +355,8 @@ async function loadViewers() {
   try {
     const data: any = await apiFetch('/api/viewers')
     viewersBuffer.value = Array.isArray(data) ? data : []
-  } catch {
+  } catch (err) {
+    log.warn('[loadViewers] failed', err)
     viewersBuffer.value = []
   }
 }
@@ -392,8 +399,8 @@ async function handleCreateMessage() {
     newMessage.subject = ''
     newMessage.body = ''
     await loadMessages()
-  } catch {
-    // errorMessage already set by apiFetch
+  } catch (err) {
+    log.warn('[handleCreateMessage] failed', err)
   } finally {
     messageSending.value = false
   }
@@ -439,8 +446,8 @@ async function handleCreateRequest() {
     newRequest.message = ''
     selectedViewerId.value = ''
     await loadRequests()
-  } catch {
-    // errorMessage already set by apiFetch
+  } catch (err) {
+    log.warn('[handleCreateRequest] failed', err)
   } finally {
     requestSending.value = false
   }
