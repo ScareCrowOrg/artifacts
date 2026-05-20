@@ -126,7 +126,8 @@ import '@/styles/index.css'
 
 import { ref, computed, watch, onMounted, onUnmounted, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useWorkspaceHandshake } from './composables/useWorkspaceHandshake'
+import { useBaseViewer } from '@/composables/useBaseViewer'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useGridLayout } from './composables/useGridLayout'
 import { useCellViewProvider } from './composables/useCellViewProvider'
 import { usePersistenceManager } from './composables/usePersistenceManager'
@@ -146,8 +147,9 @@ import type { CellTypeDefinition, LayoutBook } from './types'
 const log = createLogger('workspace:app')
 const { t } = useI18n()
 
-// ── Handshake (Phase 1) ───────────────────────────────────────────────────────
-const { store } = useWorkspaceHandshake()
+// ── Handshake (Phase 1) — managed by useBaseViewer ──────────────────────────
+useBaseViewer({ validationMode: 'validated' })
+const store = useWorkspaceStore()
 
 // ── Grid Layout ───────────────────────────────────────────────────────────────
 const { cells, addCell, removeCell, updateCell, toggleMinimize, toggleMaximize, clearCells } = useGridLayout()

@@ -243,7 +243,7 @@ const { t } = useI18n()
 
 const {
   loadingState, errorMessage, isAuthenticated,
-  apiFetch, checkAuth, formatDate,
+  apiFetch, formatDate,
   loadData,
 } = useBaseViewer()
 
@@ -310,11 +310,9 @@ async function loadRequests() {
 }
 
 async function loadViewerData() {
-  // First check if user has a session
-  await checkAuth()
-
+  // Handshake is handled internally by useBaseViewer.loadData
   // Always load planet info (public endpoint)
-  // Only load messages/requests if authenticated
+  // Only load messages/requests if authenticated via handshake
   const tasks = [loadPlanetInfo()]
   if (isAuthenticated.value) {
     tasks.push(loadMessages(), loadRequests())

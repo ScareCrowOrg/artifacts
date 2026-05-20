@@ -19,13 +19,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useBaseViewer } from '@/composables/useBaseViewer'
+
+const {
+  loadingState, errorMessage, isAuthenticated,
+} = useBaseViewer()
 
 const statusText = ref('Initializing...')
 const statusDetail = ref('')
 const statusClass = ref('success')
-const status = ref('Session validated, WebSocket connected')
-const sessionToken = inject<string | null>('sessionToken', null)
+const status = computed(() => {
+  if (isAuthenticated.value) return 'Session validated, WebSocket connected'
+  if (errorMessage.value) return `Error: ${errorMessage.value}`
+  return 'Waiting for handshake...'
+})
 
 function updateStatus(text: string, detail: string = '', isError: boolean = false) {
   statusText.value = `Status: ${text}`
@@ -33,20 +41,21 @@ function updateStatus(text: string, detail: string = '', isError: boolean = fals
   statusClass.value = isError ? 'error' : 'success'
 }
 
-onMounted(() => {
-  if (sessionToken) {
-    console.log('[HMR-Test] Session valid (validated by Auth-Proxy), HMR ready')
+// Track authentication state reactively
+watch(isAuthenticated, (auth) => {
+  if (auth) {
     updateStatus('Ready', 'Session validated by Auth-Proxy\nEdit files to test HMR', false)
-    status.value = 'HMR is active. Edit files and save to test hot reload.\nCheck browser console for WebSocket logs.'
-  } else {
-    console.error('[HMR-Test] No session token provided by ViewerShell')
-    updateStatus(
-      'Authentication Failed',
-      'ViewerShell did not provide session token',
-      true,
-    )
   }
 })
+
+watch(errorMessage, (err) => {
+  if (err) {
+    updateStatus('Authentication Failed', err, true)
+  }
+})
+
+// Initial state
+updateStatus('Waiting for handshake...', 'Listening for INIT_WORKSPACE from ViewerShell', false)
 </script>
 
 <style scoped>

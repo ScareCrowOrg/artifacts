@@ -3,6 +3,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { defineComponent, nextTick } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 
 // Mock localStorage since jsdom in this environment doesn't provide it
 const localStorageMock = (() => {
@@ -19,7 +22,6 @@ const localStorageMock = (() => {
 Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock, writable: true })
 
 // Mock apiService BEFORE importing useBaseViewer
-// apiFetch delegates to global.fetch so tests can control responses
 vi.mock('@/services/apiService', () => ({
   getApiBaseUrl: vi.fn(() => 'http://localhost:5050'),
   normalizePath: vi.fn((path: string) => {
@@ -32,13 +34,70 @@ vi.mock('@/services/apiService', () => ({
   }),
 }))
 
+// Mock logger to avoid console noise in tests
+vi.mock('@/utils/logger', () => ({
+  createLogger: vi.fn(() => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+    isEnabled: vi.fn(() => false),
+    getNamespace: vi.fn(() => 'test'),
+  })),
+}))
+
 import { useBaseViewer } from '../useBaseViewer'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function createTestWrapper(options: { validationMode?: 'immediate' | 'validated' } = {}) {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+
+  const TestComp = defineComponent({
+    setup() {
+      return useBaseViewer(options)
+    },
+    template: '<div></div>',
+  })
+
+  const wrapper = mount(TestComp, {
+    global: { plugins: [pinia] },
+  })
+
+  return { wrapper, pinia }
+}
+
+/** Dispatch a postMessage event on window as the Cockpit would. */
+function dispatchCockpitMessage(
+  type: string,
+  payload: Record<string, any>,
+  origin = 'http://localhost:5173',
+) {
+  window.dispatchEvent(new MessageEvent('message', {
+    data: { type, payload, timestamp: Date.now() },
+    origin,
+  }))
+}
+
+/**
+ * LoadData blocks on handshake when store.status === 'pending'.
+ * Call this to set the store to 'ready' before tests that don't test handshake.
+ */
+function makeStoreReady() {
+  const store = useWorkspaceStore()
+  // initWorkspace sets status to 'pending' — we need to directly set it to 'ready'
+  // to avoid going through the handshake path
+  ;(store as any).status = 'ready'
+}
 
 describe('useBaseViewer', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.clearAllMocks()
     localStorage.clear()
-    // Default mock fetch: 200 OK with empty JSON
     ;(globalThis as any).__mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -123,107 +182,11 @@ describe('useBaseViewer', () => {
     })
   })
 
-  // ── Auth ────────────────────────────────────────────────────────────────
-
-  describe('checkAuth', () => {
-    let originalFetch: typeof globalThis.fetch
-
-    beforeEach(() => {
-      originalFetch = globalThis.fetch
-      globalThis.fetch = vi.fn()
-    })
-
-    afterEach(() => {
-      globalThis.fetch = originalFetch
-    })
-
-    it('binds session when localStorage token exists and session-bind succeeds', async () => {
-      localStorage.setItem('scareverse_token', 'test-jwt')
-      ;(globalThis.fetch as any).mockResolvedValue({ ok: true })
-
-      const { checkAuth, isAuthenticated, sessionToken } = useBaseViewer()
-      await checkAuth()
-
-      expect(isAuthenticated.value).toBe(true)
-      expect(sessionToken.value).toBe('test-jwt')
-    })
-
-    it('falls back to cookie probe when session-bind fails', async () => {
-      localStorage.setItem('scareverse_token', 'test-jwt')
-      // session-bind fails, cookie probe succeeds
-      ;(globalThis.fetch as any)
-        .mockResolvedValueOnce({ ok: false })
-        .mockResolvedValueOnce({ ok: true })
-
-      const { checkAuth, isAuthenticated } = useBaseViewer()
-      await checkAuth()
-
-      expect(isAuthenticated.value).toBe(true)
-    })
-
-    it('sets isAuthenticated to false when no token and cookie probe fails', async () => {
-      ;(globalThis.fetch as any).mockResolvedValue({ ok: false })
-
-      const { checkAuth, isAuthenticated } = useBaseViewer()
-      await checkAuth()
-
-      expect(isAuthenticated.value).toBe(false)
-    })
-
-    it('sets isAuthenticated to false on network error in cookie probe', async () => {
-      ;(globalThis.fetch as any).mockRejectedValue(new Error('Network error'))
-
-      const { checkAuth, isAuthenticated } = useBaseViewer()
-      await checkAuth()
-
-      expect(isAuthenticated.value).toBe(false)
-    })
-  })
-
-  describe('bindSession', () => {
-    let originalFetch: typeof globalThis.fetch
-
-    beforeEach(() => {
-      originalFetch = globalThis.fetch
-      globalThis.fetch = vi.fn()
-    })
-
-    afterEach(() => {
-      globalThis.fetch = originalFetch
-    })
-
-    it('returns true when session-bind succeeds', async () => {
-      ;(globalThis.fetch as any).mockResolvedValue({ ok: true })
-
-      const { bindSession } = useBaseViewer()
-      const result = await bindSession('test-jwt')
-
-      expect(result).toBe(true)
-    })
-
-    it('returns false when session-bind fails', async () => {
-      ;(globalThis.fetch as any).mockResolvedValue({ ok: false })
-
-      const { bindSession } = useBaseViewer()
-      const result = await bindSession('test-jwt')
-
-      expect(result).toBe(false)
-    })
-
-    it('returns false on network error', async () => {
-      ;(globalThis.fetch as any).mockRejectedValue(new Error('Network error'))
-
-      const { bindSession } = useBaseViewer()
-      const result = await bindSession('test-jwt')
-
-      expect(result).toBe(false)
-    })
-  })
-
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
   describe('loadData', () => {
     it('sets loadingState true, calls loader, then sets loadingState false', async () => {
+      makeStoreReady()
       const { loadData, loadingState } = useBaseViewer()
       const loader = vi.fn().mockResolvedValue(undefined)
 
@@ -236,6 +199,7 @@ describe('useBaseViewer', () => {
     })
 
     it('clears errorMessage before loading and sets it on error', async () => {
+      makeStoreReady()
       const { loadData, loadingState, errorMessage } = useBaseViewer()
       errorMessage.value = 'old error'
       const loader = vi.fn().mockRejectedValue(new Error('Load failed'))
@@ -247,6 +211,7 @@ describe('useBaseViewer', () => {
     })
 
     it('finishes loading even if loader throws', async () => {
+      makeStoreReady()
       const { loadData, loadingState } = useBaseViewer()
       const loader = vi.fn().mockRejectedValue(new Error('Any error'))
 
@@ -296,11 +261,6 @@ describe('useBaseViewer', () => {
       expect(errorMessage.value).toBe('')
     })
 
-    it('isAuthenticated starts false', () => {
-      const { isAuthenticated } = useBaseViewer()
-      expect(isAuthenticated.value).toBe(false)
-    })
-
     it('API_BASE resolves to mocked value', () => {
       const { API_BASE } = useBaseViewer()
       expect(API_BASE).toBe('http://localhost:5050')
@@ -308,22 +268,165 @@ describe('useBaseViewer', () => {
   })
 
   describe('return shape', () => {
-    it('exposes loadingState but NOT loadingMessage', () => {
+    it('exposes loadingState, errorMessage, isAuthenticated', () => {
       const result = useBaseViewer()
       expect(result).toHaveProperty('loadingState')
-      expect(result).not.toHaveProperty('loadingMessage')
+      expect(result).toHaveProperty('errorMessage')
+      expect(result).toHaveProperty('isAuthenticated')
     })
 
-    it('exposes apiFetch, bindSession, checkAuth', () => {
+    it('exposes apiFetch but NOT auth methods (bindSession, checkAuth)', () => {
       const result = useBaseViewer()
       expect(result).toHaveProperty('apiFetch')
-      expect(result).toHaveProperty('bindSession')
-      expect(result).toHaveProperty('checkAuth')
+      expect(result).not.toHaveProperty('bindSession')
+      expect(result).not.toHaveProperty('checkAuth')
     })
 
-    it('does NOT expose TOKEN_KEY', () => {
+    it('does NOT expose TOKEN_KEY or sessionToken', () => {
       const result = useBaseViewer()
       expect(result).not.toHaveProperty('TOKEN_KEY')
+      expect(result).not.toHaveProperty('sessionToken')
+    })
+  })
+
+  // ── Handshake Tests ─────────────────────────────────────────────────────
+
+  describe('handshake (immediate mode)', () => {
+    it('INIT_WORKSPACE received → store populated → isAuthenticated = true', async () => {
+      const { wrapper } = createTestWrapper()
+      const store = useWorkspaceStore()
+      expect(store.status).toBe('pending')
+
+      dispatchCockpitMessage('INIT_WORKSPACE', {
+        workspaceId: 'ws-123',
+        sessionToken: 'tok_abc123',
+        cockpitOrigin: 'http://localhost:5173',
+        userId: 'user-42',
+      })
+
+      await nextTick()
+
+      expect(store.sessionToken).toBe('tok_abc123')
+      expect(store.workspaceId).toBe('ws-123')
+      expect(store.status).toBe('ready')
+      expect((wrapper.vm as any).isAuthenticated).toBe(true)
+    })
+
+    it('origin mismatch → message ignored', async () => {
+      const { wrapper } = createTestWrapper()
+      const store = useWorkspaceStore()
+
+      dispatchCockpitMessage('INIT_WORKSPACE', {
+        workspaceId: 'ws-123',
+        sessionToken: 'tok_abc123',
+        cockpitOrigin: 'http://localhost:5173',
+        userId: 'user-42',
+      }, 'http://evil.com')
+
+      await nextTick()
+
+      expect(store.sessionToken).toBe('')
+      expect(store.status).toBe('pending')
+      expect((wrapper.vm as any).isAuthenticated).toBe(false)
+    })
+
+    it('missing required fields → error state', async () => {
+      const { wrapper } = createTestWrapper()
+      const store = useWorkspaceStore()
+
+      dispatchCockpitMessage('INIT_WORKSPACE', {
+        sessionToken: 'tok_abc123',
+        // missing workspaceId, cockpitOrigin
+      })
+
+      await nextTick()
+
+      expect(store.status).toBe('error')
+      expect(store.errorCode).toBe('INVALID_PAYLOAD')
+    })
+
+    it('SWITCH_THEME received → store.theme updated', async () => {
+      const { wrapper } = createTestWrapper()
+      const store = useWorkspaceStore()
+      expect(store.theme).toBe('auto')
+
+      // First establish handshake
+      dispatchCockpitMessage('INIT_WORKSPACE', {
+        workspaceId: 'ws-123',
+        sessionToken: 'tok_abc123',
+        cockpitOrigin: 'http://localhost:5173',
+        userId: 'user-42',
+      })
+
+      await nextTick()
+      expect(store.status).toBe('ready')
+
+      // Send SWITCH_THEME
+      dispatchCockpitMessage('SWITCH_THEME', { theme: 'dark' })
+      await nextTick()
+
+      expect(store.theme).toBe('dark')
+    })
+  })
+
+  describe('handshake (validated mode)', () => {
+    it('INIT_WORKSPACE → pending → VALIDATION_RESULT success → ready', async () => {
+      const { wrapper } = createTestWrapper({ validationMode: 'validated' })
+      const store = useWorkspaceStore()
+
+      // Send INIT_WORKSPACE — should not setReady yet
+      dispatchCockpitMessage('INIT_WORKSPACE', {
+        workspaceId: 'ws-123',
+        sessionToken: 'tok_abc123',
+        cockpitOrigin: 'http://localhost:5173',
+        userId: 'user-42',
+      })
+
+      await nextTick()
+
+      expect(store.sessionToken).toBe('tok_abc123')
+      expect(store.status).toBe('pending') // not ready yet
+      expect((wrapper.vm as any).isAuthenticated).toBe(false)
+
+      // Send VALIDATION_RESULT success
+      dispatchCockpitMessage('VALIDATION_RESULT', {
+        workspaceId: 'ws-123',
+        success: true,
+        userId: 'user-42',
+      })
+
+      await nextTick()
+
+      expect(store.status).toBe('ready')
+      expect((wrapper.vm as any).isAuthenticated).toBe(true)
+    })
+
+    it('VALIDATION_RESULT fail → store.status = error', async () => {
+      const { wrapper } = createTestWrapper({ validationMode: 'validated' })
+      const store = useWorkspaceStore()
+
+      dispatchCockpitMessage('INIT_WORKSPACE', {
+        workspaceId: 'ws-123',
+        sessionToken: 'tok_abc123',
+        cockpitOrigin: 'http://localhost:5173',
+        userId: 'user-42',
+      })
+
+      await nextTick()
+      expect(store.status).toBe('pending')
+
+      // Send VALIDATION_RESULT failure
+      dispatchCockpitMessage('VALIDATION_RESULT', {
+        workspaceId: 'ws-123',
+        success: false,
+        error: 'Session expired',
+      })
+
+      await nextTick()
+
+      expect(store.status).toBe('error')
+      expect(store.errorCode).toBe('VALIDATION_FAILED')
+      expect(store.errorMessage).toBe('Session expired')
     })
   })
 })

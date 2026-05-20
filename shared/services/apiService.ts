@@ -125,13 +125,14 @@ export function normalizePath(path: string): string {
 /**
  * Resilient authenticated fetch.
  *
- * Auth strategy (automatic):
- * 1. If workspaceStore (Pinia) is available with a sessionToken → Bearer token
- * 2. Otherwise → cookie-based (`credentials: 'include'`)
+ * Auth strategy:
+ * - Reads Bearer token from workspaceStore (Pinia) at call time
+ * - Always sends Authorization header when token is available
  *
- * This single function serves both cell types (which use Pinia/Bearer) and
- * standalone viewers (which use cookies). Callers always get a raw `Response`
- * and handle `.json()` / error parsing themselves.
+ * This single function serves all viewers and cell types. Since CentralHub
+ * is always present, Pinia + workspaceStore are always available, and the
+ * token is always set via the MFE handshake (INIT_WORKSPACE postMessage).
+ * Cookie fallback was removed as dead code — see unified-mfe-handshake-refactor.
  *
  * Path normalization:
  * - `/layout-books` → http://localhost:5050/api/layout-books
@@ -139,15 +140,11 @@ export function normalizePath(path: string): string {
  * - `http://localhost:5050/api/...` → used as-is
  */
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  // Try to read Bearer token from workspaceStore (Pinia).
-  // If Pinia isn't installed (standalone viewer context), fall through to cookie auth.
-  let token: string | null = null
-  try {
-    const store = useWorkspaceStore()
-    token = store.sessionToken ?? null
-  } catch {
-    // Pinia not available — standalone viewer, use cookie auth
-  }
+  // Read Bearer token from workspaceStore (Pinia).
+  // Since CentralHub is always present, Pinia + workspaceStore are always
+  // available, and the token is set via the MFE handshake.
+  const store = useWorkspaceStore()
+  const token = store.sessionToken
 
   const url = normalizePath(path)
   const headers: Record<string, string> = {
@@ -155,19 +152,11 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     ...(options.headers as Record<string, string>),
   }
 
-  const fetchOptions: RequestInit = {
-    ...options,
-    headers,
-  }
-
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
-  } else {
-    // No Bearer token — rely on httpOnly session cookie (standalone viewer)
-    ;(fetchOptions as any).credentials = 'include'
   }
 
-  return fetch(url, fetchOptions)
+  return fetch(url, { ...options, headers })
 }
 
 // ── Default export (backward compatibility with legacy imports) ────────────────

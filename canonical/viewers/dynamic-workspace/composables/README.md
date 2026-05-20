@@ -17,7 +17,7 @@ This directory contains all composables used by the DynamicWorkspace viewer. Eac
 
 ```
 composables/
-├── useWorkspaceHandshake.ts    - postMessage handshake (INIT_WORKSPACE → session validation)
+├── ~~useWorkspaceHandshake.ts~~  - **[REMOVED]** — Migrated to `shared/composables/useBaseViewer.ts`
 ├── useCellViewProvider.ts      - Cell type discovery, instantiation, and view resolution
 ├── useGridLayout.ts            - Reactive grid state management and CRUD
 ├── useAutoSave.ts              - Debounced + interval auto-save for grid changes
@@ -29,12 +29,14 @@ composables/
 ## How to Use
 
 ```typescript
-import { useWorkspaceHandshake } from './composables/useWorkspaceHandshake'
+import { useBaseViewer } from '@/composables/useBaseViewer'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useGridLayout } from './composables/useGridLayout'
 import { useAutoSave } from './composables/useAutoSave'
 
 // In App.vue setup():
-const { sessionToken, isReady } = useWorkspaceHandshake()
+const { isAuthenticated } = useBaseViewer({ validationMode: 'validated' })
+const store = useWorkspaceStore()
 const { cells, addCell, removeCell } = useGridLayout()
 useAutoSave(cells)
 ```
@@ -43,7 +45,7 @@ useAutoSave(cells)
 
 | File | Description |
 |---|---|
-| `useWorkspaceHandshake.ts` | Cockpit ↔ Runner postMessage handshake and session validation |
+| ~~`useWorkspaceHandshake.ts`~~ | **[REMOVED]** — Migrated to `@/composables/useBaseViewer` |
 | `useCellViewProvider.ts` | Cell type discovery (HybridDatabase), instantiation, and view resolution |
 | `useGridLayout.ts` | Reactive GridCell list with position management and CRUD |
 | `useAutoSave.ts` | Debounced + interval auto-save background task |

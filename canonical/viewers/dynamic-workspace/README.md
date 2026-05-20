@@ -78,7 +78,7 @@ GridContainer renders
 |------|---------|
 | `App.vue` | Root orchestrator (handshake + grid + modals) |
 | `main.ts` | Vue 3 + Pinia + vue-i18n setup |
-| `composables/useWorkspaceHandshake.ts` | postMessage receiver + backend validation |
+| ~~`composables/useWorkspaceHandshake.ts`~~ | **[REMOVED]** — Handshake migrado para `@/composables/useBaseViewer` |
 | `composables/useGridLayout.ts` | Reactive grid cell state (add/remove/update) |
 | `composables/useCellViewProvider.ts` | Cell type loading + BaseCell instantiation + show() |
 | `components/` | UI components (see `components/README.md`) |
