@@ -220,7 +220,29 @@
                   <option value="access">{{ $t('planetHall.access') }}</option>
                 </select>
               </div>
-              <div>
+              <!-- Viewer grid for allowance requests -->
+              <div v-if="newRequest.request_type === 'allowance' && viewersBuffer.length > 0">
+                <label class="block text-sm mb-2" style="color: rgba(255, 255, 255, 0.5);">
+                  {{ $t('planetHall.selectViewer') }}
+                </label>
+                <div class="viewer-grid">
+                  <button
+                    v-for="viewer in viewersBuffer"
+                    :key="viewer.id"
+                    :class="['viewer-card', { 'viewer-card--selected': selectedViewerId === viewer.id }]"
+                    :disabled="viewer.has_allowance"
+                    @click="selectedViewerId = viewer.id"
+                  >
+                    <span class="viewer-card__name">{{ viewer.name || viewer.id }}</span>
+                    <span
+                      v-if="viewer.has_allowance"
+                      class="viewer-card__badge"
+                    >{{ $t('planetHall.viewerGranted') }}</span>
+                  </button>
+                </div>
+              </div>
+              <!-- Textarea for access requests or when no viewers loaded -->
+              <div v-else>
                 <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
                   {{ $t('planetHall.message') }}
                 </label>
@@ -265,6 +287,7 @@ const {
 // ── Buffer Locals (REACTIVITY_ISOLATION.md) ──────────────────────────────
 const messagesBuffer = ref<any[]>([])
 const requestsBuffer = ref<any[]>([])
+const viewersBuffer = ref<any[]>([])
 const planetOwnerId = ref('')
 
 const messageSending = ref(false)
@@ -279,6 +302,8 @@ const newRequest = reactive({
   request_type: 'allowance',
   message: '',
 })
+
+const selectedViewerId = ref('')
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -320,11 +345,21 @@ async function loadRequests() {
   }
 }
 
+async function loadViewers() {
+  try {
+    const data: any = await apiFetch('/api/viewers')
+    viewersBuffer.value = Array.isArray(data) ? data : []
+  } catch {
+    viewersBuffer.value = []
+  }
+}
+
 async function loadViewerData() {
   // Handshake is handled internally by useBaseViewer.loadData
   // Always load planet info (public endpoint)
+  // Always load viewers (public endpoint)
   // Only load messages/requests if authenticated via handshake
-  const tasks = [loadPlanetInfo()]
+  const tasks = [loadPlanetInfo(), loadViewers()]
   if (isAuthenticated.value) {
     tasks.push(loadMessages(), loadRequests())
   }
@@ -365,7 +400,12 @@ async function handleCreateMessage() {
 }
 
 async function handleCreateRequest() {
-  if (!newRequest.request_type || !newRequest.message) {
+  if (newRequest.request_type === 'allowance') {
+    if (!selectedViewerId.value) {
+      errorMessage.value = 'Please select a viewer to request allowance for.'
+      return
+    }
+  } else if (!newRequest.message) {
     errorMessage.value = 'Please fill in both request type and message.'
     return
   }
@@ -376,16 +416,28 @@ async function handleCreateRequest() {
   requestSending.value = true
   errorMessage.value = ''
   try {
+    const selectedViewer = viewersBuffer.value.find(
+      (v: any) => v.id === selectedViewerId.value
+    )
+    const viewerName = selectedViewer?.name || selectedViewerId.value
+    const body: Record<string, any> = {
+      target_user_id: planetOwnerId.value,
+      request_type: newRequest.request_type,
+    }
+    if (newRequest.request_type === 'allowance') {
+      body.viewer_id = selectedViewerId.value
+      body.viewer_name = viewerName
+      body.message = `Requesting allowance for viewer: ${viewerName}`
+    } else {
+      body.message = newRequest.message
+    }
     await apiFetch('/api/inbox/requests', {
       method: 'POST',
-      body: JSON.stringify({
-        target_user_id: planetOwnerId.value,
-        request_type: newRequest.request_type,
-        message: newRequest.message,
-      }),
+      body: JSON.stringify(body),
     })
     newRequest.request_type = 'allowance'
     newRequest.message = ''
+    selectedViewerId.value = ''
     await loadRequests()
   } catch {
     // errorMessage already set by apiFetch

@@ -20,6 +20,8 @@
     "access": "Viewer Access",
     "message": "Message",
     "submit": "Submit",
+    "selectViewer": "Select a Viewer",
+    "viewerGranted": "Already Granted",
     "loginPrompt": "Authenticate to transmit messages and request planet access.",
     "loginButton": "Authenticate",
     "notAuthenticated": "You are exploring Planet Hall as a visitor. Authenticate to interact with the guardian."

@@ -20,6 +20,8 @@
     "access": "Acesso ao Visualizador",
     "message": "Mensagem",
     "submit": "Enviar",
+    "selectViewer": "Selecione um Visualizador",
+    "viewerGranted": "Já Concedido",
     "loginPrompt": "Autentique-se para transmitir mensagens e solicitar acesso ao planeta.",
     "loginButton": "Autenticar-se",
     "notAuthenticated": "Você está explorando o Salão Planetário como visitante. Autentique-se para interagir com o guardião."
