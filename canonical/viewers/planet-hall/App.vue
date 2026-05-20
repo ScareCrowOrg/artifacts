@@ -220,8 +220,8 @@
                   <option value="access">{{ $t('planetHall.access') }}</option>
                 </select>
               </div>
-              <!-- Viewer grid for allowance requests -->
-              <div v-if="newRequest.request_type === 'allowance' && viewersBuffer.length > 0">
+              <!-- Viewer grid for access requests (FIXED: swapped) -->
+              <div v-if="newRequest.request_type === 'access' && viewersBuffer.length > 0">
                 <label class="block text-sm mb-2" style="color: rgba(255, 255, 255, 0.5);">
                   {{ $t('planetHall.selectViewer') }}
                 </label>
@@ -242,7 +242,7 @@
                   </button>
                 </div>
               </div>
-              <!-- Textarea for access requests or when no viewers loaded -->
+              <!-- Textarea for allowance requests or when no viewers loaded -->
               <div v-else>
                 <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
                   {{ $t('planetHall.message') }}
@@ -272,7 +272,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBaseViewer } from '@/composables/useBaseViewer'
 import { createLogger } from '@/utils/logger'
@@ -308,6 +308,10 @@ const newRequest = reactive({
 })
 
 const selectedViewerId = ref('')
+
+watch(() => newRequest.request_type, () => {
+  selectedViewerId.value = ''
+})
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -407,13 +411,13 @@ async function handleCreateMessage() {
 }
 
 async function handleCreateRequest() {
-  if (newRequest.request_type === 'allowance') {
+  if (newRequest.request_type === 'access') {
     if (!selectedViewerId.value) {
-      errorMessage.value = 'Please select a viewer to request allowance for.'
+      errorMessage.value = 'Please select a viewer to request access for.'
       return
     }
   } else if (!newRequest.message) {
-    errorMessage.value = 'Please fill in both request type and message.'
+    errorMessage.value = 'Please fill in a message describing your artifact allowance request.'
     return
   }
   if (!planetOwnerId.value) {
@@ -431,10 +435,10 @@ async function handleCreateRequest() {
       target_user_id: planetOwnerId.value,
       request_type: newRequest.request_type,
     }
-    if (newRequest.request_type === 'allowance') {
+    if (newRequest.request_type === 'access') {
       body.viewer_id = selectedViewerId.value
       body.viewer_name = viewerName
-      body.message = `Requesting allowance for viewer: ${viewerName}`
+      body.message = `Requesting access for viewer: ${viewerName}`
     } else {
       body.message = newRequest.message
     }

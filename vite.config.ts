@@ -4,6 +4,7 @@ import vue from '@vitejs/plugin-vue'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
+import { viteHmrBridgePlugin } from './shared/utils/viteHmrBridgePlugin.ts'
 
 // ESM doesn't have __dirname, so we create it
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -646,6 +647,10 @@ export default defineConfig({
 
     // Viewer pre-compilation warmup
     viewerWarmupPlugin,
+
+    // HMR Bridge — external file change detection for Docker Desktop Windows
+    // Polls filesystem with raw fs.statSync where chokidar/inotify fail
+    viteHmrBridgePlugin(),
 
     // Cell type pre-compilation warmup (avoids cold-start on first cell load)
     cellTypeWarmupPlugin,
