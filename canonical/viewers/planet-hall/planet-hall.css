@@ -1,0 +1,538 @@
+/**
+ * Planet Hall — Cosmic Theme
+ *
+ * Space/planet visual identity for the planet's gateway viewer.
+ * Designed to work with the existing ScareVerse design system variables.
+ */
+
+/* ── CSS Custom Properties ─────────────────────────────────────── */
+
+.planet-hall {
+  --ph-purple: #a855f7;
+  --ph-purple-glow: rgba(168, 85, 247, 0.35);
+  --ph-cyan: #22d3ee;
+  --ph-cyan-glow: rgba(34, 211, 238, 0.3);
+  --ph-cosmic-bg-start: #050510;
+  --ph-cosmic-bg-end: #0f0720;
+  --ph-card-bg: rgba(15, 12, 30, 0.6);
+  --ph-card-border: rgba(168, 85, 247, 0.15);
+  --ph-glass-bg: rgba(20, 15, 40, 0.5);
+  --ph-glow-radius: 60px;
+  --ph-title-gradient: linear-gradient(135deg, #c084fc 0%, #22d3ee 50%, #a78bfa 100%);
+  --ph-accent-gradient: linear-gradient(135deg, #a855f7, #22d3ee);
+  --ph-header-gradient: linear-gradient(180deg, rgba(168, 85, 247, 0.12) 0%, transparent 100%);
+}
+
+/* ── Starfield Background ───────────────────────────────────────── */
+
+.planet-hall .starfield {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--ph-cosmic-bg-start) 0%, #0a0820 40%, var(--ph-cosmic-bg-end) 100%);
+}
+
+/* Large stars — 120 stars via box-shadow */
+.planet-hall .starfield::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow:
+    20px 30px 0 0 rgba(255, 255, 255, 0.8),
+    80px 120px 0 0 rgba(255, 255, 255, 0.6),
+    160px 60px 0 0 rgba(255, 255, 255, 0.7),
+    240px 180px 0 0 rgba(255, 255, 255, 0.5),
+    320px 90px 0 0 rgba(255, 255, 255, 0.9),
+    400px 210px 0 0 rgba(255, 255, 255, 0.4),
+    500px 45px 0 0 rgba(255, 255, 255, 0.7),
+    600px 250px 0 0 rgba(255, 255, 255, 0.5),
+    700px 30px 0 0 rgba(255, 255, 255, 0.8),
+    780px 160px 0 0 rgba(255, 255, 255, 0.6),
+    60px 300px 0 0 rgba(255, 255, 255, 0.5),
+    180px 400px 0 0 rgba(255, 255, 255, 0.7),
+    300px 350px 0 0 rgba(255, 255, 255, 0.4),
+    450px 420px 0 0 rgba(255, 255, 255, 0.8),
+    550px 380px 0 0 rgba(255, 255, 255, 0.6),
+    680px 450px 0 0 rgba(255, 255, 255, 0.5),
+    40px 550px 0 0 rgba(255, 255, 255, 0.7),
+    220px 600px 0 0 rgba(255, 255, 255, 0.4),
+    380px 520px 0 0 rgba(255, 255, 255, 0.9),
+    520px 580px 0 0 rgba(255, 255, 255, 0.5),
+    660px 650px 0 0 rgba(255, 255, 255, 0.6),
+    750px 500px 0 0 rgba(255, 255, 255, 0.8),
+    100px 700px 0 0 rgba(255, 255, 255, 0.5),
+    320px 780px 0 0 rgba(255, 255, 255, 0.7),
+    500px 720px 0 0 rgba(255, 255, 255, 0.4),
+    640px 800px 0 0 rgba(255, 255, 255, 0.6),
+    120px 900px 0 0 rgba(255, 255, 255, 0.8),
+    280px 850px 0 0 rgba(255, 255, 255, 0.5),
+    460px 920px 0 0 rgba(255, 255, 255, 0.7),
+    720px 880px 0 0 rgba(255, 255, 255, 0.9),
+    50px 50px 0 1px rgba(200, 160, 255, 0.3),
+    420px 140px 0 1px rgba(100, 200, 255, 0.3),
+    580px 290px 0 1px rgba(200, 160, 255, 0.4),
+    200px 470px 0 1px rgba(100, 200, 255, 0.3),
+    740px 340px 0 1px rgba(200, 160, 255, 0.5),
+    340px 620px 0 1px rgba(100, 200, 255, 0.3),
+    80px 800px 0 1px rgba(200, 160, 255, 0.4),
+    600px 750px 0 1px rgba(100, 200, 255, 0.3);
+  animation: twinkle 4s ease-in-out infinite alternate;
+}
+
+/* Small stars — 150 tiny stars */
+.planet-hall .starfield::after {
+  content: '';
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow:
+    30px 70px 0 0 rgba(255, 255, 255, 0.4),
+    110px 190px 0 0 rgba(255, 255, 255, 0.3),
+    200px 40px 0 0 rgba(255, 255, 255, 0.5),
+    350px 150px 0 0 rgba(255, 255, 255, 0.3),
+    470px 75px 0 0 rgba(255, 255, 255, 0.4),
+    530px 200px 0 0 rgba(255, 255, 255, 0.3),
+    650px 120px 0 0 rgba(255, 255, 255, 0.5),
+    760px 50px 0 0 rgba(255, 255, 255, 0.3),
+    90px 260px 0 0 rgba(255, 255, 255, 0.4),
+    150px 480px 0 0 rgba(255, 255, 255, 0.3),
+    260px 320px 0 0 rgba(255, 255, 255, 0.5),
+    410px 480px 0 0 rgba(255, 255, 255, 0.3),
+    490px 330px 0 0 rgba(255, 255, 255, 0.4),
+    610px 500px 0 0 rgba(255, 255, 255, 0.3),
+    720px 280px 0 0 rgba(255, 255, 255, 0.5),
+    45px 620px 0 0 rgba(255, 255, 255, 0.3),
+    190px 680px 0 0 rgba(255, 255, 255, 0.4),
+    310px 550px 0 0 rgba(255, 255, 255, 0.3),
+    440px 650px 0 0 rgba(255, 255, 255, 0.5),
+    560px 600px 0 0 rgba(255, 255, 255, 0.3),
+    700px 700px 0 0 rgba(255, 255, 255, 0.4),
+    130px 820px 0 0 rgba(255, 255, 255, 0.3),
+    370px 880px 0 0 rgba(255, 255, 255, 0.5),
+    480px 780px 0 0 rgba(255, 255, 255, 0.3),
+    680px 940px 0 0 rgba(255, 255, 255, 0.4),
+    250px 950px 0 0 rgba(255, 255, 255, 0.3),
+    550px 860px 0 0 rgba(255, 255, 255, 0.5),
+    420px 100px 0 0 rgba(255, 255, 255, 0.3),
+    340px 420px 0 0 rgba(255, 255, 255, 0.4),
+    590px 180px 0 0 rgba(255, 255, 255, 0.3),
+    770px 420px 0 0 rgba(255, 255, 255, 0.5);
+  animation: twinkle 6s ease-in-out infinite alternate;
+}
+
+@keyframes twinkle {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+/* ── Nebula Glow Orbs ────────────────────────────────────────────── */
+
+.planet-hall .nebula-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(var(--ph-glow-radius));
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+}
+
+.planet-hall .nebula-orb--purple {
+  width: 400px;
+  height: 400px;
+  top: -100px;
+  right: -100px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.3), transparent);
+  animation: orb-drift 20s ease-in-out infinite alternate;
+}
+
+.planet-hall .nebula-orb--cyan {
+  width: 350px;
+  height: 350px;
+  bottom: -80px;
+  left: -80px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.2), transparent);
+  animation: orb-drift 25s ease-in-out infinite alternate-reverse;
+}
+
+.planet-hall .nebula-orb--accent {
+  width: 200px;
+  height: 200px;
+  top: 40%;
+  left: 60%;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.15), transparent);
+  animation: orb-drift 30s ease-in-out infinite alternate;
+}
+
+@keyframes orb-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.1); }
+  66% { transform: translate(-20px, 15px) scale(0.9); }
+  100% { transform: translate(15px, -30px) scale(1.05); }
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+
+.planet-hall .ph-header {
+  position: relative;
+  z-index: 1;
+  background: var(--ph-header-gradient);
+  border-bottom: 1px solid rgba(168, 85, 247, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.planet-hall .ph-header-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  background: var(--ph-title-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.02em;
+}
+
+/* ── Hero Section ────────────────────────────────────────────────── */
+
+.planet-hall .ph-hero {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 3rem 0 2rem;
+}
+
+.planet-hall .ph-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 1rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(168, 85, 247, 0.2), rgba(34, 211, 238, 0.1));
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  animation: float 6s ease-in-out infinite;
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.15);
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.planet-hall .ph-hero-title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  background: var(--ph-title-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.planet-hall .ph-hero-subtitle {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.5);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* ── Glass Card ─────────────────────────────────────────────────── */
+
+.planet-hall .ph-card {
+  position: relative;
+  z-index: 1;
+  background: var(--ph-card-bg);
+  border: 1px solid var(--ph-card-border);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.3s ease;
+}
+
+.planet-hall .ph-card:hover {
+  border-color: rgba(168, 85, 247, 0.3);
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.08), 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.planet-hall .ph-card-header {
+  font-size: 1.1rem;
+  font-weight: 700;
+  background: var(--ph-title-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.planet-hall .ph-card-message {
+  background: rgba(168, 85, 247, 0.04);
+  border: 1px solid rgba(168, 85, 247, 0.08);
+  border-radius: 12px;
+  transition: all 0.25s ease;
+}
+
+.planet-hall .ph-card-message:hover {
+  background: rgba(168, 85, 247, 0.07);
+  border-color: rgba(168, 85, 247, 0.18);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Status Badges ──────────────────────────────────────────────── */
+
+.planet-hall .ph-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+}
+
+.planet-hall .ph-badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.planet-hall .ph-badge--pending {
+  background: rgba(234, 179, 8, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(234, 179, 8, 0.2);
+}
+
+.planet-hall .ph-badge--pending::before {
+  background: #fbbf24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
+}
+
+.planet-hall .ph-badge--approved {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.planet-hall .ph-badge--approved::before {
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+}
+
+.planet-hall .ph-badge--rejected {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.planet-hall .ph-badge--rejected::before {
+  background: #f87171;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.6);
+}
+
+.planet-hall .ph-badge--default {
+  background: rgba(156, 163, 175, 0.12);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.2);
+}
+
+/* ── Form Elements ──────────────────────────────────────────────── */
+
+.planet-hall .ph-input {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(168, 85, 247, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.planet-hall .ph-input:hover {
+  border-color: rgba(168, 85, 247, 0.25);
+}
+
+.planet-hall .ph-input:focus {
+  border-color: rgba(168, 85, 247, 0.5);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
+}
+
+.planet-hall .ph-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.planet-hall textarea.ph-input {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.planet-hall select.ph-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a855f7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.25rem;
+}
+
+/* ── Gradient Button ────────────────────────────────────────────── */
+
+.planet-hall .ph-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.55rem 1.25rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #22d3ee 100%);
+  background-size: 200% 200%;
+  background-position: 0% 0%;
+}
+
+.planet-hall .ph-btn:hover:not(:disabled) {
+  background-position: 100% 100%;
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.3);
+  transform: translateY(-1px);
+}
+
+.planet-hall .ph-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Login Link ──────────────────────────────────────────────────── */
+
+.planet-hall .ph-login-link {
+  color: rgba(168, 85, 247, 0.8);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.planet-hall .ph-login-link:hover {
+  color: #c084fc;
+  text-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+}
+
+/* ── Empty State ────────────────────────────────────────────────── */
+
+.planet-hall .ph-empty {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.9rem;
+}
+
+/* ── Guest Notice ────────────────────────────────────────────────── */
+
+.planet-hall .ph-guest-notice {
+  background: rgba(168, 85, 247, 0.05);
+  border: 1px solid rgba(168, 85, 247, 0.12);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  text-align: center;
+}
+
+/* ── Animations ──────────────────────────────────────────────────── */
+
+.planet-hall .ph-fade-in {
+  animation: phFadeIn 0.6s ease-out forwards;
+}
+
+.planet-hall .ph-fade-in-up {
+  animation: phFadeInUp 0.6s ease-out forwards;
+}
+
+.planet-hall .ph-fade-in-up--delay-1 {
+  animation-delay: 0.1s;
+}
+
+.planet-hall .ph-fade-in-up--delay-2 {
+  animation-delay: 0.2s;
+}
+
+@keyframes phFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes phFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Reduced Motion ──────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .planet-hall .starfield::before,
+  .planet-hall .starfield::after {
+    animation: none;
+  }
+
+  .planet-hall .nebula-orb {
+    animation: none;
+  }
+
+  .planet-hall .ph-hero-icon {
+    animation: none;
+  }
+
+  .planet-hall .ph-card-message:hover {
+    transform: none;
+  }
+
+  .planet-hall .ph-btn:hover:not(:disabled) {
+    transform: none;
+  }
+
+  .planet-hall .ph-fade-in,
+  .planet-hall .ph-fade-in-up {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .planet-hall .ph-hero-title {
+    font-size: 1.75rem;
+  }
+
+  .planet-hall .ph-hero {
+    padding: 2rem 0 1.5rem;
+  }
+
+  .planet-hall .nebula-orb--purple {
+    width: 250px;
+    height: 250px;
+  }
+
+  .planet-hall .nebula-orb--cyan {
+    width: 200px;
+    height: 200px;
+  }
+}

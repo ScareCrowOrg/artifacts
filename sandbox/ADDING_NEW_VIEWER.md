@@ -40,9 +40,10 @@ artifacts/canonical/viewers/my-viewer/
 
 | Concern | Provided by `useBaseViewer` | You Implement |
 |---------|----------------------------|---------------|
+| MFE handshake (INIT_WORKSPACE) | Internal — transparent in `loadData()` | — |
 | API URL resolution | `API_BASE`, `normalizePath()` | — |
-| HTTP client | `apiFetch()` (cookie-based, no Pinia) | — |
-| Auth detection | `checkAuth()`, `bindSession()`, `isAuthenticated` | — |
+| HTTP client | `apiFetch()` (Bearer token via Pinia) | — |
+| Auth state | `isAuthenticated` (computed from handshake) | — |
 | Loading/error states | `loadingState`, `errorMessage`, `loadData()` | — |
 | Date formatting | `formatDate()` | — |
 | Viewer-specific logic | — | Forms, lists, grids, themes |
@@ -78,11 +79,13 @@ mkdir -p artifacts/canonical/viewers/my-viewer
 
 ```typescript
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import App from './App.vue'
 import en from './en.json'
 import pt from './pt.json'
 
+const pinia = createPinia()
 const i18n = createI18n({
   legacy: false,
   locale: 'en',
@@ -91,9 +94,12 @@ const i18n = createI18n({
 })
 
 const app = createApp(App)
+app.use(pinia)
 app.use(i18n)
 app.mount('#app')
 ```
+
+> **Pinia is required**: `useBaseViewer` reads the session token from `useWorkspaceStore()` (Pinia), which is always populated by the MFE handshake from Cockpit.
 
 ### 4. Create `App.vue` with `useBaseViewer`
 
@@ -140,14 +146,15 @@ import { useBaseViewer } from '@/composables/useBaseViewer'
 
 const {
   loadingState, errorMessage, isAuthenticated,
-  apiFetch, checkAuth, formatDate, loadData,
+  apiFetch, loadData, formatDate,
 } = useBaseViewer()
 
 // Viewer-specific state
 const items = ref<any[]>([])
 
 async function loadItems() {
-  await checkAuth()
+  // Handshake is handled internally by loadData — no need to wait for it here.
+  // isAuthenticated will be true once the Cockpit sends INIT_WORKSPACE.
   if (isAuthenticated.value) {
     const data = await apiFetch('/api/my-endpoint')
     items.value = Array.isArray(data) ? data : []
@@ -213,20 +220,16 @@ const { ... } = useBaseViewer()
 | `normalizePath(path)` | `(path: string) => string` | Normalizes a path to a full URL: `/inbox` → `{API_BASE}/api/inbox`, `/api/inbox` → `{API_BASE}/api/inbox` |
 | `loadingState` | `Ref<boolean>` | Reactive — `true` while `loadData()` is executing |
 | `errorMessage` | `Ref<string>` | Reactive — set when `apiFetch()` or `loadData()` catches an error |
-| `isAuthenticated` | `Ref<boolean>` | Reactive — set by `checkAuth()` |
-| `sessionToken` | `Ref<string>` | Reactive — JWT token read from localStorage (if found) |
-| `apiFetch(path, options?)` | `(path: string, options?: RequestInit) => Promise<any>` | Delegates to `apiService.apiFetch` (unified fetch). In standalone viewers (no Pinia), uses `credentials: 'include'` cookie auth. Parses JSON. Sets `errorMessage` on failure. |
-| `bindSession(token)` | `(token: string) => Promise<boolean>` | Exchange JWT for httpOnly session cookie via `POST /api/v1/auth/session-bind` |
-| `checkAuth()` | `() => Promise<void>` | Two-step auth detection: (1) localStorage JWT → session-bind → httpOnly cookie; (2) fallback cookie probe |
-| `loadData(loader)` | `(loader: () => Promise<void>) => Promise<void>` | Lifecycle helper: sets `loadingState = true`, clears `errorMessage`, calls `loader()`, sets `loadingState = false` |
+| `isAuthenticated` | `ComputedRef<boolean>` | Reactive — `true` when `store.status === 'ready' && !!store.sessionToken` (handshake complete) |
+| `apiFetch(path, options?)` | `(path: string, options?: RequestInit) => Promise<any>` | Delegates to `apiService.apiFetch` (Bearer token via workspaceStore). Parses JSON. Sets `errorMessage` on failure. |
+| `loadData(loader)` | `(loader: () => Promise<void>) => Promise<void>` | Lifecycle helper: awaits internal handshake, sets `loadingState = true`, clears `errorMessage`, calls `loader()`, sets `loadingState = false` |
 | `formatDate(isoStr?)` | `(isoStr?: string) => string` | Formats ISO date string to locale date (e.g., "May 19, 2026") |
 
 ### What `useBaseViewer` Does NOT Provide
 
 | Concern | Why Not |
 |---------|---------|
-| postMessage handshake | Only needed by Dynamic Workspace (iframe parent communication) |
-| Pinia stores / workspaceStore | Viewers are standalone — no store dependency |
+| postMessage handshake | **Internal** — handled transparently by `useBaseViewer` in `loadData()` |
 | UI components / CSS | Viewer-specific decision |
 | Form validation | Viewer-specific logic |
 | Grid layout / cells | Cell/Book architecture, not viewer |
@@ -242,14 +245,16 @@ See `artifacts/canonical/viewers/planet-hall/` for a complete, production-qualit
 - Loading state and error banner patterns
 - Form submission with `apiFetch`
 - i18n with `$t()`
+- Handshake handled transparently — no `onMounted` listener, no manual handshake logic
 
 ---
 
 ## Validation
 
 1. **Start Vite**: The viewer should compile without errors when accessed at `/artifacts/canonical/viewers/my-viewer/`
-2. **Check auth flow**: Login → JWT stored in localStorage → `checkAuth()` binds session → `isAuthenticated` becomes `true`
-3. **Check API calls**: `apiFetch()` sends `credentials: 'include'` — the Auth-Proxy forwards the session cookie to Backend
+2. **Check auth flow**: Cockpit (parent iframe) sends `INIT_WORKSPACE` via postMessage → `useBaseViewer` processes internally → `isAuthenticated` becomes `true`
+3. **Check API calls**: `apiFetch()` sends `Authorization: Bearer <token>` — reads session token from workspaceStore (populated by handshake)
+4. **Check handshake timeout**: If no `INIT_WORKSPACE` is received within 5s, `errorMessage` is set but public content still loads (graceful degradation)
 
 ---
 

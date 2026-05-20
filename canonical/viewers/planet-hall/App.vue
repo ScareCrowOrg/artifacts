@@ -1,15 +1,21 @@
 <template>
-  <div class="planet-hall min-h-screen flex flex-col theme-bg-background">
-    <!-- Simplified header -->
-    <header class="w-full border-b border-border-light dark:border-border-dark bg-bg-card dark:bg-bg-card-dark">
+  <div class="planet-hall min-h-screen flex flex-col">
+    <!-- Starfield background -->
+    <div class="starfield" aria-hidden="true"></div>
+    <div class="nebula-orb nebula-orb--purple" aria-hidden="true"></div>
+    <div class="nebula-orb nebula-orb--cyan" aria-hidden="true"></div>
+    <div class="nebula-orb nebula-orb--accent" aria-hidden="true"></div>
+
+    <!-- Header -->
+    <header class="ph-header w-full">
       <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-        <h1 class="text-lg font-semibold text-text-primary dark:text-text-primary-dark">
+        <h1 class="ph-header-title">
           {{ $t('planetHall.title') }}
         </h1>
         <div v-if="!isAuthenticated" class="text-sm">
           <a
             href="/"
-            class="text-primary dark:text-primary-dark hover:opacity-80 transition-opacity"
+            class="ph-login-link"
           >
             {{ $t('planetHall.loginButton') }}
           </a>
@@ -17,20 +23,26 @@
       </div>
     </header>
 
-    <main class="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
-      <!-- Page title -->
-      <section class="text-center mb-10">
-        <h1 class="text-3xl font-bold text-text-primary dark:text-text-primary-dark mb-2">
-          {{ $t('planetHall.title') }}
-        </h1>
-        <p class="text-text-secondary dark:text-text-secondary-dark">
-          {{ $t('planetHall.subtitle') }}
-        </p>
+    <main class="flex-1 w-full max-w-4xl mx-auto px-4 py-6">
+      <!-- Hero -->
+      <section class="ph-hero ph-fade-in">
+        <div class="ph-hero-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: #c084fc;">
+            <circle cx="12" cy="12" r="10"/>
+            <circle cx="12" cy="12" r="4"/>
+            <line x1="12" y1="2" x2="12" y2="6"/>
+            <line x1="12" y1="18" x2="12" y2="22"/>
+            <line x1="2" y1="12" x2="6" y2="12"/>
+            <line x1="18" y1="12" x2="22" y2="12"/>
+          </svg>
+        </div>
+        <h1 class="ph-hero-title">{{ $t('planetHall.title') }}</h1>
+        <p class="ph-hero-subtitle">{{ $t('planetHall.subtitle') }}</p>
       </section>
 
-      <!-- Loading indicators -->
-      <div v-if="loadingState" class="text-center py-8">
-        <p class="text-text-secondary dark:text-text-secondary-dark">
+      <!-- Loading -->
+      <div v-if="loadingState" class="ph-fade-in text-center py-12">
+        <p class="text-sm" style="color: rgba(255, 255, 255, 0.4);">
           {{ $t('planetHall.loading') }}
         </p>
       </div>
@@ -38,38 +50,39 @@
       <!-- Error banner -->
       <div
         v-if="errorMessage"
-        class="mb-6 p-4 bg-red-900/20 border border-red-700 rounded-lg text-red-300 text-sm"
+        class="ph-fade-in mb-6 px-4 py-3 rounded-lg"
+        style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #f87171; font-size: 0.875rem;"
         role="alert"
       >
         {{ errorMessage }}
       </div>
 
       <template v-if="!loadingState">
-        <!-- Not authenticated notice -->
+        <!-- Guest notice -->
         <div
           v-if="!isAuthenticated"
-          class="mb-8 p-6 bg-bg-card dark:bg-bg-card-dark border border-border-light dark:border-border-dark rounded-lg text-center"
+          class="ph-guest-notice ph-fade-in-up ph-fade-in-up--delay-1 mb-8"
         >
-          <p class="text-text-secondary dark:text-text-secondary-dark mb-3">
+          <p style="color: rgba(255, 255, 255, 0.5); margin-bottom: 0.75rem;">
             {{ $t('planetHall.notAuthenticated') }}
           </p>
           <a
             href="/"
-            class="inline-block px-4 py-2 rounded-md bg-primary dark:bg-primary-dark text-white text-sm font-medium hover:opacity-90 transition-opacity"
+            class="ph-btn"
           >
             {{ $t('planetHall.loginButton') }}
           </a>
         </div>
 
         <!-- Messages section -->
-        <section class="mb-12">
-          <h2 class="text-xl font-semibold text-text-primary dark:text-text-primary-dark mb-4">
+        <section class="ph-card ph-fade-in-up ph-fade-in-up--delay-1 mb-8 p-6">
+          <h2 class="ph-card-header mb-4">
             {{ $t('planetHall.messages') }}
           </h2>
 
           <div
             v-if="messagesBuffer.length === 0"
-            class="p-6 bg-bg-card dark:bg-bg-card-dark border border-border-light dark:border-border-dark rounded-lg text-center text-text-secondary dark:text-text-secondary-dark"
+            class="ph-empty"
           >
             {{ $t('planetHall.noMessages') }}
           </div>
@@ -78,20 +91,21 @@
             <div
               v-for="msg in messagesBuffer"
               :key="msg._id || msg.id"
-              class="p-4 bg-bg-card dark:bg-bg-card-dark border border-border-light dark:border-border-dark rounded-lg"
+              class="ph-card-message p-4"
             >
               <div class="flex items-start justify-between gap-2">
                 <div>
-                  <h3 class="font-medium text-text-primary dark:text-text-primary-dark">
+                  <h3 class="font-semibold" style="color: rgba(255, 255, 255, 0.85);">
                     {{ msg.payload?.subject || $t('planetHall.noSubject') }}
                   </h3>
-                  <p class="text-sm text-text-secondary dark:text-text-secondary-dark mt-1">
+                  <p class="text-sm mt-1" style="color: rgba(255, 255, 255, 0.45);">
                     {{ msg.payload?.body || '' }}
                   </p>
                 </div>
                 <span
                   v-if="msg.created_at"
-                  class="text-xs text-text-secondary dark:text-text-secondary-dark shrink-0"
+                  class="text-xs shrink-0"
+                  style="color: rgba(255, 255, 255, 0.3);"
                 >
                   {{ formatDate(msg.created_at) }}
                 </span>
@@ -103,40 +117,40 @@
         <!-- Create message form (auth required) -->
         <section
           v-if="isAuthenticated"
-          class="mb-12 p-6 bg-bg-card dark:bg-bg-card-dark border border-border-light dark:border-border-dark rounded-lg"
+          class="ph-card ph-fade-in-up ph-fade-in-up--delay-2 mb-8 p-6"
         >
-          <h2 class="text-lg font-semibold text-text-primary dark:text-text-primary-dark mb-4">
+          <h2 class="ph-card-header mb-4">
             {{ $t('planetHall.sendMessage') }}
           </h2>
 
           <form @submit.prevent="handleCreateMessage" class="space-y-4">
             <div>
-              <label class="block text-sm text-text-secondary dark:text-text-secondary-dark mb-1">
+              <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
                 {{ $t('planetHall.subject') }}
               </label>
               <input
                 v-model="newMessage.subject"
                 type="text"
                 required
-                class="w-full px-3 py-2 rounded-md bg-bg-main dark:bg-bg-main-dark border border-border-light dark:border-border-dark text-text-primary dark:text-text-primary-dark text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light"
+                class="ph-input"
               />
             </div>
             <div>
-              <label class="block text-sm text-text-secondary dark:text-text-secondary-dark mb-1">
+              <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
                 {{ $t('planetHall.body') }}
               </label>
               <textarea
                 v-model="newMessage.body"
                 rows="3"
                 required
-                class="w-full px-3 py-2 rounded-md bg-bg-main dark:bg-bg-main-dark border border-border-light dark:border-border-dark text-text-primary dark:text-text-primary-dark text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light resize-y"
+                class="ph-input"
               ></textarea>
             </div>
             <div class="flex justify-end">
               <button
                 type="submit"
                 :disabled="messageSending"
-                class="px-4 py-2 rounded-md bg-primary dark:bg-primary-dark text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                class="ph-btn"
               >
                 {{ messageSending ? $t('planetHall.sending') : $t('planetHall.send') }}
               </button>
@@ -146,14 +160,14 @@
 
         <!-- Requests section (auth required) -->
         <template v-if="isAuthenticated">
-          <section class="mb-12">
-            <h2 class="text-xl font-semibold text-text-primary dark:text-text-primary-dark mb-4">
+          <section class="ph-card ph-fade-in-up ph-fade-in-up--delay-2 mb-8 p-6">
+            <h2 class="ph-card-header mb-4">
               {{ $t('planetHall.requests') }}
             </h2>
 
             <div
               v-if="requestsBuffer.length === 0"
-              class="p-6 bg-bg-card dark:bg-bg-card-dark border border-border-light dark:border-border-dark rounded-lg text-center text-text-secondary dark:text-text-secondary-dark"
+              class="ph-empty"
             >
               {{ $t('planetHall.noRequests') }}
             </div>
@@ -162,21 +176,21 @@
               <div
                 v-for="req in requestsBuffer"
                 :key="req._id || req.id"
-                class="p-4 bg-bg-card dark:bg-bg-card-dark border border-border-light dark:border-border-dark rounded-lg"
+                class="ph-card-message p-4"
               >
                 <div class="flex items-start justify-between gap-2">
                   <div>
-                    <h3 class="font-medium text-text-primary dark:text-text-primary-dark">
+                    <h3 class="font-semibold" style="color: rgba(255, 255, 255, 0.85);">
                       {{ req.request_type || $t('planetHall.unknownRequest') }}
                     </h3>
-                    <p class="text-sm text-text-secondary dark:text-text-secondary-dark mt-1">
+                    <p class="text-sm mt-1" style="color: rgba(255, 255, 255, 0.45);">
                       {{ req.payload?.message || '' }}
                     </p>
                   </div>
                   <div class="text-right shrink-0">
                     <span
-                      class="inline-block px-2 py-0.5 text-xs rounded-full"
-                      :class="statusClass(req.status)"
+                      class="ph-badge"
+                      :class="statusBadgeClass(req.status)"
                     >
                       {{ req.status }}
                     </span>
@@ -187,41 +201,41 @@
           </section>
 
           <!-- Create request form -->
-          <section class="p-6 bg-bg-card dark:bg-bg-card-dark border border-border-light dark:border-border-dark rounded-lg">
-            <h2 class="text-lg font-semibold text-text-primary dark:text-text-primary-dark mb-4">
+          <section class="ph-card ph-fade-in-up ph-fade-in-up--delay-2 p-6">
+            <h2 class="ph-card-header mb-4">
               {{ $t('planetHall.createRequest') }}
             </h2>
 
             <form @submit.prevent="handleCreateRequest" class="space-y-4">
               <div>
-                <label class="block text-sm text-text-secondary dark:text-text-secondary-dark mb-1">
+                <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
                   {{ $t('planetHall.requestType') }}
                 </label>
                 <select
                   v-model="newRequest.request_type"
                   required
-                  class="w-full px-3 py-2 rounded-md bg-bg-main dark:bg-bg-main-dark border border-border-light dark:border-border-dark text-text-primary dark:text-text-primary-dark text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light"
+                  class="ph-input"
                 >
                   <option value="allowance">{{ $t('planetHall.allowance') }}</option>
                   <option value="access">{{ $t('planetHall.access') }}</option>
                 </select>
               </div>
               <div>
-                <label class="block text-sm text-text-secondary dark:text-text-secondary-dark mb-1">
+                <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
                   {{ $t('planetHall.message') }}
                 </label>
                 <textarea
                   v-model="newRequest.message"
                   rows="3"
                   required
-                  class="w-full px-3 py-2 rounded-md bg-bg-main dark:bg-bg-main-dark border border-border-light dark:border-border-dark text-text-primary dark:text-text-primary-dark text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light resize-y"
+                  class="ph-input"
                 ></textarea>
               </div>
               <div class="flex justify-end">
                 <button
                   type="submit"
                   :disabled="requestSending"
-                  class="px-4 py-2 rounded-md bg-primary dark:bg-primary-dark text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  class="ph-btn"
                 >
                   {{ requestSending ? $t('planetHall.sending') : $t('planetHall.submit') }}
                 </button>
@@ -238,6 +252,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBaseViewer } from '@/composables/useBaseViewer'
+import './planet-hall.css'
 
 const { t } = useI18n()
 
@@ -267,16 +282,12 @@ const newRequest = reactive({
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function statusClass(status?: string) {
+function statusBadgeClass(status?: string) {
   switch (status) {
-    case 'pending':
-      return 'bg-yellow-900/30 text-yellow-300'
-    case 'approved':
-      return 'bg-green-900/30 text-green-300'
-    case 'rejected':
-      return 'bg-red-900/30 text-red-300'
-    default:
-      return 'bg-gray-900/30 text-gray-300'
+    case 'pending':   return 'ph-badge--pending'
+    case 'approved':  return 'ph-badge--approved'
+    case 'rejected':  return 'ph-badge--rejected'
+    default:          return 'ph-badge--default'
   }
 }
 

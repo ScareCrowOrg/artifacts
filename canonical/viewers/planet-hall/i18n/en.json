@@ -1,16 +1,16 @@
 {
   "planetHall": {
     "title": "Planet Hall",
-    "subtitle": "Welcome, guest. Here you can interact with the planet owner.",
-    "loading": "Loading...",
-    "messages": "Messages from Owner",
-    "noMessages": "No messages yet.",
+    "subtitle": "Welcome to the outpost. Send messages and requests to the planet's guardian.",
+    "loading": "Tuning signals...",
+    "messages": "Guardian Transmissions",
+    "noMessages": "No transmissions received yet.",
     "noSubject": "(no subject)",
-    "sendMessage": "Send a Message",
+    "sendMessage": "Transmit Message",
     "subject": "Subject",
-    "body": "Message",
-    "send": "Send",
-    "sending": "Sending...",
+    "body": "Content",
+    "send": "Transmit",
+    "sending": "Transmitting...",
     "requests": "Your Requests",
     "noRequests": "No requests yet.",
     "unknownRequest": "Request",
@@ -20,8 +20,8 @@
     "access": "Viewer Access",
     "message": "Message",
     "submit": "Submit",
-    "loginPrompt": "Log in to send messages and request viewer access.",
-    "loginButton": "Log In",
-    "notAuthenticated": "You are viewing the Planet Hall as a guest. Log in to interact."
+    "loginPrompt": "Authenticate to transmit messages and request planet access.",
+    "loginButton": "Authenticate",
+    "notAuthenticated": "You are exploring Planet Hall as a visitor. Authenticate to interact with the guardian."
   }
 }
