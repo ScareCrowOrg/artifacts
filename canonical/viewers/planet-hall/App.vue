@@ -275,6 +275,8 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBaseViewer } from '@/composables/useBaseViewer'
+import { useThemeSync } from '#artifacts/shared/composables/useThemeSync'
+import { useLocaleSync } from '#artifacts/shared/composables/useLocaleSync'
 import { createLogger } from '@/utils/logger'
 import './planet-hall.css'
 
@@ -287,6 +289,11 @@ const {
   apiFetch, formatDate,
   loadData,
 } = useBaseViewer()
+
+// Theme and locale synchronization with Cockpit-Vue
+// Reacts to SWITCH_THEME / SWITCH_LOCALE / SYNC_CONFIG postMessages
+useThemeSync()
+useLocaleSync()
 
 // ── Buffer Locals (REACTIVITY_ISOLATION.md) ──────────────────────────────
 const messagesBuffer = ref<any[]>([])
