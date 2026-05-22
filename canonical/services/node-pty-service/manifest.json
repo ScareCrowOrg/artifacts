@@ -3,8 +3,8 @@
   "name": "node-pty-service",
   "description": "Node-PTY Service - WebSocket terminal + Git integration for AI agents",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-node-pty-service:staging20260522T023027",
-  "imageTag": "staging20260522T023027",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-node-pty-service:staging20260522T154231",
+  "imageTag": "staging20260522T154231",
   "dependencies": [],
   "generate_env_file": false,
   "routing": {
@@ -16,5 +16,5 @@
       "path": "/wss/pty"
     }
   },
-  "lastBuilt": "2026-05-22T02:32:50.510Z"
+  "lastBuilt": "2026-05-22T15:44:59.746Z"
 }
