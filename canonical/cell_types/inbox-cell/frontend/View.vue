@@ -9,7 +9,7 @@
         :class="localActiveTab === tab.id
           ? 'text-primary border-b-2 border-primary bg-surface-alt dark:bg-surface-alt-dark'
           : 'text-text-secondary dark:text-text-secondary-dark hover:text-primary hover:bg-surface-alt dark:hover:bg-surface-alt-dark'"
-        @click="localActiveTab = tab.id"
+        @click="switchTab(tab.id)"
       >
         {{ tab.label }}
       </button>
@@ -230,6 +230,11 @@ async function loadData() {
 }
 
 // ─── Handlers ──────────────────────────────────────────────────────────────
+
+function switchTab(tabId: string) {
+  localActiveTab.value = tabId
+  loadData()
+}
 
 function handleRefresh() {
   loadData()
