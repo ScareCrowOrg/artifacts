@@ -242,8 +242,19 @@
                   </button>
                 </div>
               </div>
-              <!-- Textarea for allowance requests or when no viewers loaded -->
+              <!-- Allowance request fields or when no viewers loaded -->
               <div v-else>
+                <div class="mb-3">
+                  <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
+                    Artifact ID (optional)
+                  </label>
+                  <input
+                    v-model="newRequest.artifact_id"
+                    type="text"
+                    placeholder="e.g. mesh-cell"
+                    class="ph-input"
+                  />
+                </div>
                 <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
                   {{ $t('planetHall.message') }}
                 </label>
@@ -312,6 +323,7 @@ const newMessage = reactive({
 const newRequest = reactive({
   request_type: 'allowance',
   message: '',
+  artifact_id: '',
 })
 
 const selectedViewerId = ref('')
@@ -449,6 +461,10 @@ async function handleCreateRequest() {
       }
       body.message = `Requesting access for viewer: ${viewerName}`
     } else {
+      body.payload = {}
+      if (newRequest.artifact_id) {
+        body.payload.artifact_id = newRequest.artifact_id
+      }
       body.message = newRequest.message
     }
     await apiFetch('/api/inbox/requests', {
@@ -457,6 +473,7 @@ async function handleCreateRequest() {
     })
     newRequest.request_type = 'allowance'
     newRequest.message = ''
+    newRequest.artifact_id = ''
     selectedViewerId.value = ''
     await loadRequests()
   } catch (err) {
