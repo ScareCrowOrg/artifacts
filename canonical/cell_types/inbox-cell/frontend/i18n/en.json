@@ -1,0 +1,23 @@
+{
+  "inboxCell": {
+    "tabMessages": "Messages",
+    "tabRequests": "Requests",
+    "noMessages": "No messages yet.",
+    "noRequests": "No requests yet.",
+    "loading": "Loading…",
+    "error": "Something went wrong.",
+    "retry": "Retry",
+    "reply": "Reply",
+    "replySubject": "Subject (optional)",
+    "replyBody": "Type your reply…",
+    "cancel": "Cancel",
+    "send": "Send",
+    "approve": "Approve",
+    "reject": "Reject",
+    "statusApproved": "approved",
+    "statusRejected": "rejected",
+    "statusPending": "pending",
+    "requestType": "Type",
+    "sendError": "Failed to send reply"
+  }
+}

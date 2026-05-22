@@ -1,0 +1,25 @@
+{
+  "id": "inbox-cell",
+  "name": "inbox-cell",
+  "display_name": "Inbox",
+  "description": "Inbox for messages and allowance/access requests sent to the planet owner",
+  "version": "1.0.0",
+  "category": "communication",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "basecell": ["frontend/InboxCell.ts"],
+    "handler": [],
+    "scripts": [],
+    "docs": ["docs/README.md"]
+  },
+  "default_initial_data": {},
+  "allow_instance_override_refs": false,
+  "properties_schema": {},
+  "_discovery": {
+    "labels": ["#inbox", "#messages", "#requests", "#allowance", "#communication"],
+    "required_resources": [],
+    "dependencies": []
+  },
+  "kind": "cell"
+}

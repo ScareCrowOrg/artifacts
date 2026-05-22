@@ -1,0 +1,23 @@
+{
+  "inboxCell": {
+    "tabMessages": "Mensagens",
+    "tabRequests": "Solicitações",
+    "noMessages": "Nenhuma mensagem ainda.",
+    "noRequests": "Nenhuma solicitação ainda.",
+    "loading": "Carregando…",
+    "error": "Algo deu errado.",
+    "retry": "Tentar novamente",
+    "reply": "Responder",
+    "replySubject": "Assunto (opcional)",
+    "replyBody": "Digite sua resposta…",
+    "cancel": "Cancelar",
+    "send": "Enviar",
+    "approve": "Aprovar",
+    "reject": "Rejeitar",
+    "statusApproved": "aprovado",
+    "statusRejected": "rejeitado",
+    "statusPending": "pendente",
+    "requestType": "Tipo",
+    "sendError": "Falha ao enviar resposta"
+  }
+}
