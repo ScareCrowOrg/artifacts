@@ -38,9 +38,12 @@ const loadedKeys = new Set<string>()
 /**
  * Load and merge i18n translations for a single cell type.
  *
- * Uses fetch() + Backend /local/ static mount to load translation JSON
- * (instead of Vite dynamic import, which breaks in staging because
- * the #artifacts/ import map points to localhost:5052 — Docker-only).
+ * Uses Vite dynamic import with #canonical alias to load translation JSON.
+ * Vite resolves #canonical/ to /app/artifacts/canonical/ via its alias config.
+ * Works in ALL environments (Docker, staging, cloud) because:
+ * - File is inside artifacts/ → served by Vite compilation service
+ * - Vite compiles the import() and resolves the #canonical alias at serve time
+ * - Translation JSON files are transformed to ES modules by Vite automatically
  *
  * Deduplication: safe to call multiple times for the same (cellTypeName, locale).
  * Graceful failure: missing translation file = no-op, returns false.
@@ -63,36 +66,27 @@ export async function loadCellI18n(
   }
 
   try {
-    // Use /local/ prefix (Backend StaticFiles mount) instead of #artifacts/ import map
-    // #artifacts/ resolves to http://localhost:5052/ via import map (only works in Docker Compose).
-    // /local/ is served by Backend's StaticFiles mount in ALL environments.
-    const translationUrl =
-      `/local/canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json`
+    // Dynamic import via Vite's #canonical alias.
+    // Vite resolves #canonical/ to /app/artifacts/canonical/ and serves the file.
+    // JSON imports are automatically transformed to ES modules by Vite.
+    const translationSpecifier =
+      `#canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json` as string
 
     log.debug('[loadCellI18n] Loading translations', {
       cellTypeName,
       normalizedLocale,
-      translationUrl,
+      translationSpecifier,
     })
 
     let messages: Record<string, any> | null = null
     try {
-      const response = await fetch(translationUrl)
-      if (!response.ok) {
-        log.debug('[loadCellI18n] No translations found', {
-          cellTypeName,
-          normalizedLocale,
-          status: response.status,
-        })
-        loadedKeys.add(key)
-        return false
-      }
-      messages = await response.json()
-    } catch (fetchError) {
-      log.debug('[loadCellI18n] Failed to fetch translations', {
+      const module = await import(translationSpecifier)
+      messages = module.default || module
+    } catch (importError) {
+      log.debug('[loadCellI18n] No translations found', {
         cellTypeName,
         normalizedLocale,
-        error: fetchError instanceof Error ? fetchError.message : String(fetchError),
+        error: importError instanceof Error ? importError.message : String(importError),
       })
       loadedKeys.add(key)
       return false
