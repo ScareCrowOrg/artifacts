@@ -452,17 +452,46 @@ export abstract class BaseCell {
   }
   
   /**
+   * Load i18n translations for this cell type (optional)
+   *
+   * Calls the shared cellI18nLoader utility with the cell's own cellTypeName.
+   * Useful when a cell needs to ensure its translations are loaded
+   * outside of the grid auto-loader (e.g. in standalone viewers or tests).
+   *
+   * Uses dynamic import to avoid circular dependency (BaseCell
+   * is in shared/types, loader is in canonical/shared/utils).
+   *
+   * Default implementation: loads translations for this cell type.
+   * No-op if __cellTypeName is not set (e.g. abstract base, not instantiated).
+   *
+   * @param locale - Locale to load (defaults to current i18n locale)
+   * @returns true if translations were loaded/merged
+   */
+  async loadI18n(locale?: string): Promise<boolean> {
+    const typeName = (this as any).__cellTypeName
+    if (!typeName) return false
+    try {
+      const { loadCellI18n } = await import(
+        '#canonical/shared/utils/cellI18nLoader'
+      )
+      return loadCellI18n(typeName, locale)
+    } catch {
+      return false
+    }
+  }
+
+  /**
    * Execute complete cell lifecycle atomically (optional)
-   * 
+   *
    * Executes setup → execute → save → show in one call.
    * Each step adds a Fragment to the result for tracing.
    * On error, aborts execution and returns failed result.
-   * 
+   *
    * Default implementation provided. Can be overridden for custom lifecycle.
-   * 
+   *
    * @param lifecycle - Lifecycle configuration
    * @returns Promise resolving to CellResult with fragments
-   * 
+   *
    * @example
    * ```typescript
    * const result = await cell.run({

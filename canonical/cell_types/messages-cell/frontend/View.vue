@@ -73,6 +73,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { loadCellI18n } from '#canonical/shared/utils/cellI18nLoader'
 import { useMessagesCell } from './composables/useMessagesCell'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -151,6 +152,8 @@ defineExpose({ loadData })
 // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
 onMounted(() => {
+  // Load own i18n translations for $t('messagesCell.*') keys
+  loadCellI18n('messages-cell')
   // Only self-load if no external messages provided
   if (!props.messages) {
     loadData()

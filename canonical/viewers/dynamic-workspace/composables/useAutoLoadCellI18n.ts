@@ -49,7 +49,6 @@ function normalizeLocale(locale: string): string {
     'en-AU': 'en',
     'en': 'en',
     'pt-BR': 'pt-BR',
-    'pt-PT': 'pt-BR', // Fallback to Brazilian Portuguese
     'pt': 'pt-BR',
   }
   return localeMap[locale] || locale

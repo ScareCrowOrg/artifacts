@@ -93,6 +93,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { loadCellI18n } from '#canonical/shared/utils/cellI18nLoader'
 import { useRequestsCell } from './composables/useRequestsCell'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -183,6 +184,8 @@ function statusBadgeClass(status: string): string {
 // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
 onMounted(() => {
+  // Load own i18n translations for $t('requestsCell.*') keys
+  loadCellI18n('requests-cell')
   // Only self-load if no external requests provided
   if (!props.requests) {
     loadData()
