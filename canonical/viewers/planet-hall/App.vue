@@ -74,44 +74,12 @@
           </a>
         </div>
 
-        <!-- Messages section -->
+        <!-- Messages section (using messages-cell) -->
         <section class="ph-card ph-fade-in-up ph-fade-in-up--delay-1 mb-8 p-6">
           <h2 class="ph-card-header mb-4">
             {{ $t('planetHall.messages') }}
           </h2>
-
-          <div
-            v-if="messagesBuffer.length === 0"
-            class="ph-empty"
-          >
-            {{ $t('planetHall.noMessages') }}
-          </div>
-
-          <div v-else class="space-y-3">
-            <div
-              v-for="msg in messagesBuffer"
-              :key="msg._id || msg.id"
-              class="ph-card-message p-4"
-            >
-              <div class="flex items-start justify-between gap-2">
-                <div>
-                  <h3 class="font-semibold" style="color: rgba(255, 255, 255, 0.85);">
-                    {{ msg.payload?.subject || $t('planetHall.noSubject') }}
-                  </h3>
-                  <p class="text-sm mt-1" style="color: rgba(255, 255, 255, 0.45);">
-                    {{ msg.payload?.body || '' }}
-                  </p>
-                </div>
-                <span
-                  v-if="msg.created_at"
-                  class="text-xs shrink-0"
-                  style="color: rgba(255, 255, 255, 0.3);"
-                >
-                  {{ formatDate(msg.created_at) }}
-                </span>
-              </div>
-            </div>
-          </div>
+          <MessagesCellView ref="messagesCellRef" />
         </section>
 
         <!-- Create message form (auth required) -->
@@ -158,46 +126,13 @@
           </form>
         </section>
 
-        <!-- Requests section (auth required) -->
+        <!-- Requests section (auth required, using requests-cell) -->
         <template v-if="isAuthenticated">
           <section class="ph-card ph-fade-in-up ph-fade-in-up--delay-2 mb-8 p-6">
             <h2 class="ph-card-header mb-4">
               {{ $t('planetHall.requests') }}
             </h2>
-
-            <div
-              v-if="requestsBuffer.length === 0"
-              class="ph-empty"
-            >
-              {{ $t('planetHall.noRequests') }}
-            </div>
-
-            <div v-else class="space-y-3">
-              <div
-                v-for="req in requestsBuffer"
-                :key="req._id || req.id"
-                class="ph-card-message p-4"
-              >
-                <div class="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 class="font-semibold" style="color: rgba(255, 255, 255, 0.85);">
-                      {{ req.request_type || $t('planetHall.unknownRequest') }}
-                    </h3>
-                    <p class="text-sm mt-1" style="color: rgba(255, 255, 255, 0.45);">
-                      {{ req.payload?.message || '' }}
-                    </p>
-                  </div>
-                  <div class="text-right shrink-0">
-                    <span
-                      class="ph-badge"
-                      :class="statusBadgeClass(req.status)"
-                    >
-                      {{ req.status }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <RequestsCellView />
           </section>
 
           <!-- Create request form -->
@@ -220,7 +155,7 @@
                   <option value="access">{{ $t('planetHall.access') }}</option>
                 </select>
               </div>
-              <!-- Viewer grid for access requests (FIXED: swapped) -->
+              <!-- Viewer grid for access requests -->
               <div v-if="newRequest.request_type === 'access' && viewersBuffer.length > 0">
                 <label class="block text-sm mb-2" style="color: rgba(255, 255, 255, 0.5);">
                   {{ $t('planetHall.selectViewer') }}
@@ -254,6 +189,21 @@
                     placeholder="e.g. mesh-cell"
                     class="ph-input"
                   />
+                  <!-- Allowance status indicator -->
+                  <div
+                    v-if="allowanceStatus === 'allowed'"
+                    class="mt-2 text-xs"
+                    style="color: #34d399;"
+                  >
+                    ✅ Você já possui acesso a este artifact
+                  </div>
+                  <div
+                    v-else-if="allowanceStatus === 'pending'"
+                    class="mt-2 text-xs"
+                    style="color: #fbbf24;"
+                  >
+                    ⏳ Solicitação já enviada, aguardando resposta
+                  </div>
                 </div>
                 <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
                   {{ $t('planetHall.message') }}
@@ -268,7 +218,7 @@
               <div class="flex justify-end">
                 <button
                   type="submit"
-                  :disabled="requestSending"
+                  :disabled="requestSending || !!allowanceStatus || allowanceLoading"
                   class="ph-btn"
                 >
                   {{ requestSending ? $t('planetHall.sending') : $t('planetHall.submit') }}
@@ -283,12 +233,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBaseViewer } from '@/composables/useBaseViewer'
 import { useThemeSync } from '#artifacts/shared/composables/useThemeSync'
 import { useLocaleSync } from '#artifacts/shared/composables/useLocaleSync'
 import { createLogger } from '@/utils/logger'
+import MessagesCellView from '#canonical/cell_types/messages-cell/frontend/View.vue'
+import RequestsCellView from '#canonical/cell_types/requests-cell/frontend/View.vue'
+import { useRequestsCell } from '#canonical/cell_types/requests-cell/frontend/composables/useRequestsCell'
 import './planet-hall.css'
 
 const log = createLogger('planet:hall')
@@ -302,15 +255,17 @@ const {
 } = useBaseViewer()
 
 // Theme and locale synchronization with Cockpit-Vue
-// Reacts to SWITCH_THEME / SWITCH_LOCALE / SYNC_CONFIG postMessages
 useThemeSync()
 useLocaleSync()
 
+// ── Shared reactive state from requests-cell for allowance awareness ─────
+const requestsApi = useRequestsCell()
+
 // ── Buffer Locals (REACTIVITY_ISOLATION.md) ──────────────────────────────
-const messagesBuffer = ref<any[]>([])
-const requestsBuffer = ref<any[]>([])
 const viewersBuffer = ref<any[]>([])
 const planetOwnerId = ref('')
+const allowedArtifactIds = ref<Set<string>>(new Set())
+const allowanceLoading = ref(false)
 
 const messageSending = ref(false)
 const requestSending = ref(false)
@@ -326,22 +281,28 @@ const newRequest = reactive({
   artifact_id: '',
 })
 
+const messagesCellRef = ref<any>(null)
+
 const selectedViewerId = ref('')
+
+// ── Computed: Allowance Status ──────────────────────────────────────────
+const allowanceStatus = computed<'allowed' | 'pending' | null>(() => {
+  const aid = newRequest.artifact_id?.trim()
+  if (!aid || newRequest.request_type !== 'allowance') return null
+  if (allowedArtifactIds.value.has(aid)) return 'allowed'
+  const hasPending = requestsApi.requests.value.some(
+    (r: any) =>
+      r.status === 'pending'
+      && r.request_type === 'allowance'
+      && r.payload?.artifact_id === aid
+  )
+  if (hasPending) return 'pending'
+  return null
+})
 
 watch(() => newRequest.request_type, () => {
   selectedViewerId.value = ''
 })
-
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-function statusBadgeClass(status?: string) {
-  switch (status) {
-    case 'pending':   return 'ph-badge--pending'
-    case 'approved':  return 'ph-badge--approved'
-    case 'rejected':  return 'ph-badge--rejected'
-    default:          return 'ph-badge--default'
-  }
-}
 
 // ── Data Loading ─────────────────────────────────────────────────────────
 
@@ -351,26 +312,6 @@ async function loadPlanetInfo() {
     planetOwnerId.value = data.planet_owner_id || ''
   } catch (err) {
     log.warn('[loadPlanetInfo] failed', err)
-  }
-}
-
-async function loadMessages() {
-  try {
-    const data: any = await apiFetch('/api/inbox/messages')
-    messagesBuffer.value = Array.isArray(data) ? data : []
-  } catch (err) {
-    log.warn('[loadMessages] failed', err)
-    messagesBuffer.value = []
-  }
-}
-
-async function loadRequests() {
-  try {
-    const data: any = await apiFetch('/api/inbox/requests')
-    requestsBuffer.value = Array.isArray(data) ? data : []
-  } catch (err) {
-    log.warn('[loadRequests] failed', err)
-    requestsBuffer.value = []
   }
 }
 
@@ -384,14 +325,26 @@ async function loadViewers() {
   }
 }
 
+async function loadAllowances() {
+  allowanceLoading.value = true
+  try {
+    const data: any = await apiFetch('/api/inbox/allowances')
+    const ids = Array.isArray(data?.artifact_ids) ? data.artifact_ids : []
+    allowedArtifactIds.value = new Set(ids)
+  } catch (err) {
+    log.warn('[loadAllowances] failed', err)
+    allowedArtifactIds.value = new Set()
+  } finally {
+    allowanceLoading.value = false
+  }
+}
+
 async function loadViewerData() {
-  // Handshake is handled internally by useBaseViewer.loadData
-  // Always load planet info (public endpoint)
-  // Always load viewers (public endpoint)
-  // Only load messages/requests if authenticated via handshake
-  const tasks = [loadPlanetInfo(), loadViewers()]
+  const tasks = [loadPlanetInfo(), loadViewers(), loadAllowances()]
   if (isAuthenticated.value) {
-    tasks.push(loadMessages(), loadRequests())
+    // Load requests via the shared composable (kept in sync with
+    // RequestsCellView — no separate requestsBuffer needed)
+    tasks.push(requestsApi.loadRequests())
   }
 
   await Promise.all(tasks)
@@ -421,7 +374,8 @@ async function handleCreateMessage() {
     })
     newMessage.subject = ''
     newMessage.body = ''
-    await loadMessages()
+    // Refresh messages cell to show the new message
+    messagesCellRef.value?.loadData()
   } catch (err) {
     log.warn('[handleCreateMessage] failed', err)
   } finally {
@@ -471,11 +425,28 @@ async function handleCreateRequest() {
       method: 'POST',
       body: JSON.stringify(body),
     })
+    // ── Reactive state sync (Buffer Local Pattern) ──
+    // Inject pending artifact into local buffer immediately so UI updates
+    // without waiting for server round-trip.
+    //
+    // Note: Intentionally sparse shape for allowanceStatus computed consumption.
+    // Only fields read by allowanceStatus are included (status, request_type,
+    // payload.artifact_id). If a future computed or template needs _id,
+    // sender_id, created_at, etc., hydrate from the server response or expand
+    // this injection point.
+    if (body.request_type === 'allowance' && body.payload?.artifact_id) {
+      requestsApi.injectLocalRequest({
+        status: 'pending',
+        request_type: 'allowance',
+        payload: { artifact_id: body.payload.artifact_id },
+      })
+    }
     newRequest.request_type = 'allowance'
     newRequest.message = ''
     newRequest.artifact_id = ''
     selectedViewerId.value = ''
-    await loadRequests()
+    // Background refresh requests via shared composable
+    requestsApi.loadRequests()
   } catch (err) {
     log.warn('[handleCreateRequest] failed', err)
   } finally {

@@ -1,0 +1,13 @@
+{
+  "messagesCell": {
+    "title": "Messages",
+    "loading": "Loading messages…",
+    "empty": "No messages yet.",
+    "error": "Failed to load messages.",
+    "retry": "Retry",
+    "reply": "Reply",
+    "sender": "From",
+    "subject": "Subject",
+    "date": "Date"
+  }
+}

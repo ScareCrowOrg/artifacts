@@ -1,0 +1,25 @@
+{
+  "id": "messages-cell",
+  "name": "messages-cell",
+  "display_name": "Messages",
+  "description": "Display inbox messages — read-only, no reply actions",
+  "version": "1.0.0",
+  "category": "communication",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "basecell": ["frontend/MessagesCell.ts"],
+    "handler": [],
+    "scripts": [],
+    "docs": ["docs/README.md"]
+  },
+  "default_initial_data": {},
+  "allow_instance_override_refs": false,
+  "properties_schema": {},
+  "_discovery": {
+    "labels": ["#messages", "#inbox", "#communication"],
+    "required_resources": [],
+    "dependencies": []
+  },
+  "kind": "cell"
+}

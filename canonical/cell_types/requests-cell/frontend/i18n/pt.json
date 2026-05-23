@@ -1,0 +1,18 @@
+{
+  "requestsCell": {
+    "title": "Solicitações",
+    "loading": "Carregando solicitações…",
+    "empty": "Nenhuma solicitação ainda.",
+    "error": "Falha ao carregar solicitações.",
+    "retry": "Tentar novamente",
+    "approve": "Aprovar",
+    "reject": "Rejeitar",
+    "sender": "De",
+    "type": "Tipo",
+    "status": "Status",
+    "date": "Data",
+    "pending": "pendente",
+    "approved": "aprovado",
+    "rejected": "rejeitado"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "requestsCell": {
+    "title": "Requests",
+    "loading": "Loading requests…",
+    "empty": "No requests yet.",
+    "error": "Failed to load requests.",
+    "retry": "Retry",
+    "approve": "Approve",
+    "reject": "Reject",
+    "sender": "From",
+    "type": "Type",
+    "status": "Status",
+    "date": "Date",
+    "pending": "pending",
+    "approved": "approved",
+    "rejected": "rejected"
+  }
+}
