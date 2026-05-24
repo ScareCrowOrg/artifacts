@@ -42,7 +42,7 @@
 
       <!-- Loading -->
       <div v-if="loadingState" class="ph-fade-in text-center py-12">
-        <p class="text-sm" style="color: rgba(255, 255, 255, 0.4);">
+        <p class="text-sm ph-text-muted">
           {{ $t('planetHall.loading') }}
         </p>
       </div>
@@ -50,8 +50,7 @@
       <!-- Error banner -->
       <div
         v-if="errorMessage"
-        class="ph-fade-in mb-6 px-4 py-3 rounded-lg"
-        style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #f87171; font-size: 0.875rem;"
+        class="ph-fade-in ph-error-banner mb-6"
         role="alert"
       >
         {{ errorMessage }}
@@ -63,7 +62,7 @@
           v-if="!isAuthenticated"
           class="ph-guest-notice ph-fade-in-up ph-fade-in-up--delay-1 mb-8"
         >
-          <p style="color: rgba(255, 255, 255, 0.5); margin-bottom: 0.75rem;">
+          <p class="ph-text-secondary" style="margin-bottom: 0.75rem;">
             {{ $t('planetHall.notAuthenticated') }}
           </p>
           <a
@@ -93,7 +92,7 @@
 
           <form @submit.prevent="handleCreateMessage" class="space-y-4">
             <div>
-              <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
+              <label class="block text-sm mb-1 ph-label">
                 {{ $t('planetHall.subject') }}
               </label>
               <input
@@ -104,7 +103,7 @@
               />
             </div>
             <div>
-              <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
+              <label class="block text-sm mb-1 ph-label">
                 {{ $t('planetHall.body') }}
               </label>
               <textarea
@@ -143,7 +142,7 @@
 
             <form @submit.prevent="handleCreateRequest" class="space-y-4">
               <div>
-                <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
+                <label class="block text-sm mb-1 ph-label">
                   {{ $t('planetHall.requestType') }}
                 </label>
                 <select
@@ -157,7 +156,7 @@
               </div>
               <!-- Viewer grid for access requests -->
               <div v-if="newRequest.request_type === 'access' && viewersBuffer.length > 0">
-                <label class="block text-sm mb-2" style="color: rgba(255, 255, 255, 0.5);">
+                <label class="block text-sm mb-2 ph-label">
                   {{ $t('planetHall.selectViewer') }}
                 </label>
                 <div class="viewer-grid">
@@ -180,7 +179,7 @@
               <!-- Allowance request fields or when no viewers loaded -->
               <div v-else>
                 <div class="mb-3">
-                  <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
+                  <label class="block text-sm mb-1 ph-label">
                     Artifact ID (optional)
                   </label>
                   <input
@@ -192,20 +191,18 @@
                   <!-- Allowance status indicator -->
                   <div
                     v-if="allowanceStatus === 'allowed'"
-                    class="mt-2 text-xs"
-                    style="color: #34d399;"
+                    class="mt-2 text-xs ph-status--allowed"
                   >
                     ✅ Você já possui acesso a este artifact
                   </div>
                   <div
                     v-else-if="allowanceStatus === 'pending'"
-                    class="mt-2 text-xs"
-                    style="color: #fbbf24;"
+                    class="mt-2 text-xs ph-status--pending"
                   >
                     ⏳ Solicitação já enviada, aguardando resposta
                   </div>
                 </div>
-                <label class="block text-sm mb-1" style="color: rgba(255, 255, 255, 0.5);">
+                <label class="block text-sm mb-1 ph-label">
                   {{ $t('planetHall.message') }}
                 </label>
                 <textarea

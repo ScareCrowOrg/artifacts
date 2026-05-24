@@ -63,7 +63,7 @@ export async function loadCellI18n(
 
   try {
     const translationPath =
-      `#artifacts/canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json`
+      `/artifacts/canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json`
 
     log.debug('[loadCellI18n] Loading translations', {
       cellTypeName,

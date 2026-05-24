@@ -116,9 +116,9 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
     }
 
     try {
-      // Path: #artifacts/canonical/cell_types/{cellTypeName}/frontend/translations/{locale}.json
+      // Path: /artifacts/canonical/cell_types/{cellTypeName}/frontend/translations/{locale}.json
       // Resolved via import map in index.html
-      const translationPath = `#artifacts/canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json`
+      const translationPath = `/artifacts/canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json`
 
       log.debug('[useAutoLoadCellI18n] Loading translations', {
         cellTypeName,
