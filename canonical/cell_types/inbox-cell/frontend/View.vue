@@ -53,7 +53,7 @@
         class="border-t border-border dark:border-border-dark px-4 py-3"
       >
         <p class="text-xs font-semibold text-text-secondary dark:text-text-secondary-dark mb-2">
-          Reply to {{ localReplyTarget.sender_id }}
+          Reply to {{ localReplyTarget.sender_name || localReplyTarget.sender_id }}
         </p>
         <input
           v-model="localReplySubject"
@@ -191,15 +191,19 @@ function handleCancelReply() {
 
 async function handleSendReply(msg: any) {
   localReplyError.value = null
+  const msgId = msg._id || msg.id
   const success = await inbox.replyToMessage(
     msg.sender_id,
     localReplySubject.value || 'Re: ' + (msg.subject || ''),
     localReplyBody.value,
+    msgId,  // inReplyTo — for threading
   )
   if (success) {
     localReplyTarget.value = null
     localReplySubject.value = ''
     localReplyBody.value = ''
+    // Reload messages to show the new reply in the thread
+    await loadData()
   } else {
     localReplyError.value = inbox.error.value || 'Failed to send reply'
   }

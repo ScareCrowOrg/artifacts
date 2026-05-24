@@ -45,7 +45,7 @@
       >
         <div class="flex items-baseline justify-between gap-2 mb-1">
           <span class="text-xs font-semibold text-primary dark:text-primary-light">
-            {{ req.sender_id }}
+            {{ req.sender_name || req.sender_id }}
           </span>
           <span
             class="text-xs px-2 py-0.5 rounded-full"

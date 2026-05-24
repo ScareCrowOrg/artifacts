@@ -8,6 +8,8 @@
     "reply": "Reply",
     "sender": "From",
     "subject": "Subject",
-    "date": "Date"
+    "date": "Date",
+    "threadExpand": "Show {count} more replies",
+    "threadCollapse": "Collapse thread"
   }
 }

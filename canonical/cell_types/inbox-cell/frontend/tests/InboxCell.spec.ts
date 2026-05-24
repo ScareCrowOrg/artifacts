@@ -46,6 +46,7 @@ class InboxCell {
         targetUserId: { type: 'string', description: 'Target user ID.', required: false },
         subject: { type: 'string', description: 'Message subject.', required: false },
         body: { type: 'string', description: 'Message body.', required: false },
+        inReplyTo: { type: 'string', description: 'Original message _id this reply responds to.', required: false },
       },
       outputs: {
         messages: { type: 'array', description: 'List of messages.' },
@@ -224,6 +225,16 @@ describe('InboxCell', () => {
         targetUserId: 'user-456',
         subject: 'Re: Hello',
         body: 'Thanks for your message!',
+      })
+      expect(errors).toHaveLength(0)
+    })
+
+    it('should accept reply_to_message with optional inReplyTo', () => {
+      const errors = cell.validate({
+        action: 'reply_to_message',
+        targetUserId: 'user-456',
+        body: 'Hello!',
+        inReplyTo: 'msg-123',
       })
       expect(errors).toHaveLength(0)
     })

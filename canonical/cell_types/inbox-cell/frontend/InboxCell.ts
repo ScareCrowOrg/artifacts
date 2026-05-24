@@ -48,6 +48,8 @@ export interface InboxInput {
   subject?: string
   /** Body — required for reply_to_message */
   body?: string
+  /** Original message _id this reply is responding to — for threading */
+  inReplyTo?: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,14 +116,18 @@ export class InboxCell extends BaseCell {
 
         case 'reply_to_message':
           url = '/api/inbox/messages'
+          const replyBody: Record<string, any> = {
+            target_user_id: input.targetUserId,
+            subject: input.subject || '',
+            body: input.body || '',
+          }
+          if (input.inReplyTo) {
+            replyBody.in_reply_to = input.inReplyTo
+          }
           options = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              target_user_id: input.targetUserId,
-              subject: input.subject || '',
-              body: input.body || '',
-            }),
+            body: JSON.stringify(replyBody),
           }
           break
       }

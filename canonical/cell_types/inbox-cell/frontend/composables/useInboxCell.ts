@@ -92,7 +92,7 @@ export function useInboxCell() {
     }
   }
 
-  async function replyToMessage(targetUserId: string, subject: string, body: string) {
+  async function replyToMessage(targetUserId: string, subject: string, body: string, inReplyTo?: string) {
     isLoading.value = true
     error.value = null
     try {
@@ -101,6 +101,7 @@ export function useInboxCell() {
         targetUserId,
         subject,
         body,
+        inReplyTo,
       })
       if (!result.success) {
         error.value = result.error || 'Failed to reply to message'
