@@ -38,7 +38,7 @@ const loadedKeys = new Set<string>()
 /**
  * Load and merge i18n translations for a single cell type.
  *
- * Uses Vite dynamic import to fetch translations/{locale}.json
+ * Uses fetch() to load translations/{locale}.json
  * and merges into the root i18n instance via mergeLocaleMessage.
  *
  * Deduplication: safe to call multiple times for the same (cellTypeName, locale).
@@ -73,13 +73,16 @@ export async function loadCellI18n(
 
     let messages: Record<string, any> | null = null
     try {
-      const module = await import(translationPath)
-      messages = module.default || module
-    } catch (importError) {
+      const response = await fetch(translationPath)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      messages = await response.json()
+    } catch (fetchError) {
       log.debug('[loadCellI18n] No translations found', {
         cellTypeName,
         normalizedLocale,
-        error: importError instanceof Error ? importError.message : String(importError),
+        error: fetchError instanceof Error ? fetchError.message : String(fetchError),
       })
       loadedKeys.add(key)
       return false

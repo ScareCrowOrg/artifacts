@@ -33,7 +33,7 @@ import type { GridCell } from '../types'
 const log = createLogger('composable:cell-i18n-auto')
 
 // Note: SCARERUNNER_URL is no longer used for i18n files.
-// Translations are now loaded via Vite's import map (#artifacts/) instead of HTTP.
+// Translations are loaded via fetch() with paths resolved through the browser's import map.
 // This avoids /local endpoint dependency and works in both dev and production.
 
 /**
@@ -99,7 +99,7 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
    * Merges under namespace: cells.{cellTypeName}
    * Tracks loaded state to avoid HTTP request storms.
    *
-   * Uses dynamic import() to resolve #artifacts/ paths via Vite import map.
+   * Uses fetch() to load JSON translation files from artifacts.
    * Falls back gracefully if translations don't exist (404 is normal for cells without i18n).
    */
   const load = async (cellTypeName: string, locale: string): Promise<void> => {
@@ -116,8 +116,8 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
     }
 
     try {
-      // Use Vite import map to resolve translations from artifacts
       // Path: #artifacts/canonical/cell_types/{cellTypeName}/frontend/translations/{locale}.json
+      // Resolved via import map in index.html
       const translationPath = `#artifacts/canonical/cell_types/${cellTypeName}/frontend/translations/${normalizedLocale}.json`
 
       log.debug('[useAutoLoadCellI18n] Loading translations', {
@@ -127,19 +127,22 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
         translationPath,
       })
 
-      // Use dynamic import to load translation file via Vite import map
-      // import() respects import maps, whereas fetch() does not
+      // Use fetch() to load translation file — more reliable for JSON
+      // import maps are still used for #artifacts/ path resolution via index.html
       let messages: Record<string, any> | null = null
       try {
-        const module = await import(translationPath)
-        messages = module.default || module
-      } catch (importError) {
+        const response = await fetch(translationPath)
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+        messages = await response.json()
+      } catch (fetchError) {
         // 404 or other error: cell doesn't have translations for this locale
         // This is normal and expected - not all cells have translations
         log.debug('[useAutoLoadCellI18n] No translations found', {
           cellTypeName,
           normalizedLocale,
-          error: importError instanceof Error ? importError.message : String(importError),
+          error: fetchError instanceof Error ? fetchError.message : String(fetchError),
         })
         loadedKeys.add(key) // Mark as attempted to avoid retries
         return
