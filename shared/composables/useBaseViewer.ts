@@ -25,6 +25,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { getApiBaseUrl, normalizePath, apiFetch as apiServiceFetch } from '@/services/apiService'
 import { createLogger } from '@/utils/logger'
+import { normalizeLocale } from '@/utils/i18nUtils'
+import i18nInstance from '@/i18n'
 import type {
   InitWorkspaceMessage,
   SwitchThemeMessage,
@@ -69,6 +71,17 @@ export interface UseBaseViewerOptions {
    * @default 'immediate'
    */
   validationMode?: 'immediate' | 'validated'
+
+  /**
+   * i18n configuration for viewer-specific translations.
+   * Messages are merged into the shared i18n instance (from @/i18n)
+   * using normalizeLocale() to bridge locale code formats.
+   */
+  i18n?: {
+    /** Viewer-specific messages to merge into the shared i18n instance.
+     *  Each entry's locale is normalized (e.g., 'pt' → 'pt-BR') before merge. */
+    messages?: { locale: string; messages: Record<string, any> }[]
+  }
 }
 
 // ── Composable ───────────────────────────────────────────────────────────────
@@ -76,6 +89,14 @@ export interface UseBaseViewerOptions {
 export function useBaseViewer(options: UseBaseViewerOptions = {}) {
   const validationMode = options.validationMode ?? 'immediate'
   const store = useWorkspaceStore()
+
+  // ── i18n Auto-Setup ──────────────────────────────────────────────────
+  if (options.i18n?.messages) {
+    for (const { locale, messages } of options.i18n.messages) {
+      const normalized = normalizeLocale(locale)
+      i18nInstance.global.mergeLocaleMessage(normalized, messages)
+    }
+  }
 
   // ── URL Resolution ────────────────────────────────────────────────────
   const API_BASE = getApiBaseUrl()
@@ -369,6 +390,18 @@ export function useBaseViewer(options: UseBaseViewerOptions = {}) {
     }
   }
 
+  // ── i18n Utilities ───────────────────────────────────────────────────
+
+  /**
+   * Load and merge cell type translations into the shared i18n instance.
+   * Convenience wrapper around cellI18nLoader.loadCellI18n().
+   * Viewers can use this to ensure cell translations are available.
+   */
+  async function mergeCellI18n(cellTypeName: string): Promise<boolean> {
+    const { loadCellI18n } = await import('#canonical/shared/utils/cellI18nLoader')
+    return loadCellI18n(cellTypeName)
+  }
+
   // ── Utilities ─────────────────────────────────────────────────────────
 
   function formatDate(isoStr?: string): string {
@@ -411,5 +444,8 @@ export function useBaseViewer(options: UseBaseViewerOptions = {}) {
 
     // Utilities
     formatDate,
+
+    // i18n
+    mergeCellI18n,
   }
 }

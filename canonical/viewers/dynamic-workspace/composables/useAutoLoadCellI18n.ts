@@ -24,6 +24,7 @@ import { watch, Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { createLogger } from '@/utils/logger'
+import { normalizeLocale } from '@/utils/i18nUtils'
 // Import the i18n instance directly to access .global
 // In vue-i18n with legacy: false, useI18n() returns Composer (local instance)
 // To access .global (root instance), we need the exported i18n instance
@@ -35,24 +36,6 @@ const log = createLogger('composable:cell-i18n-auto')
 // Note: SCARERUNNER_URL is no longer used for i18n files.
 // Translations are loaded via fetch() with paths resolved through the browser's import map.
 // This avoids /local endpoint dependency and works in both dev and production.
-
-/**
- * Normalize locale codes to match translation file naming.
- * Cockpit-Vue may send full locale codes (e.g., en-US, pt-BR)
- * but translation files use simplified codes (en, pt-BR, etc).
- */
-function normalizeLocale(locale: string): string {
-  // Map full locale codes to translation file names
-  const localeMap: Record<string, string> = {
-    'en-US': 'en',
-    'en-GB': 'en',
-    'en-AU': 'en',
-    'en': 'en',
-    'pt-BR': 'pt-BR',
-    'pt': 'pt-BR',
-  }
-  return localeMap[locale] || locale
-}
 
 /**
  * Auto-discover and load cell translations based on active cells in grid.

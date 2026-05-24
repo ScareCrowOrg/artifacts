@@ -240,6 +240,8 @@ import MessagesCellView from '#canonical/cell_types/messages-cell/frontend/View.
 import RequestsCellView from '#canonical/cell_types/requests-cell/frontend/View.vue'
 import { useRequestsCell } from '#canonical/cell_types/requests-cell/frontend/composables/useRequestsCell'
 import './planet-hall.css'
+import en from './i18n/en.json'
+import pt from './i18n/pt.json'
 
 const log = createLogger('planet:hall')
 
@@ -248,8 +250,15 @@ const { t } = useI18n()
 const {
   loadingState, errorMessage, isAuthenticated,
   apiFetch, formatDate,
-  loadData,
-} = useBaseViewer()
+  loadData, mergeCellI18n,
+} = useBaseViewer({
+  i18n: {
+    messages: [
+      { locale: 'en', messages: en },
+      { locale: 'pt', messages: pt },
+    ],
+  },
+})
 
 // Theme and locale synchronization with Cockpit-Vue
 useThemeSync()
@@ -454,6 +463,11 @@ async function handleCreateRequest() {
 // ── Lifecycle ────────────────────────────────────────────────────────────
 
 onMounted(() => {
+  // Pre-load cell translations to validate mergeCellI18n integration.
+  // Fire-and-forget: cells also call loadCellI18n in their own onMounted,
+  // but this starts loading earlier and validates the composable wiring.
+  mergeCellI18n('messages-cell')
+  mergeCellI18n('requests-cell')
   loadData(loadViewerData)
 })
 </script>

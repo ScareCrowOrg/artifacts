@@ -12,25 +12,11 @@
  *   onMounted(() => { loadCellsI18n(['messages-cell', 'requests-cell']) })
  */
 
+import { normalizeLocale } from '@/utils/i18nUtils'
 import i18nInstance from '@/i18n'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('util:cell-i18n-loader')
-
-/**
- * Normalize locale codes to match translation file naming.
- */
-function normalizeLocale(locale: string): string {
-  const localeMap: Record<string, string> = {
-    'en-US': 'en',
-    'en-GB': 'en',
-    'en-AU': 'en',
-    'en': 'en',
-    'pt-BR': 'pt-BR',
-    'pt': 'pt-BR',
-  }
-  return localeMap[locale] || locale
-}
 
 // Track loaded cells to avoid duplicate imports: "cellTypeName-locale"
 const loadedKeys = new Set<string>()

@@ -14,21 +14,9 @@ import { watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { createLogger } from '@/utils/logger'
+import { normalizeLocale } from '@/utils/i18nUtils'
 
 const log = createLogger('composable:locale-sync')
-
-function normalizeLocale(locale: string): string {
-  const localeMap: Record<string, string> = {
-    'en-US': 'en',
-    'en-GB': 'en',
-    'en-AU': 'en',
-    'en': 'en',
-    'pt-BR': 'pt-BR',
-    'pt-PT': 'pt-BR',
-    'pt': 'pt-BR',
-  }
-  return localeMap[locale] || locale
-}
 
 export function useLocaleSync(): void {
   const composer = useI18n()
