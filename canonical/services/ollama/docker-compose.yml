@@ -7,7 +7,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-ollama:staging20260525T020359
+    image: hub-staging.scareverse.net/registry/staging/scareverse-ollama:staging20260525T164646
     container_name: scareverse-ollama-raw
     runtime: nvidia
     environment:
