@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-CLAUDE_HOME="${CLAUDE_HOME:-/app/artifacts}"
+CLAUDE_HOME="${CLAUDE_HOME:-/app/claude-home}"
 export HOME="$CLAUDE_HOME"
 
 # Verificar se Claude Code já está instalado

@@ -83,7 +83,7 @@ wss.on('connection', (ws) => {
 
     const env = {
       ...process.env,
-      HOME: process.env.CLAUDE_HOME || '/app/artifacts',
+      HOME: process.env.CLAUDE_HOME || '/app/claude-home',
       TERM: 'xterm-256color',
     }
 
@@ -95,7 +95,7 @@ wss.on('connection', (ws) => {
       cols,
       rows,
       env,
-      cwd: process.env.CLAUDE_HOME || '/app/artifacts',
+      cwd: process.env.CLAUDE_CWD || '/app/artifacts',
     })
 
     activeProcesses.set(sessionId, ptyProcess)
