@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-traefik:staging20260525T015408
+    image: hub-staging.scareverse.net/registry/staging/scareverse-traefik:staging20260525T020359
     container_name: scareverse-traefik-worker
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
