@@ -1,12 +1,12 @@
 {
   "id": "1879e53a-09e0-4909-b958-35e247903298",
-  "name": "Mem\u00c3\u00b3ria de Conversa\u00c3\u00a7\u00c3\u00a3o",
-  "description": "Mem\u00c3\u00b3ria de Conversa\u00c3\u00a7\u00c3\u00a3o",
+  "name": "MemÃ³ria de ConversaÃ§Ã£o",
+  "description": "MemÃ³ria de ConversaÃ§Ã£o",
   "default_refs": {
     "workflow_graph": []
   },
   "default_initial_data": {
-    "workflow_yaml": "# Workflow de mem\u00c3\u00b3ria\nsteps:\n  - capture\n  - store\n  - retrieve",
+    "workflow_yaml": "# Workflow de memÃ³ria\nsteps:\n  - capture\n  - store\n  - retrieve",
     "category": "persistida",
     "views_components": [
       "CellView_Memory"
@@ -17,5 +17,6 @@
   "created_at": "2025-11-17T06:08:04.281650",
   "updated_at": "2025-11-17T06:08:04.281651",
   "can_render_dynamically": false,
-  "kind": "cell"
+  "kind": "cell",
+  "stage": "canonical"
 }

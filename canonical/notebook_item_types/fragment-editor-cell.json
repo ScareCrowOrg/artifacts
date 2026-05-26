@@ -47,14 +47,13 @@
         "edit",
         "load"
       ],
-      "description": "Action to perform: create, edit, or load fragment"
-    ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+      "description": "Action to perform: create, edit, or load fragment",
+      "updated_at": "2026-02-24T00:00:00",
+      "created_at": "2026-02-24T00:00:00"
+    }
   },
-  "kind": "cell"
-,
+  "kind": "cell",
   "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
+  "created_at": "2026-02-24T00:00:00",
+  "stage": "canonical"
 }

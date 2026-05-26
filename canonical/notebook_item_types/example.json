@@ -55,5 +55,6 @@
       "Validate cell registry loading",
       "Test cell instantiation"
     ]
-  }
+  },
+  "stage": "canonical"
 }

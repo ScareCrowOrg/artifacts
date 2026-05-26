@@ -6,10 +6,18 @@
   "category": "code-generation",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "scripts": ["backend/scripts/main.py"],
-    "docs": ["docs/README.md"],
-    "types": ["frontend/types.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
+    "types": [
+      "frontend/types.ts"
+    ]
   },
   "default_initial_data": {
     "category": "ephemeral",
@@ -35,7 +43,10 @@
       "description": "Cell category - 'ephemeral' marks this as ephemeral (not persisted)"
     },
     "plan": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "default": null,
       "description": "Validated plan from PlannerCell containing DAG definition"
     },
@@ -54,19 +65,25 @@
         },
         "example_cells": {
           "type": "array",
-          "items": { "type": "object" },
+          "items": {
+            "type": "object"
+          },
           "description": "Example cells to use as reference"
         },
         "constraints": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Constraints to follow during generation"
         }
       }
     },
     "files_created": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "default": [],
       "description": "List of file paths that were created"
     },
@@ -84,14 +101,23 @@
         },
         "errors": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "List of validation errors"
         }
       }
     },
     "status": {
       "type": "string",
-      "enum": ["idle", "generating", "validating", "registering", "completed", "failed"],
+      "enum": [
+        "idle",
+        "generating",
+        "validating",
+        "registering",
+        "completed",
+        "failed"
+      ],
       "default": "idle",
       "description": "Current status of the code generation process"
     },
@@ -102,12 +128,29 @@
     }
   },
   "_discovery": {
-    "labels": ["#code-generation", "#automation", "#ai-driven", "#validation"],
+    "labels": [
+      "#code-generation",
+      "#automation",
+      "#ai-driven",
+      "#validation"
+    ],
     "describe": "Autonomous code generation cell that creates new cells based on specifications from PlannerCell. Uses Aider + Qwen (via aider-worker) to generate type.json definitions, TypeScript Cell implementations, and Vue view components. Performs TypeScript compilation validation and JSON schema validation. Automatically updates CellRegistry after successful generation. Follows existing cell patterns and conventions.",
     "estimated_duration_seconds": 60,
-    "required_resources": ["aider-worker", "typescript-compiler", "cell-registry"],
-    "dependencies": ["aider-worker", "cell-registry"],
-    "tags": ["code-generation", "automation", "validation", "aider"],
+    "required_resources": [
+      "aider-worker",
+      "typescript-compiler",
+      "cell-registry"
+    ],
+    "dependencies": [
+      "aider-worker",
+      "cell-registry"
+    ],
+    "tags": [
+      "code-generation",
+      "automation",
+      "validation",
+      "aider"
+    ],
     "use_cases": [
       "Generate missing cells identified by PlannerCell",
       "Create type.json definitions following schema",
@@ -116,5 +159,6 @@
       "Validate generated code (TypeScript + JSON)",
       "Update CellRegistry with newly created cells"
     ]
-  }
+  },
+  "stage": "canonical"
 }

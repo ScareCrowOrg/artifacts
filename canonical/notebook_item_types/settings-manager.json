@@ -23,12 +23,23 @@
   "can_render_dynamically": true,
   "permissions": {
     "required": [],
-    "optional": ["settings:manage", "settings:admin"]
+    "optional": [
+      "settings:manage",
+      "settings:admin"
+    ]
   },
   "inputs": {
     "action": {
       "type": "enum",
-      "values": ["list", "create", "update", "delete", "history", "rollback", "push_redis"],
+      "values": [
+        "list",
+        "create",
+        "update",
+        "delete",
+        "history",
+        "rollback",
+        "push_redis"
+      ],
       "description": "Settings operation to perform"
     },
     "payload": {
@@ -80,5 +91,6 @@
   },
   "kind": "cell",
   "created_at": "2026-03-14T00:00:00",
-  "updated_at": "2026-03-14T00:00:00"
+  "updated_at": "2026-03-14T00:00:00",
+  "stage": "canonical"
 }

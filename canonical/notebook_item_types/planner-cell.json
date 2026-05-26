@@ -6,10 +6,18 @@
   "category": "planning",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "scripts": ["backend/scripts/main.py"],
-    "docs": ["docs/README.md"],
-    "types": ["frontend/types.ts"]
+    "view": [
+      "frontend/View.vue"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ],
+    "types": [
+      "frontend/types.ts"
+    ]
   },
   "default_initial_data": {
     "category": "ephemeral",
@@ -34,7 +42,10 @@
       "description": "User intent in natural language (e.g., 'Create horror boss with animations')"
     },
     "previous_failure": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "default": null,
       "description": "Context from previous failure for learning",
       "properties": {
@@ -53,18 +64,25 @@
       }
     },
     "plan": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "default": null,
       "description": "Generated execution plan",
       "properties": {
         "cells_discovered": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "List of cell IDs that were discovered"
         },
         "cells_to_generate": {
           "type": "array",
-          "items": { "type": "object" },
+          "items": {
+            "type": "object"
+          },
           "description": "Specifications for cells that need to be generated"
         },
         "execution_dag": {
@@ -85,7 +103,15 @@
     },
     "status": {
       "type": "string",
-      "enum": ["idle", "discovering", "analyzing", "planning", "decomposing", "completed", "failed"],
+      "enum": [
+        "idle",
+        "discovering",
+        "analyzing",
+        "planning",
+        "decomposing",
+        "completed",
+        "failed"
+      ],
       "default": "idle",
       "description": "Current status of the planning process"
     },
@@ -109,12 +135,29 @@
     }
   },
   "_discovery": {
-    "labels": ["#planning", "#discovery", "#automation", "#ai-driven", "#recursive"],
+    "labels": [
+      "#planning",
+      "#discovery",
+      "#automation",
+      "#ai-driven",
+      "#recursive"
+    ],
     "describe": "Autonomous planning cell that discovers available cells through 4-level search (semantic, label, LLM ranking, validation), analyzes task complexity, recursively decomposes complex tasks into manageable subplans, generates execution DAGs, identifies missing cells, and learns from previous failures. Integrates with DiscoveryService for cell discovery and uses OpenInterpreter + Gemini Flash for planning decisions. Supports human-in-the-loop approval via MITM Gate.",
     "estimated_duration_seconds": 30,
-    "required_resources": ["discovery-service", "llm-service", "aider-worker"],
-    "dependencies": ["discovery-service"],
-    "tags": ["planning", "autonomous", "recursive", "self-healing"],
+    "required_resources": [
+      "discovery-service",
+      "llm-service",
+      "aider-worker"
+    ],
+    "dependencies": [
+      "discovery-service"
+    ],
+    "tags": [
+      "planning",
+      "autonomous",
+      "recursive",
+      "self-healing"
+    ],
     "use_cases": [
       "Transform user intent into executable workflows",
       "Discover and compose existing cells into pipelines",
@@ -122,5 +165,6 @@
       "Learn from failures and retry with improved approach",
       "Generate specifications for missing cells"
     ]
-  }
+  },
+  "stage": "canonical"
 }

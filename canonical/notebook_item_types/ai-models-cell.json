@@ -20,11 +20,10 @@
     "title": "AI Models Configuration",
     "description": "Configure AI model providers (Ollama, Gemini, OpenAI)",
     "config": {
-      "defaultProvider": "ollama"
-    ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+      "defaultProvider": "ollama",
+      "updated_at": "2026-02-24T00:00:00",
+      "created_at": "2026-02-24T00:00:00"
+    }
   },
   "properties_schema": {
     "type": "object",
@@ -62,19 +61,16 @@
           },
           "modelName": {
             "type": "string",
-            "description": "Default model name"
-          ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
-        ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
-      ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+            "description": "Default model name",
+            "updated_at": "2026-02-24T00:00:00",
+            "created_at": "2026-02-24T00:00:00"
+          },
+          "updated_at": "2026-02-24T00:00:00",
+          "created_at": "2026-02-24T00:00:00"
+        },
+        "updated_at": "2026-02-24T00:00:00",
+        "created_at": "2026-02-24T00:00:00"
+      }
     },
     "required": [
       "action"
@@ -91,8 +87,8 @@
   "required_resources": [
     "internet"
   ],
-  "kind": "cell"
-,
+  "kind": "cell",
   "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
+  "created_at": "2026-02-24T00:00:00",
+  "stage": "canonical"
 }

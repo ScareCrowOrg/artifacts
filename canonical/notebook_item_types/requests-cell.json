@@ -7,19 +7,31 @@
   "category": "communication",
   "can_render_dynamically": true,
   "default_refs": {
-    "view": ["frontend/View.vue"],
-    "basecell": ["frontend/RequestsCell.ts"],
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/RequestsCell.ts"
+    ],
     "handler": [],
     "scripts": [],
-    "docs": ["docs/README.md"]
+    "docs": [
+      "docs/README.md"
+    ]
   },
   "default_initial_data": {},
   "allow_instance_override_refs": false,
   "properties_schema": {},
   "_discovery": {
-    "labels": ["#requests", "#inbox", "#allowance", "#communication"],
+    "labels": [
+      "#requests",
+      "#inbox",
+      "#allowance",
+      "#communication"
+    ],
     "required_resources": [],
     "dependencies": []
   },
-  "kind": "cell"
+  "kind": "cell",
+  "stage": "canonical"
 }

@@ -98,5 +98,6 @@
       "Building chatbot interfaces"
     ]
   },
-  "kind": "cell"
+  "kind": "cell",
+  "stage": "canonical"
 }

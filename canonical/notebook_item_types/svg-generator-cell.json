@@ -67,11 +67,10 @@
     "selectedModel": {
       "type": "string",
       "default": "mistral",
-      "description": "Currently selected LLM model for generation"
-    ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+      "description": "Currently selected LLM model for generation",
+      "updated_at": "2026-02-24T00:00:00",
+      "created_at": "2026-02-24T00:00:00"
+    }
   },
   "_discovery": {
     "labels": [
@@ -101,8 +100,8 @@
       "Generate graphics for 3D extrusion"
     ]
   },
-  "kind": "cell"
-,
+  "kind": "cell",
   "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
+  "created_at": "2026-02-24T00:00:00",
+  "stage": "canonical"
 }

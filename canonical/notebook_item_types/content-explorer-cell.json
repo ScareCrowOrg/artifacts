@@ -53,11 +53,10 @@
         "list"
       ],
       "default": "grid",
-      "description": "Display mode for assets"
-    ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+      "description": "Display mode for assets",
+      "updated_at": "2026-02-24T00:00:00",
+      "created_at": "2026-02-24T00:00:00"
+    }
   },
   "_discovery": {
     "labels": [
@@ -88,8 +87,8 @@
       "Discover reusable assets"
     ]
   },
-  "kind": "cell"
-,
+  "kind": "cell",
   "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
+  "created_at": "2026-02-24T00:00:00",
+  "stage": "canonical"
 }

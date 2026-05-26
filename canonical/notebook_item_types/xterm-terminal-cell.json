@@ -5,10 +5,18 @@
   "version": "1.0.0",
   "category": "infrastructure",
   "default_refs": {
-    "basecell": ["frontend/xterm-terminal.ts"],
-    "view": ["frontend/View.vue"],
-    "scripts": ["backend/scripts/main.py"],
-    "docs": ["docs/README.md"]
+    "basecell": [
+      "frontend/xterm-terminal.ts"
+    ],
+    "view": [
+      "frontend/View.vue"
+    ],
+    "scripts": [
+      "backend/scripts/main.py"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
   },
   "default_initial_data": {
     "cols": 120,
@@ -39,19 +47,40 @@
     },
     "theme": {
       "type": "string",
-      "enum": ["dark", "light"],
+      "enum": [
+        "dark",
+        "light"
+      ],
       "default": "dark",
       "description": "Terminal color theme"
     }
   },
   "can_render_dynamically": true,
   "_discovery": {
-    "labels": ["#terminal", "#pty", "#shell", "#infrastructure", "#ai-agents"],
+    "labels": [
+      "#terminal",
+      "#pty",
+      "#shell",
+      "#infrastructure",
+      "#ai-agents"
+    ],
     "describe": "Interactive terminal cell powered by xterm.js. Connects to the Node-PTY Service over WebSocket to provide persistent shell sessions. Serves as shared terminal infrastructure for AI agent CLI tools (GeminiCLI, Claude Code, Aider, OpenInterpreter). Supports Git operations, file system manipulation, and arbitrary command execution.",
     "estimated_duration_seconds": 0,
-    "required_resources": ["node-pty-service"],
-    "dependencies": ["node-pty-service"],
-    "tags": ["terminal", "pty", "shell", "websocket", "xterm", "infrastructure", "ai-agents"],
+    "required_resources": [
+      "node-pty-service"
+    ],
+    "dependencies": [
+      "node-pty-service"
+    ],
+    "tags": [
+      "terminal",
+      "pty",
+      "shell",
+      "websocket",
+      "xterm",
+      "infrastructure",
+      "ai-agents"
+    ],
     "use_cases": [
       "Interactive shell access from the cockpit",
       "Git operations (clone, status, log) via CLI",
@@ -59,5 +88,6 @@
       "File system manipulation via terminal",
       "Script execution and debugging"
     ]
-  }
+  },
+  "stage": "canonical"
 }

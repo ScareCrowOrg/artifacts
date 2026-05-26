@@ -21,7 +21,9 @@
     "basecell": [
       "frontend/UserSelectionCell.ts"
     ],
-    "docs": ["README.md"]
+    "docs": [
+      "README.md"
+    ]
   },
   "capabilities": {
     "headless_execution": false,
@@ -36,7 +38,9 @@
       "mode": {
         "type": "string",
         "description": "Selection mode. Currently only 'pick-one' is supported.",
-        "enum": ["pick-one"],
+        "enum": [
+          "pick-one"
+        ],
         "default": "pick-one"
       },
       "title": {
@@ -57,7 +61,9 @@
     "describe": "Ephemeral utility cell that opens a modal overlay for selecting a user from the platform user list. Resolves with a User object on selection or null on cancel. Used by artifacts-explorer-cell for allowance flows. Requires admin role to load user list from GET /api/users/.",
     "estimated_duration_seconds": 0,
     "required_resources": [],
-    "required_permissions": ["admin"],
+    "required_permissions": [
+      "admin"
+    ],
     "use_cases": [
       "Select a user to grant access to an artifact (allowance flow)",
       "Pick a user for assignment in admin workflows"
@@ -65,5 +71,6 @@
   },
   "kind": "cell",
   "created_at": "2026-05-09T00:00:00",
-  "updated_at": "2026-05-09T00:00:00"
+  "updated_at": "2026-05-09T00:00:00",
+  "stage": "canonical"
 }

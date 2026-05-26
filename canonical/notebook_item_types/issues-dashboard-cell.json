@@ -70,29 +70,25 @@
           "label": "Labels",
           "description": "Filter by labels",
           "items": {
-            "type": "string"
-          ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
-        ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
-      ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+            "type": "string",
+            "updated_at": "2026-02-24T00:00:00",
+            "created_at": "2026-02-24T00:00:00"
+          },
+          "updated_at": "2026-02-24T00:00:00",
+          "created_at": "2026-02-24T00:00:00"
+        },
+        "updated_at": "2026-02-24T00:00:00",
+        "created_at": "2026-02-24T00:00:00"
+      }
     },
     "data": {
       "type": "object",
       "label": "Data",
       "description": "Data payload for create/update actions",
-      "required": false
-    ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+      "required": false,
+      "updated_at": "2026-02-24T00:00:00",
+      "created_at": "2026-02-24T00:00:00"
+    }
   },
   "inputs": [
     {
@@ -120,11 +116,10 @@
     {
       "name": "issues-dashboard-cell",
       "type": "object",
-      "required": false
-    ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+      "required": false,
+      "updated_at": "2026-02-24T00:00:00",
+      "created_at": "2026-02-24T00:00:00"
+    }
   ],
   "outputs": [
     {
@@ -137,14 +132,13 @@
     },
     {
       "name": "issues-dashboard-cell",
-      "type": "object"
-    ,
-  "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
-}
+      "type": "object",
+      "updated_at": "2026-02-24T00:00:00",
+      "created_at": "2026-02-24T00:00:00"
+    }
   ],
-  "kind": "cell"
-,
+  "kind": "cell",
   "updated_at": "2026-02-24T00:00:00",
-  "created_at": "2026-02-24T00:00:00"
+  "created_at": "2026-02-24T00:00:00",
+  "stage": "canonical"
 }

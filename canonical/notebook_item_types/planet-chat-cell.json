@@ -28,12 +28,18 @@
   "allow_instance_override_refs": false,
   "properties_schema": {
     "partyId": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Legacy party/context ID for channel isolation. Superseded by roomName."
     },
     "roomName": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": null,
       "description": "Room name for channel isolation. Null = Global Lobby (global-planet-lobby)."
     },
@@ -79,5 +85,6 @@
   },
   "kind": "cell",
   "updated_at": "2026-05-02T00:00:00",
-  "created_at": "2026-05-02T00:00:00"
+  "created_at": "2026-05-02T00:00:00",
+  "stage": "canonical"
 }
