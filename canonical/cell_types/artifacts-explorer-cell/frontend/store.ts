@@ -24,10 +24,19 @@ export interface ArtifactIdentity {
   author: string
 }
 
+export interface ArtifactDependencyGraph {
+  services: string[]
+  cell_types: string[]
+  book_types: string[]
+  workers: string[]
+  shared_utils: string[]
+  viewers: string[]
+}
+
 export interface ArtifactRuntime {
   entry_point: string | null
   strategy: 'frontend_injection' | 'docker_orchestration' | 'python_subprocess'
-  required_artifacts: string[]
+  dependencies: ArtifactDependencyGraph
   env_vars: string[]
 }
 

@@ -165,7 +165,7 @@ function makeArtifactResponse(count = 2) {
         artifact_type: 'cell-type',
         stage: 'canonical',
         identity: { name: `Cell ${i}`, description: '', icon: '🧩', author: 'system' },
-        runtime: { entry_point: null, strategy: 'frontend_injection', required_artifacts: [], env_vars: [] },
+        runtime: { entry_point: null, strategy: 'frontend_injection', dependencies: { services: [], cell_types: [], book_types: [], workers: [], shared_utils: [], viewers: [] }, env_vars: [] },
         execution_model: { orchestrator: 'frontend', heartbeat_channel: null, health_check: null },
         metadata: { tags: [] },
       })),

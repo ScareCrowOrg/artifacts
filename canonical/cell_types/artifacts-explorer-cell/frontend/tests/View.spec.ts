@@ -55,7 +55,7 @@ function makeArtifact(overrides: Partial<ExplorerArtifact> = {}): ExplorerArtifa
     runtime: {
       entry_point: 'frontend/TestCell.ts',
       strategy: 'frontend_injection',
-      required_artifacts: [],
+      dependencies: { services: [], cell_types: [], book_types: [], workers: [], shared_utils: [], viewers: [] },
       env_vars: [],
     },
     execution_model: {
