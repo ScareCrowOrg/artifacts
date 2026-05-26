@@ -849,7 +849,9 @@ export abstract class BaseCell {
 
       // Use shared utility to load type.json (handles both JSON and reference files)
       // Uses #artifacts/ import map which Vite resolves to actual artifact paths
-      const typeJsonUrl = `#artifacts/canonical/cell_types/${typeFolder}/type.json`
+      // Stage-aware: canonical cells load from /artifacts/canonical/, sandbox from /artifacts/sandbox/
+      const stage = (this as any).__cellStage || 'canonical'
+      const typeJsonUrl = `#artifacts/${stage}/cell_types/${typeFolder}/type.json`
       const typeDef = await loadCellTypeJson(typeJsonUrl)
 
       console.log('✅ [BaseCell] loadCellTypeFromDiscovery SUCCESS ✅', {

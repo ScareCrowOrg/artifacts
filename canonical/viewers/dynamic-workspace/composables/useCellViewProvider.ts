@@ -215,6 +215,8 @@ export function useCellViewProvider() {
 
       // Set semantic name so BaseCell.show() uses the correct folder for type.json loading
       ;(instance as any).__cellTypeName = cellTypeName
+      // Set stage so BaseCell.loadCellTypeFromDiscovery loads from correct path (sandbox vs canonical)
+      ;(instance as any).__cellStage = cellType.stage || 'canonical'
 
       log.info('[useCellViewProvider] instantiateCellByType: cell instantiated', {
         cellTypeName,
