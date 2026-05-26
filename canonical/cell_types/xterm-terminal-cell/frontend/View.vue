@@ -276,8 +276,12 @@ onMounted(async () => {
       connect(wsUrl.value)
     } else if (services.length === 0) {
       errorMessage.value = 'No PTY service available'
+    } else {
+      // > 1: auto-select first service, user can switch via dropdown
+      wsUrl.value = resolveWsUrl(services[0])
+      selectedServiceUrl.value = resolveWsUrl(services[0])
+      connect(wsUrl.value)
     }
-    // if > 1: user must select via dropdown (no auto-connect)
   }
   initTerminal()
 })
