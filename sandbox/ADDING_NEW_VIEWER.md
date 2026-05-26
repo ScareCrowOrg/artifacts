@@ -30,8 +30,9 @@ artifacts/canonical/viewers/my-viewer/
 ├── index.html        # Entry HTML (loads main.ts)
 ├── main.ts           # Vue app bootstrap
 ├── App.vue           # Root component with useBaseViewer
-├── en.json           # English i18n messages
-└── pt.json           # Portuguese i18n messages
+└── i18n/
+    ├── en.json       # English i18n messages
+    └── pt.json       # Portuguese i18n messages
 ```
 
 ### The `useBaseViewer` Composable
@@ -80,26 +81,18 @@ mkdir -p artifacts/canonical/viewers/my-viewer
 ```typescript
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { createI18n } from 'vue-i18n'
+import i18n from '@/i18n'
 import App from './App.vue'
-import en from './en.json'
-import pt from './pt.json'
-
-const pinia = createPinia()
-const i18n = createI18n({
-  legacy: false,
-  locale: 'en',
-  fallbackLocale: 'en',
-  messages: { en, pt },
-})
 
 const app = createApp(App)
-app.use(pinia)
+app.use(createPinia())
 app.use(i18n)
 app.mount('#app')
 ```
 
 > **Pinia is required**: `useBaseViewer` reads the session token from `useWorkspaceStore()` (Pinia), which is always populated by the MFE handshake from Cockpit.
+>
+> **Shared i18n instance**: Viewers use the shared `@/i18n` instance, not a per-viewer one. Viewer-specific messages are merged into this instance via the `i18n` option in `useBaseViewer()` (see step 4).
 
 ### 4. Create `App.vue` with `useBaseViewer`
 
@@ -143,11 +136,21 @@ app.mount('#app')
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useBaseViewer } from '@/composables/useBaseViewer'
+import en from './i18n/en.json'
+import pt from './i18n/pt.json'
 
 const {
   loadingState, errorMessage, isAuthenticated,
-  apiFetch, loadData, formatDate,
-} = useBaseViewer()
+  apiFetch, loadData, formatDate, mergeCellI18n,
+} = useBaseViewer({
+  // Viewer-specific messages are merged into the shared @/i18n instance
+  i18n: {
+    messages: [
+      { locale: 'en', messages: en },
+      { locale: 'pt', messages: pt },
+    ],
+  },
+})
 
 // Viewer-specific state
 const items = ref<any[]>([])
@@ -169,7 +172,7 @@ onMounted(() => {
 
 ### 5. Create i18n files
 
-**`en.json`**:
+**`i18n/en.json`**:
 ```json
 {
   "myViewer": {
@@ -182,7 +185,7 @@ onMounted(() => {
 }
 ```
 
-**`pt.json`**:
+**`i18n/pt.json`**:
 ```json
 {
   "myViewer": {
@@ -211,8 +214,17 @@ The viewer is automatically served by Vite at `/artifacts/canonical/viewers/my-v
 
 ```typescript
 import { useBaseViewer } from '@/composables/useBaseViewer'
-const { ... } = useBaseViewer()
+const { ... } = useBaseViewer(options?)
 ```
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `validationMode` | `'immediate' \| 'validated'` | `'immediate'` | `'immediate'` sets workspace ready on INIT_WORKSPACE. `'validated'` requests Cockpit to validate the session token first. |
+| `i18n.messages` | `{ locale: string, messages: Record<string, any> }[]` | `undefined` | Viewer-specific translations merged into the shared `@/i18n` instance. Locale is normalized via `normalizeLocale()` (e.g., `'pt'` → `'pt-BR'`). |
+
+### Return Values
 
 | Return | Type | Description |
 |--------|------|-------------|
@@ -224,6 +236,7 @@ const { ... } = useBaseViewer()
 | `apiFetch(path, options?)` | `(path: string, options?: RequestInit) => Promise<any>` | Delegates to `apiService.apiFetch` (Bearer token via workspaceStore). Parses JSON. Sets `errorMessage` on failure. |
 | `loadData(loader)` | `(loader: () => Promise<void>) => Promise<void>` | Lifecycle helper: awaits internal handshake, sets `loadingState = true`, clears `errorMessage`, calls `loader()`, sets `loadingState = false` |
 | `formatDate(isoStr?)` | `(isoStr?: string) => string` | Formats ISO date string to locale date (e.g., "May 19, 2026") |
+| `mergeCellI18n(cellTypeName)` | `(cellTypeName: string) => Promise<boolean>` | Pre-loads and merges translations for a cell type into the i18n instance. Used when embedding cells that need their locale data available upfront. |
 
 ### What `useBaseViewer` Does NOT Provide
 
@@ -233,6 +246,25 @@ const { ... } = useBaseViewer()
 | UI components / CSS | Viewer-specific decision |
 | Form validation | Viewer-specific logic |
 | Grid layout / cells | Cell/Book architecture, not viewer |
+
+### Optional Add-ons
+
+These composables from `#artifacts/shared/composables/` are commonly used alongside `useBaseViewer`:
+
+| Composable | Import | Purpose |
+|------------|--------|---------|
+| `useThemeSync` | `#artifacts/shared/composables/useThemeSync` | Applies Cockpit theme (`dark` class on `<html>`) for Tailwind dark mode. Call in `App.vue` after `useBaseViewer`. |
+| `useLocaleSync` | `#artifacts/shared/composables/useLocaleSync` | Syncs Cockpit locale changes to the i18n instance. Call in `App.vue` after `useBaseViewer`. |
+
+Example:
+```typescript
+import { useThemeSync } from '#artifacts/shared/composables/useThemeSync'
+import { useLocaleSync } from '#artifacts/shared/composables/useLocaleSync'
+
+useBaseViewer({ ... })
+useThemeSync()
+useLocaleSync()
+```
 
 ---
 
@@ -244,7 +276,9 @@ See `artifacts/canonical/viewers/planet-hall/` for a complete, production-qualit
 - Authenticated content (requests, create forms) guarded by `v-if="isAuthenticated"`
 - Loading state and error banner patterns
 - Form submission with `apiFetch`
-- i18n with `$t()`
+- i18n with `$t()` and `useBaseViewer({ i18n: { messages } })` pattern
+- `mergeCellI18n()` for pre-loading cell type translations
+- `useThemeSync()` / `useLocaleSync()` for Cockpit integration
 - Handshake handled transparently — no `onMounted` listener, no manual handshake logic
 
 ---
@@ -258,5 +292,5 @@ See `artifacts/canonical/viewers/planet-hall/` for a complete, production-qualit
 
 ---
 
-> **Last Updated**: 2026-05-19
+> **Last Updated**: 2026-05-26
 > **Version**: 1.0.0

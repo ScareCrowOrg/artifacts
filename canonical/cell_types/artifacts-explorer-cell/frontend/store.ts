@@ -122,12 +122,6 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
     const result = availableArtifacts.value
       .filter(a => a.artifact_type === 'cell-type')
       .map(a => {
-        // [DEBUG-stage] Log stage value being dropped during mapping
-        log.info('[DEBUG-stage][availableCellTypes] mapping artifact', {
-          name: a.artifact_id,
-          stage: a.stage,
-          artifactType: a.artifact_type,
-        })
         return {
           name: a.artifact_id,
           id: a.artifact_id,
@@ -139,11 +133,6 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
           default_refs: a.metadata.default_refs as Record<string, string[]> | undefined,
         }
       })
-    // [DEBUG-stage] Log final count
-    log.info('[DEBUG-stage][availableCellTypes] mapped', {
-      count: result.length,
-      names: result.map(r => r.name),
-    })
     return result
   })
 

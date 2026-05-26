@@ -70,8 +70,6 @@ function buildArtifactUrl(cellTypeName: string, filePath: string, stage: string 
   }
   const artifactPath = `/artifacts/${stage}/cell_types/${cellTypeName}/${filePath}`
   log.debug('[useCellViewProvider] buildArtifactUrl', { cellTypeName, filePath, stage, artifactPath, hasTunnelFqdn: !!TUNNEL_FQDN })
-  // [DEBUG-stage] Confirm final URL with stage
-  console.log('[DEBUG-stage][buildArtifactUrl]', JSON.stringify({ cellTypeName, filePath, stage, artifactPath }))
   return TUNNEL_FQDN ? `https://${TUNNEL_FQDN}${artifactPath}` : artifactPath
 }
 
