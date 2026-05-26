@@ -398,7 +398,17 @@ watch(
       explorerStore.clearSelection()
       return
     }
-    log.info('[App] Explorer selected artifact, adding to grid', { name: artifact.identity.name })
+    log.info('[App] Explorer selected artifact, adding to grid', {
+      name: artifact.identity.name,
+      stage: artifact.stage,
+      default_refs: artifact.metadata.default_refs,
+    })
+    // 🚨 [DEBUG-stage] Confirm stage value from artifact before mapping
+    console.log('[DEBUG-stage][App] artifact before mapping', JSON.stringify({
+      name: artifact.identity.name,
+      stage: artifact.stage,
+      artifactType: artifact.artifact_type,
+    }))
     // Map ArtifactRecord → CellTypeDefinition shape expected by handleCellTypeSelected.
     // default_refs are populated from artifact.metadata.default_refs (preserved by ArtifactLoader
     // from type.json) so instantiateCellByType can locate the basecell entry point.
@@ -409,8 +419,15 @@ watch(
       version: artifact.version,
       icon: artifact.identity.icon ?? undefined,
       can_render_dynamically: true,
+      stage: artifact.stage,
       default_refs: artifact.metadata.default_refs,
     }
+    // 🚨 [DEBUG-stage] Confirm stage is now preserved after mapping
+    console.log('[DEBUG-stage][App] cellTypeDef after mapping', JSON.stringify({
+      name: cellTypeDef.name,
+      stage: cellTypeDef.stage,
+      hasStage: 'stage' in cellTypeDef,
+    }))
     try {
       await handleCellTypeSelected(cellTypeDef)
     } catch (err: any) {
@@ -504,6 +521,12 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
             version: '1.0.0',
             can_render_dynamically: true,
           }
+      // 🚨 [DEBUG-stage] Confirm stage in layout hydration
+      console.log('[DEBUG-stage][App] handleLoadLayout cellType', JSON.stringify({
+        name: cellType.name,
+        stage: cellType.stage,
+        isKnownType: !!knownType,
+      }))
 
       const cellInstance = await instantiateCellByType(cellRef.type, cellType)
       const viewSpec = await resolveViewSpec(cellInstance, cellRef.type, cellType, undefined, tempId)

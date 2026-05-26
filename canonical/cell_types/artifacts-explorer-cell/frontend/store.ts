@@ -119,17 +119,32 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
    * Filters artifacts where artifact_type === 'cell-type' and maps to CellTypeDefinition shape.
    */
   const availableCellTypes = computed(() => {
-    return availableArtifacts.value
+    const result = availableArtifacts.value
       .filter(a => a.artifact_type === 'cell-type')
-      .map(a => ({
-        name: a.artifact_id,
-        id: a.artifact_id,
-        description: a.identity.description,
-        version: a.version,
-        icon: a.identity.icon ?? undefined,
-        can_render_dynamically: true,
-        default_refs: a.metadata.default_refs as Record<string, string[]> | undefined,
-      }))
+      .map(a => {
+        // [DEBUG-stage] Log stage value being dropped during mapping
+        log.info('[DEBUG-stage][availableCellTypes] mapping artifact', {
+          name: a.artifact_id,
+          stage: a.stage,
+          artifactType: a.artifact_type,
+        })
+        return {
+          name: a.artifact_id,
+          id: a.artifact_id,
+          description: a.identity.description,
+          version: a.version,
+          icon: a.identity.icon ?? undefined,
+          can_render_dynamically: true,
+          stage: a.stage,
+          default_refs: a.metadata.default_refs as Record<string, string[]> | undefined,
+        }
+      })
+    // [DEBUG-stage] Log final count
+    log.info('[DEBUG-stage][availableCellTypes] mapped', {
+      count: result.length,
+      names: result.map(r => r.name),
+    })
+    return result
   })
 
   /**
