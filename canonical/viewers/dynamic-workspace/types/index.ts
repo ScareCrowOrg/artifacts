@@ -29,6 +29,8 @@ export interface CellTypeDefinition {
   icon?: string
   /** Whether this cell type can be loaded dynamically in a browser */
   can_render_dynamically?: boolean
+  /** Artifact stage (canonical, sandbox, runtime) — tells frontend where to load files from */
+  stage?: string
   /** File refs from type.json (e.g. view, basecell) */
   default_refs?: {
     view?: string[]

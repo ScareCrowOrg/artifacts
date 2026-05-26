@@ -43,28 +43,33 @@ const TUNNEL_FQDN =
 /**
  * Build an absolute (or origin-relative) URL for a cell artifact.
  *
+ * Uses the stage from the cell type definition (canonical, sandbox, runtime)
+ * to construct the correct artifact path. Falls back to "canonical" if no
+ * stage is provided (backward compatibility).
+ *
  * When VITE_TUNNEL_FQDN is set, returns an absolute HTTPS URL so that
  * dynamic imports work correctly in Cloudflare Tunnel environments where
  * same-origin is not guaranteed.
  *
- * URL structure: /artifacts/canonical/cell_types/{cellTypeName}/{filePath}
- * - Traefik routes PathPrefix(`/artifacts/canonical/cell_types/`) → vite:5052
- * - Vite's artifactsRewritePlugin strips `/artifacts` → `/canonical/cell_types/...`
- * - Vite resolves to /app/artifacts/canonical/cell_types/{cellTypeName}/{filePath}
+ * URL structure: /artifacts/{stage}/cell_types/{cellTypeName}/{filePath}
+ * - Traefik routes PathPrefix(`/artifacts/`) → vite:5052
+ * - Vite's artifactsRewritePlugin strips `/artifacts` → `/{stage}/cell_types/...`
+ * - Vite resolves to /app/artifacts/{stage}/cell_types/{cellTypeName}/{filePath}
  *
  * @param cellTypeName  Semantic cell-type name (e.g. "calculator-cell")
  * @param filePath      Relative file path within the cell-type directory
+ * @param stage         Artifact stage (canonical, sandbox) — defaults to "canonical"
  * @returns             Absolute or root-relative URL string
  */
-function buildArtifactUrl(cellTypeName: string, filePath: string): string {
+function buildArtifactUrl(cellTypeName: string, filePath: string, stage: string = 'canonical'): string {
   if (!cellTypeName || !filePath) {
     throw new Error(`[useCellViewProvider] Missing artifact path: cellTypeName="${cellTypeName ?? 'undefined'}", filePath="${filePath ?? 'undefined'}"`)
   }
   if (cellTypeName.includes('..') || filePath.includes('..')) {
     throw new Error(`[useCellViewProvider] Invalid artifact path: cellTypeName="${cellTypeName}", filePath="${filePath}"`)
   }
-  const artifactPath = `/artifacts/canonical/cell_types/${cellTypeName}/${filePath}`
-  log.debug('[useCellViewProvider] buildArtifactUrl', { cellTypeName, filePath, artifactPath, hasTunnelFqdn: !!TUNNEL_FQDN })
+  const artifactPath = `/artifacts/${stage}/cell_types/${cellTypeName}/${filePath}`
+  log.debug('[useCellViewProvider] buildArtifactUrl', { cellTypeName, filePath, stage, artifactPath, hasTunnelFqdn: !!TUNNEL_FQDN })
   return TUNNEL_FQDN ? `https://${TUNNEL_FQDN}${artifactPath}` : artifactPath
 }
 
@@ -140,7 +145,7 @@ export function useCellViewProvider() {
    * Dynamically import the BaseCell class for the given cell type and instantiate it.
    *
    * Requires the cell type's type.json to have default_refs.basecell[0] set.
-   * Import uses buildArtifactUrl(): /artifacts/canonical/cell_types/{name}/{basecellPath}
+   * Import uses buildArtifactUrl(): /artifacts/{stage}/cell_types/{name}/{basecellPath}
    *
    * @param cellTypeName  Semantic type name (e.g. "calculator-cell") — never UUID
    * @param cellType      Type definition (from getCellTypes or provided externally)
@@ -171,7 +176,7 @@ export function useCellViewProvider() {
       cellTypeNameType: typeof cellTypeName,
       basecellPathType: typeof basecellPath,
     })
-    const importUrl = buildArtifactUrl(cellTypeName, basecellPath)
+    const importUrl = buildArtifactUrl(cellTypeName, basecellPath, cellType.stage || 'canonical')
     log.info('[useCellViewProvider] instantiateCellByType: dynamic import', { importUrl })
 
     try {
@@ -271,7 +276,7 @@ export function useCellViewProvider() {
     // Case 1: show() returned a custom view path
     if (showResult && showResult.componentPath) {
       const viewPath = showResult.componentPath
-      const importUrl = buildArtifactUrl(cellTypeName, viewPath)
+      const importUrl = buildArtifactUrl(cellTypeName, viewPath, cellType.stage || 'canonical')
       log.info('[useCellViewProvider] resolveViewSpec: loading custom View.vue from show()', {
         importUrl,
       })
@@ -325,7 +330,7 @@ export function useCellViewProvider() {
     })
 
     if (viewRef) {
-      const importUrl = buildArtifactUrl(cellTypeName, viewRef)
+      const importUrl = buildArtifactUrl(cellTypeName, viewRef, cellType.stage || 'canonical')
       log.info('[useCellViewProvider] resolveViewSpec: loading View.vue from type.json ref', {
         importUrl,
         viewRef,
