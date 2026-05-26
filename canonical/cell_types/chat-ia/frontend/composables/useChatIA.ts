@@ -173,12 +173,8 @@ export function useChatIA(props: UseChatIAProps): UseChatIAReturn {
     { value: 'scareverse_code', label: 'Código', icon: '💻' },
     { value: 'scareverse_config', label: 'Configuração', icon: '⚙️' },
   ])
-  // Default to all collections selected (user can deselect to narrow or disable RAG)
-  const selectedCollections = ref<string[]>([
-    'scareverse_docs',
-    'scareverse_code',
-    'scareverse_config',
-  ])
+  // Default to no collections selected (user selects to enable RAG)
+  const selectedCollections = ref<string[]>([])
 
   // Computed properties
   const localModels = computed<AIModel[]>(() =>

@@ -145,14 +145,17 @@ const { syncLayoutPositions } = useGridLayout()
 const gridLayout = ref<GridLayoutItem[]>([])
 
 /**
- * Synchronize gridLayout ref when cells change (add/remove).
- * Watch tracks cell count + cell IDs to detect structural changes.
- * Position mutations during drag/resize do NOT trigger this watch.
+ * Synchronize gridLayout ref when cells or their positions change.
+ * Watch serializes cells → layout key so position/minimized changes
+ * (e.g. from handleLoadLayout updateCell) also trigger a rebuild.
+ * During drag/resize the library fires handleLayoutUpdated which
+ * updates gridLayout directly, so this watch only fires on external changes.
  */
 watch(
-  () => props.cells.map(c => c.cellId),
-  (cellIds) => {
-    // Rebuild layout when cells are added/removed
+  () => props.cells.map(c =>
+    `${c.cellId}:${c.position.x},${c.position.y},${c.position.w},${c.position.h}:${c.isMinimized}`
+  ),
+  () => {
     gridLayout.value = props.cells.map(cell => ({
       i: cell.cellId,
       x: cell.position.x,

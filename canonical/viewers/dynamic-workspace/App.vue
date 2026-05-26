@@ -10,6 +10,7 @@
 <!--
   App.vue — DynamicWorkspace v2
   Phase 4: AddCellModal → artifacts-explorer-cell migration
+  Fix: gridKey remount on layout load
 
   Orchestrates:
   1. Cockpit ↔ Runner handshake (Phase 1, preserved)
@@ -60,6 +61,7 @@
       <!-- Grid Area -->
       <main class="flex-1 overflow-hidden pb-16">
         <GridContainer
+          :key="gridKey"
           :cells="cells"
           @remove-cell="handleRemoveCell"
           @minimize-cell="toggleMinimize"
@@ -184,13 +186,14 @@ const TOAST_DURATION_MS = 3_000
 
 // ── UI State ──────────────────────────────────────────────────────────────────
 const showSaveLayoutModal = ref(false)
+const gridKey = ref(0)
 const savedLayouts = ref<LayoutBook[]>([])
 const isLoadingLayouts = ref(false)
 const isSavingLayout = ref(false)
 const loadError = ref<string | null>(null)
 const saveSuccess = ref<string | null>(null)
 let loadErrorTimer: ReturnType<typeof setTimeout> | null = null
-let saveSuccessTimer: ReturnType<typeof setTimeout> | null = null
+let saveSuccessTimer: typeof loadErrorTimer = null
 
 const isDev = import.meta.env.DEV
 
@@ -531,6 +534,9 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
       })
     }
   }
+
+  // Force GridContainer remount so vue3-grid-layout-next picks up the saved positions
+  gridKey.value++
 
   log.info('[App] Layout loaded', { layoutId, cellCount: cellRefs.length })
 }

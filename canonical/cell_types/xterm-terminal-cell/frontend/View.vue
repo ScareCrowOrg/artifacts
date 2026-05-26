@@ -40,14 +40,13 @@
         <!-- Service selector (shown when multiple PTY services available) -->
         <select
           v-if="availableServices.length > 0"
+          v-model="selectedServiceUrl"
           class="text-xs rounded bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark px-1 py-0.5"
-          @change="onServiceSelect"
         >
           <option
             v-for="svc in availableServices"
             :key="svc.name"
             :value="resolveWsUrl(svc)"
-            :selected="resolveWsUrl(svc) === selectedServiceUrl"
           >
             {{ svc.alias || svc.name }}
           </option>
@@ -303,14 +302,15 @@ function handleDisconnect() {
   disconnect()
 }
 
-function onServiceSelect(event: Event) {
-  const url = (event.target as HTMLSelectElement).value
-  selectedServiceUrl.value = url
-  wsUrl.value = url
-  errorMessage.value = null
-  disconnect()
-  connect(url)
-}
+// Watch service selection changes (user picks a different service via dropdown)
+watch(selectedServiceUrl, (newUrl) => {
+  if (newUrl && newUrl !== wsUrl.value) {
+    wsUrl.value = newUrl
+    errorMessage.value = null
+    disconnect()
+    connect(newUrl)
+  }
+})
 
 // Watch font size changes
 watch(fontSize, (size) => {
