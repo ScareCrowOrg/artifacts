@@ -16,7 +16,7 @@ import type {
   ValidationError, 
   HealthCheckResult 
 } from '@/types/BaseCell'
-import { processMessage, fetchAvailableModels } from '@/services/aiChatService'
+import { ChatIACell } from '../../chat-ia/frontend/ChatCell'
 
 /**
  * SVG Generator input interface
@@ -126,22 +126,15 @@ IMPORTANT: Return ONLY the SVG code, no explanations. Start with <svg> and end w
 Include proper viewBox and dimensions. Keep it simple and readable.`
       
       try {
-        // Call LLM service
-        const response = await processMessage({
-          intention: svgPrompt,
-          assignee_id: '', // Backend uses authenticated user from JWT token
-          history: [],
+        // Instantiate ChatIACell and delegate the LLM call
+        const chatCell = new ChatIACell()
+        const chatResult = await chatCell.execute({
+          prompt: svgPrompt,
           model,
-          classifyIntention: false,
-          attachments: [],
-          thread_id: '',
-          assistant_id: '',
-          selected_collections: [],
-          conversation_id: '',
         })
-        
+
         // Extract SVG from response
-        const content = (response as any).message || (response as any).response || ''
+        const content = (chatResult.output as any).message || ''
         
         // Try to extract SVG (handle code blocks or direct SVG)
         let extractedSvg = content
@@ -310,22 +303,9 @@ Include proper viewBox and dimensions. Keep it simple and readable.`
    */
   async health_check(): Promise<HealthCheckResult> {
     try {
-      // Try to fetch available models to verify service is up
-      const models = await fetchAvailableModels()
-      
-      if (models && models.length > 0) {
-        return {
-          status: 'healthy',
-          can_execute: true,
-          reason: `LLM service available with ${models.length} models`
-        }
-      } else {
-        return {
-          status: 'degraded',
-          can_execute: true,
-          reason: 'LLM service available but no models found. Will use fallback.'
-        }
-      }
+      const chatCell = new ChatIACell()
+      const result = await chatCell.health_check()
+      return result
     } catch (error: any) {
       return {
         status: 'degraded',

@@ -13,6 +13,7 @@ import type {
   ValidationError,
   EnvironmentConfig
 } from '@/types/BaseCell'
+import { processMessage, fetchAvailableModels } from './services/aiChatService'
 
 export class ChatIACell extends BaseCell {
   private conversationId: string | null = null
@@ -24,7 +25,8 @@ export class ChatIACell extends BaseCell {
 
   /**
    * Execute the chat cell
-   * Pure business logic - no UI knowledge
+   * Calls aiChatService.processMessage internally, enabling headless reuse
+   * by any other cell via ChatIACell.execute() regardless of file location.
    */
   async execute(input: Record<string, any>): Promise<CellResult> {
     const startTime = performance.now()
@@ -47,23 +49,38 @@ export class ChatIACell extends BaseCell {
         model = 'gemini-2.5-flash',
         selectedCollections = [],
         systemPrompt = '',
-        enableIntentionClassification = false
+        enableIntentionClassification = false,
+        thread_id = null,
+        assistant_id = null,
+        conversation_id = null,
       } = input
 
-      // Chat execution logic
-      // This is where the actual chat logic would go
-      // View.vue will call this and handle displaying results
+      // Delegate to aiChatService.processMessage
+      const data = await processMessage({
+        intention: prompt,
+        assignee_id: '',
+        history: [],
+        model,
+        classifyIntention: enableIntentionClassification,
+        attachments: [],
+        thread_id,
+        assistant_id,
+        selected_collections: selectedCollections.length > 0 ? selectedCollections : null,
+        conversation_id: conversation_id || this.getConversationId(),
+      })
 
       return {
         success: true,
         output: {
-          message: 'Chat message received',
+          message: data.response || '',
           model,
           prompt,
           selectedCollections,
           systemPrompt,
           enableIntentionClassification,
-          conversationId: this.getConversationId()
+          conversationId: data.conversation_id || this.getConversationId(),
+          thread_id: data.thread_id,
+          assistant_id: data.assistant_id,
         },
         execution_time: performance.now() - startTime
       }

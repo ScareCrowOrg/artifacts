@@ -175,7 +175,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, type Ref, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { fetchAvailableModels } from '@/services/aiChatService.js'
+import { fetchAvailableModels } from '../../chat-ia/frontend/services/aiChatService.js'
 import { SvgGeneratorCell } from './SvgGeneratorCell'
 
 // i18n

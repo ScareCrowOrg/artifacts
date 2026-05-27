@@ -90,6 +90,13 @@
         @cancel="showSaveLayoutModal = false"
       />
 
+      <!-- Explorer Modal: artifacts-explorer-cell in picker mode -->
+      <CellModal
+        :is-open="isExplorerModalOpen"
+        :cell="modalCell"
+        @close="handleCloseExplorerModal"
+      />
+
       <!-- Load error toast -->
       <div
         v-if="loadError"
@@ -140,11 +147,12 @@ import GridContainer from './components/GridContainer.vue'
 import FooterWindowManager from './components/FooterWindowManager.vue'
 import SaveLayoutBookModal from './components/SaveLayoutBookModal.vue'
 import Toolbar from './components/Toolbar.vue'
+import CellModal from './components/CellModal.vue'
 import { createLogger } from '@/utils/logger'
 import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
 import { useArtifactsExplorerStore } from '#canonical/cell_types/artifacts-explorer-cell/frontend/store'
 import type { ExplorerArtifact } from '#canonical/cell_types/artifacts-explorer-cell/frontend/store'
-import type { CellTypeDefinition, LayoutBook } from './types'
+import type { CellTypeDefinition, GridCell, LayoutBook } from './types'
 
 const log = createLogger('workspace:app')
 const { t } = useI18n()
@@ -194,6 +202,10 @@ const loadError = ref<string | null>(null)
 const saveSuccess = ref<string | null>(null)
 let loadErrorTimer: ReturnType<typeof setTimeout> | null = null
 let saveSuccessTimer: typeof loadErrorTimer = null
+
+// ── Explorer Modal State ────────────────────────────────────────────────────────
+const isExplorerModalOpen = ref(false)
+const modalCell = ref<GridCell | null>(null)
 
 const isDev = import.meta.env.DEV
 
@@ -298,15 +310,16 @@ async function handleCellTypeSelected(
 }
 
 /**
- * Show the artifacts-explorer-cell in picker mode.
+ * Open the artifacts-explorer-cell in a modal overlay.
  * Called when FooterWindowManager emits 'show-artifacts-explorer'.
  *
- * Guards against duplicate instances: if the explorer is already in the grid, does nothing.
+ * Instantiates the explorer cell in memory (not in the grid), creates a temporary
+ * GridCell, and shows it inside CellModal. When the user selects an artifact,
+ * the explorerStore.selectedArtifact watcher adds it to the grid and closes the modal.
  */
 async function handleShowArtifactsExplorer(): Promise<void> {
-  const existing = cells.value.find((c) => c.cellTypeName === EXPLORER_CELL_TYPE_NAME)
-  if (existing) {
-    log.info('[App] artifacts-explorer-cell already in grid, skipping', { cellId: existing.cellId })
+  if (isExplorerModalOpen.value) {
+    log.debug('[App] Explorer modal already open, skipping')
     return
   }
 
@@ -322,8 +335,49 @@ async function handleShowArtifactsExplorer(): Promise<void> {
     },
   }
 
-  log.info('[App] Instantiating artifacts-explorer-cell in picker mode')
-  await handleCellTypeSelected(explorerType)
+  log.info('[App] Opening artifacts-explorer-cell in modal')
+
+  // Create a temporary GridCell in loading state for the modal
+  const tempCell: GridCell = {
+    cellId: 'explorer-modal',
+    cellTypeName: EXPLORER_CELL_TYPE_NAME,
+    cellType: explorerType,
+    cellInstance: null,
+    viewSpec: null,
+    isLoading: true,
+    error: null,
+    isMinimized: false,
+    isMaximized: false,
+    position: { x: 0, y: 0, w: 6, h: 12 },
+  }
+
+  modalCell.value = tempCell
+  isExplorerModalOpen.value = true
+
+  try {
+    const cellInstance = await instantiateCellByType(EXPLORER_CELL_TYPE_NAME, explorerType)
+    const viewSpec = await resolveViewSpec(cellInstance, EXPLORER_CELL_TYPE_NAME, explorerType, undefined, 'explorer-modal')
+
+    modalCell.value = {
+      ...tempCell,
+      cellInstance,
+      viewSpec,
+      isLoading: false,
+    }
+  } catch (err: any) {
+    const errorMsg = err?.message || 'Failed to load artifacts explorer'
+    log.error('[App] Explorer cell instantiation failed', { error: errorMsg })
+    modalCell.value = {
+      ...tempCell,
+      isLoading: false,
+      error: errorMsg,
+    }
+  }
+}
+
+function handleCloseExplorerModal(): void {
+  isExplorerModalOpen.value = false
+  modalCell.value = null
 }
 
 // ── Cell Factory (provide/inject) ─────────────────────────────────────────
@@ -393,6 +447,11 @@ watch(
   () => explorerStore.selectedArtifact,
   async (artifact: ExplorerArtifact | null) => {
     if (!artifact) return
+
+    // Close the explorer modal since the user selected an artifact
+    isExplorerModalOpen.value = false
+    modalCell.value = null
+
     if (artifact.execution_model.orchestrator !== 'frontend') {
       log.info('[App] Ignoring non-frontend artifact selection', {
         name: artifact.identity.name,
