@@ -209,10 +209,11 @@ function handleLayoutUpdated(layout: GridLayoutItem[]) {
 
   // Sync positions into useGridLayout state for persistence
   const updates: Record<string, GridPosition> = {}
+  let hasChanges = false
   for (const item of layout) {
     const cell = cellIndex.value.get(item.i)
     if (!cell) continue
-    updates[item.i] = {
+    const pos = {
       x: item.x,
       y: item.y,
       w: item.w,
@@ -220,8 +221,22 @@ function handleLayoutUpdated(layout: GridLayoutItem[]) {
       // is only a visual placeholder — the real height lives in cell.position.h)
       h: cell.isMinimized ? cell.position.h : item.h,
     }
+    // Skip if position hasn't changed — prevents recursive trigger loop
+    // when syncLayoutPositions updates cells, the watch rebuilds gridLayout,
+    // and GridLayout fires layout-updated again with the same values.
+    if (
+      pos.x !== cell.position.x ||
+      pos.y !== cell.position.y ||
+      pos.w !== cell.position.w ||
+      pos.h !== cell.position.h
+    ) {
+      hasChanges = true
+    }
+    updates[item.i] = pos
   }
-  syncLayoutPositions(updates)
+  if (hasChanges) {
+    syncLayoutPositions(updates)
+  }
 }
 </script>
 

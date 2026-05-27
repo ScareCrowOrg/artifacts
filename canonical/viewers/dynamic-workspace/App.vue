@@ -378,11 +378,6 @@ async function handleShowArtifactsExplorer(): Promise<void> {
 function handleCloseExplorerModal(): void {
   isExplorerModalOpen.value = false
   modalCell.value = null
-  // Fallback: directly remove the teleported modal from DOM.
-  // The "Maximum recursive updates" error in GridContainer can freeze Vue's
-  // reactivity scheduler, so v-if may not re-evaluate. Direct DOM removal
-  // ensures the modal always closes regardless of scheduler state.
-  document.querySelectorAll('.cell-modal-overlay').forEach(el => el.remove())
 }
 
 // ── Cell Factory (provide/inject) ─────────────────────────────────────────
