@@ -1,0 +1,117 @@
+{
+  "id": "wikipedia-search-cell",
+  "name": "Wikipedia Search",
+  "description": "Search Wikipedia articles and browse results with direct links to full pages",
+  "version": "1.0.0",
+  "category": "reference",
+  "icon": "W",
+  "tags": ["search", "wikipedia", "reference", "utility", "frontend-only"],
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "basecell": ["frontend/WikipediaSearchCell.ts"],
+    "docs": ["docs/README.md"]
+  },
+  "default_initial_data": {
+    "query": "",
+    "language": "en",
+    "limit": 10,
+    "results": [],
+    "totalResults": 0,
+    "isSearching": false,
+    "error": null
+  },
+  "allow_instance_override_refs": true,
+  "capabilities": {
+    "headless_execution": true,
+    "requires_backend": false,
+    "requires_gpu": false,
+    "composable": true,
+    "avg_execution_time_ms": 800
+  },
+  "properties_schema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Search query for Wikipedia",
+        "required": true,
+        "minLength": 1
+      },
+      "language": {
+        "type": "string",
+        "description": "Wikipedia language code (e.g. en, pt, es, fr, de)",
+        "required": false,
+        "default": "en",
+        "pattern": "^[a-z]{2,3}$"
+      },
+      "limit": {
+        "type": "number",
+        "description": "Maximum number of results to return (1-50)",
+        "required": false,
+        "default": 10,
+        "minimum": 1,
+        "maximum": 50
+      }
+    },
+    "required": ["query"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "description": "List of Wikipedia search results",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string", "description": "Article title" },
+            "pageId": { "type": "number", "description": "Wikipedia page ID" },
+            "snippet": { "type": "string", "description": "Article excerpt with highlighted terms" },
+            "url": { "type": "string", "description": "Full URL to the article" }
+          }
+        }
+      },
+      "totalResults": {
+        "type": "number",
+        "description": "Total number of matching articles"
+      }
+    }
+  },
+  "examples": [
+    {
+      "input": { "query": "Artificial Intelligence", "language": "en", "limit": 5 },
+      "description": "Search English Wikipedia for AI articles"
+    },
+    {
+      "input": { "query": "Brasil", "language": "pt", "limit": 10 },
+      "description": "Search Portuguese Wikipedia for Brazil"
+    }
+  ],
+  "validation_rules": {
+    "query": { "required": true, "minLength": 1, "message": "Search query cannot be empty" },
+    "limit": { "min": 1, "max": 50, "message": "Limit must be between 1 and 50" }
+  },
+  "_discovery": {
+    "labels": ["Wikipedia", "Search", "Reference"],
+    "describe_text": "Search Wikipedia articles and browse results with direct links",
+    "tags": ["search", "reference", "utility"],
+    "use_cases": [
+      "Research topics directly from the workspace",
+      "Find Wikipedia articles without leaving the app",
+      "Quick reference lookups during development"
+    ],
+    "search_keywords": ["wiki", "search", "reference", "articles", "encyclopedia"]
+  },
+  "metadata": {
+    "author": "ScareVerse",
+    "license": "MIT",
+    "homepage": "",
+    "dependencies": [],
+    "notes": "Frontend-only cell. Uses the Wikipedia Action API with CORS (origin=*). No backend needed."
+  },
+  "kind": "cell",
+  "stage": "canonical",
+  "created_at": "2026-05-27T00:00:00",
+  "updated_at": "2026-05-27T00:00:00"
+}

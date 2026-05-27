@@ -1,0 +1,22 @@
+{
+  "artifacts": {
+    "redisExplorer": {
+      "errorLabel": "Error:",
+      "navigation": "Navigation",
+      "scanningKeys": "Scanning keys…",
+      "branches": "Branches ({count})",
+      "keys": "Keys ({count})",
+      "noKeysFound": "No keys found at this level.",
+      "keyInspector": "Key Inspector",
+      "selectKey": "Select a key to inspect its value",
+      "loadingValue": "Loading value…",
+      "keyLabel": "Key",
+      "typeLabel": "Type",
+      "ttlLabel": "TTL",
+      "sizeLabel": "Size",
+      "valueLabel": "Value",
+      "keysWillBeDeleted": "key(s) will be deleted",
+      "andMore": "... and {count} more"
+    }
+  }
+}

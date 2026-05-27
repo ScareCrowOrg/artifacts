@@ -1,0 +1,22 @@
+{
+  "artifacts": {
+    "redisExplorer": {
+      "errorLabel": "Erro:",
+      "navigation": "Navegação",
+      "scanningKeys": "Escaneando chaves…",
+      "branches": "Ramos ({count})",
+      "keys": "Chaves ({count})",
+      "noKeysFound": "Nenhuma chave encontrada neste nível.",
+      "keyInspector": "Inspetor de Chaves",
+      "selectKey": "Selecione uma chave para inspecionar",
+      "loadingValue": "Carregando valor…",
+      "keyLabel": "Chave",
+      "typeLabel": "Tipo",
+      "ttlLabel": "TTL",
+      "sizeLabel": "Tamanho",
+      "valueLabel": "Valor",
+      "keysWillBeDeleted": "chave(s) serão deletadas",
+      "andMore": "... e mais {count}"
+    }
+  }
+}

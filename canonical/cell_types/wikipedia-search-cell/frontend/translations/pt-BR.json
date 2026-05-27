@@ -1,0 +1,17 @@
+{
+  "wikipediaSearchCell": {
+    "title": "Pesquisa na Wikipedia",
+    "searchPlaceholder": "Pesquisar na Wikipedia...",
+    "searchButton": "Pesquisar",
+    "searching": "Pesquisando...",
+    "languageLabel": "Idioma",
+    "resultsLabel": "Resultados",
+    "totalResults": "{count} resultados encontrados",
+    "noResults": "Nenhum resultado encontrado. Tente um termo diferente.",
+    "errorMessage": "Ocorreu um erro ao pesquisar. Tente novamente.",
+    "openArticle": "Abrir artigo",
+    "visitWikipedia": "Visitar Wikipedia",
+    "resultsCount": "Exibindo {shown} de {total} resultados",
+    "emptyState": "Digite um termo para encontrar artigos na Wikipedia"
+  }
+}

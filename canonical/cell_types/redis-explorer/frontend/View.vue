@@ -603,7 +603,21 @@ async function copyToClipboard(text: string): Promise<void> {
     await navigator.clipboard.writeText(text)
     logger.info('Copied to clipboard')
   } catch (err) {
-    logger.error('Failed to copy to clipboard', err)
+    // Fallback for cross-origin iframe without clipboard-write permission
+    logger.warn('Clipboard API failed, trying execCommand fallback', err)
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      logger.info('Copied to clipboard via execCommand fallback')
+    } catch (fallbackErr) {
+      logger.error('Clipboard fallback also failed', fallbackErr)
+    }
   }
 }
 
