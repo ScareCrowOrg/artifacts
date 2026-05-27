@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+*.log
+logs/
+models/
+output/
+input/
+.DS_Store
+Thumbs.db

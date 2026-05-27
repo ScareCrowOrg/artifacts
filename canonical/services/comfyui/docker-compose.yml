@@ -1,0 +1,67 @@
+services:
+  comfyui:
+    container_name: scareverse-comfyui-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260527T225519
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /app/artifacts
+      REDIS_L1_HOST: ${REDIS_L1_HOST:-redis}
+      REDIS_L1_PORT: ${REDIS_L1_PORT:-6380}
+      REDIS_L1_DB: ${REDIS_L1_DB:-0}
+      REDIS_L1_PASSWORD: ${REDIS_L1_PASSWORD:-scarerunner}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-60}
+      HEARTBEAT_TTL: ${HEARTBEAT_TTL:-180}
+      COMFYUI_PORT: 8188
+      WRAPPER_PORT: 9090
+      SCARE_LOG_DESTINATION: /app/logs/service.log
+    volumes:
+      - ../../../../artifacts:/app/artifacts:ro
+      - comfyui-models:/app/comfyui/models
+      - comfyui-output:/app/comfyui/output
+      - ./logs:/app/logs:rw
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+    shm_size: 2gb
+    ports:
+      - 9090:9090
+      - 8188:8188 # DEBUG ONLY: ComfyUI native UI (remove in production)
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:9090/health
+      interval: 30s
+      timeout: 15s
+      start_period: 180s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - scareverse-net
+
+networks:
+  scareverse-net:
+    external: true
+
+volumes:
+  comfyui-models:
+    driver: local
+  comfyui-output:
+    driver: local

@@ -26,6 +26,7 @@ separately from ephemeral subprocess job workers.
 | `gatekeeper/` | Docker (FastAPI) | Unified job dispatcher (L1/L2 Redis → workers) |
 | `ollama/` | Docker (Ollama image) | LLM inference service |
 | `stable-diffusion/` | Docker (SD image) | Image generation service |
+| `comfyui/` | Docker (ComfyUI) | Unified GPU generation runtime (2D image + 3D mesh) |
 
 ## Architecture
 
@@ -59,6 +60,9 @@ cd services/ollama && docker-compose up -d
 
 # Stable Diffusion (GPU required)
 cd services/stable-diffusion && docker-compose up -d
+
+# ComfyUI (GPU required)
+cd services/comfyui && docker-compose up -d
 ```
 
 ## Volume Mounts (GateKeeper)
