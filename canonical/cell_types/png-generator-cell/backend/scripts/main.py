@@ -273,7 +273,7 @@ def _create_fallback_png() -> str:
         return f"data:image/png;base64,{MINIMAL_FALLBACK_PNG}"
 
 
-async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_cell(cell_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Execute the PNG generator cell with action-based routing.
 
@@ -289,6 +289,7 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             - 'generationParams': Optional parameters for PNG generation
             - 'negativePrompt': Optional negative prompt for generation
             - 'asset3dMode': Optional flag for 3D asset optimization
+        user_id: Optional user identifier passed by the router
 
     Returns:
         Dict with execution results based on action
