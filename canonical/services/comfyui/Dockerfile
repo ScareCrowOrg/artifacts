@@ -42,6 +42,10 @@ WORKDIR /app/comfyui/custom_nodes
 
 RUN GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/ltdrdata/ComfyUI-Manager.git
 
+# Pin kornia < 0.7.4: 0.8.3 crasha com torch.jit.script em PyTorch 2.5.1+cu121
+# (segfault em kornia/geometry/epipolar/essential.py durante import)
+RUN python3.11 -m pip install --no-cache-dir "kornia<0.7.4"
+
 # Hunyuan3DWrapper v2 (FP8) — compila extensões C++ com nvcc (devel necessário)
 # TORCH_CUDA_ARCH_LIST explícito: docker build não tem GPU visível para auto-detecção
 ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9"
