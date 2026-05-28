@@ -2,7 +2,7 @@
   "version": "0.1",
   "name": "comfyui",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260528T175235",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260528T223318",
   "dependencies": [
     "Dockerfile",
     "entrypoint.sh",
@@ -12,6 +12,6 @@
   ],
   "generate_env_file": false,
   "totp_seed": false,
-  "imageTag": "staging20260528T175235",
-  "lastBuilt": "2026-05-28T18:00:23.394Z"
+  "imageTag": "staging20260528T223318",
+  "lastBuilt": "2026-05-28T22:41:34.697Z"
 }
