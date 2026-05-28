@@ -57,8 +57,8 @@ if [ $READY -eq 0 ]; then
 fi
 
 echo "[entrypoint] Inicializando ScareVerse Wrapper..."
-cd /app/wrapper
-python main.py &
+cd /app
+python -m wrapper.main &
 WRAPPER_PID=$!
 echo "[entrypoint] Wrapper iniciado (PID: $WRAPPER_PID)"
 
