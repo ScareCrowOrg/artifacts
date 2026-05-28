@@ -1,0 +1,60 @@
+{
+  "name": "comfyui_generate",
+  "version": "1.0.0",
+  "description": "Image generation via ComfyUI service",
+
+  "queue_type": "gpu",
+
+  "execution_model": "subprocess",
+
+  "worker": {
+    "type": "job",
+    "path": "artifacts/canonical/workers/comfyui-wrapper",
+    "entry_point": "main.py",
+    "python_version": "3.11+"
+  },
+
+  "configuration": {
+    "timeout_seconds": 300
+  },
+
+  "queue": "scareverse:comfyui-jobs:queue",
+  "queue_l1": "scareverse:comfyui-jobs:queue",
+  "queue_l2": "scareverse:comfyui-jobs:queue",
+  "result_storage": "rpush_l1",
+  "result_key_prefix": "scareverse:comfyui-results",
+  "result_key_ttl": 120,
+  "timeout": 300,
+
+  "dependencies": [
+    "comfyui"
+  ],
+
+  "worker_availability_key": "state:worker:comfyui_generate:available",
+
+  "aliases": [
+    "comfyui_generate"
+  ],
+
+  "input_schema": {
+    "type": "object",
+    "required": ["prompt"],
+    "properties": {
+      "prompt": {"type": "string"},
+      "negative_prompt": {"type": "string", "default": ""},
+      "width": {"type": "integer", "default": 1024},
+      "height": {"type": "integer", "default": 1024},
+      "num_inference_steps": {"type": "integer", "default": 20},
+      "guidance_scale": {"type": "number", "default": 7.0},
+      "seed": {"type": "integer", "default": -1}
+    }
+  },
+
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "image_base64": {"type": "string"},
+      "seed": {"type": "integer"}
+    }
+  }
+}

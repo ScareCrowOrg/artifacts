@@ -1,7 +1,7 @@
 """
 Image Generation Integration for PNG Generator Cell
 
-Provides GPU-accelerated image generation via Stable Diffusion by delegating to
+Provides GPU-accelerated image generation via ComfyUI by delegating to
 the Windows Worker via Redis queue using canonical redis_client.
 """
 
@@ -24,9 +24,9 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / 'shared'))
     from redis_client import get_redis_client
 
-# Result key prefix must match stable_diffusion_queue router config
-_SD_RESULT_KEY_PREFIX = "scareverse:sd-results"
-_SD_RESULT_TTL = 300
+# Result key prefix must match comfyui_generate queue router config
+_COMFYUI_RESULT_KEY_PREFIX = "scareverse:comfyui-results"
+_COMFYUI_RESULT_TTL = 300
 
 
 async def queue_image_generation_job(
@@ -41,13 +41,13 @@ async def queue_image_generation_job(
     timeout: float = 300.0
 ) -> Dict[str, Any]:
     """
-    Queue an image generation job to Redis for GPU Worker processing.
+    Queue an image generation job to Redis for ComfyUI GPU Worker processing.
 
     This function:
     1. Calls redis_job_client.create_job() with owner-first scheduling
        (checks worker availability; enqueues to L1 if available, L2 otherwise)
     2. Uses BRPOP to wait for the result pushed by GateKeeper to L1
-    3. Returns the generated PNG result
+    3. Returns the base64-encoded PNG result
 
     Args:
         prompt: Text description of the desired image
@@ -93,7 +93,7 @@ async def queue_image_generation_job(
         try:
             from canonical.shared.redis_client import create_job
             enqueued_job_id, location = await create_job(
-                job_type="sd_generate",
+                job_type="comfyui_generate",
                 payload=payload,
                 owner_user_id="cell-script",
                 job_id=job_id,
@@ -105,16 +105,16 @@ async def queue_image_generation_job(
             redis_client = await get_redis_client()
             job_data = {
                 "job_id": job_id,
-                "job_type": "sd_generate",
+                "job_type": "comfyui_generate",
                 "user_id": "cell-script",
-                "queue": "scareverse:sd-jobs:queue",
+                "queue": "scareverse:comfyui-jobs:queue",
                 **payload,
             }
-            await redis_client.lpush("scareverse:sd-jobs:queue", json.dumps(job_data))
+            await redis_client.lpush("scareverse:comfyui-jobs:queue", json.dumps(job_data))
 
         # Wait for result via BRPOP (GateKeeper pushes result to this key)
         redis_client = await get_redis_client()
-        result_key = f"{_SD_RESULT_KEY_PREFIX}:{job_id}"
+        result_key = f"{_COMFYUI_RESULT_KEY_PREFIX}:{job_id}"
         result = await brpop_result(redis_client, result_key, timeout)
 
         if result is None:

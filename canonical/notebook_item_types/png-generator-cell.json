@@ -83,17 +83,17 @@
       "#image",
       "#generation",
       "#ai",
-      "#stable-diffusion",
+      "#comfyui",
       "#2d"
     ],
-    "describe": "Generates high-quality PNG images from text prompts using Stable Diffusion AI. Interactive cell with real-time preview and customizable generation parameters (resolution, steps, CFG scale, seed). Supports various image sizes (default 512x512) and quality settings. Best for creating concept art, UI assets, textures, and reference images. Processing time ~10-30 seconds depending on image size and quality settings. Requires GPU with 4GB+ VRAM for optimal performance. Outputs base64-encoded PNG images ready for use in other cells.",
+    "describe": "Generates high-quality PNG images from text prompts using ComfyUI (SDXL). Interactive cell with real-time preview and customizable generation parameters (resolution, steps, CFG scale, seed). Supports various image sizes (default 512x512) and quality settings. Best for creating concept art, UI assets, textures, and reference images. Processing time ~10-30 seconds depending on image size and quality settings. Requires GPU with 4GB+ VRAM for optimal performance. Outputs base64-encoded PNG images ready for use in other cells.",
     "estimated_duration_seconds": 20,
     "required_resources": [
       "gpu",
-      "stable-diffusion-runtime"
+      "comfyui-runtime"
     ],
     "dependencies": [
-      "stable-diffusion"
+      "comfyui"
     ],
     "tags": [
       "image",
