@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     python3.11 \
     python3.11-dev \
+    python3.11-venv \
     python3-pip \
     ffmpeg \
     libgl1-mesa-glx \
@@ -18,15 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Python 3.11 como padrão
+# Python 3.11 como padrão (ensurepip é desabilitado no Ubuntu, usamos get-pip.py)
 RUN ln -sf /usr/bin/python3.11 /usr/bin/python \
-    && ln -sf /usr/bin/pip3 /usr/bin/pip
-
-# Ferramentas de build atualizadas (essencial para extensões CUDA)
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 \
+    && python3.11 -m pip install --upgrade pip setuptools wheel
 
 # PyTorch com CUDA 12.1 explícito (--index-url cu121)
-RUN pip install --no-cache-dir torch torchvision torchaudio \
+RUN python3.11 -m pip install --no-cache-dir torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/cu121
 
 WORKDIR /app
@@ -34,7 +33,7 @@ WORKDIR /app
 # ComfyUI Core (shallow clone para evitar rate limiting)
 RUN GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git /app/comfyui \
     && cd /app/comfyui \
-    && pip install --no-cache-dir -r requirements.txt sqlalchemy aiofiles
+    && python3.11 -m pip install --no-cache-dir -r requirements.txt sqlalchemy aiofiles
 
 # Custom Nodes (ordem importa: Manager -> 3D)
 # Nota: ComfyUI-HunyuanImageWrapper foi removido do GitHub do Kijai.
@@ -46,12 +45,12 @@ RUN GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/ltdrdata/ComfyU
 # Hunyuan3DWrapper v2 (FP8) — compila extensões C++ com nvcc (devel necessário)
 RUN GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/Kijai/ComfyUI-Hunyuan3DWrapper.git \
     && cd ComfyUI-Hunyuan3DWrapper \
-    && pip install --no-cache-dir -r requirements.txt
+    && python3.11 -m pip install --no-cache-dir -r requirements.txt
 
 # ScareVerse Wrapper (FastAPI + BaseService heartbeat)
 WORKDIR /app
 COPY wrapper/requirements.txt /app/wrapper/requirements.txt
-RUN pip install --no-cache-dir -r /app/wrapper/requirements.txt
+RUN python3.11 -m pip install --no-cache-dir -r /app/wrapper/requirements.txt
 
 COPY wrapper/ /app/wrapper/
 COPY entrypoint.sh /app/entrypoint.sh
