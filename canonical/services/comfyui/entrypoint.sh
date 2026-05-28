@@ -40,7 +40,7 @@ ATTEMPT=1
 READY=0
 
 while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-    if curl -sf http://127.0.0.1:8188/system > /dev/null 2>&1; then
+    if curl -sf http://127.0.0.1:8188/ > /dev/null 2>&1; then
         echo "[entrypoint] ComfyUI pronto!"
         READY=1
         break
