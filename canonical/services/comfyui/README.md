@@ -51,7 +51,7 @@ docker-compose -f artifacts/canonical/services/comfyui/docker-compose.yml up -d
 
 ```bash
 # Health check
-curl http://localhost:9090/health
+curl http://localhost:9091/health
 
 # GPU detection
 docker exec scareverse-comfyui-service python -c "import torch; print(torch.cuda.is_available())"

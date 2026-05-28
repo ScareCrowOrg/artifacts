@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260527T225519
+    image: hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260528T002358
     runtime: nvidia
     environment:
       NVIDIA_VISIBLE_DEVICES: all
@@ -35,7 +35,7 @@ services:
                 - gpu
     shm_size: 2gb
     ports:
-      - 9090:9090
+      - 9091:9090
       - 8188:8188 # DEBUG ONLY: ComfyUI native UI (remove in production)
     healthcheck:
       test:
