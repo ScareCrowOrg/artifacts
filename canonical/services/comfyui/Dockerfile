@@ -43,9 +43,15 @@ WORKDIR /app/comfyui/custom_nodes
 RUN GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/ltdrdata/ComfyUI-Manager.git
 
 # Hunyuan3DWrapper v2 (FP8) — compila extensões C++ com nvcc (devel necessário)
+# TORCH_CUDA_ARCH_LIST explícito: docker build não tem GPU visível para auto-detecção
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9"
 RUN GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/Kijai/ComfyUI-Hunyuan3DWrapper.git \
     && cd ComfyUI-Hunyuan3DWrapper \
-    && python3.11 -m pip install --no-cache-dir -r requirements.txt
+    && python3.11 -m pip install --no-cache-dir -r requirements.txt \
+    && cd hy3dgen/texgen/custom_rasterizer \
+    && python3.11 setup.py build_ext --inplace \
+    && cd /app/comfyui/custom_nodes/ComfyUI-Hunyuan3DWrapper/hy3dgen/texgen/differentiable_renderer \
+    && python3.11 setup.py build_ext --inplace
 
 # ScareVerse Wrapper (FastAPI + BaseService heartbeat)
 WORKDIR /app
