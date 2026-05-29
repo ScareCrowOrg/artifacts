@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260529T043035
+    image: hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260529T050403
     runtime: nvidia
     environment:
       NVIDIA_VISIBLE_DEVICES: all
