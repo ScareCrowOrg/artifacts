@@ -54,7 +54,7 @@ export class RequestsCell extends BaseCell {
         }
       }
 
-      const response = await apiFetch('/api/inbox/requests?direction=received', { method: 'GET' })
+      const response = await apiFetch('/api/inbox/requests?direction=all', { method: 'GET' })
 
       if (!response.ok) {
         const errText = await response.text().catch(() => '')

@@ -54,7 +54,7 @@ export class MessagesCell extends BaseCell {
         }
       }
 
-      const response = await apiFetch('/api/inbox/messages', { method: 'GET' })
+      const response = await apiFetch('/api/inbox/messages?direction=all', { method: 'GET' })
 
       if (!response.ok) {
         const errText = await response.text().catch(() => '')
