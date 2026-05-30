@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260529T053344
+    image: hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260530T021356
     runtime: nvidia
     environment:
       NVIDIA_VISIBLE_DEVICES: all
@@ -19,6 +19,8 @@ services:
       HEARTBEAT_TTL: ${HEARTBEAT_TTL:-180}
       COMFYUI_PORT: 8188
       WRAPPER_PORT: 9090
+      SDXL_MODEL_NAME: ${SDXL_MODEL_NAME:-sd_xl_base_1.0.safetensors}
+      HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
       SCARE_LOG_DESTINATION: /app/logs/service.log
     volumes:
       - ../../../../artifacts:/app/artifacts:ro

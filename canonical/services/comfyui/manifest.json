@@ -2,10 +2,12 @@
   "version": "0.1",
   "name": "comfyui",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260529T053344",
-  "dependencies": [],
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260530T021356",
+  "dependencies": [
+    "heartbeat.py"
+  ],
   "generate_env_file": false,
   "totp_seed": false,
-  "imageTag": "staging20260529T053344",
-  "lastBuilt": "2026-05-29T05:43:39.805Z"
+  "imageTag": "staging20260530T021356",
+  "lastBuilt": "2026-05-30T02:20:09.238Z"
 }

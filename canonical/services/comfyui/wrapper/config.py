@@ -9,8 +9,5 @@ COMFYUI_HOST = os.getenv("COMFYUI_HOST", "127.0.0.1")
 COMFYUI_POLL_INTERVAL = float(os.getenv("COMFYUI_POLL_INTERVAL", "1.0"))
 COMFYUI_GENERATE_TIMEOUT = int(os.getenv("COMFYUI_GENERATE_TIMEOUT", "120"))
 
-REDIS_L1_HOST = os.getenv("REDIS_L1_HOST", "redis")
-REDIS_L1_PORT = int(os.getenv("REDIS_L1_PORT", "6380"))
-REDIS_L1_PASSWORD = os.getenv("REDIS_L1_PASSWORD", "scarerunner")
-HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "60"))
-HEARTBEAT_TTL = int(os.getenv("HEARTBEAT_TTL", "180"))
+# Removido — Redis config agora gerenciado pelo BaseService
+# (lê diretamente de env vars com defaults próprios)
