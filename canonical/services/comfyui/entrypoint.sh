@@ -48,7 +48,7 @@ trap _graceful_shutdown SIGTERM SIGINT
 # qualquer operação de startup (download, ComfyUI, wrapper). O wrapper assume
 # o heartbeat contínuo quando ficar pronto (Fase 4).
 echo "[entrypoint] Fase 0: Iniciando heartbeat antecipado..."
-python3 /app/artifacts/canonical/services/comfyui/heartbeat.py &
+python /app/artifacts/canonical/services/comfyui/heartbeat.py &
 EARLY_HB_PID=$!
 echo "[entrypoint] Early heartbeat iniciado (PID: $EARLY_HB_PID)"
 
