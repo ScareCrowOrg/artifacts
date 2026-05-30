@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-stable-diffusion:staging20260528T150327
+    image: hub-staging.scareverse.net/registry/staging/scareverse-stable-diffusion:staging20260530T041927
     pull_policy: missing
     runtime: nvidia
     environment:
