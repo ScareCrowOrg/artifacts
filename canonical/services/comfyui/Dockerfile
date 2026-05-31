@@ -61,6 +61,30 @@ RUN GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/Kijai/ComfyUI-H
     && cd /app/comfyui/custom_nodes/ComfyUI-Hunyuan3DWrapper/hy3dgen/texgen/differentiable_renderer \
     && python3.11 setup.py build_ext --inplace
 
+# Patch: safetensors from_single_file fix
+# Kijai's pipelines.py uses load_torch_file() which returns flat keys
+# for safetensors (model.dit.blocks.0.weight), but code expects nested
+# dict (ckpt["model"] = {...}). Add prefix-splitting logic.
+RUN python3.11 <<'PYEOF'
+f = '/app/comfyui/custom_nodes/ComfyUI-Hunyuan3DWrapper/hy3dshape/hy3dshape/pipelines.py'
+c = open(f).read()
+old = 'ckpt = load_torch_file(ckpt_path)'
+new = '''ckpt = load_torch_file(ckpt_path)
+        if "model" not in ckpt:
+            split_ckpt = {}
+            for key, value in ckpt.items():
+                prefix = key.split('.')[0]
+                inner_key = '.'.join(key.split('.')[1:])
+                if prefix not in split_ckpt:
+                    split_ckpt[prefix] = {}
+                split_ckpt[prefix][inner_key] = value
+            ckpt = split_ckpt'''
+assert old in c, 'Anchor not found in pipelines.py'
+c = c.replace(old, new, 1)
+open(f, 'w').write(c)
+print('PATCH APPLIED: safetensors prefix split')
+PYEOF
+
 # omegaconf + rembg — missing transitive dependencies for Hy3D shape model
 # Kijai's requirements.txt doesn't include them, but runtime lazy-imports them
 # rembg[cpu] includes onnxruntime backend
