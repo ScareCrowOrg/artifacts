@@ -64,7 +64,7 @@ RUN GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/Kijai/ComfyUI-H
 # omegaconf + rembg — missing transitive dependencies for Hy3D shape model
 # Kijai's requirements.txt doesn't include them, but runtime lazy-imports them
 # rembg[cpu] includes onnxruntime backend
-RUN python3.11 -m pip install --no-cache-dir omegaconf "rembg[cpu]"
+RUN python3.11 -m pip install --no-cache-dir omegaconf "rembg[cpu]" timm
 
 # ScareVerse Wrapper (FastAPI + BaseService heartbeat)
 WORKDIR /app
