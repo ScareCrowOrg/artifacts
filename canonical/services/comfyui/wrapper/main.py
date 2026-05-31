@@ -206,7 +206,12 @@ async def generate_3d(req: Generate3DRequest):
         raise HTTPException(status_code=502, detail=f"ComfyUI submission failed: {exc}")
 
     # Poll for result
-    glb_filename = await _poll_for_result_3d(comfy_prompt_id, config.HUNYUAN3D_GENERATE_TIMEOUT)
+    # expected_glb_prefix matches the filename_prefix in _build_hunyuan3d_workflow
+    glb_filename = await _poll_for_result_3d(
+        comfy_prompt_id,
+        config.HUNYUAN3D_GENERATE_TIMEOUT,
+        expected_glb_prefix=f"hunyuan3d_{prompt_id}",
+    )
     if glb_filename is None:
         logger.error("Timeout polling ComfyUI history for Hunyuan3D prompt %s", comfy_prompt_id)
         raise HTTPException(status_code=504, detail=f"Hunyuan3D generation timed out after {config.HUNYUAN3D_GENERATE_TIMEOUT}s")
@@ -442,13 +447,14 @@ def _build_hunyuan3d_workflow(image_filename: str, prompt_prefix: str) -> Dict[s
     }
 
 
-async def _poll_for_result_3d(comfy_prompt_id: str, timeout: int) -> Optional[str]:
+async def _poll_for_result_3d(comfy_prompt_id: str, timeout: int, expected_glb_prefix: str) -> Optional[str]:
     """
     Poll GET /history/{prompt_id} until ComfyUI marks prompt as completed.
 
-    Returns the output GLB filename, or None on timeout.
-    Extracts from any node output that has 'glb' files or the first
-    non-image output.
+    Hy3DExportMesh saves GLB files to disk but does NOT register them in the
+    ComfyUI history outputs dict. Instead of relying on history outputs, we
+    scan the output directory for the expected GLB filename once ComfyUI
+    confirms completion.
     """
     deadline = asyncio.get_running_loop().time() + timeout
     url = f"{_COMFYUI_BASE}/history/{comfy_prompt_id}"
@@ -461,10 +467,13 @@ async def _poll_for_result_3d(comfy_prompt_id: str, timeout: int) -> Optional[st
                     data = resp.json()
                     entry = data.get(comfy_prompt_id)
                     if entry and entry.get("status", {}).get("completed") is True:
-                        glb_filename = _extract_glb_filename(entry)
+                        # Hy3DExportMesh does not register in history outputs, so we
+                        # scan the output directory for the expected GLB filename.
+                        glb_filename = _find_glb_in_output(expected_glb_prefix)
                         if glb_filename:
                             return glb_filename
-                        logger.warning("History completed but no GLB output found for %s", comfy_prompt_id)
+
+                        logger.warning("History completed but no GLB output found for %s (prefix=%s)", comfy_prompt_id, expected_glb_prefix)
                         return None
             except Exception as exc:
                 logger.debug("Poll attempt failed for %s: %s", comfy_prompt_id, exc)
@@ -474,48 +483,20 @@ async def _poll_for_result_3d(comfy_prompt_id: str, timeout: int) -> Optional[st
     return None  # timeout
 
 
-def _extract_glb_filename(history_entry: Dict[str, Any]) -> Optional[str]:
+def _find_glb_in_output(prefix: str) -> Optional[str]:
     """
-    Extract the first GLB output filename from a ComfyUI history entry.
+    Scan the ComfyUI output directory for a GLB file matching the given prefix.
 
-    Looks for:
-    1. 'glb_path' key in node outputs (Hy3DExportMesh primary output format)
-    2. 'string' key (fallback for RETURN_TYPES = ("STRING",))
-    3. 'files' array with file entries ending in .glb
-    4. 'images' array with .glb extension (fallback)
+    Primary method for finding Hy3DExportMesh output — the node saves GLB
+    files to disk but does NOT register them in ComfyUI history outputs.
     """
-    outputs: Dict[str, Any] = history_entry.get("outputs", {})
-    for node_id, node_output in outputs.items():
-        # Check for 'glb_path' key (Hy3DExportMesh primary output format)
-        glb_path = node_output.get("glb_path")
-        if glb_path:
-            return os.path.basename(str(glb_path))
-
-        # Check for bare 'string' key (RETURN_TYPES = ("STRING",))
-        string_val = node_output.get("string")
-        if string_val and str(string_val).endswith(".glb"):
-            return os.path.basename(str(string_val))
-
-        # Check for generic 'files' array
-        files: List[Dict[str, str]] = node_output.get("files", [])
-        for f in files:
-            fname = f.get("filename", "")
-            if fname.endswith(".glb"):
-                subfolder = f.get("subfolder", "")
-                if subfolder:
-                    return os.path.join(subfolder, fname)
+    output_dir = "/app/comfyui/output"
+    try:
+        for fname in os.listdir(output_dir):
+            if fname.startswith(prefix) and fname.endswith(".glb"):
                 return fname
-
-        # Fallback: check images array
-        images: List[Dict[str, str]] = node_output.get("images", [])
-        for img in images:
-            fname = img.get("filename", "")
-            if fname.endswith(".glb"):
-                subfolder = img.get("subfolder", "")
-                if subfolder:
-                    return os.path.join(subfolder, fname)
-                return fname
-
+    except Exception as exc:
+        logger.debug("Failed to scan output directory for '%s': %s", prefix, exc)
     return None
 
 
