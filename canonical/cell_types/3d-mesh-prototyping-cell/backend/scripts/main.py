@@ -22,7 +22,7 @@ Architecture:
 - Shared Volume: File transfer between Manager and Worker
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 import os
 import sys
@@ -57,7 +57,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_cell(cell_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Execute the 3D mesh prototyping cell with hybrid generation mode routing.
 
@@ -77,6 +77,7 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             - reconstructionParams: Parameters for 3D generation
             - generationMode: Generation mode (optional, defaults to 'local-gpu')
             - modelType: 3D model to use (optional, defaults to 'hunyuan3d')
+        user_id: Optional user identifier for audit/logging
 
     Returns:
         Dict with execution results:
