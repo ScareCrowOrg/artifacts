@@ -61,6 +61,11 @@ RUN GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/Kijai/ComfyUI-H
     && cd /app/comfyui/custom_nodes/ComfyUI-Hunyuan3DWrapper/hy3dgen/texgen/differentiable_renderer \
     && python3.11 setup.py build_ext --inplace
 
+# omegaconf + rembg — missing transitive dependencies for Hy3D shape model
+# Kijai's requirements.txt doesn't include them, but runtime lazy-imports them
+# rembg[cpu] includes onnxruntime backend
+RUN python3.11 -m pip install --no-cache-dir omegaconf "rembg[cpu]"
+
 # ScareVerse Wrapper (FastAPI + BaseService heartbeat)
 WORKDIR /app
 COPY wrapper/requirements.txt /app/wrapper/requirements.txt
