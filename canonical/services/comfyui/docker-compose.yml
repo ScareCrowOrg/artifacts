@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260531T054318
+    image: hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260531T060728
     runtime: nvidia
     environment:
       NVIDIA_VISIBLE_DEVICES: all
@@ -22,7 +22,7 @@ services:
       SDXL_MODEL_NAME: ${SDXL_MODEL_NAME:-sd_xl_base_1.0.safetensors}
       HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
       HUNYUAN3D_MODEL_URL: ${HUNYUAN3D_MODEL_URL:-}
-      HUNYUAN3D_MODEL_NAME: ${HUNYUAN3D_MODEL_NAME:-hunyuan3d_v2_fp8.safetensors}
+      HUNYUAN3D_MODEL_NAME: ${HUNYUAN3D_MODEL_NAME:-hunyuan3d-dit-v2-0-fp16.safetensors}
       SCARE_LOG_DESTINATION: /app/logs/service.log
     volumes:
       - ../../../../artifacts:/app/artifacts:ro
