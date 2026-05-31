@@ -530,17 +530,22 @@ const handleCopy = async () => {
 const handleDownload = () => {
   try {
     if (!localGeneratedPng.value) return
-    
-    const link = document.createElement('a')
-    link.href = localGeneratedPng.value
-    link.download = `generated-image-${Date.now()}.png`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    
-    logger.info('PNG downloaded')
+
+    // Cross-origin iframe: Chrome blocks the `download` attribute on anchor
+    // elements inside cross-origin iframes. Delegate the download to the host
+    // shell (cockpit-vue) via postMessage so it runs in the same-origin context.
+    window.top.postMessage({
+      type: 'FILE_DOWNLOAD',
+      payload: {
+        url: localGeneratedPng.value,
+        filename: `generated-image-${Date.now()}.png`
+      },
+      timestamp: Date.now()
+    }, '*')
+
+    logger.info('PNG download requested via host shell')
   } catch (error: any) {
-    logger.error('Failed to download PNG', { error: error.message })
+    logger.error('Failed to request PNG download', { error: error.message })
     localError.value = 'Failed to download image'
   }
 }
