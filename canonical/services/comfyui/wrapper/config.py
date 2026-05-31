@@ -12,7 +12,7 @@ COMFYUI_GENERATE_TIMEOUT = int(os.getenv("COMFYUI_GENERATE_TIMEOUT", "120"))
 # Poll & timeout for POST /generate-3d (Hunyuan3D)
 HUNYUAN3D_POLL_INTERVAL = float(os.getenv("HUNYUAN3D_POLL_INTERVAL", "2.0"))
 HUNYUAN3D_GENERATE_TIMEOUT = int(os.getenv("HUNYUAN3D_GENERATE_TIMEOUT", "600"))
-HUNYUAN3D_MODEL_NAME = os.getenv("HUNYUAN3D_MODEL_NAME", "hunyuan3d-dit-v2-0-fp16.safetensors")
+HUNYUAN3D_MODEL_NAME = os.getenv("HUNYUAN3D_MODEL_NAME", "hunyuan_3d_v2.1.safetensors")
 
 # Removido — Redis config agora gerenciado pelo BaseService
 # (lê diretamente de env vars com defaults próprios)

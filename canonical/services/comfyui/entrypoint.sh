@@ -83,12 +83,12 @@ fi
 # O modelo fica cacheado no volume comfyui-models, em /app/comfyui/models/diffusion_models/
 # (Hy3D_2_1SimpleMeshGen carrega modelos de diffusion_models/, não de hunyuan3d/)
 HUNYUAN3D_MODEL_DIR="/app/comfyui/models/diffusion_models"
-HUNYUAN3D_MODEL_NAME="${HUNYUAN3D_MODEL_NAME:-hunyuan3d-dit-v2-0-fp16.safetensors}"
+HUNYUAN3D_MODEL_NAME="${HUNYUAN3D_MODEL_NAME:-hunyuan_3d_v2.1.safetensors}"
 HUNYUAN3D_MODEL_PATH="${HUNYUAN3D_MODEL_DIR}/${HUNYUAN3D_MODEL_NAME}"
 if [ ! -f "$HUNYUAN3D_MODEL_PATH" ]; then
     echo "[entrypoint] Fase 1.5: Modelo Hunyuan3D '${HUNYUAN3D_MODEL_NAME}' não encontrado. Iniciando download..."
     mkdir -p "${HUNYUAN3D_MODEL_DIR}"
-    HUNYUAN3D_MODEL_URL="${HUNYUAN3D_MODEL_URL:-https://huggingface.co/Kijai/Hunyuan3D-2_safetensors/resolve/main/${HUNYUAN3D_MODEL_NAME}}"
+    HUNYUAN3D_MODEL_URL="${HUNYUAN3D_MODEL_URL:-https://huggingface.co/Comfy-Org/hunyuan3D_2.1_repackaged/resolve/main/${HUNYUAN3D_MODEL_NAME}}"
     curl -f -L -o "${HUNYUAN3D_MODEL_PATH}" "${HUNYUAN3D_MODEL_URL}"
     if [ $? -eq 0 ]; then
         echo "[entrypoint] Modelo Hunyuan3D baixado com sucesso: ${HUNYUAN3D_MODEL_PATH}"
