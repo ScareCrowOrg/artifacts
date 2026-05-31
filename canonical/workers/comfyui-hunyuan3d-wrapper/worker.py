@@ -37,7 +37,7 @@ class Hunyuan3DWorker(BaseWorker):
             self.job_id,
             COMFYUI_SERVICE_URL,
         )
-        self._client = httpx.Client(base_url=COMFYUI_SERVICE_URL, timeout=300.0)
+        self._client = httpx.Client(base_url=COMFYUI_SERVICE_URL, timeout=600.0)
         self.logger.info("[%s] Hunyuan3D worker client initialized", self.job_id)
 
     def execute(self) -> Dict[str, Any]:

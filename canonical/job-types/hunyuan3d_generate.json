@@ -15,7 +15,7 @@
   },
 
   "configuration": {
-    "timeout_seconds": 300
+    "timeout_seconds": 600
   },
 
   "queue": "scareverse:hunyuan3d-jobs:queue",
@@ -24,7 +24,7 @@
   "result_storage": "rpush_l1",
   "result_key_prefix": "scareverse:hunyuan3d-results",
   "result_key_ttl": 600,
-  "timeout": 300,
+  "timeout": 600,
 
   "dependencies": [
     "comfyui"
