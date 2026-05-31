@@ -80,7 +80,7 @@ export function useJobPolling(
     isPolling.value = true
     
     try {
-      const response = await apiFetch(`/cells/3d-job-status/${id}`)
+      const response = await apiFetch(`/cells/job-status/${id}`)
 
       if (!response.ok) {
         const text = await response.text().catch(() => 'No error details available')

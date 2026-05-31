@@ -217,7 +217,7 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
     try:
         redis_client = await get_redis_client()
         status_key = f"scareverse:3d-status:{job_id}"
-        
+
         # Get job status from Redis (expecting a Hash)
         try:
             job_data = await redis_client.hgetall(status_key)
@@ -238,8 +238,10 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
             else:
                 # Re-raise other Redis errors
                 raise
-        
+
         if not job_data:
+            # GateKeeper fallback REMOVED — now handled centrally by
+            # the generic backend endpoint GET /api/cells/job-status/{job_id}.
             return {
                 "status": "not_found",
                 "error": "Job not found"
@@ -407,13 +409,18 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
         
         else:
             # Job still in progress (queued or processing)
+            # GateKeeper fallback REMOVED — now handled by the generic backend endpoint.
             return {
                 "status": status
             }
-        
+
     except Exception as e:
         logger.error(f"Error getting job status: {e}", exc_info=True)
         return {
             "status": "error",
             "error": f"Status retrieval failed: {str(e)}"
         }
+
+
+# _check_gatekeeper_result REMOVED — now handled by the generic backend endpoint
+# GET /api/cells/job-status/{job_id} in backend/app/routers/cells_router.py
