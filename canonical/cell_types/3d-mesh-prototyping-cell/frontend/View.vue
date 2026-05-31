@@ -372,13 +372,6 @@ const generate3DMesh = async () => {
     return
   }
 
-  // ITERATION #6: Check if user is authenticated
-  if (!authService.isAuthenticated()) {
-    localError.value = 'You must be logged in to generate 3D meshes'
-    logger.warn('User not authenticated, cannot generate mesh')
-    return
-  }
-
   logger.info(`Starting 3D mesh generation with mode: ${generationMode.value}`)
 
   localIsGenerating.value = true
