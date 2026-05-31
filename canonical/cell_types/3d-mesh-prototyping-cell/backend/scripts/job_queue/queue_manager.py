@@ -36,7 +36,7 @@ async def queue_3d_generation_job(
     enable_draco: bool = True,
     compression_level: int = 7,
     target_size_mb: float = 5.0,
-    model_type: str = "instantmesh"
+    model_type: str = "hunyuan3d"
 ) -> Dict[str, Any]:
     """
     Queue a 3D generation job to Redis for processing by Windows Worker.
@@ -53,7 +53,7 @@ async def queue_3d_generation_job(
         enable_draco: Enable Draco mesh compression
         compression_level: Draco compression level (0-10)
         target_size_mb: Target file size in MB
-        model_type: 3D generation model to use ('sf3d' or 'instantmesh', default: 'instantmesh')
+        model_type: 3D generation model to use ('hunyuan3d', default: 'hunyuan3d')
 
     Returns:
         Dict containing:
@@ -170,15 +170,12 @@ async def queue_3d_generation_job(
         logger.debug(f"Stored job status in Redis: {status_key}")
 
         # Queue job for worker (route to appropriate service based on model_type)
-        # model_type can be: instantmesh, sf3d, blender, etc.
-        # Each service has its own queue that worker listens on
-        if model_type == "instantmesh":
-            queue_key = "scareverse:instantmesh-jobs:queue"
-        elif model_type == "sf3d":
-            queue_key = "scareverse:sf3d-jobs:queue"
+        # model_type can be: hunyuan3d (only supported local model)
+        if model_type == "hunyuan3d":
+            queue_key = "scareverse:hunyuan3d-jobs:queue"
         else:
-            # Default to instantmesh for unknown types
-            queue_key = "scareverse:instantmesh-jobs:queue"
+            # Default to hunyuan3d for unknown types
+            queue_key = "scareverse:hunyuan3d-jobs:queue"
 
         await redis_client.lpush(queue_key, json.dumps(job_data))
         

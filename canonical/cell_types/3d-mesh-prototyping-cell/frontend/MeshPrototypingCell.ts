@@ -26,7 +26,7 @@ export type GenerationMode = 'cloud-api' | 'local-gpu' | 'manual-upload'
 /**
  * Supported 3D mesh generation models
  */
-export type MeshGenerationModel = 'sf3d' | 'instantmesh'
+export type MeshGenerationModel = 'hunyuan3d'
 
 /**
  * Reconstruction parameters for mesh generation

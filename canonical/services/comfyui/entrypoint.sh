@@ -77,6 +77,29 @@ else
     echo "[entrypoint] Fase 1: Modelo '${MODEL_NAME}' encontrado no volume, download ignorado."
 fi
 
+# ── Fase 1.5: Download Hunyuan3D models (cacheado no volume) ───────────────────
+# Modelo Hunyuan3D v2 FP8 para geração 3D via ComfyUI-Hunyuan3DWrapper.
+# O custom node Huanyuan3DWrapper (Kijai) já está instalado no Dockerfile.
+# O modelo fica cacheado no volume comfyui-models, em /app/comfyui/models/hunyuan3d/
+HUNYUAN3D_MODEL_DIR="/app/comfyui/models/hunyuan3d"
+HUNYUAN3D_MODEL_PATH="${HUNYUAN3D_MODEL_DIR}/${HUNYUAN3D_MODEL_NAME}"
+if [ ! -f "$HUNYUAN3D_MODEL_PATH" ]; then
+    echo "[entrypoint] Fase 1.5: Modelo Hunyuan3D '${HUNYUAN3D_MODEL_NAME}' não encontrado. Iniciando download..."
+    mkdir -p "${HUNYUAN3D_MODEL_DIR}"
+    if [ -n "${HUNYUAN3D_MODEL_URL}" ]; then
+        curl -f -L -o "${HUNYUAN3D_MODEL_PATH}" "${HUNYUAN3D_MODEL_URL}"
+        if [ $? -eq 0 ]; then
+            echo "[entrypoint] Modelo Hunyuan3D baixado com sucesso: ${HUNYUAN3D_MODEL_PATH}"
+        else
+            echo "[entrypoint] AVISO: Falha no download do modelo Hunyuan3D. POST /generate-3d retornará 502 até o modelo estar disponível."
+        fi
+    else
+        echo "[entrypoint] AVISO: HUNYUAN3D_MODEL_URL não configurada. Download de modelo Hunyuan3D ignorado."
+    fi
+else
+    echo "[entrypoint] Fase 1.5: Modelo Hunyuan3D '${HUNYUAN3D_MODEL_NAME}' encontrado no volume, download ignorado."
+fi
+
 # ── Fase 2: Start ComfyUI (mantido do atual) ──────────────────────────────────
 echo "[entrypoint] Fase 2: Inicializando o ComfyUI..."
 cd /app/comfyui

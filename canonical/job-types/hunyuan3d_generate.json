@@ -1,0 +1,56 @@
+{
+  "name": "hunyuan3d_generate",
+  "version": "1.0.0",
+  "description": "3D mesh generation via ComfyUI/Hunyuan3DWrapper",
+
+  "queue_type": "gpu",
+
+  "execution_model": "subprocess",
+
+  "worker": {
+    "type": "job",
+    "path": "artifacts/canonical/workers/comfyui-hunyuan3d-wrapper",
+    "entry_point": "main.py",
+    "python_version": "3.11+"
+  },
+
+  "configuration": {
+    "timeout_seconds": 300
+  },
+
+  "queue": "scareverse:hunyuan3d-jobs:queue",
+  "queue_l1": "scareverse:hunyuan3d-jobs:queue",
+  "queue_l2": "scareverse:hunyuan3d-jobs:queue",
+  "result_storage": "rpush_l1",
+  "result_key_prefix": "scareverse:hunyuan3d-results",
+  "result_key_ttl": 600,
+  "timeout": 300,
+
+  "dependencies": [
+    "comfyui"
+  ],
+
+  "worker_availability_key": "state:worker:comfyui-hunyuan3d:available",
+
+  "aliases": [
+    "hunyuan3d_generate"
+  ],
+
+  "input_schema": {
+    "type": "object",
+    "required": ["image_base64"],
+    "properties": {
+      "image_base64": {"type": "string"},
+      "seed": {"type": "integer", "default": -1}
+    }
+  },
+
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "mesh_base64": {"type": "string"},
+      "mesh_format": {"type": "string"},
+      "seed": {"type": "integer"}
+    }
+  }
+}

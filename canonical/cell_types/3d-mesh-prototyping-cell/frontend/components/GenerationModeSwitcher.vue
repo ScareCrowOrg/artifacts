@@ -54,16 +54,16 @@ const modes: Array<{
   {
     value: 'cloud-api',
     label: 'Cloud API',
-    description: 'Fast generation via external API (default)',
+    description: 'Fast generation via external API (requires API key)',
     icon: '☁️',
-    badge: 'Default'
+    badge: null
   },
   {
     value: 'local-gpu',
     label: 'Local GPU',
-    description: 'Local pipeline with Redis/Windows Worker',
+    description: 'Local pipeline via ComfyUI/Hunyuan3D (default)',
     icon: '⚡',
-    badge: 'Experimental'
+    badge: 'Default'
   },
   {
     value: 'manual-upload',

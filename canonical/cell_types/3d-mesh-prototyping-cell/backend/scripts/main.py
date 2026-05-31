@@ -76,7 +76,7 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             - inputImage: Base64-encoded PNG image for reconstruction
             - reconstructionParams: Parameters for 3D generation
             - generationMode: Generation mode (optional, defaults to 'local-gpu')
-            - modelType: 3D model to use (optional, defaults to 'instantmesh')
+            - modelType: 3D model to use (optional, defaults to 'hunyuan3d')
 
     Returns:
         Dict with execution results:
@@ -97,7 +97,7 @@ async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         input_image = cell_data.get('inputImage')
         reconstruction_params = cell_data.get('reconstructionParams', {})
         generation_mode = cell_data.get('generationMode', 'local-gpu')
-        model_type = input_data.get('modelType', 'instantmesh')  # Default: InstantMesh (more stable than SF3D FP16)
+        model_type = input_data.get('modelType', 'hunyuan3d')  # Default: Hunyuan3D v2 FP8 via ComfyUI
 
         if not input_image:
             return {
@@ -275,7 +275,7 @@ async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, An
 
     # Extract modelType from nested input_data (BaseCell wrapper structure)
     input_data = cell_data.get('input_data', {})
-    model_type = input_data.get('modelType', 'instantmesh')  # Default: InstantMesh (more stable)
+    model_type = input_data.get('modelType', 'hunyuan3d')  # Default: Hunyuan3D v2 FP8 via ComfyUI
 
     logger.info(f"Using 3D generation model: {model_type}")
 

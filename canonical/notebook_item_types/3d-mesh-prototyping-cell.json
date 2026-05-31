@@ -21,14 +21,14 @@
   },
   "default_initial_data": {
     "category": "ephemeral",
-    "generationMode": "cloud-api",
+    "generationMode": "local-gpu",
     "inputImage": null,
     "generatedMesh": null,
     "meshMetadata": null,
     "isGenerating": false,
     "error": null,
     "reconstructionParams": {
-      "targetFaces": 50000,
+      "targetFaces": 10000,
       "enableDracoCompression": true,
       "compressionLevel": 7,
       "targetFileSizeMB": 5
@@ -53,13 +53,13 @@
     },
     "generationMode": {
       "type": "string",
-      "default": "cloud-api",
+      "default": "local-gpu",
       "enum": [
         "cloud-api",
         "local-gpu",
         "manual-upload"
       ],
-      "description": "Generation mode: cloud-api (default), local-gpu (experimental), or manual-upload (direct GLB)"
+      "description": "Generation mode: local-gpu (default via ComfyUI/Hunyuan3D), cloud-api (requires API key), or manual-upload (direct GLB)"
     },
     "inputImage": {
       "type": [
@@ -101,7 +101,7 @@
     "reconstructionParams": {
       "type": "object",
       "default": {
-        "targetFaces": 50000,
+        "targetFaces": 10000,
         "enableDracoCompression": true,
         "compressionLevel": 7,
         "targetFileSizeMB": 5
