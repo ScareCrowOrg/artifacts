@@ -122,15 +122,33 @@ async def queue_background_removal_job(
 
         logger.info("Background removal completed: %s", job_id)
 
+        # DEBUG: Log FULL result structure to understand data flow
+        logger.info("=== DEBUG BRPOP RESULT ===")
+        logger.info("result keys: %s", list(result.keys()))
+        logger.info("result has 'data': %s", "data" in result)
+        logger.info("result raw (truncated): %s", str(result)[:500])
+
         # GateKeeper wraps result in envelope: {"status": "success", "data": {...actual result...}}
         # Extract the actual result from the "data" field
         actual_result = result.get("data", result)  # Fallback to result if no data envelope
-        logger.debug("Result structure - keys: %s, has 'data' envelope: %s",
-                    list(result.keys()), "data" in result)
 
+        logger.info("=== DEBUG ACTUAL RESULT ===")
+        logger.info("actual_result type: %s", type(actual_result))
+        logger.info("actual_result keys: %s", list(actual_result.keys()) if isinstance(actual_result, dict) else "NOT A DICT")
+        logger.info("actual_result has 'image_base64': %s", "image_base64" in actual_result if isinstance(actual_result, dict) else False)
+        logger.info("actual_result has 'result': %s", "result" in actual_result if isinstance(actual_result, dict) else False)
+        logger.info("actual_result raw (truncated): %s", str(actual_result)[:500])
+
+        # Worker returns {"image_base64": "..."} directly (result field from worker stdout)
+        # GateKeeper wraps in {"status": "success", "data": {"image_base64": "..."}}
+        # So actual_result has key "image_base64", not "result"
+        output_image = actual_result.get("image_base64") or actual_result.get("result", "")
+        logger.info("=== DEBUG OUTPUT ===")
+        logger.info("output_image length: %d chars", len(output_image) if output_image else 0)
+        logger.info("output_image starts with: %s", output_image[:50] if output_image else "EMPTY")
         return {
             "success": True,
-            "output_image_base64": actual_result.get("result", ""),
+            "output_image_base64": output_image,
             "job_id": job_id,
             "processing_time": actual_result.get("processing_time", 0),
         }
