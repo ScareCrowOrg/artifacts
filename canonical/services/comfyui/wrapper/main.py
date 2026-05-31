@@ -70,7 +70,7 @@ class Generate3DResponse(BaseModel):
     status: str
     mesh_base64: str
     mesh_format: str = "glb"
-    seed: int
+    seed: int = Field(0, description="Always 0 — Hy3D_2_1SimpleMeshGen is feed-forward, no seed applies")
 
 
 class WorkflowRequest(BaseModel):
@@ -152,19 +152,25 @@ async def generate(req: GenerateRequest):
 @app.post("/generate-3d", response_model=Generate3DResponse)
 async def generate_3d(req: Generate3DRequest):
     """
-    Generate 3D mesh from image via Hunyuan3DWrapper (ComfyUI).
+    Generate 3D mesh from image via Hy3D nodes (Kijai ComfyUI-Hunyuan3DWrapper).
+
+    NOTE: 3D mesh generation via Hy3D_2_1SimpleMeshGen is a feed-forward
+    reconstruction — it does NOT use a seed for stochastic sampling. The
+    generation is deterministic for a given input image and model weights.
+    The `seed` field in Generate3DResponse is always 0.
 
     1. Save input image to /app/comfyui/input/
-    2. Build Hunyuan3D workflow (LoadImage → Hunyuan3DWrapper → SaveGLB)
+    2. Build Hunyuan3D workflow (LoadImage → Hy3D_2_1SimpleMeshGen → Hy3DExportMesh)
     3. POST to ComfyUI /prompt
     4. Poll /history/{prompt_id}
     5. Read GLB output, base64-encode
-    6. Return base64 GLB + seed
+    6. Return base64 GLB (seed always 0 — not applicable for 3D mesh gen)
     """
-    logger.info("POST /generate-3d called (seed=%d, image_base64 length=%d)", req.seed, len(req.image_base64[:100]))
+    requested_seed = req.seed
+    logger.info("POST /generate-3d called (requested_seed=%d, image_base64 length=%d)", requested_seed, len(req.image_base64[:100]))
 
-    # Resolve seed
-    seed = random.randint(0, 2 ** 31 - 1) if req.seed == -1 else req.seed
+    if requested_seed != -1:
+        logger.warning("Seed=%d provided but Hy3D_2_1SimpleMeshGen does not accept seed — generation is deterministic from input image", requested_seed)
 
     # Save input image
     input_filename = f"hunyuan3d_input_{uuid.uuid4().hex}.png"
@@ -181,9 +187,9 @@ async def generate_3d(req: Generate3DRequest):
         logger.error("Failed to save input image: %s", exc)
         raise HTTPException(status_code=400, detail=f"Invalid image data: {exc}")
 
-    # Build Hunyuan3D workflow
+    # Build Hunyuan3D workflow (no seed — Hy3D_2_1SimpleMeshGen is feed-forward)
     prompt_id = str(uuid.uuid4())
-    workflow = _build_hunyuan3d_workflow(input_filename, seed, prompt_id)
+    workflow = _build_hunyuan3d_workflow(input_filename, prompt_id)
     logger.info("Hunyuan3D workflow built with %d nodes", len(workflow))
 
     # Submit to ComfyUI
@@ -215,8 +221,9 @@ async def generate_3d(req: Generate3DRequest):
     with open(glb_path, "rb") as f:
         mesh_base64 = base64.b64encode(f.read()).decode("utf-8")
 
-    logger.info("3D mesh generated: %s (%d bytes, seed=%d)", glb_filename, len(mesh_base64), seed)
-    return Generate3DResponse(status="success", mesh_base64=mesh_base64, seed=seed)
+    # seed=0: Hy3D_2_1SimpleMeshGen is deterministic from input image, no seed applies
+    logger.info("3D mesh generated: %s (%d bytes)", glb_filename, len(mesh_base64))
+    return Generate3DResponse(status="success", mesh_base64=mesh_base64, seed=0)
 
 
 @app.post("/workflow", response_model=WorkflowResponse)
@@ -393,36 +400,43 @@ def _extract_output_filename(history_entry: Dict[str, Any]) -> Optional[str]:
 
 # ── Hunyuan3D 3D mesh workflow ─────────────────────────────────────────────
 
-def _build_hunyuan3d_workflow(image_filename: str, seed: int, prefix: str) -> Dict[str, Any]:
+def _build_hunyuan3d_workflow(image_filename: str, prompt_prefix: str) -> Dict[str, Any]:
     """
-    Build a Hunyuan3D v2 FP8 ComfyUI workflow.
+    Build a Hunyuan3D v2 FP8 ComfyUI workflow using Kijai Hy3D nodes.
+
+    NOTE: Hy3D_2_1SimpleMeshGen is a feed-forward reconstruction model and does
+    NOT accept a seed parameter. 3D mesh generation is deterministic for a given
+    input image and model weights — the seed concept from diffusion models does
+    not apply here.
 
     Node graph:
-        LoadImage → Hunyuan3DWrapper → SaveGLB
+        LoadImage → Hy3D_2_1SimpleMeshGen → Hy3DExportMesh
 
-    The Hunyuan3DWrapper custom node (Kijai) takes an image as input and
-    generates a 3D mesh (GLB) as output. The SaveGLB node writes the
-    mesh to /app/comfyui/output/.
+    Hy3D_2_1SimpleMeshGen (Kijai custom node) takes an image as input and
+    generates a 3D mesh (TRIMESH) as output. Hy3DExportMesh writes the
+    mesh to /app/comfyui/output/ as GLB.
     """
     return {
         "1": {  # Load Image
             "class_type": "LoadImage",
             "inputs": {"image": image_filename},
         },
-        "2": {  # Hunyuan3DWrapper v2 FP8 — Image to 3D
-            "class_type": "Hunyuan3DWrapper",
+        "2": {  # Hy3D_2_1SimpleMeshGen — Image to TRIMESH (self-contained)
+            "class_type": "Hy3D_2_1SimpleMeshGen",
             "inputs": {
+                "model": config.HUNYUAN3D_MODEL_NAME,  # Widget string from diffusion_models/
                 "image": ["1", 0],
-                "seed": seed,
-                "model_type": config.HUNYUAN3D_MODEL_NAME,
-                "output_format": "glb",
+                "steps": 50,
+                "guidance_scale": 7.0,
+                "octree_resolution": 256,
             },
         },
-        "3": {  # Save GLB
-            "class_type": "SaveGLB",
+        "3": {  # Hy3DExportMesh — Save TRIMESH as GLB
+            "class_type": "Hy3DExportMesh",
             "inputs": {
-                "mesh": ["2", 0],
-                "filename_prefix": f"hunyuan3d_{prefix}",
+                "trimesh": ["2", 0],
+                "filename_prefix": f"hunyuan3d_{prompt_prefix}",
+                "file_format": "glb",
             },
         },
     }
@@ -465,20 +479,24 @@ def _extract_glb_filename(history_entry: Dict[str, Any]) -> Optional[str]:
     Extract the first GLB output filename from a ComfyUI history entry.
 
     Looks for:
-    1. 'glb' key in node outputs (direct GLB output)
-    2. Any 'files' array with file entries ending in .glb
-    3. First 'images' entry (fallback — some custom nodes report GLBs as images)
+    1. 'glb_path' key in node outputs (Hy3DExportMesh primary output format)
+    2. 'string' key (fallback for RETURN_TYPES = ("STRING",))
+    3. 'files' array with file entries ending in .glb
+    4. 'images' array with .glb extension (fallback)
     """
     outputs: Dict[str, Any] = history_entry.get("outputs", {})
     for node_id, node_output in outputs.items():
-        # Check for direct 'glb' key
-        glb_data = node_output.get("glb")
-        if glb_data and isinstance(glb_data, dict):
-            filename = glb_data.get("filename")
-            if filename:
-                return filename
+        # Check for 'glb_path' key (Hy3DExportMesh primary output format)
+        glb_path = node_output.get("glb_path")
+        if glb_path:
+            return os.path.basename(str(glb_path))
 
-        # Check for generic 'files' array (SaveGLB may use this)
+        # Check for bare 'string' key (RETURN_TYPES = ("STRING",))
+        string_val = node_output.get("string")
+        if string_val and str(string_val).endswith(".glb"):
+            return os.path.basename(str(string_val))
+
+        # Check for generic 'files' array
         files: List[Dict[str, str]] = node_output.get("files", [])
         for f in files:
             fname = f.get("filename", "")

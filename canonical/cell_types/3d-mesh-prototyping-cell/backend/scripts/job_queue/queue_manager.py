@@ -142,12 +142,13 @@ async def queue_3d_generation_job(
         
         job_data = {
             "job_id": job_id,
-            "job_type": "3d_generation",  # Worker needs to know this is a 3D job
+            "job_type": "hunyuan3d_generate",  # Maps to gatekeeper JOB_TYPES_CONFIG key
             "status": "queued",
             "created_at": timestamp,
             "model_type": model_type,  # Route to appropriate 3D service (sf3d or instantmesh)
             "input_image_path": worker_input_path,
             "output_dir": worker_output_dir,
+            "image_base64": image_data,  # For worker (comfyui-hunyuan3d-wrapper expects this key)
             "parameters": json.dumps({
                 "target_faces": target_faces,
                 "enable_draco": enable_draco,

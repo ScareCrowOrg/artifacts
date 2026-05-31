@@ -78,10 +78,11 @@ else
 fi
 
 # ── Fase 1.5: Download Hunyuan3D models (cacheado no volume) ───────────────────
-# Modelo Hunyuan3D v2 FP8 para geração 3D via ComfyUI-Hunyuan3DWrapper.
-# O custom node Huanyuan3DWrapper (Kijai) já está instalado no Dockerfile.
-# O modelo fica cacheado no volume comfyui-models, em /app/comfyui/models/hunyuan3d/
-HUNYUAN3D_MODEL_DIR="/app/comfyui/models/hunyuan3d"
+# Modelo Hunyuan3D v2 FP8 para geração 3D via Hy3D nodes (Kijai ComfyUI-Hunyuan3DWrapper).
+# O custom node Kijai já está instalado no Dockerfile.
+# O modelo fica cacheado no volume comfyui-models, em /app/comfyui/models/diffusion_models/
+# (Hy3D_2_1SimpleMeshGen carrega modelos de diffusion_models/, não de hunyuan3d/)
+HUNYUAN3D_MODEL_DIR="/app/comfyui/models/diffusion_models"
 HUNYUAN3D_MODEL_PATH="${HUNYUAN3D_MODEL_DIR}/${HUNYUAN3D_MODEL_NAME}"
 if [ ! -f "$HUNYUAN3D_MODEL_PATH" ]; then
     echo "[entrypoint] Fase 1.5: Modelo Hunyuan3D '${HUNYUAN3D_MODEL_NAME}' não encontrado. Iniciando download..."
