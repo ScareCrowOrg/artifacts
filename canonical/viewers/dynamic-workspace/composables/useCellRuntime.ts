@@ -181,9 +181,12 @@ export function useCellRuntime() {
 
       const cells = (await response.json()) as PersistedCell[]
 
-      // Filter to only cells with category === "persistent"
+      // Filter to only cells with category === "persistent" (saved cells)
+      // The frontend sends category='persistent' at request root level,
+      // and the backend stores it as-is via CreateCellRequest.category field.
+      // Old records may have category inside initial_data as a secondary fallback.
       const persistedCells = cells.filter(
-        c => c.category === 'persistent' || (c.initial_data && (c as any).category === 'persistent'),
+        c => c.category === 'persistent' || (c.initial_data && c.initial_data.category === 'persistent'),
       )
 
       log.info('[CellRuntime] Listed cell runtimes', {

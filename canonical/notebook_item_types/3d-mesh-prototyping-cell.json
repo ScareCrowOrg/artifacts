@@ -20,7 +20,7 @@
     ]
   },
   "default_initial_data": {
-    "category": "ephemeral",
+    "category": "persistent",
     "generationMode": "local-gpu",
     "inputImage": null,
     "generatedMesh": null,
@@ -48,8 +48,9 @@
   "properties_schema": {
     "category": {
       "type": "string",
-      "default": "ephemeral",
-      "description": "Cell category - 'ephemeral' marks this as ephemeral (not persisted)"
+      "default": "persistent",
+      "enum": ["ephemeral", "persistent"],
+      "description": "Cell category - 'persistent' saves to MongoDB cells_runtime"
     },
     "generationMode": {
       "type": "string",
