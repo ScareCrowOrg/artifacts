@@ -82,6 +82,10 @@ export interface GridCell {
   position: GridPosition
   /** Cell type definition (for title, icon, etc.) */
   cellType: CellTypeDefinition | null
+  /** MongoDB _id from cells_runtime — set when cell state is persisted */
+  runtimeId?: string
+  /** Whether this cell has persisted state in MongoDB (default: false) */
+  isPersisted: boolean
 }
 
 // ── GridPosition ────────────────────────────────────────────────────────────

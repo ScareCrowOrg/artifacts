@@ -86,6 +86,7 @@ export function useGridLayout() {
       error: null,
       isMinimized: false,
       isMaximized: false,
+      isPersisted: false,
       position,
       cellType,
     }

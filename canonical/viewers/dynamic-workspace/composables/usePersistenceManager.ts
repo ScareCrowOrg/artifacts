@@ -14,6 +14,7 @@ import type {
   Book,
   CellReference,
   GridConfig,
+  GridCell,
   LayoutBook,
   LayoutBookListItem,
   LayoutBookListResponse,
@@ -76,20 +77,82 @@ export function usePersistenceManager() {
   const { cells } = useGridLayout()
 
   /**
+   * Extract the current state from a cell instance for persistence.
+   * Inspects the cellInstance for observable state fields (status, jobId,
+   * content_id, error, progress, etc.) and returns them as a plain object.
+   *
+   * Falls back to an empty object if the instance is null or has no state.
+   */
+  function extractCellState(cellInstance: any): Record<string, any> {
+    if (!cellInstance) return {}
+
+    const state: Record<string, any> = {}
+
+    // Common state fields found across cell types
+    const stateFields = [
+      'status',
+      'jobId',
+      'content_id',
+      'input_content_id',
+      'error',
+      'progress',
+      'isGenerating',
+      'generatedMesh',
+      'inputImage',
+      'outputData',
+    ]
+
+    for (const field of stateFields) {
+      if (field in cellInstance) {
+        // Skip binary/base64 data (stored separately, not in MongoDB)
+        if (typeof cellInstance[field] === 'string') {
+          const val = cellInstance[field] as string
+          if (val.startsWith('data:') || val.startsWith('blob:')) {
+            continue
+          }
+        }
+        state[field] = cellInstance[field]
+      }
+    }
+
+    return state
+  }
+
+  /**
    * Serialize current grid cells into the CellReference format required by
    * the layout books API.
+   *
+   * For persisted cells (isPersisted === true):
+   * - category = "persistent"
+   * - cellId = runtimeId (MongoDB _id)
+   * - initialization_data = current cell state (for full restore on reload)
+   *
+   * For ephemeral cells:
+   * - category = "ephemeral" (unchanged)
+   * - No initialization_data (state is not saved)
    */
   function serializeCells(): CellReference[] {
-    return cells.value.map(cell => ({
-      category: 'ephemeral' as const,
-      type: cell.cellTypeName,
-      title: cell.cellType?.name ?? cell.cellTypeName,
-      position: cell.position,
-      state: {
-        isMinimized: cell.isMinimized ?? false,
-        isMaximized: cell.isMaximized ?? false,
-      },
-    }))
+    return cells.value.map((cell: GridCell): CellReference => {
+      const isPersisted = cell.isPersisted === true
+
+      const ref: CellReference = {
+        category: isPersisted ? 'persistent' : 'ephemeral',
+        type: cell.cellTypeName,
+        title: cell.cellType?.name ?? cell.cellTypeName,
+        position: cell.position,
+        state: {
+          isMinimized: cell.isMinimized ?? false,
+          isMaximized: cell.isMaximized ?? false,
+        },
+      }
+
+      if (isPersisted) {
+        ref.cellId = cell.runtimeId
+        ref.initialization_data = extractCellState(cell.cellInstance)
+      }
+
+      return ref
+    })
   }
 
   // ── CRUD ──────────────────────────────────────────────────────────────────

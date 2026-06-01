@@ -140,6 +140,8 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useGridLayout } from './composables/useGridLayout'
 import { useCellViewProvider } from './composables/useCellViewProvider'
 import { usePersistenceManager } from './composables/usePersistenceManager'
+import { useCellRuntime } from './composables/useCellRuntime'
+import type { PersistedCell } from './composables/useCellRuntime'
 import { useAutoSave } from './composables/useAutoSave'
 import { useAutoLoadCellI18n } from './composables/useAutoLoadCellI18n'
 import { useThemeSync } from '#artifacts/shared/composables/useThemeSync'
@@ -183,6 +185,7 @@ const explorerStore = useArtifactsExplorerStore()
 
 // ── Persistence (Phase 3) ─────────────────────────────────────────────────────
 const persistence = usePersistenceManager()
+const cellRuntime = useCellRuntime()
 const autoSave = useAutoSave()
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -292,7 +295,8 @@ async function loadSavedLayouts(): Promise<void> {
 async function handleCellTypeSelected(
   cellType: CellTypeDefinition,
   initialData?: Record<string, any>,
-): Promise<void> {
+  runtimeOpts?: { runtimeId?: string; isPersisted?: boolean },
+): Promise<string | undefined> {
   log.info('[App] handleCellTypeSelected', { cellTypeName: cellType.name })
 
   const cellId = addCell(cellType.name, cellType)
@@ -300,12 +304,19 @@ async function handleCellTypeSelected(
   try {
     const cellInstance = await instantiateCellByType(cellType.name, cellType)
     const viewSpec = await resolveViewSpec(cellInstance, cellType.name, cellType, initialData, cellId)
-    updateCell(cellId, { cellInstance, viewSpec, isLoading: false })
+    updateCell(cellId, {
+      cellInstance,
+      viewSpec,
+      isLoading: false,
+      ...(runtimeOpts ? { runtimeId: runtimeOpts.runtimeId, isPersisted: runtimeOpts.isPersisted ?? false } : {}),
+    })
     log.info('[App] Cell ready', { cellId, cellTypeName: cellType.name })
+    return cellId
   } catch (err: any) {
     const errorMsg = err?.message || 'Failed to load cell'
     updateCell(cellId, { isLoading: false, error: errorMsg })
     log.error('[App] Cell loading failed', { cellId, error: errorMsg })
+    return undefined
   }
 }
 
@@ -571,8 +582,13 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
             version: '1.0.0',
             can_render_dynamically: true,
           }
+      // Pass initialization_data if the cell reference has persisted state
+      const initialData = cellRef.initialization_data || undefined
+      // Track runtimeId if the cell was previously persisted
+      const runtimeId = cellRef.category === 'persistent' ? cellRef.cellId : undefined
+
       const cellInstance = await instantiateCellByType(cellRef.type, cellType)
-      const viewSpec = await resolveViewSpec(cellInstance, cellRef.type, cellType, undefined, tempId)
+      const viewSpec = await resolveViewSpec(cellInstance, cellRef.type, cellType, initialData, tempId)
 
       updateCell(tempId, {
         cellInstance,
@@ -582,9 +598,11 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
         isMinimized: cellRef.state?.isMinimized ?? false,
         isMaximized: cellRef.state?.isMaximized ?? false,
         isLoading: false,
+        runtimeId,
+        isPersisted: cellRef.category === 'persistent',
       })
 
-      log.info('[App] Cell hydrated', { cellId: tempId, type: cellRef.type })
+      log.info('[App] Cell hydrated', { cellId: tempId, type: cellRef.type, isPersisted: cellRef.category === 'persistent' })
     } catch (err: any) {
       log.error('[App] Cell hydration failed', { type: cellRef.type, error: err?.message })
       updateCell(tempId, {
@@ -598,6 +616,242 @@ async function handleLoadLayout(layoutId: string): Promise<void> {
   gridKey.value++
 
   log.info('[App] Layout loaded', { layoutId, cellCount: cellRefs.length })
+}
+
+// ── Persisted Cell Runtime (Phase 5) ──────────────────────────────────────────
+
+/**
+ * Find a CellTypeDefinition by its UUID (id) from the explorer store.
+ * This is used to resolve notebook_item_type_id from persisted cells back
+ * to the CellTypeDefinition required by handleCellTypeSelected.
+ */
+function findCellTypeById(typeId: string): CellTypeDefinition | null {
+  const known = explorerStore.availableCellTypes as CellTypeDefinition[]
+  const result = known?.find(t => t.id === typeId) ?? null
+  if (!result) {
+    log.warn('[App] findCellTypeById: type not found', { typeId })
+  }
+  return result
+}
+
+/**
+ * Load persisted cells from MongoDB and hydrate them into the grid.
+ *
+ * Called during workspace initialization (onMounted). If no persisted cells
+ * exist, the workspace remains empty (normal behavior). Errors are logged
+ * as warnings and do NOT block the workspace from loading.
+ */
+async function loadPersistedCells(): Promise<void> {
+  log.info('[App] Loading persisted cells')
+
+  try {
+    const persistedCells = await cellRuntime.listCellRuntimes()
+
+    if (persistedCells.length === 0) {
+      log.info('[App] No persisted cells to load')
+      return
+    }
+
+    log.info('[App] Found persisted cells', { count: persistedCells.length })
+
+    // Ensure cell types are loaded for resolution
+    if (explorerStore.availableCellTypes.length === 0) {
+      await explorerStore.loadCellTypes()
+    }
+
+    // Hydrate each persisted cell — one failure does NOT abort the rest
+    for (const persistedCell of persistedCells) {
+      try {
+        const cellTypeDef = findCellTypeById(persistedCell.notebook_item_type_id)
+
+        if (!cellTypeDef) {
+          log.warn('[App] Skipping persisted cell: unknown cell type', {
+            notebookItemTypeId: persistedCell.notebook_item_type_id,
+          })
+          continue
+        }
+
+        const cellId = await handleCellTypeSelected(
+          cellTypeDef,
+          persistedCell.initial_data,
+          { runtimeId: persistedCell._id, isPersisted: true },
+        )
+
+        if (cellId) {
+          log.info('[App] Persisted cell hydrated', {
+            cellId,
+            runtimeId: persistedCell._id,
+            cellType: cellTypeDef.name,
+          })
+        }
+      } catch (err: any) {
+        log.warn('[App] Failed to hydrate persisted cell', {
+          error: err?.message,
+          persistedCellId: persistedCell._id,
+        })
+      }
+    }
+
+    log.info('[App] Persisted cells loaded', { hydrated: persistedCells.length })
+  } catch (err: any) {
+    log.warn('[App] Failed to load persisted cells — workspace continues', {
+      error: err?.message,
+    })
+    // Graceful degradation: workspace loads normally without persisted cells
+  }
+}
+
+/**
+ * Save the current state of a cell to MongoDB.
+ *
+ * - If the cell already has a runtimeId → update existing record
+ * - If the cell has no runtimeId → create new persisted cell record
+ *
+ * @param cellId  GridCell UUID
+ */
+async function handleSaveCellState(cellId: string): Promise<void> {
+  const cell = cells.value.find(c => c.cellId === cellId)
+  if (!cell) {
+    log.warn('[App] handleSaveCellState: cell not found', { cellId })
+    showLoadError('Cell not found')
+    return
+  }
+
+  const initialData = extractCellStateForRuntime(cell)
+
+  if (cell.runtimeId) {
+    // Update existing persisted cell
+    log.info('[App] Updating persisted cell state', { cellId, runtimeId: cell.runtimeId })
+    const success = await cellRuntime.updateCellRuntime(cell.runtimeId, initialData)
+    if (success) {
+      showSaveSuccessToast('Cell state saved ✅')
+    } else {
+      showLoadError('Failed to save cell state')
+    }
+  } else {
+    // Create new persisted cell
+    log.info('[App] Saving cell state as new persisted cell', { cellId })
+
+    const notebookItemTypeId = cell.cellType?.id || ''
+    if (!notebookItemTypeId) {
+      log.warn('[App] Cannot save cell: no cellType.id available', { cellId })
+      showLoadError('Cannot save: cell type ID missing')
+      return
+    }
+
+    const result = await cellRuntime.saveCellRuntime(
+      notebookItemTypeId,
+      initialData,
+      cell.cellType?.name || cell.cellTypeName,
+    )
+
+    if (result && (result._id || result.id)) {
+      const runtimeId = result._id || result.id!
+      updateCell(cellId, { runtimeId, isPersisted: true })
+      showSaveSuccessToast('Cell state saved ✅')
+      log.info('[App] Cell state saved as persisted', { cellId, runtimeId })
+    } else {
+      showLoadError('Failed to save cell state')
+    }
+  }
+}
+
+/**
+ * Load a specific persisted cell into the grid by its PersistedCell record.
+ *
+ * @param persistedCell  The PersistedCell to load from MongoDB
+ */
+async function handleLoadPersistedCell(persistedCell: PersistedCell): Promise<void> {
+  log.info('[App] Loading persisted cell', { persistedCellId: persistedCell._id })
+
+  try {
+    // Ensure cell types are loaded
+    if (explorerStore.availableCellTypes.length === 0) {
+      await explorerStore.loadCellTypes()
+    }
+
+    const cellTypeDef = findCellTypeById(persistedCell.notebook_item_type_id)
+    if (!cellTypeDef) {
+      showLoadError(`Cell type ${persistedCell.notebook_item_type_id} not found`)
+      return
+    }
+
+    await handleCellTypeSelected(
+      cellTypeDef,
+      persistedCell.initial_data,
+      { runtimeId: persistedCell._id, isPersisted: true },
+    )
+
+    showSaveSuccessToast('Persisted cell loaded ✅')
+  } catch (err: any) {
+    showLoadError(`Failed to load persisted cell: ${err?.message}`)
+    log.error('[App] Failed to load persisted cell', {
+      persistedCellId: persistedCell._id,
+      error: err?.message,
+    })
+  }
+}
+
+/**
+ * Delete a persisted cell from MongoDB and remove it from the grid.
+ *
+ * @param runtimeId    MongoDB _id of the persisted cell
+ * @param cellId       GridCell UUID (to remove from grid)
+ */
+async function handleDeletePersistedCell(runtimeId: string, cellId: string): Promise<void> {
+  log.info('[App] Deleting persisted cell', { runtimeId, cellId })
+
+  const success = await cellRuntime.deleteCellRuntime(runtimeId)
+  if (success) {
+    removeCell(cellId)
+    showSaveSuccessToast('Persisted cell deleted')
+    log.info('[App] Persisted cell deleted', { runtimeId, cellId })
+  } else {
+    showLoadError('Failed to delete persisted cell')
+  }
+}
+
+/**
+ * Extract the serializable state from a GridCell for persistence.
+ * Inspects cellInstance for observable state fields and returns them
+ * as a plain object safe for JSON transport.
+ */
+function extractCellStateForRuntime(cell: GridCell): Record<string, any> {
+  const state: Record<string, any> = {}
+
+  if (!cell.cellInstance) return state
+
+  // Common state fields found across BaseCell implementations
+  const stateFields = [
+    'status',
+    'jobId',
+    'content_id',
+    'input_content_id',
+    'error',
+    'progress',
+    'isGenerating',
+    'generatedMesh',
+    'inputImage',
+    'outputData',
+  ]
+
+  for (const field of stateFields) {
+    if (field in cell.cellInstance) {
+      // Skip binary/base64 data (stored separately, not in MongoDB)
+      if (typeof cell.cellInstance[field] === 'string') {
+        const val = cell.cellInstance[field] as string
+        if (val.startsWith('data:') || val.startsWith('blob:')) {
+          continue
+        }
+      }
+      state[field] = cell.cellInstance[field]
+    }
+  }
+
+  // Also include the GridCell-level error and status
+  if (cell.error) state._gridError = cell.error
+
+  return state
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -637,6 +891,8 @@ onUnmounted(() => {
 async function initPersistence(): Promise<void> {
   await loadSavedLayouts()
   autoSave.enableAutoSave()
+  // Load persisted cells from MongoDB (graceful: warns if fails, never blocks)
+  loadPersistedCells()
   log.info('[App] Persistence initialized')
 }
 </script>

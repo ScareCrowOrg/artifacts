@@ -2,11 +2,11 @@
   "version": "0.1",
   "name": "ollama",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-ollama:staging20260530T041927",
-  "imageTag": "staging20260530T041927",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-ollama:staging20260601T012431",
+  "imageTag": "staging20260601T012431",
   "checksum": "sha256:ded44d1012f9e7c1e39a7c3192c583c21c3438e0ec6dff1fe840bb88a7095fae",
   "dependencies": [],
   "generate_env_file": false,
   "totp_seed": false,
-  "lastBuilt": "2026-05-30T04:29:28.974Z"
+  "lastBuilt": "2026-06-01T01:27:32.508Z"
 }
