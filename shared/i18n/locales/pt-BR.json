@@ -1199,7 +1199,12 @@
       "healthHealthy": "Saudável",
       "healthDegraded": "Degradado",
       "healthUnhealthy": "Não saudável",
-      "healthUnknown": "Status desconhecido"
+      "healthUnknown": "Status desconhecido",
+      "save": "Salvar estado da célula",
+      "deletePersisted": "Deletar célula persistida",
+      "persisted": "Persistida",
+      "ephemeral": "Efêmera",
+      "confirmDelete": "Deletar esta célula persistida? Esta ação não pode ser desfeita."
     },
     "dynamicCellView": {
       "loadingView": "Carregando visualização de {cellType}...",
@@ -1257,7 +1262,8 @@
       "seedDataSuccess": "Seed data inicializado com sucesso!\n\n📓 NotebookItemTypes: {notebookItemTypes}\n🤖 Modelos IA: {modelosIA}\n🎭 Agent Types: {agentTypes}\n👤 Agents: {agents}\n📚 Livros: {livros}",
       "seedDataError": "Erro ao inicializar seed data: {error}",
       "noPermission": "Você não tem permissão para executar esta ação",
-      "layoutBooks": "Layout Books"
+      "layoutBooks": "Layout Books",
+      "loadSavedCell": "Carregar Célula Salva"
     },
     "layoutBookSelector": {
       "tooltip": "Layout Books - Salvar e carregar configurações de workspace",
@@ -1312,6 +1318,15 @@
       "hydratingCells": "Restaurando células…",
       "hydrationError": "Falha ao restaurar célula: {type}",
       "noLayouts": "Nenhum layout salvo"
+    },
+    "loadCellModal": {
+      "title": "Carregar Célula Salva",
+      "load": "Carregar",
+      "delete": "Excluir",
+      "confirmDelete": "Excluir esta célula persistida?",
+      "loading": "Carregando células salvas...",
+      "empty": "Você ainda não tem células salvas. Salve o estado de uma célula primeiro.",
+      "error": "Falha ao carregar células salvas. Tente novamente."
     }
   },
   "fragmentsManager": {

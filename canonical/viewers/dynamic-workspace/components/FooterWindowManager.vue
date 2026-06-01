@@ -60,8 +60,18 @@
           </div>
         </div>
 
-        <!-- Right: Layout Book Selector + Workspace status -->
+        <!-- Right: Persistence actions + Layout Book Selector + Workspace status -->
         <div class="footer-right flex items-center gap-3">
+          <!-- Load Saved Cell -->
+          <button
+            class="btn-icon flex items-center gap-1 px-2 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            :title="t('layout.footerWindowManager.loadSavedCell')"
+            @click="$emit('show-load-modal')"
+          >
+            <span>📂</span>
+            <span class="hidden md:inline">{{ t('layout.footerWindowManager.loadSavedCell') }}</span>
+          </button>
+
           <!-- Layout Book Selector (Phase 3) -->
           <LayoutBookSelector
             :layouts="savedLayouts"
@@ -114,6 +124,7 @@ const emit = defineEmits<{
   'close-cell': [cellId: string]
   'load-layout': [layoutId: string]
   'save-layout': []
+  'show-load-modal': []
 }>()
 
 // ── Computed ──────────────────────────────────────────────────────────────────

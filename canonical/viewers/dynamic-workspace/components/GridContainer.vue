@@ -66,6 +66,8 @@
           @remove="$emit('remove-cell', $event)"
           @minimize="$emit('minimize-cell', $event)"
           @maximize="$emit('maximize-cell', $event)"
+          @save="$emit('save-cell', $event)"
+          @delete-persisted="$emit('delete-persisted-cell', $event)"
         />
       </GridItem>
     </GridLayout>
@@ -104,6 +106,8 @@ defineEmits<{
   'remove-cell': [cellId: string]
   'minimize-cell': [cellId: string]
   'maximize-cell': [cellId: string]
+  'save-cell': [cellId: string]
+  'delete-persisted-cell': [{ runtimeId?: string; cellId: string }]
 }>()
 
 // ── Grid Configuration ────────────────────────────────────────────────────────

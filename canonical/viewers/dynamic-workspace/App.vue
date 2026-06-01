@@ -66,6 +66,8 @@
           @remove-cell="handleRemoveCell"
           @minimize-cell="toggleMinimize"
           @maximize-cell="toggleMaximize"
+          @save-cell="handleSaveCellState"
+          @delete-persisted-cell="e => handleDeletePersistedCell(e.runtimeId, e.cellId)"
         />
       </main>
 
@@ -80,6 +82,18 @@
         @close-cell="handleRemoveCell"
         @load-layout="handleLoadLayout"
         @save-layout="showSaveLayoutModal = true"
+        @show-load-modal="showLoadModal = true"
+      />
+
+      <!-- LoadCellModal (Phase 5: Persisted Cell Runtime UI) -->
+      <LoadCellModal
+        :visible="showLoadModal"
+        :persisted-cells="loadableCells"
+        :is-loading="isLoadingPersistedCells"
+        :cell-types="explorerStore.availableCellTypes"
+        @close="showLoadModal = false"
+        @load-cell="handleLoadPersistedCell"
+        @delete-cell="handleDeleteFromModal"
       />
 
       <!-- SaveLayout Modal -->
@@ -150,6 +164,7 @@ import FooterWindowManager from './components/FooterWindowManager.vue'
 import SaveLayoutBookModal from './components/SaveLayoutBookModal.vue'
 import Toolbar from './components/Toolbar.vue'
 import CellModal from './components/CellModal.vue'
+import LoadCellModal from './components/LoadCellModal.vue'
 import { createLogger } from '@/utils/logger'
 import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
 import { useArtifactsExplorerStore } from '#canonical/cell_types/artifacts-explorer-cell/frontend/store'
@@ -205,6 +220,25 @@ const loadError = ref<string | null>(null)
 const saveSuccess = ref<string | null>(null)
 let loadErrorTimer: ReturnType<typeof setTimeout> | null = null
 let saveSuccessTimer: typeof loadErrorTimer = null
+
+// ── Load Cell Modal State (Phase 5) ───────────────────────────────────────────
+const showLoadModal = ref(false)
+const loadableCells = ref<PersistedCell[]>([])
+const isLoadingPersistedCells = ref(false)
+
+/** Watch modal open → load persisted cells from MongoDB */
+watch(showLoadModal, async (visible) => {
+  if (visible) {
+    isLoadingPersistedCells.value = true
+    try {
+      loadableCells.value = await cellRuntime.listCellRuntimes() || []
+    } catch (err: any) {
+      log.warn('[App] Failed to load persisted cells for modal', { error: err?.message })
+    } finally {
+      isLoadingPersistedCells.value = false
+    }
+  }
+})
 
 // ── Explorer Modal State ────────────────────────────────────────────────────────
 const isExplorerModalOpen = ref(false)
@@ -528,6 +562,20 @@ async function handleSaveLayout(name: string, description: string): Promise<void
   } finally {
     isSavingLayout.value = false
   }
+}
+
+// ── Persisted Cell Runtime (Phase 5) ──────────────────────────────────────────
+
+/**
+ * Delete a persisted cell from the modal list after deleting from MongoDB.
+ * Called from LoadCellModal @delete-cell event.
+ */
+async function handleDeleteFromModal(runtimeId: string): Promise<void> {
+  log.info('[App] handleDeleteFromModal', { runtimeId })
+  // Reuse existing handler — it will delete from MongoDB and remove from grid
+  await handleDeletePersistedCell(runtimeId, '')
+  // Also remove from modal's local list so it disappears immediately
+  loadableCells.value = loadableCells.value.filter(c => c._id !== runtimeId)
 }
 
 /**

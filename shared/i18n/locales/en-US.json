@@ -1199,7 +1199,12 @@
       "healthHealthy": "Healthy",
       "healthDegraded": "Degraded",
       "healthUnhealthy": "Unhealthy",
-      "healthUnknown": "Unknown status"
+      "healthUnknown": "Unknown status",
+      "save": "Save cell state",
+      "deletePersisted": "Delete persisted cell",
+      "persisted": "Persisted",
+      "ephemeral": "Ephemeral",
+      "confirmDelete": "Delete this persisted cell? This cannot be undone."
     },
     "dynamicCellView": {
       "loadingView": "Loading {cellType} view...",
@@ -1257,7 +1262,8 @@
       "seedDataSuccess": "Seed data initialized successfully!\n\n📓 NotebookItemTypes: {notebookItemTypes}\n🤖 AI Models: {modelosIA}\n🎭 Agent Types: {agentTypes}\n👤 Agents: {agents}\n📚 Books: {livros}",
       "seedDataError": "Error initializing seed data: {error}",
       "noPermission": "You don't have permission to perform this action",
-      "layoutBooks": "Layout Books"
+      "layoutBooks": "Layout Books",
+      "loadSavedCell": "Load Saved Cell"
     },
     "layoutBookSelector": {
       "tooltip": "Layout Books - Save and load workspace configurations",
@@ -1312,6 +1318,15 @@
       "hydratingCells": "Restoring cells…",
       "hydrationError": "Failed to restore cell: {type}",
       "noLayouts": "No saved layouts"
+    },
+    "loadCellModal": {
+      "title": "Load Saved Cell",
+      "load": "Load",
+      "delete": "Delete",
+      "confirmDelete": "Delete this persisted cell?",
+      "loading": "Loading saved cells...",
+      "empty": "You have no saved cells yet. Save a cell state first.",
+      "error": "Failed to load saved cells. Please try again."
     }
   },
   "fragmentsManager": {

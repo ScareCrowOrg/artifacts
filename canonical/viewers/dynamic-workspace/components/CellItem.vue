@@ -35,6 +35,18 @@
         >
           {{ cell.cellType?.name || cell.cellTypeName }}
         </h3>
+        <!-- Status badge -->
+        <span
+          v-if="!cell.isLoading"
+          class="text-xs px-1.5 py-0.5 rounded-full"
+          :class="cell.isPersisted
+            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+            : 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'"
+          :title="cell.isPersisted ? t('layout.cellWrapper.persisted') : t('layout.cellWrapper.ephemeral')"
+        >
+          {{ cell.isPersisted ? '🟢' : '⚪' }}
+        </span>
+
         <!-- Loading indicator -->
         <span
           v-if="cell.isLoading"
@@ -44,6 +56,25 @@
 
       <!-- Right: Action Buttons -->
       <div class="cell-actions flex items-center gap-1">
+        <!-- Save -->
+        <button
+          class="btn-icon hover:text-blue-500"
+          :title="t('layout.cellWrapper.save')"
+          @click.stop="$emit('save', cell.cellId)"
+        >
+          <span class="text-sm">💾</span>
+        </button>
+
+        <!-- Delete persisted (only if isPersisted) -->
+        <button
+          v-if="cell.isPersisted"
+          class="btn-icon hover:bg-red-500 hover:text-white transition-colors"
+          :title="t('layout.cellWrapper.deletePersisted')"
+          @click.stop="confirmAndDelete"
+        >
+          <span class="text-sm">🗑️</span>
+        </button>
+
         <!-- Minimize -->
         <button
           class="btn-icon"
@@ -147,11 +178,20 @@ const props = defineProps<{
 }>()
 
 // ── Emits ─────────────────────────────────────────────────────────────────────
-defineEmits<{
+const emit = defineEmits<{
   remove: [cellId: string]
   minimize: [cellId: string]
   maximize: [cellId: string]
+  save: [cellId: string]
+  'delete-persisted': [{ runtimeId?: string; cellId: string }]
 }>()
+
+// ── Handlers ─────────────────────────────────────────────────────────────────
+async function confirmAndDelete(): Promise<void> {
+  if (window.confirm(t('layout.cellWrapper.confirmDelete'))) {
+    emit('delete-persisted', { runtimeId: props.cell.runtimeId, cellId: props.cell.cellId })
+  }
+}
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const cellIcon = computed(() => {
