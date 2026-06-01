@@ -1201,6 +1201,7 @@
       "healthUnhealthy": "Unhealthy",
       "healthUnknown": "Unknown status",
       "save": "Save cell state",
+      "loadSavedCell": "Load saved cell state",
       "deletePersisted": "Delete persisted cell",
       "persisted": "Persisted",
       "ephemeral": "Ephemeral",

@@ -67,6 +67,7 @@
           @minimize-cell="toggleMinimize"
           @maximize-cell="toggleMaximize"
           @save-cell="handleSaveCellState"
+          @load-cell="openLoadModal($event)"
           @delete-persisted-cell="e => handleDeletePersistedCell(e.runtimeId, e.cellId)"
         />
       </main>
@@ -91,6 +92,7 @@
         :persisted-cells="loadableCells"
         :is-loading="isLoadingPersistedCells"
         :cell-types="explorerStore.availableCellTypes"
+        :cell-type-id-filter="loadCellTypeFilter"
         @close="showLoadModal = false"
         @load-cell="handleLoadPersistedCell"
         @delete-cell="handleDeleteFromModal"
@@ -225,6 +227,8 @@ let saveSuccessTimer: typeof loadErrorTimer = null
 const showLoadModal = ref(false)
 const loadableCells = ref<PersistedCell[]>([])
 const isLoadingPersistedCells = ref(false)
+/** When triggered from CellItem toolbar, filter modal by cell type */
+const loadCellTypeFilter = ref<string | null>(null)
 
 /** Watch modal open → load persisted cells from MongoDB */
 watch(showLoadModal, async (visible) => {
@@ -237,8 +241,20 @@ watch(showLoadModal, async (visible) => {
     } finally {
       isLoadingPersistedCells.value = false
     }
+  } else {
+    // Reset filter when modal closes
+    loadCellTypeFilter.value = null
   }
 })
+
+/**
+ * Open the load modal with an optional cell type filter.
+ * When triggered from a cell toolbar, only show persisted cells of that type.
+ */
+function openLoadModal(payload: { cellId: string; cellTypeId: string }): void {
+  loadCellTypeFilter.value = payload.cellTypeId || null
+  showLoadModal.value = true
+}
 
 // ── Explorer Modal State ────────────────────────────────────────────────────────
 const isExplorerModalOpen = ref(false)

@@ -1201,6 +1201,7 @@
       "healthUnhealthy": "Não saudável",
       "healthUnknown": "Status desconhecido",
       "save": "Salvar estado da célula",
+      "loadSavedCell": "Carregar célula salva",
       "deletePersisted": "Deletar célula persistida",
       "persisted": "Persistida",
       "ephemeral": "Efêmera",

@@ -65,6 +65,15 @@
           <span class="text-sm">💾</span>
         </button>
 
+        <!-- Load -->
+        <button
+          class="btn-icon hover:text-blue-500"
+          :title="t('layout.cellWrapper.loadSavedCell')"
+          @click.stop="$emit('load', { cellId: cell.cellId, cellTypeId: cell.cellType?.id || '' })"
+        >
+          <span class="text-sm">📂</span>
+        </button>
+
         <!-- Delete persisted (only if isPersisted) -->
         <button
           v-if="cell.isPersisted"
@@ -183,6 +192,7 @@ const emit = defineEmits<{
   minimize: [cellId: string]
   maximize: [cellId: string]
   save: [cellId: string]
+  load: [{ cellId: string; cellTypeId: string }]
   'delete-persisted': [{ runtimeId?: string; cellId: string }]
 }>()
 

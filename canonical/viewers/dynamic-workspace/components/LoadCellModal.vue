@@ -27,15 +27,18 @@
       </div>
 
       <!-- Body: Empty -->
-      <div v-else-if="persistedCells.length === 0" class="flex flex-col items-center justify-center py-16 gap-3">
+      <div v-else-if="filteredCells.length === 0" class="flex flex-col items-center justify-center py-16 gap-3">
         <span class="text-4xl">📂</span>
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('layout.loadCellModal.empty') }}</p>
+        <p v-if="cellTypeIdFilter" class="text-xs text-gray-400 dark:text-gray-500">
+          {{ filterTypeName }}
+        </p>
       </div>
 
       <!-- Body: Cell List -->
       <div v-else class="overflow-y-auto max-h-[60vh] p-4 space-y-2">
         <div
-          v-for="cell in persistedCells"
+          v-for="cell in filteredCells"
           :key="cell._id"
           class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-sm transition-shadow"
         >
@@ -81,7 +84,7 @@
  * - Props are read-only; all mutations use local refs
  */
 
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PersistedCell } from '../composables/useCellRuntime'
 import type { CellTypeDefinition } from '../types'
@@ -93,6 +96,7 @@ const props = defineProps<{
   persistedCells: PersistedCell[]
   isLoading: boolean
   cellTypes: CellTypeDefinition[]
+  cellTypeIdFilter: string | null
 }>()
 
 const emit = defineEmits<{
@@ -100,6 +104,19 @@ const emit = defineEmits<{
   'load-cell': [cell: PersistedCell]
   'delete-cell': [runtimeId: string]
 }>()
+
+/** Filter displayed cells when triggered from a specific cell toolbar */
+const filteredCells = computed(() => {
+  if (!props.cellTypeIdFilter) return props.persistedCells
+  return props.persistedCells.filter(c => c.notebook_item_type_id === props.cellTypeIdFilter)
+})
+
+/** Resolve the filter display name for the header */
+const filterTypeName = computed(() => {
+  if (!props.cellTypeIdFilter) return ''
+  const t = props.cellTypes.find(x => x.id === props.cellTypeIdFilter)
+  return t?.name || t?.id || ''
+})
 
 // Local state (Buffer Local Pattern)
 const deleteConfirmId = ref<string | null>(null)
