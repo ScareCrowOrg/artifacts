@@ -23,3 +23,27 @@ export interface CellFactory {
 }
 
 export const CELL_FACTORY_KEY: InjectionKey<CellFactory> = Symbol('cellFactory')
+
+/**
+ * CellStateBridge — Provide/Inject Pattern for Cell State Sharing
+ *
+ * Allows View.vue to share content_ids with App.vue for persistence.
+ * App.vue uses registered providers during save to capture the current
+ * content reference state (relative_urls, content_ids) from the active View.vue.
+ *
+ * Usage:
+ *   // In App.vue:
+ *   import { CELL_STATE_BRIDGE_KEY, type CellStateBridge } from '#canonical/shared/cellFactory'
+ *   provide(CELL_STATE_BRIDGE_KEY, { registerStateProvider, unregisterStateProvider })
+ *
+ *   // In View.vue:
+ *   import { CELL_STATE_BRIDGE_KEY, type CellStateBridge } from '#canonical/shared/cellFactory'
+ *   const bridge = inject(CELL_STATE_BRIDGE_KEY)
+ *   bridge?.registerStateProvider(cellId, () => ({ mesh_content_id: ... }))
+ */
+export interface CellStateBridge {
+  registerStateProvider(cellId: string, provider: () => Record<string, any>): void
+  unregisterStateProvider(cellId: string): void
+}
+
+export const CELL_STATE_BRIDGE_KEY: InjectionKey<CellStateBridge> = Symbol('cellStateBridge')

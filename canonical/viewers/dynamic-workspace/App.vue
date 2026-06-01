@@ -168,7 +168,7 @@ import Toolbar from './components/Toolbar.vue'
 import CellModal from './components/CellModal.vue'
 import LoadCellModal from './components/LoadCellModal.vue'
 import { createLogger } from '@/utils/logger'
-import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
+import { CELL_FACTORY_KEY, CELL_STATE_BRIDGE_KEY, type CellFactory, type CellStateBridge } from '#canonical/shared/cellFactory'
 import { useArtifactsExplorerStore } from '#canonical/cell_types/artifacts-explorer-cell/frontend/store'
 import type { ExplorerArtifact } from '#canonical/cell_types/artifacts-explorer-cell/frontend/store'
 import type { CellTypeDefinition, GridCell, LayoutBook } from './types'
@@ -499,6 +499,22 @@ const cellFactory: CellFactory = {
 }
 
 provide(CELL_FACTORY_KEY, cellFactory)
+
+// ── Cell State Bridge (View Bridge) ──────────────────────────────────────
+// View.vue registers content_id providers so App.vue can capture them
+// during save without needing direct access to View.vue's reactive state.
+const stateProviders = new Map<string, () => Record<string, any>>()
+
+function registerStateProvider(cellId: string, provider: () => Record<string, any>): void {
+  stateProviders.set(cellId, provider)
+}
+
+function unregisterStateProvider(cellId: string): void {
+  stateProviders.delete(cellId)
+}
+
+const cellStateBridge: CellStateBridge = { registerStateProvider, unregisterStateProvider }
+provide(CELL_STATE_BRIDGE_KEY, cellStateBridge)
 
 // ── Explorer store watcher (Phase 4 → Phase 2 upgrade) ───────────────────────
 // When the user clicks a frontend-orchestrated artifact in the explorer,
@@ -877,42 +893,50 @@ async function handleDeletePersistedCell(runtimeId: string, cellId: string): Pro
 
 /**
  * Extract the serializable state from a GridCell for persistence.
- * Inspects cellInstance for observable state fields and returns them
- * as a plain object safe for JSON transport.
+ *
+ * Priority order:
+ * 1. BaseCell.getState() — standardized serialization (content_ids only, no binary)
+ * 2. View Bridge providers — current reactive content_ids from View.vue
+ * 3. GridCell-level fields (fallback)
+ *
+ * Binary/base64 data is NEVER persisted in MongoDB (Redis Magro architecture).
+ * Only lightweight content references (~200 bytes) are stored.
  */
 function extractCellStateForRuntime(cell: GridCell): Record<string, any> {
   const state: Record<string, any> = {}
 
   if (!cell.cellInstance) return state
 
-  // Common state fields found across BaseCell implementations
-  const stateFields = [
-    'status',
-    'jobId',
-    'content_id',
-    'input_content_id',
-    'error',
-    'progress',
-    'isGenerating',
-    'generatedMesh',
-    'inputImage',
-    'outputData',
-  ]
-
-  for (const field of stateFields) {
-    if (field in cell.cellInstance) {
-      // Skip binary/base64 data (stored separately, not in MongoDB)
-      if (typeof cell.cellInstance[field] === 'string') {
-        const val = cell.cellInstance[field] as string
-        if (val.startsWith('data:') || val.startsWith('blob:')) {
-          continue
+  // Priority 1: Use BaseCell.getState() for standardized serialization
+  if (typeof cell.cellInstance.getState === 'function') {
+    const baseState = cell.cellInstance.getState()
+    Object.assign(state, baseState)
+  } else {
+    // Legacy fallback: manual field extraction
+    const stateFields = [
+      'status', 'jobId', 'content_id', 'input_content_id',
+      'error', 'progress', 'isGenerating', 'generatedMesh',
+      'inputImage', 'outputData',
+    ]
+    for (const field of stateFields) {
+      if (field in cell.cellInstance) {
+        // Skip binary/base64 data
+        if (typeof cell.cellInstance[field] === 'string') {
+          const val = cell.cellInstance[field] as string
+          if (val.startsWith('data:') || val.startsWith('blob:')) continue
         }
+        state[field] = cell.cellInstance[field]
       }
-      state[field] = cell.cellInstance[field]
     }
   }
 
-  // Also include the GridCell-level error and status
+  // Priority 2: Merge View Bridge content_ids from View.vue's reactive state
+  if (cell.cellId && stateProviders.has(cell.cellId)) {
+    const contentIds = stateProviders.get(cell.cellId)!()
+    Object.assign(state, contentIds)
+  }
+
+  // Also include GridCell-level error
   if (cell.error) state._gridError = cell.error
 
   return state

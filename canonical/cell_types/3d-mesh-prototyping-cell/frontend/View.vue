@@ -30,11 +30,13 @@
  * @component
  */
 
-import { ref, computed, watch, onMounted, onUnmounted, defineOptions, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, defineOptions, nextTick, inject } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { MeshPrototypingCell } from './MeshPrototypingCell'
 import type { MeshPrototypingInput } from './MeshPrototypingCell'
 import { apiFetch } from '@/services/apiService'
+import { CELL_STATE_BRIDGE_KEY } from '#canonical/shared/cellFactory'
+import type { CellStateBridge } from '#canonical/shared/cellFactory'
 import { useJobPolling } from './composables/useJobPolling'
 import BabylonModelViewer from '@/components/viewers/BabylonModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
@@ -59,6 +61,11 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'update:cell', value: any): void
 }>()
+
+// View Bridge: register state providers so App.vue captures content_ids during save
+// MeshPrototypingCell creates its own instance locally (for validation),
+// but content_ids from displays (e.g. relative_url) must flow to the save mechanism.
+const cellStateBridge = inject<CellStateBridge>(CELL_STATE_BRIDGE_KEY) ?? null
 
 // Local component state (ITERATION #5 - writable refs for user interactions)
 // ARCHITECTURE: Separate UI State from Persistence State
@@ -213,7 +220,13 @@ const meshBlobUrl = computed(() => {
   }
   
   if (!generatedMesh.value) return null
-  
+
+  // NEW: Direct URL (relative_url from Redis Magro) — return as-is
+  // Vite serves runtime/user/ assets directly, no blob conversion needed
+  if (typeof generatedMesh.value === 'string' && generatedMesh.value.startsWith('/runtime/')) {
+    return generatedMesh.value
+  }
+
   try {
     const base64Data = generatedMesh.value.split(',')[1]
     const binaryData = atob(base64Data)
@@ -467,25 +480,46 @@ const downloadMesh = () => {
   logger.info('Downloading GLB mesh')
 
   try {
-    const link = document.createElement('a')
-
-    // Use blob URL for generated meshes, or file blob for uploaded files
     if (uploadedGLBFile.value) {
       // Manual upload mode - use file blob
       const blob = uploadedGLBFile.value
+      const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
       link.download = uploadedGLBFile.value.name || `mesh_${Date.now()}.glb`
+      link.click()
+      URL.revokeObjectURL(link.href)
+      logger.debug('GLB download initiated (manual upload)')
+
+    } else if (meshBlobUrl.value && meshBlobUrl.value.startsWith('/runtime/')) {
+      // NEW: Direct URL (Redis Magro) — fetch then download
+      fetch(meshBlobUrl.value)
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          return res.blob()
+        })
+        .then(blob => {
+          const link = document.createElement('a')
+          link.href = URL.createObjectURL(blob)
+          link.download = `mesh_${Date.now()}.glb`
+          link.click()
+          URL.revokeObjectURL(link.href)
+          logger.debug('GLB download initiated (Redis Magro URL)')
+        })
+        .catch(err => {
+          logger.error('Error downloading mesh from URL', err)
+          localError.value = 'Failed to download mesh file'
+        })
     } else {
-      // Generated mesh mode - use blob URL
+      // Generated mesh blob URL (legacy base64)
+      const link = document.createElement('a')
       link.href = meshBlobUrl.value!
       link.download = `mesh_${Date.now()}.glb`
+      link.click()
+      logger.debug('GLB download initiated (blob URL)')
     }
-
-    link.click()
-    logger.debug('GLB download initiated')
   } catch (err) {
     logger.error('Error downloading mesh', err)
-    localError.value = 'Failed to download mesh file' // ITERATION #5 - Use local ref
+    localError.value = 'Failed to download mesh file'
   }
 }
 
@@ -509,11 +543,70 @@ const toggleGrid = () => {
 onMounted(async () => {
   logger.info('3D Mesh Prototyping Cell (Babylon.js) mounted')
 
-  // HYDRATION: Read from props ONLY on mount, never again
+  // ── View Bridge Registration ────────────────────────────────────────────
+  // Register state provider so App.vue captures content_ids during save.
+  // The provider is called lazily by extractCellStateForRuntime() at save time.
+  const cellId = props.cell?.cellId
+  if (cellId && cellStateBridge) {
+    cellStateBridge.registerStateProvider(cellId, () => {
+      const ids: Record<string, any> = {}
+      // mesh_relative_url: the current mesh reference (Redis Magro) or base64
+      if (localGeneratedMesh.value) {
+        ids.mesh_relative_url = localGeneratedMesh.value
+      }
+      // input_content_id: if we have a content reference for the input image
+      if (cellInstance.contentId) {
+        ids.input_content_id = cellInstance.contentId
+      }
+      // mesh_content_id: extracted from relative_url or set by cellInstance
+      if (cellInstance.meshContentId) {
+        ids.mesh_content_id = cellInstance.meshContentId
+      }
+      // Also extract content_id from relative_url if cellInstance doesn't have it yet
+      if (!cellInstance.meshContentId && typeof localGeneratedMesh.value === 'string') {
+        const url = localGeneratedMesh.value as string
+        if (url.startsWith('/runtime/')) {
+          const parts = url.split('/')
+          const contentIdx = parts.indexOf('contents')
+          if (contentIdx >= 0 && contentIdx + 1 < parts.length) {
+            ids.mesh_content_id = parts[contentIdx + 1]
+          }
+        }
+      }
+      return ids
+    })
+    logger.info('[View] Registered state provider with View Bridge', { cellId })
+  }
+
+  // ── HYDRATION: Read from props ONLY on mount, never again ───────────────
   // This follows Buffer Local Pattern from REACTIVITY_ISOLATION.md
+
+  // Hydrate input image (legacy or persisted)
   if (!localPreview.value && props.cell?.initial_data?.inputImage) {
     localPreview.value = props.cell.initial_data.inputImage
     logger.info('Hydrated localPreview from props.cell.initial_data')
+  }
+
+  // Hydrate mesh from relative_url (Redis Magro — content reference)
+  if (!localGeneratedMesh.value && props.cell?.initial_data?.mesh_relative_url) {
+    localGeneratedMesh.value = props.cell.initial_data.mesh_relative_url
+    logger.info('Hydrated mesh from mesh_relative_url', {
+      url: localGeneratedMesh.value,
+    })
+  }
+
+  // Hydrate mesh from legacy base64 (fallback)
+  if (!localGeneratedMesh.value && props.cell?.initial_data?.generatedMesh) {
+    localGeneratedMesh.value = props.cell.initial_data.generatedMesh
+    logger.info('Hydrated mesh from legacy generatedMesh')
+  }
+
+  // Hydrate content_ids into cellInstance for future save operations
+  if (props.cell?.initial_data?.input_content_id) {
+    cellInstance.contentId = props.cell.initial_data.input_content_id
+  }
+  if (props.cell?.initial_data?.mesh_content_id) {
+    cellInstance.meshContentId = props.cell.initial_data.mesh_content_id
   }
 
   // Debug check
@@ -522,7 +615,7 @@ onMounted(async () => {
   } else {
     logger.info('Image available on mount')
   }
-  
+
   // Perform health check
   try {
     const health = await cellInstance.health_check()
@@ -544,15 +637,22 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // Unregister from View Bridge
+  const cellId = props.cell?.cellId
+  if (cellId && cellStateBridge) {
+    cellStateBridge.unregisterStateProvider(cellId)
+    logger.info('[View] Unregistered state provider from View Bridge', { cellId })
+  }
+
   // Stop polling
   stopPolling()
-  
+
   // Cleanup blob URL on unmount
   if (previousBlobUrl) {
     URL.revokeObjectURL(previousBlobUrl)
     logger.debug('Revoked blob URL on unmount')
   }
-  
+
   // Cleanup uploaded GLB URL
   if (uploadedGLBUrl.value) {
     URL.revokeObjectURL(uploadedGLBUrl.value)

@@ -134,6 +134,18 @@ export interface MeshPrototypingOutput {
  */
 export class MeshPrototypingCell extends BaseCell {
   private _isSetup: boolean = false
+
+  // ── Persistence State Fields ─────────────────────────────────────────
+  /** Content ID for the input image (auto-persisted on upload or loaded from save) */
+  public contentId: string = ''
+  /** Content ID for the generated mesh (set after job completion or loaded from save) */
+  public meshContentId: string = ''
+  /** Whether a generation job is currently running */
+  public isGenerating: boolean = false
+  /** Current job ID (set when a generation job is queued) */
+  public jobId: string = ''
+  /** Error message if the last operation failed */
+  public error: string = ''
   
   /**
    * Execute 3D mesh generation from 2D image
@@ -416,8 +428,37 @@ export class MeshPrototypingCell extends BaseCell {
   }
   
   /**
+   * Get serializable state for persistence.
+   * Returns content_ids + textual state fields (no binary).
+   * Used by App.vue extractCellStateForRuntime() as baseline.
+   */
+  getState(): Record<string, any> {
+    return {
+      status: this.isGenerating ? 'generating' : 'idle',
+      jobId: this.jobId,
+      input_content_id: this.contentId,
+      mesh_content_id: this.meshContentId,
+      error: this.error,
+      isGenerating: this.isGenerating,
+    }
+  }
+
+  /**
+   * Restore state from persisted data.
+   * Hydrates content_ids and state from saved record.
+   * View.vue uses these to reconstruct direct URLs.
+   */
+  setState(state: Record<string, any>): void {
+    this.contentId = state.input_content_id || state.content_id || ''
+    this.meshContentId = state.mesh_content_id || ''
+    this.jobId = state.jobId || ''
+    this.isGenerating = state.isGenerating || false
+    this.error = state.error || ''
+  }
+
+  /**
    * Health check (optional) - Check backend availability
-   * 
+   *
    * Performs a lightweight check to verify that the backend is reachable.
    * Returns 'degraded' if backend is unreachable, 'healthy' otherwise.
    */

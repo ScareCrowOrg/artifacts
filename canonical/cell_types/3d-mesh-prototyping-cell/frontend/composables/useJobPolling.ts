@@ -21,6 +21,10 @@ export interface JobStatus {
   sf3d_completed?: boolean
   message?: string
   error?: string
+  /** NEW: content reference format (Redis Magro) */
+  content_id?: string
+  relative_url?: string
+  mesh_format?: string
 }
 
 export interface UseJobPollingReturn {
@@ -111,8 +115,13 @@ export function useJobPolling(
         stopPolling()
         
         // Call completion callback
-        if (onComplete && status.mesh_data) {
-          onComplete(status.mesh_data, status.metadata)
+        // Prefer relative_url (Redis Magro) over legacy mesh_data base64
+        if (onComplete) {
+          if (status.relative_url) {
+            onComplete(status.relative_url, status.metadata)
+          } else if (status.mesh_data) {
+            onComplete(status.mesh_data, status.metadata)
+          }
         }
         
         return status

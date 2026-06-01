@@ -280,6 +280,11 @@ async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, An
 
     logger.info(f"Using 3D generation model: {model_type}")
 
+    # Extract assignee_id for Auto-Swap storage routing (Redis Magro)
+    # Must match content-manager's convention: cell_data.get("assignee_id") or cell_data.get("user_id")
+    assignee_id = cell_data.get("assignee_id") or cell_data.get("user_id")
+    logger.info("[Redis Magro] assignee_id: %s", assignee_id)
+
     # Queue job to Redis (non-blocking)
     job_result = await queue_3d_generation_job(
         input_image=input_image,
@@ -287,7 +292,8 @@ async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, An
         enable_draco=reconstruction_params.get('enableDracoCompression', True),
         compression_level=reconstruction_params.get('compressionLevel', 7),
         target_size_mb=reconstruction_params.get('targetFileSizeMB', 5),
-        model_type=model_type
+        model_type=model_type,
+        assignee_id=assignee_id,
     )
     
     if job_result.get("success"):

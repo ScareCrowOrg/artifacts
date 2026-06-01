@@ -308,15 +308,27 @@ class CloudflareR2Storage(StorageBackend):
             return False
 
 
-def get_storage_backend() -> StorageBackend:
+def get_storage_backend(assignee_id: str = None) -> StorageBackend:
     """
     Get configured storage backend based on environment variables.
+
+    When assignee_id is provided, the local storage path is scoped to
+    runtime/user/{assignee_id}/contents for per-user content isolation.
+
+    Args:
+        assignee_id: Optional user identifier for runtime scoping
 
     Returns:
         StorageBackend instance (CloudflareR2Storage or LocalStorage)
     """
     storage_mode = os.getenv("STORAGE_MODE", "local").lower()
     logger.debug(f"[DEBUG] STORAGE_MODE={storage_mode}")
+
+    # Determine base path: runtime/user/{assignee}/contents if assignee_id provided
+    if assignee_id:
+        default_local_path = f"runtime/user/{assignee_id}/contents"
+    else:
+        default_local_path = "/data/content"
 
     if storage_mode == "r2":
         # Check R2 configuration
@@ -325,7 +337,7 @@ def get_storage_backend() -> StorageBackend:
 
         if not r2_enabled:
             logger.warning("R2 mode requested but R2_ENABLED=false. Falling back to local storage.")
-            local_path = os.getenv("STORAGE_LOCAL_PATH", "/data/content")
+            local_path = os.getenv("STORAGE_LOCAL_PATH", default_local_path)
             logger.info(f"[DEBUG] Using LocalStorage at {local_path}")
             return LocalStorage(local_path)
 
@@ -349,7 +361,7 @@ def get_storage_backend() -> StorageBackend:
         if not all([account_id, access_key_id, secret_access_key]):
             logger.error("R2 credentials not configured. Falling back to local storage.")
             logger.error(f"[DEBUG] Missing credentials: account_id={bool(account_id)}, access_key={bool(access_key_id)}, secret={bool(secret_access_key)}")
-            local_path = os.getenv("STORAGE_LOCAL_PATH", "/data/content")
+            local_path = os.getenv("STORAGE_LOCAL_PATH", default_local_path)
             logger.info(f"[DEBUG] Using LocalStorage fallback at {local_path}")
             return LocalStorage(local_path)
 
@@ -366,11 +378,11 @@ def get_storage_backend() -> StorageBackend:
         except Exception as e:
             logger.error(f"Failed to initialize R2 storage: {e}. Falling back to local storage.")
             logger.error(f"[DEBUG] R2 initialization error: {type(e).__name__}: {str(e)}")
-            local_path = os.getenv("STORAGE_LOCAL_PATH", "/data/content")
+            local_path = os.getenv("STORAGE_LOCAL_PATH", default_local_path)
             logger.info(f"[DEBUG] Using LocalStorage fallback at {local_path}")
             return LocalStorage(local_path)
 
     # Default to local storage
-    local_path = os.getenv("STORAGE_LOCAL_PATH", "/data/content")
+    local_path = os.getenv("STORAGE_LOCAL_PATH", default_local_path)
     logger.info(f"[DEBUG] Using LocalStorage (default) at {local_path}")
     return LocalStorage(local_path)

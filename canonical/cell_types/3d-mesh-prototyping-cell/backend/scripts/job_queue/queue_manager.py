@@ -8,6 +8,7 @@ for hybrid Windows Worker architecture.
 import logging
 import base64
 import json
+import os
 import uuid
 import time
 from typing import Dict, Any
@@ -29,6 +30,119 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# ── Auto-Swap Helpers ─────────────────────────────────────────────────────
+# MAX_JOB_INLINE_SIZE: threshold for auto-swap (default 10KB)
+# Fields larger than this are persisted to runtime/user/ and replaced
+# with a lightweight { content_id, relative_url } reference.
+MAX_INLINE_SIZE = int(os.getenv("MAX_JOB_INLINE_SIZE", str(10 * 1024)))
+
+
+def _infer_content_info(key: str, value: str) -> tuple:
+    """Infer MIME type and filename from key name and value prefix."""
+    key_lower = key.lower()
+
+    if 'image' in key_lower or 'img' in key_lower:
+        if value[:100].startswith('data:image/png'):
+            return 'image/png', 'input.png'
+        elif value[:100].startswith('data:image/jpeg') or value[:100].startswith('data:image/jpg'):
+            return 'image/jpeg', 'input.jpg'
+        elif value[:100].startswith('data:image/webp'):
+            return 'image/webp', 'input.webp'
+        return 'image/png', 'input.png'
+
+    if 'mesh' in key_lower or 'glb' in key_lower or 'model' in key_lower:
+        return 'model/gltf-binary', 'mesh.glb'
+
+    return 'application/octet-stream', 'file.bin'
+
+
+def _extract_bytes(value: str) -> bytes:
+    """Extract raw bytes from a data URL, raw base64, or plain string.
+
+    Guards against data loss: only splits on ',' for actual data URLs
+    (value.startswith('data:')), not for plain strings that happen to
+    contain a comma (e.g. "hello, world").
+    """
+    if value.startswith('data:') and ',' in value:
+        prefix, data = value.split(',', 1)
+        if 'base64' in prefix:
+            return base64.b64decode(data)
+        return data.encode('utf-8')
+    # Raw base64 (no data: prefix) — try decode, fallback to utf-8
+    try:
+        return base64.b64decode(value)
+    except Exception:
+        return value.encode('utf-8')
+
+
+def _resolve_abs_path(rel_path: str) -> Path:
+    """Resolve a relative path against the artifacts root."""
+    artifacts_root = os.getenv("ARTIFACTS_ROOT", "/app/artifacts")
+    return Path(artifacts_root) / rel_path
+
+
+async def _auto_swap_large_fields(
+    job_data: Dict[str, Any],
+    assignee_id: str,
+    max_inline: int = MAX_INLINE_SIZE,
+) -> Dict[str, Any]:
+    """
+    Auto-swap large string fields for content references.
+
+    Fields > max_inline are persisted to runtime/user/{assignee}/contents/
+    and replaced with { content_id, relative_url }.
+
+    Args:
+        job_data: Original job data dict (may contain large base64 strings)
+        assignee_id: User identifier for content path scoping
+        max_inline: Maximum inline size in bytes (default: 10KB)
+
+    Returns:
+        Cleaned job_data with large fields replaced by content references
+    """
+    cleaned = {}
+
+    for key, value in job_data.items():
+        # Skip if already a complete content reference (idempotent)
+        # Both content_id and relative_url required — partial references
+        # (e.g. dict with only content_id) are treated as raw data
+        if isinstance(value, dict) and "content_id" in value and "relative_url" in value:
+            cleaned[key] = value
+            continue
+
+        # Skip small fields
+        if not isinstance(value, str) or len(value) <= max_inline:
+            cleaned[key] = value
+            continue
+
+        # Auto-swap: persist to runtime/user/
+        content_id = str(uuid.uuid4())
+
+        # Infer content type and filename from key/prefix
+        content_type, filename = _infer_content_info(key, value)
+
+        # Decode and save to runtime/user/
+        raw_bytes = _extract_bytes(value)
+        rel_path = f"runtime/user/{assignee_id}/contents/{content_id}/{filename}"
+        abs_path = _resolve_abs_path(rel_path)
+        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+        with open(abs_path, "wb") as f:
+            f.write(raw_bytes)
+
+        logger.info(
+            "[Auto-Swap] %s: %d bytes -> content/%s/%s "
+            "(reduction: %dB -> ~200B)",
+            key, len(value), content_id, filename, len(value),
+        )
+
+        # Replace with lightweight reference
+        cleaned[key] = {
+            "content_id": content_id,
+            "relative_url": f"/{rel_path}",
+        }
+
+    return cleaned
+
 
 async def queue_3d_generation_job(
     input_image: str,
@@ -36,7 +150,8 @@ async def queue_3d_generation_job(
     enable_draco: bool = True,
     compression_level: int = 7,
     target_size_mb: float = 5.0,
-    model_type: str = "hunyuan3d"
+    model_type: str = "hunyuan3d",
+    assignee_id: str = None,
 ) -> Dict[str, Any]:
     """
     Queue a 3D generation job to Redis for processing by Windows Worker.
@@ -156,6 +271,18 @@ async def queue_3d_generation_job(
                 "target_size_mb": target_size_mb
             })
         }
+
+        # ✨ AUTO-SWAP: Replace large fields with content references
+        # Before storing to Redis, swap any fields >MAX_INLINE_SIZE (10KB)
+        # for lightweight { content_id, relative_url } (~200 bytes each).
+        # The original binary content persists to runtime/user/{assignee}/contents/
+        if assignee_id:
+            job_data = await _auto_swap_large_fields(job_data, assignee_id)
+            logger.info(
+                "[Auto-Swap] Job %s payload reduced: %d fields processed",
+                job_id,
+                len([k for k, v in job_data.items() if isinstance(v, dict) and "content_id" in v]),
+            )
         
         # Store job status in Redis as a Hash
         status_key = f"scareverse:3d-status:{job_id}"
@@ -256,6 +383,20 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
         status = job_data.get("status", "unknown")
         
         if status == "completed":
+
+            # NEW FORMAT: Worker returned relative_url (Redis Magro browser)
+            if job_data.get("relative_url"):
+                logger.info("Job %s completed with relative_url: %s", job_id, job_data.get("relative_url"))
+                metadata = {}
+                return {
+                    "status": "completed",
+                    "content_id": job_data.get("content_id"),
+                    "relative_url": job_data.get("relative_url"),
+                    "mesh_format": job_data.get("mesh_format", "glb"),
+                    "metadata": metadata,
+                }
+
+            # LEGACY: Worker returned optimized_mesh_path (old format)
             # Job completed - read GLB from shared volume
             # Phase B: Trust Redis - Extract optimized_mesh_path from Worker payload
             

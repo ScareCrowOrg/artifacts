@@ -481,6 +481,33 @@ export abstract class BaseCell {
   }
 
   /**
+   * Get serializable state for persistence.
+   *
+   * Override in subclasses to expose specific state fields
+   * (content_ids, textual state, etc.).
+   * Returns empty object by default — caller uses View Bridge
+   * for additional view-level state.
+   *
+   * @returns Record of serializable state fields
+   */
+  getState(): Record<string, any> {
+    return {}
+  }
+
+  /**
+   * Restore state from persisted data.
+   *
+   * Override in subclasses to hydrate from loaded content_ids
+   * or other persisted state fields.
+   * No-op by default.
+   *
+   * @param state - Previously persisted state record
+   */
+  setState(state: Record<string, any>): void {
+    // Default: no-op
+  }
+
+  /**
    * Execute complete cell lifecycle atomically (optional)
    *
    * Executes setup → execute → save → show in one call.

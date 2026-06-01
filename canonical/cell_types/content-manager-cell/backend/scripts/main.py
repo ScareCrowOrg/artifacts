@@ -199,8 +199,9 @@ async def handle_load(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 "error": f"Content not found: {content_id}"
             }
         
-        # Get storage backend
-        storage = get_storage_backend()
+        # Get storage backend (use assignee from content for runtime path)
+        assignee = getattr(content, 'assignee_id', None)
+        storage = get_storage_backend(assignee_id=assignee)
         
         # Get presigned URL expiry from env or default to 3600
         presigned_expiry = int(os.getenv("R2_PRESIGNED_URL_EXPIRY", "3600"))
@@ -360,7 +361,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         
         # Step 1: Upload to storage backend FIRST (get real data_ref)
         logger.info("[DEBUG] ===== STORAGE BACKEND INITIALIZATION =====")
-        storage = get_storage_backend()
+        storage = get_storage_backend(assignee_id=assignee_id)
         logger.info(f"[DEBUG] Storage backend type: {type(storage).__name__}")
 
         # Log storage configuration
