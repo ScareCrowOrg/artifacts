@@ -2,10 +2,10 @@
   "version": "0.1",
   "name": "comfyui",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260601T012431",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-comfyui:staging20260602T081533",
   "dependencies": [],
   "generate_env_file": false,
   "totp_seed": false,
-  "imageTag": "staging20260601T012431",
-  "lastBuilt": "2026-06-01T01:27:32.499Z"
+  "imageTag": "staging20260602T081533",
+  "lastBuilt": "2026-06-02T09:14:48.187Z"
 }
