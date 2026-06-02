@@ -1,0 +1,78 @@
+{
+  "id": "content-upload-cell",
+  "name": "content-upload-cell",
+  "description": "Upload and persist files to platform storage. Persists via ContentManagerCell, returns content_id for use by other cells as a lightweight reference (~36 bytes instead of MB-sized data URLs).",
+  "version": "1.0.0",
+  "category": "utility",
+  "icon": "📤",
+  "tags": [
+    "upload",
+    "content",
+    "persist",
+    "utility",
+    "headless-capable",
+    "basecell"
+  ],
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/ContentUploadCell.ts"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "capabilities": {
+    "headless_execution": true,
+    "requires_backend": true,
+    "requires_gpu": false,
+    "composable": true,
+    "avg_execution_time_ms": 2000
+  },
+  "default_initial_data": {
+    "category": "ephemeral",
+    "content_type_id": null,
+    "allowMultiple": false
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' since this cell persists content, not its own state"
+    },
+    "content_type_id": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Content type ID for the upload. Auto-detected from MIME type if null."
+    },
+    "allowMultiple": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow multiple file selection"
+    }
+  },
+  "output_schema": {
+    "content_id": {
+      "type": "string",
+      "description": "UUID of the persisted Content record"
+    },
+    "data_ref": {
+      "type": "string",
+      "description": "Storage reference (e.g. /runtime/user/...)"
+    },
+    "filename": {
+      "type": "string",
+      "description": "Persisted filename"
+    },
+    "size_bytes": {
+      "type": "number",
+      "description": "File size in bytes"
+    }
+  },
+  "kind": "cell",
+  "stage": "canonical"
+}
