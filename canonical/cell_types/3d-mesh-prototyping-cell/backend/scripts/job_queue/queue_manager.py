@@ -279,21 +279,36 @@ async def queue_3d_generation_job(
         # The original binary content persists to runtime/user/{assignee}/contents/
         if assignee_id:
             job_data = await _auto_swap_large_fields(job_data, assignee_id)
+
+            # 🐛 Post-process: Map auto-swapped image_base64 to input_image
+            # The worker expects input_image as a content reference dict,
+            # and image_base64 is the legacy fallback (raw base64 string).
+            if isinstance(job_data.get("image_base64"), dict) and "relative_url" in job_data["image_base64"]:
+                job_data["input_image"] = job_data["image_base64"]
+                del job_data["image_base64"]
+
+            swapped_count = len([k for k, v in job_data.items() if isinstance(v, dict) and "content_id" in v])
             logger.info(
                 "[Auto-Swap] Job %s payload reduced: %d fields processed",
                 job_id,
-                len([k for k, v in job_data.items() if isinstance(v, dict) and "content_id" in v]),
+                swapped_count,
             )
-        
+
         # Store job status in Redis as a Hash
         status_key = f"scareverse:3d-status:{job_id}"
-        
+
         # Preventive cleanup: Delete any existing key to avoid WRONGTYPE errors
         # This ensures we always start with a fresh Hash, not a leftover String
         await redis_client.delete(status_key)
-        
-        # Store job data as a Hash using hmset
-        await redis_client.hmset(status_key, job_data)
+
+        # Convert dict values (content references) to JSON strings for hmset
+        # Redis hashes cannot store nested dicts — only strings/bytes/ints/floats.
+        # The lpush path later uses json.dumps() which handles dicts natively.
+        hmset_data = {
+            k: json.dumps(v) if isinstance(v, dict) else v
+            for k, v in job_data.items()
+        }
+        await redis_client.hmset(status_key, hmset_data)
         await redis_client.expire(status_key, 3600)  # Expire after 1 hour
         
         logger.debug(f"Stored job status in Redis: {status_key}")
