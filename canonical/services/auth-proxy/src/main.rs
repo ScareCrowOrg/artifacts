@@ -6,8 +6,11 @@
 //!   - Registers a Redis heartbeat so Traefik can detect readiness before routing traffic.
 //!   - Handles SIGTERM/SIGINT for graceful shutdown (30-second grace period).
 
+mod classify;
 mod config;
+mod file_server;
 mod proxy;
+mod upstream;
 mod ws_proxy;
 
 use axum::{extract::Request, routing::any, Router};
