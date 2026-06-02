@@ -713,13 +713,17 @@ export default defineConfig({
     ],
 
     // HMR (Hot Module Replacement) configuration
-    // With the Triarquia architecture, all browser HMR traffic goes through
-    // the auth-proxy → backend HMRMultiplexer → Vite internal connection.
-    // The browser NEVER connects directly to Vite's HMR WebSocket.
-    // So we set hmr: true (no host restriction) to allow the HMRMultiplexer
-    // to connect via ws://vite:5052/__vite_hmr without Host header validation.
-    // Security is handled upstream by auth-proxy session validation.
-    hmr: true,
+    //
+    // CRITICAL: hmr.path MUST be '/__vite_hmr'. When hmr: true (boolean),
+    // Vite uses ONLY base ('/artifacts/') as WebSocket path, WITHOUT the
+    // '__vite_hmr' suffix. The client then connects to /artifacts/ which
+    // the backend HMRMultiplexer does NOT handle (no WS route for bare
+    // '/artifacts/'). With absolute path '/__vite_hmr', path.posix.join
+    // discards the base and the client generates wss://.../__vite_hmr,
+    // matching the backend's @router.websocket("/__vite_hmr").
+    hmr: {
+      path: '/__vite_hmr',
+    },
 
     // Serve files from artifacts root
     fs: {
