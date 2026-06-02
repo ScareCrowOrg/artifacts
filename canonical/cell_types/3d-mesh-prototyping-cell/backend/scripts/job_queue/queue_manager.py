@@ -264,6 +264,7 @@ async def queue_3d_generation_job(
             "input_image_path": worker_input_path,
             "output_dir": worker_output_dir,
             "image_base64": image_data,  # For worker (comfyui-hunyuan3d-wrapper expects this key)
+            "assignee_id": assignee_id or "unknown",  # Worker uses this for output path scoping
             "parameters": json.dumps({
                 "target_faces": target_faces,
                 "enable_draco": enable_draco,

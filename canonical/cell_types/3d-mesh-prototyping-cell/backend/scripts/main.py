@@ -111,6 +111,18 @@ async def execute_cell(cell_data: Dict[str, Any], user_id: Optional[str] = None)
         logger.info(f"Using 3D model: {model_type}")
         logger.debug(f"Reconstruction params: {reconstruction_params}")
 
+        # 🐛 FIX: Inject user_id into cell_data before routing
+        # The backend passes user_id (current_user.id from JWT) as a separate parameter,
+        # but handle_local_gpu_generation reads assignee_id from cell_data.
+        # Without this injection, assignee_id defaults to "unknown" and the worker
+        # saves files to runtime/user/unknown/ — causing 404 on load.
+        if user_id and "assignee_id" not in cell_data:
+            cell_data["assignee_id"] = user_id
+            logger.info(
+                "[Redis Magro] Injected assignee_id from JWT: %s (was missing from cell_data)",
+                user_id,
+            )
+
         # Route to appropriate generation handler
         result = await route_generation_request(cell_data, generation_mode)
         

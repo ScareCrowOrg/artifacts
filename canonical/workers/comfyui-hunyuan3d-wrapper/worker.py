@@ -156,6 +156,12 @@ class Hunyuan3DWorker(BaseWorker):
             mesh_base64 = result.get("mesh_base64", "")
             if mesh_base64:
                 assignee_id = payload.get("assignee_id", "unknown")
+                if assignee_id == "unknown":
+                    self.logger.warning(
+                        "[%s] assignee_id is 'unknown' — user context missing. "
+                        "File will be saved to runtime/user/unknown/",
+                        self.job_id,
+                    )
                 content_id = str(uuid.uuid4())
                 rel_path = f"runtime/user/{assignee_id}/contents/{content_id}/mesh.glb"
                 abs_path = self._resolve_content_path(rel_path)
