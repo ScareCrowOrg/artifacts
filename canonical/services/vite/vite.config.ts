@@ -713,12 +713,13 @@ export default defineConfig({
     ],
 
     // HMR (Hot Module Replacement) configuration
-    // Browser connects to external host:port, Vite listens internally on 5052
-    hmr: process.env.VITE_HMR_HOST ? {
-      host: process.env.VITE_HMR_HOST,
-      protocol: process.env.VITE_HMR_PROTOCOL || 'wss',
-      path: '/__vite_hmr',
-    } : true,
+    // With the Triarquia architecture, all browser HMR traffic goes through
+    // the auth-proxy → backend HMRMultiplexer → Vite internal connection.
+    // The browser NEVER connects directly to Vite's HMR WebSocket.
+    // So we set hmr: true (no host restriction) to allow the HMRMultiplexer
+    // to connect via ws://vite:5052/__vite_hmr without Host header validation.
+    // Security is handled upstream by auth-proxy session validation.
+    hmr: true,
 
     // Serve files from artifacts root
     fs: {
