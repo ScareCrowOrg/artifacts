@@ -114,9 +114,15 @@ const displayImage = computed(() => {
 })
 
 const generatedMesh = computed(() => {
-  return localGeneratedMesh.value || 
-         props.cell?.initial_data?.generatedMesh || 
-         props.cell?.state?.generatedMesh || 
+  // Priority chain:
+  //   1. localGeneratedMesh (job completion or manual upload)
+  //   2. mesh_relative_url from props (Redis Magro — content reference, set by App.vue on load)
+  //   3. generatedMesh legacy base64 from props (backward compat)
+  return localGeneratedMesh.value ||
+         props.cell?.initial_data?.mesh_relative_url ||
+         props.cell?.state?.mesh_relative_url ||
+         props.cell?.initial_data?.generatedMesh ||
+         props.cell?.state?.generatedMesh ||
          props.cell?.generatedMesh || ''
 })
 
