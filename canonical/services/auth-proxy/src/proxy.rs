@@ -462,7 +462,7 @@ async fn check_session(
 
     let response = state
         .http_client
-        .get(&auth_url)
+        .post(&auth_url)
         .header(header::COOKIE, cookie_header.as_deref().unwrap_or(""))
         .send()
         .await;
