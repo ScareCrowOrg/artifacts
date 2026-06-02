@@ -44,7 +44,24 @@ use crate::upstream::{resolve_proxy_upstream, resolve_wss_upstream};
 
 /// Universal ingress handler.
 pub async fn request_handler(State(state): State<AppState>, req: Request) -> Response {
-    let path = req.uri().path().to_owned();
+    let raw_path = req.uri().path().to_owned();
+    // ── Path normalization ─────────────────────────────────────────────────
+    // If a request arrives at /runtime/, /canonical/, or /sandbox/ without the
+    // /artifacts/ prefix, prepend /artifacts so classify_route() and the
+    // file_server module can process it against the correct artifact root.
+    // This lets the frontend use bare /runtime/... URLs without hardcoding
+    // the /artifacts/ prefix at every call site.
+    let path = if let Some(rest) = raw_path.strip_prefix('/') {
+        if rest.starts_with("runtime/") || rest.starts_with("canonical/") || rest.starts_with("sandbox/") {
+            let normalized = format!("/artifacts/{}", rest);
+            debug!("[AuthProxy] Path normalized: {} → {}", raw_path, normalized);
+            normalized
+        } else {
+            raw_path
+        }
+    } else {
+        raw_path
+    };
     let query = req
         .uri()
         .query()
