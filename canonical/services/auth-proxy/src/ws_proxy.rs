@@ -228,7 +228,8 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
 
                         // Log the exact handshake being sent to upstream for debugging
                         info!(
-                            "[WS] 📤 SENDING UPGRADE TO VITE:\n{}\n[END HANDSHAKE]",
+                            "[WS] 📤 SENDING UPGRADE TO UPSTREAM ({}):\n{}\n[END HANDSHAKE]",
+                            upstream_addr,
                             handshake.trim()
                         );
                         info!("[WS] Token in handshake: {}", handshake.contains("token="));
@@ -244,11 +245,11 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                         // Read and validate upstream's 101 response (with full headers for debugging).
                         match read_http_response(&mut upstream_stream).await {
                             Ok((101, headers_text)) => {
-                                info!("[WS] 🎉 VITE ACCEPTED UPGRADE!");
+                                info!("[WS] 🎉 UPSTREAM ACCEPTED UPGRADE!");
                                 info!("[WS] ✅ HTTP 101 Switching Protocols received");
 
                                 // Log response headers for diagnostic purposes
-                                info!("[WS-DEBUG] Vite Response Headers:\n{}", headers_text);
+                                info!("[WS-DEBUG] Upstream Response Headers:\n{}", headers_text);
 
                                 // Check for sub-protocol echo (RFC 6455 requirement)
                                 let mut has_protocol = false;
@@ -260,22 +261,22 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                                 }
 
                                 if !has_protocol && ws_protocol_for_spawn.is_some() {
-                                    warn!("[WS-DEBUG] ⚠️ Client sent Sec-WebSocket-Protocol but Vite did NOT echo it back!");
+                                    warn!("[WS-DEBUG] ⚠️ Client sent Sec-WebSocket-Protocol but upstream did NOT echo it back!");
                                     warn!("[WS-DEBUG] This may cause the browser to reject the connection (RFC 6455)");
                                 }
 
-                                info!("[WS] 🌐 WebSocket tunnel established with Vite");
+                                info!("[WS] 🌐 WebSocket tunnel established with upstream");
                             }
                             Ok((status, headers_text)) => {
                                 error!(
-                                    "[WS] 🚨 VITE REJECTED UPGRADE - Got HTTP {} instead of 101",
+                                    "[WS] 🚨 UPSTREAM REJECTED UPGRADE - Got HTTP {} instead of 101",
                                     status
                                 );
-                                error!("[WS] Response headers from Vite:\n{}", headers_text);
+                                error!("[WS] Response headers from upstream:\n{}", headers_text);
                                 error!("[WS] This means:");
                                 error!("[WS]   - Token validation failed? Check token format");
-                                error!("[WS]   - Vite HMR handler not found? Check path: {}", full_path);
-                                error!("[WS]   - Host mismatch? Expected 'vite:5052', got Host: {}", original_host);
+                                error!("[WS]   - Handler not found? Check path: {}", full_path);
+                                error!("[WS]   - Host mismatch? Expected upstream host, got Host: {}", original_host);
                                 error!("[WS] Handshake sent: GET {} HTTP/1.1", full_path);
                                 error!("[WS] Host header: {}", original_host);
                                 return;
@@ -285,14 +286,14 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                                     "[WS] 🚨 Failed to read upstream HTTP response from {}: {}",
                                     upstream_addr, e
                                 );
-                                error!("[WS] Possible causes: Vite not listening, network issue, timeout");
+                                error!("[WS] Possible causes: upstream not listening, network issue, timeout");
                                 return;
                             }
                         }
 
                         // Bidirectional byte-level tunnel: browser ↔ upstream.
                         // Note: Do NOT read from upstream_stream before copy_bidirectional!
-                        // Vite sends {"type":"connected"} immediately after 101, which MUST reach the browser.
+                        // Upstream sends {"type":"connected"} immediately after 101, which MUST reach the browser.
                         match tokio::io::copy_bidirectional(
                             &mut browser_io,
                             &mut upstream_stream,
@@ -306,7 +307,7 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                                 );
 
                                 if from_upstream > 0 && from_upstream < 30 {
-                                    warn!("[WS] ⚠️ Vite closed connection with small frame ({} bytes)", from_upstream);
+                                    warn!("[WS] ⚠️ Upstream closed connection with small frame ({} bytes)", from_upstream);
                                 }
                             }
                             Err(e) => {
