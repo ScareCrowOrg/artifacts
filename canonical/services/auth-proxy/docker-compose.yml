@@ -4,12 +4,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-auth-proxy:staging20260602T173303
+    image: hub-staging.scareverse.net/registry/staging/scareverse-auth-proxy:staging20260602T175928
     container_name: scareverse-auth-proxy-worker
     restart: unless-stopped
     volumes:
-      - ../../../../artifacts/canonical:/app/artifacts/canonical:ro
-      - ../../../../artifacts/shared:/app/artifacts/shared:ro
+      - ../../../../artifacts:/app/artifacts:ro
       - C:\Users\flavi\.scareverse\staging\logs\auth-proxy:/app/logs:rw
     environment:
       - PYTHONPATH=/app/artifacts
