@@ -69,7 +69,7 @@ describe('WikipediaSearchCell', () => {
     it('returns successful search results', async () => {
       const mockResponse = {
         query: {
-          searchinfo: { totalhits: 100 },
+          searchinfo: { totalHits: 100 },
           search: [
             { pageid: 1, title: 'AI', snippet: '<span class="searchmatch">AI</span> is...' },
             { pageid: 2, title: 'Machine Learning', snippet: '<span class="searchmatch">ML</span> is...' }

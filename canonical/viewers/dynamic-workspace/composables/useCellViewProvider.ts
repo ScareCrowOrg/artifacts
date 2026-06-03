@@ -309,7 +309,7 @@ export function useCellViewProvider() {
           component: markRaw(ViewComponent),
           props: {
             cellInstance,
-            cell: { cellTypeName, cellType, cellId },
+            cell: { cellTypeName, cellType, cellId, initial_data: data },
           },
         }
       } catch (err) {
@@ -365,7 +365,7 @@ export function useCellViewProvider() {
           component: markRaw(ViewComponent),
           props: {
             cellInstance,
-            cell: { cellTypeName, cellType, cellId },
+            cell: { cellTypeName, cellType, cellId, initial_data: data },
           },
         }
       } catch (err) {

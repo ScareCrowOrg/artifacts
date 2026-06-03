@@ -1,0 +1,89 @@
+{
+  "id": "content-selection-cell",
+  "name": "content-selection-cell",
+  "description": "Browse and select persisted content. Lists content via ContentManagerCell, allows user to select an item and returns content_id + metadata for use by other cells.",
+  "version": "1.0.0",
+  "category": "utility",
+  "icon": "📂",
+  "tags": [
+    "content",
+    "selection",
+    "browse",
+    "utility",
+    "headless-capable",
+    "basecell"
+  ],
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/ContentSelectionCell.ts"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "capabilities": {
+    "headless_execution": true,
+    "requires_backend": true,
+    "requires_gpu": false,
+    "composable": true,
+    "avg_execution_time_ms": 500
+  },
+  "default_initial_data": {
+    "category": "ephemeral",
+    "content_type_id": null,
+    "allow_multiple": false,
+    "view_mode": "list"
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' since this cell selects content, not its own state"
+    },
+    "content_type_id": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Initial content type filter. Displays all types if null."
+    },
+    "allow_multiple": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow multiple content selection (future use)"
+    },
+    "view_mode": {
+      "type": "string",
+      "enum": ["list", "grid"],
+      "default": "list",
+      "description": "Display mode for content items"
+    }
+  },
+  "output_schema": {
+    "selected_content_id": {
+      "type": "string",
+      "description": "UUID of the selected Content record"
+    },
+    "selected_filename": {
+      "type": "string",
+      "description": "Filename of the selected content"
+    },
+    "selected_content_type_id": {
+      "type": "string",
+      "description": "Content type ID of the selected content"
+    },
+    "selected_size_bytes": {
+      "type": "number",
+      "description": "File size in bytes of the selected content"
+    },
+    "selected_data_ref": {
+      "type": "string",
+      "description": "Storage reference of the selected content"
+    }
+  },
+  "kind": "cell",
+  "stage": "canonical"
+}

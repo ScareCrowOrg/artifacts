@@ -49,8 +49,11 @@ export interface ReconstructionParams {
  * MeshPrototypingCell input interface
  */
 export interface MeshPrototypingInput {
-  /** Base64-encoded PNG image (required) */
-  inputImage: string
+  /** Base64-encoded PNG image (optional if input_content_id provided) */
+  inputImage?: string
+
+  /** Content ID from ContentManagerCell (optional if inputImage provided) */
+  input_content_id?: string
 
   /** Reconstruction parameters (optional) */
   reconstructionParams?: ReconstructionParams
@@ -138,6 +141,8 @@ export class MeshPrototypingCell extends BaseCell {
   // ── Persistence State Fields ─────────────────────────────────────────
   /** Content ID for the input image (auto-persisted on upload or loaded from save) */
   public contentId: string = ''
+  /** Data ref URL for direct display of input image (e.g. /runtime/user/...) */
+  public contentDataRef: string = ''
   /** Content ID for the generated mesh (set after job completion or loaded from save) */
   public meshContentId: string = ''
   /** Whether a generation job is currently running */
@@ -268,8 +273,13 @@ export class MeshPrototypingCell extends BaseCell {
       inputs: {
         inputImage: {
           type: 'string',
-          description: 'Base64-encoded PNG image',
-          required: true
+          description: 'Base64-encoded PNG image (optional if input_content_id provided)',
+          required: false
+        },
+        input_content_id: {
+          type: 'string',
+          description: 'Content ID from ContentManagerCell (optional if inputImage provided)',
+          required: false
         },
         generationMode: {
           type: 'string',
@@ -343,19 +353,29 @@ export class MeshPrototypingCell extends BaseCell {
    */
   validate(input: Record<string, any>): ValidationError[] {
     const errors: ValidationError[] = []
-    
-    // Check required inputImage field
-    if (!input.inputImage) {
-      errors.push({ field: 'inputImage', message: 'Input image is required' })
-    } else if (typeof input.inputImage !== 'string' || input.inputImage.trim().length === 0) {
-      errors.push({ field: 'inputImage', message: 'Input image must be a non-empty base64-encoded string' })
-    } else {
-      // Basic validation: check if it looks like base64
-      const base64Pattern = /^[A-Za-z0-9+/=]+$/
-      const cleanedImage = input.inputImage.replace(/^data:image\/[a-z]+;base64,/, '')
-      if (!base64Pattern.test(cleanedImage)) {
-        errors.push({ field: 'inputImage', message: 'Input image must be a valid base64-encoded string' })
+
+    // CRITICAL: At least one of inputImage or input_content_id must be provided
+    if (!input.inputImage && !input.input_content_id) {
+      errors.push({ field: 'input', message: 'Either inputImage or input_content_id is required' })
+    }
+
+    // If inputImage provided, validate format
+    if (input.inputImage) {
+      if (typeof input.inputImage !== 'string' || input.inputImage.trim().length === 0) {
+        errors.push({ field: 'inputImage', message: 'Input image must be a non-empty base64-encoded string' })
+      } else {
+        // Basic validation: check if it looks like base64
+        const base64Pattern = /^[A-Za-z0-9+/=]+$/
+        const cleanedImage = input.inputImage.replace(/^data:image\/[a-z]+;base64,/, '')
+        if (!base64Pattern.test(cleanedImage)) {
+          errors.push({ field: 'inputImage', message: 'Input image must be a valid base64-encoded string' })
+        }
       }
+    }
+
+    // If input_content_id provided, validate it's non-empty string
+    if (input.input_content_id && (typeof input.input_content_id !== 'string' || input.input_content_id.trim().length === 0)) {
+      errors.push({ field: 'input_content_id', message: 'input_content_id must be a non-empty string' })
     }
     
     // Validate generation mode if provided
@@ -437,6 +457,7 @@ export class MeshPrototypingCell extends BaseCell {
       status: this.isGenerating ? 'generating' : 'idle',
       jobId: this.jobId,
       input_content_id: this.contentId,
+      input_data_ref: this.contentDataRef,
       mesh_content_id: this.meshContentId,
       error: this.error,
       isGenerating: this.isGenerating,
@@ -450,6 +471,7 @@ export class MeshPrototypingCell extends BaseCell {
    */
   setState(state: Record<string, any>): void {
     this.contentId = state.input_content_id || state.content_id || ''
+    this.contentDataRef = state.input_data_ref || ''
     this.meshContentId = state.mesh_content_id || ''
     this.jobId = state.jobId || ''
     this.isGenerating = state.isGenerating || false

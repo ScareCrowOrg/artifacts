@@ -30,7 +30,7 @@
  * @component
  */
 
-import { ref, computed, watch, onMounted, onUnmounted, defineOptions, nextTick, inject } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, defineOptions, inject } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { MeshPrototypingCell } from './MeshPrototypingCell'
 import type { MeshPrototypingInput } from './MeshPrototypingCell'
@@ -38,12 +38,15 @@ import { apiFetch } from '@/services/apiService'
 import { CELL_STATE_BRIDGE_KEY } from '#canonical/shared/cellFactory'
 import type { CellStateBridge } from '#canonical/shared/cellFactory'
 import { useJobPolling } from './composables/useJobPolling'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 import BabylonModelViewer from '@/components/viewers/BabylonModelViewer.vue'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
 import ViewportControls from './components/ViewportControls.vue'
 import MeshMetadataDisplay from './components/MeshMetadataDisplay.vue'
 import GenerationModeSwitcher from './components/GenerationModeSwitcher.vue'
 import GLBFileUploader from './components/GLBFileUploader.vue'
+import { ContentUploadCell } from '#canonical/cell_types/content-upload-cell/frontend/ContentUploadCell'
+import ContentSelectorModal from './components/ContentSelectorModal.vue'
 
 // ITERATION #9: Define component name for proper Vue registration in dynamic loading context
 defineOptions({ name: 'MeshPrototypingCellView' })
@@ -80,6 +83,14 @@ const localWireframeMode = ref<boolean>(false) // Viewport setting (writable)
 const localShowGrid = ref<boolean>(true) // Viewport setting (writable)
 const localSolidifySilhouette = ref<boolean>(false) // Silhouette processing (writable)
 
+// Input source mode: Upload New | Select Existing
+type InputSourceMode = 'upload-new' | 'select-existing'
+const inputSourceMode = ref<InputSourceMode>('upload-new')
+
+// Content selection state (G5)
+const selectedContentName = ref<string | null>(null)
+const contentSelectorRef = ref<InstanceType<typeof ContentSelectorModal> | null>(null)
+
 // Generation mode state
 type GenerationMode = 'cloud-api' | 'local-gpu' | 'manual-upload'
 type MeshGenerationModel = 'sf3d' | 'instantmesh'
@@ -108,9 +119,7 @@ const uploadedGLBUrl = ref<string | null>(null)
 const displayImage = computed(() => {
   // ONLY use localPreview - NO fallback to props
   // Props fallback can cause re-renders when parent updates
-  const result = localPreview.value || ''
-  console.log('[COMPUTED] displayImage:', { length: result.length, hasData: result.length > 0 })
-  return result
+  return localPreview.value || ''
 })
 
 const generatedMesh = computed(() => {
@@ -260,64 +269,27 @@ watch(meshBlobUrl, (newUrl, oldUrl) => {
   previousBlobUrl = newUrl
 })
 
-// DEBUG: Watch localPreview changes - DETAILED LOGGING TO DETECT RESETS
-watch(localPreview, (newVal, oldVal) => {
-  const timestamp = new Date().toLocaleTimeString('pt-BR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 })
-  const newLength = newVal?.length || 0
-  const oldLength = oldVal?.length || 0
-
-  console.log(`%c[${timestamp}] [WATCH] localPreview CHANGED`, 'background: #ff6b6b; color: white; font-weight: bold;', {
-    'Old Length': oldLength > 0 ? `${oldLength} bytes` : 'EMPTY',
-    'New Length': newLength > 0 ? `${newLength} bytes` : 'EMPTY',
-    'Direction': oldLength === 0 && newLength > 0 ? '📤 UPLOAD (empty → data)' : oldLength > 0 && newLength === 0 ? '❌ RESET (data → empty)' : '🔄 UPDATED',
-    'New Start': newVal?.substring(0, 50) || 'null'
-  })
-
-  // CRITICAL: If resetting to empty, log stack trace
-  if (oldLength > 0 && newLength === 0) {
-    console.error('%c🚨 CRITICAL: localPreview WAS RESET TO EMPTY!', 'background: #ff0000; color: white; font-weight: bold;')
-    console.trace('[STACK TRACE] Who reset localPreview?')
-  }
-})
-
-// DEBUG: Watch displayImage changes
-watch(displayImage, (newVal, oldVal) => {
-  console.log('[WATCH] displayImage (computed) changed', {
-    newValLength: newVal?.length || 0,
-    oldValLength: oldVal?.length || 0
-  })
-})
-
-// DEBUG: Watch hasInputImage changes
-watch(hasInputImage, (newVal, oldVal) => {
-  console.log('[WATCH] hasInputImage (computed) changed', { newVal, oldVal })
-})
-
 /**
  * Handle image file upload
- * ARCHITECTURE: Updates only localPreview (UI state), not persistent state
+ * ARCHITECTURE: localPreview updated immediately for UI; async persist via ContentUploadCell
  */
-let uploadCallCount = 0
+const getCurrentAssigneeId = (): string => {
+  try {
+    const store = useWorkspaceStore()
+    return store.sessionUserId || store.userId || ''
+  } catch {
+    return ''
+  }
+}
+
 const handleFileUpload = (event: Event) => {
-  uploadCallCount++
-  const callNum = uploadCallCount
-  const timestamp = new Date().toLocaleTimeString('pt-BR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 })
-
-  console.log(`%c[${timestamp}] handleFileUpload CALLED (#${callNum})`, 'background: #4ecdc4; color: white; font-weight: bold;')
-
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
 
-  if (!file) {
-    console.warn(`[${timestamp}] No file selected (call #${callNum})`)
-    return
-  }
-
-  console.log(`[${timestamp}] File selected: ${file.name} (${file.size} bytes) [call #${callNum}]`)
+  if (!file) return
 
   if (!file.type.startsWith('image/')) {
     localError.value = 'Please upload a valid image file (PNG, JPG, etc.)'
-    console.warn(`[${timestamp}] Invalid file type: ${file.type} [call #${callNum}]`)
     return
   }
 
@@ -325,38 +297,54 @@ const handleFileUpload = (event: Event) => {
 
   const reader = new FileReader()
 
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const result = e.target?.result as string
 
-      console.log(`%c[${timestamp}] reader.onload TRIGGERED - setting localPreview to ${result.length} bytes [call #${callNum}]`, 'background: #95e1d3; color: #222;')
-
-      // IMMEDIATE UI UPDATE: localPreview updates synchronously
-      // No cascading computeds, no prop dependencies, just show what user picked
+      // 1. IMMEDIATE UI UPDATE: Display the image right away
       localPreview.value = result
       localError.value = null
-
-      console.log(`%c[${timestamp}] ✅ localPreview.value SET SUCCESSFULLY [call #${callNum}]`, 'background: #38ada9; color: white; font-weight: bold;')
 
       logger.debug('Image loaded as base64', {
         previewLength: localPreview.value?.length || 0
       })
+
+      // 2. Async persist via ContentUploadCell (non-blocking, generation still works without it)
+      try {
+        const uploader = new ContentUploadCell()
+        const assigneeId = getCurrentAssigneeId()
+        const persistResult = await uploader.execute({
+          filename: file.name,
+          binary: result,
+          assignee_id: assigneeId,
+          content_type_id: 'image-png',
+        })
+
+        if (persistResult.success) {
+          const output = persistResult.output as any
+          cellInstance.contentId = output.content_id
+          cellInstance.contentDataRef = output.data_ref
+          logger.info('Input image persisted via ContentUploadCell', {
+            contentId: output.content_id,
+            dataRef: output.data_ref,
+          })
+        }
+      } catch (persistErr: any) {
+        // Non-critical: user can still generate without persistence
+        logger.warn('Image persist failed (non-critical, generation still works)', persistErr)
+      }
     } catch (err: any) {
       localError.value = `Image load failed: ${err.message}`
-      console.error(`[${timestamp}] Error in onload: ${err.message} [call #${callNum}]`)
       logger.error('Image load error', err)
     }
   }
 
   reader.onerror = () => {
     localError.value = 'Failed to read image file'
-    console.error(`[${timestamp}] FileReader error [call #${callNum}]`)
     logger.error('FileReader error')
   }
 
-  console.log(`[${timestamp}] Calling reader.readAsDataURL [call #${callNum}]`)
   reader.readAsDataURL(file)
-  console.log(`[${timestamp}] readAsDataURL call completed [call #${callNum}]`)
 }
 
 /**
@@ -382,6 +370,64 @@ const handleGLBUploadError = (error: string) => {
 }
 
 /**
+ * Open the content selector to browse persisted images (G5)
+ */
+const openContentSelector = () => {
+  contentSelectorRef.value?.open()
+}
+
+/**
+ * Handle user selection of a persisted content item (G5)
+ */
+const handleContentSelected = (content: any) => {
+  cellInstance.contentId = content.content_id
+  cellInstance.contentDataRef = content.data_ref
+  selectedContentName.value = content.filename
+
+  // Display image directly from data_ref URL
+  localPreview.value = content.data_ref
+  localError.value = null
+
+  logger.info('Content selected', {
+    contentId: content.content_id,
+    dataRef: content.data_ref,
+    filename: content.filename,
+  })
+}
+
+/**
+ * Resolve input image to base64 for generation.
+ * If we have a base64 data URL (new upload), use directly.
+ * If we have a data_ref URL (loaded from save), fetch and convert.
+ */
+const resolveInputImageForGeneration = async (): Promise<string> => {
+  // Already have base64 in localPreview (new upload)
+  if (localPreview.value?.startsWith('data:')) {
+    return localPreview.value
+  }
+
+  // Have a data_ref URL — fetch binary and convert to base64
+  if (localPreview.value && cellInstance.contentDataRef) {
+    try {
+      const response = await apiFetch(cellInstance.contentDataRef)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const blob = await response.blob()
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = () => reject(new Error('Failed to convert blob to base64'))
+        reader.readAsDataURL(blob)
+      })
+    } catch (err: any) {
+      logger.error('Failed to resolve input image for generation', err)
+      throw new Error('Cannot resolve input image: ' + err.message)
+    }
+  }
+
+  throw new Error('No input image available for generation')
+}
+
+/**
  * Generate 3D mesh from input image with mode-aware routing
  * Supports: cloud-api, local-gpu, manual-upload
  */
@@ -397,6 +443,16 @@ const generate3DMesh = async () => {
   localError.value = null
 
   try {
+    // Resolve image to base64 (handles both new uploads and loaded-from-save)
+    let resolvedImage: string
+    try {
+      resolvedImage = await resolveInputImageForGeneration()
+    } catch (err: any) {
+      localError.value = err.message
+      localIsGenerating.value = false
+      return
+    }
+
     // Prepare input for cell execution
     const reconstructionParams = props.cell?.initial_data?.reconstructionParams ||
                                 props.cell?.state?.reconstructionParams ||
@@ -408,7 +464,8 @@ const generate3DMesh = async () => {
                                 }
 
     const input: MeshPrototypingInput = {
-      inputImage: displayImage.value || '',
+      inputImage: resolvedImage,
+      input_content_id: cellInstance.contentId || undefined,
       generationMode: generationMode.value,
       modelType: selectedModel.value,
       reconstructionParams,
@@ -563,6 +620,7 @@ onMounted(async () => {
       // input_content_id: if we have a content reference for the input image
       if (cellInstance.contentId) {
         ids.input_content_id = cellInstance.contentId
+        ids.input_data_ref = cellInstance.contentDataRef  // URL for direct display
       }
       // mesh_content_id: extracted from relative_url or set by cellInstance
       if (cellInstance.meshContentId) {
@@ -587,10 +645,17 @@ onMounted(async () => {
   // ── HYDRATION: Read from props ONLY on mount, never again ───────────────
   // This follows Buffer Local Pattern from REACTIVITY_ISOLATION.md
 
-  // Hydrate input image (legacy or persisted)
-  if (!localPreview.value && props.cell?.initial_data?.inputImage) {
-    localPreview.value = props.cell.initial_data.inputImage
-    logger.info('Hydrated localPreview from props.cell.initial_data')
+  // Hydrate input image: data_ref URL (new) → base64 (legacy fallback)
+  if (!localPreview.value) {
+    if (props.cell?.initial_data?.input_data_ref) {
+      // NEW: Runtime URL from ContentManagerCell — Vite serves it directly
+      localPreview.value = props.cell.initial_data.input_data_ref
+      logger.info('Hydrated localPreview from input_data_ref URL')
+    } else if (props.cell?.initial_data?.inputImage) {
+      // LEGACY: Base64 data URL fallback
+      localPreview.value = props.cell.initial_data.inputImage
+      logger.info('Hydrated localPreview from legacy inputImage')
+    }
   }
 
   // Hydrate mesh from relative_url (Redis Magro — content reference)
@@ -610,6 +675,9 @@ onMounted(async () => {
   // Hydrate content_ids into cellInstance for future save operations
   if (props.cell?.initial_data?.input_content_id) {
     cellInstance.contentId = props.cell.initial_data.input_content_id
+  }
+  if (props.cell?.initial_data?.input_data_ref) {
+    cellInstance.contentDataRef = props.cell.initial_data.input_data_ref
   }
   if (props.cell?.initial_data?.mesh_content_id) {
     cellInstance.meshContentId = props.cell.initial_data.mesh_content_id
@@ -714,7 +782,7 @@ onUnmounted(() => {
       <div class="flex items-center gap-2 mb-4">
         <span class="text-2xl">📤</span>
         <h3 class="text-lg font-semibold text-text-primary dark:text-text-primary-dark">
-          Upload Image for 3D Reconstruction
+          Input Image for 3D Reconstruction
         </h3>
       </div>
 
@@ -726,14 +794,58 @@ onUnmounted(() => {
         Supported formats: PNG, JPG, JPEG
       </p>
 
-      <!-- File Input -->
-      <input
-        ref="fileInput"
-        type="file"
-        accept="image/*"
-        @change="handleFileUpload"
-        class="block w-full text-sm text-text-secondary dark:text-text-secondary-dark p-3 border border-dashed border-border dark:border-border-dark rounded mb-4 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary dark:file:bg-primary-light file:text-white hover:file:bg-primary-hover dark:hover:file:bg-primary"
-        :disabled="isGenerating"
+      <!-- Input Source Mode Tabs: Upload New | Select Existing -->
+      <div class="flex gap-2 mb-4">
+        <button
+          @click="inputSourceMode = 'upload-new'"
+          :class="inputSourceMode === 'upload-new'
+            ? 'bg-primary text-white'
+            : 'bg-surface text-text-secondary hover:bg-surface-hover'"
+          class="px-4 py-2 rounded text-sm font-medium transition"
+        >
+          📤 Upload New
+        </button>
+        <button
+          @click="inputSourceMode = 'select-existing'"
+          :class="inputSourceMode === 'select-existing'
+            ? 'bg-primary text-white'
+            : 'bg-surface text-text-secondary hover:bg-surface-hover'"
+          class="px-4 py-2 rounded text-sm font-medium transition"
+        >
+          📂 Select Existing
+        </button>
+      </div>
+
+      <!-- Tab: Upload New -->
+      <div v-if="inputSourceMode === 'upload-new'">
+        <input
+          ref="fileInput"
+          type="file"
+          accept="image/*"
+          @change="handleFileUpload"
+          class="block w-full text-sm text-text-secondary dark:text-text-secondary-dark p-3 border border-dashed border-border dark:border-border-dark rounded mb-4 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary dark:file:bg-primary-light file:text-white hover:file:bg-primary-hover dark:hover:file:bg-primary"
+          :disabled="isGenerating"
+        />
+      </div>
+
+      <!-- Tab: Select Existing -->
+      <div v-if="inputSourceMode === 'select-existing'">
+        <button
+          @click="openContentSelector"
+          :disabled="isGenerating"
+          class="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded text-sm transition"
+        >
+          📂 Browse Library
+        </button>
+        <p v-if="selectedContentName" class="text-sm text-success mt-2">
+          ✅ Selected: {{ selectedContentName }}
+        </p>
+      </div>
+
+      <!-- Content Selection Modal Component -->
+      <ContentSelectorModal
+        ref="contentSelectorRef"
+        @select="handleContentSelected"
       />
 
       <!-- Solidify Silhouette Option (moved inside card) -->
@@ -766,43 +878,18 @@ onUnmounted(() => {
       <label class="block text-sm font-medium mb-4 text-text-primary dark:text-text-primary-dark">
         📤 Input Image Preview
       </label>
-      <!-- Clean, simple preview using displayImage -->
-      <div class="preview-container border-4 border-dashed border-blue-400 p-4 bg-blue-50 dark:bg-blue-950 rounded">
-        <!-- DEBUG: Show actual values - ALWAYS VISIBLE -->
-        <div class="text-xl font-bold text-red-600 bg-yellow-200 p-4 border-4 border-red-600 mb-4">
-          🔴 TEMPLATE RENDER TEST 🔴
-        </div>
-
-        <p class="text-xs text-gray-500 mb-4 p-2 bg-gray-100 rounded">
-          DEBUG: displayImage.length={{ displayImage.length }}, localPreview.length={{ localPreview?.length || 0 }}, hasInputImage={{ hasInputImage }}
+      <!-- Image preview / placeholder -->
+      <div class="preview-container border-2 border-dashed border-border dark:border-border-dark p-4 rounded">
+        <img
+          v-if="displayImage"
+          :src="displayImage"
+          alt="Input for reconstruction"
+          class="w-full h-auto rounded"
+          style="max-height: 400px;"
+        />
+        <p v-else class="text-sm text-text-secondary dark:text-text-secondary-dark text-center py-8">
+          No image selected. Upload or select an image above.
         </p>
-
-        <!-- REMOVED V-IF: Always show status -->
-        <p v-if="displayImage.length === 0" class="text-xs text-blue-700 dark:text-blue-300 p-2 bg-blue-100 rounded mb-4">
-          ⏳ Aguardando imagem... (displayImage ainda está vazio)
-        </p>
-
-        <!-- ALWAYS SHOW - Image container -->
-        <div class="border-2 border-purple-500 p-4 bg-purple-50 rounded mb-4">
-          <p class="text-purple-700 font-bold mb-2">
-            📊 STATE: displayImage.length={{ displayImage.length }}
-          </p>
-
-          <p v-if="displayImage.length > 0" class="text-xs text-green-700 dark:text-green-300 mb-2">
-            ✅ Imagem carregada ({{ displayImage.length }} chars)
-          </p>
-
-          <!-- ALWAYS RENDER IMG - regardless of v-if -->
-          <img
-            :src="displayImage"
-            :key="`img-${displayImage.substring(0, 30)}`"
-            alt="Input for reconstruction"
-            class="w-full h-auto block rounded border-2 border-green-500"
-            style="min-height: 200px; background: #333; display: block;"
-            @load="console.log('[IMG] ✅ Imagem renderizada com sucesso!')"
-            @error="console.error('[IMG] ❌ Erro ao renderizar imagem')"
-          />
-        </div>
       </div>
     </div>
 
