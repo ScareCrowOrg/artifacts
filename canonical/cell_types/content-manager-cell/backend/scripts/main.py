@@ -91,10 +91,10 @@ async def execute_cell(cell_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
 async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle list action - query contents with filters.
-    
+
     Args:
-        cell_data: Contains filters, limit, offset
-        
+        cell_data: Contains filters, limit, offset, and '_current_user' (injected by cells_router)
+
     Returns:
         List of matching contents with pagination info
     """
@@ -102,20 +102,20 @@ async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         filters_dict = cell_data.get("filters", {})
         limit = cell_data.get("limit", 20)
         offset = cell_data.get("offset", 0)
-        
+
         # Validate pagination parameters
         if limit < 1 or limit > 100:
             return {
                 "success": False,
                 "error": "Invalid limit. Must be between 1 and 100."
             }
-        
+
         if offset < 0:
             return {
                 "success": False,
                 "error": "Invalid offset. Must be >= 0."
             }
-        
+
         # Build query filters
         filters = ContentQueryFilters(
             content_type_id=filters_dict.get("content_type_id"),
@@ -124,10 +124,13 @@ async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             tags=filters_dict.get("tags"),
             is_latest=filters_dict.get("is_latest")
         )
-        
-        # Query contents from ContentManager
+
+        # Get authenticated user injected by cells_router.py
+        current_user = cell_data.get('_current_user')
+
+        # Query contents from ContentManager (RBAC enforced)
         content_manager = ContentManager()
-        all_contents = await content_manager.query_contents(filters)
+        all_contents = await content_manager.query_contents(filters, current_user=current_user)
         
         # Apply pagination
         total = len(all_contents)
@@ -173,26 +176,29 @@ async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
 async def handle_load(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle load action - get presigned URL or download binary.
-    
+
     Args:
-        cell_data: Contains content_id, direct_download flag
-        
+        cell_data: Contains content_id, direct_download flag, and '_current_user'
+
     Returns:
         Presigned URL or binary data
     """
     try:
         content_id = cell_data.get("content_id")
         direct_download = cell_data.get("direct_download", False)
-        
+
         if not content_id:
             return {
                 "success": False,
                 "error": "Missing 'content_id' parameter"
             }
-        
-        # Get content metadata from ContentManager
+
+        # Get authenticated user injected by cells_router.py
+        current_user = cell_data.get('_current_user')
+
+        # Get content metadata from ContentManager (RBAC enforced)
         content_manager = ContentManager()
-        content = content_manager.get_content(content_id)
+        content = await content_manager.get_content(content_id, current_user=current_user)
         
         if not content:
             return {
