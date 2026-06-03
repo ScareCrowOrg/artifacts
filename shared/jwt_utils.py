@@ -96,24 +96,59 @@ def load_public_keys(pub_keys_dir: Optional[Path] = None) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _get_exp_from_unverified(token: str) -> Optional[int]:
+    """Extract ``exp`` from a JWT without verifying its signature.
+
+    Args:
+        token: JWT string to inspect.
+
+    Returns:
+        The ``exp`` claim as an int, or ``None``.
+    """
+    import jwt as pyjwt
+    try:
+        unverified = pyjwt.decode(token, options={"verify_signature": False})
+        return unverified.get("exp")
+    except Exception:
+        return None
+
+
 def verify_jwt(
     token: str,
     public_keys: Dict[str, Any],
+    audience: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Verify a JWT using Ed25519 public keys.
 
     Extracts the ``kid`` from the unverified JWT header, looks up the
-    corresponding public key, then verifies the signature and expiration.
+    corresponding public key, then verifies the signature, expiration, and
+    optionally the ``aud`` (audience) claim.
+
+    .. important::
+
+       **Audience validation (Phase 1a/1b of Guest Mode Security)**
+
+       - If ``audience`` is provided and the token has an ``aud`` claim,
+         the ``aud`` claim **must** match the expected audience.
+       - If the token is **legacy** (no ``aud`` claim), it is accepted with
+         a warning during the grace period (Phase 1a).
+       - If the token has an ``aud`` claim that does **not** match the
+         expected audience, verification **fails** immediately.
+       - In Phase 1c (after all tokens are regenerated), legacy fallback
+         will be removed and ``aud`` will be required.
 
     Args:
         token: JWT string to verify.
         public_keys: Mapping of ``kid`` → public-key object (from
             :func:`load_public_keys`).
+        audience: Expected ``aud`` claim value.  When ``None`` (the default),
+            audience is **not** verified (legacy behaviour).
 
     Returns:
         Decoded JWT payload dict on success, ``None`` on any failure
-        (expired, invalid signature, unknown kid, malformed token).
+        (expired, invalid signature, unknown kid, malformed token,
+        audience mismatch).
     """
     import jwt as pyjwt
 
@@ -148,30 +183,97 @@ def verify_jwt(
 
     logger.debug(f"[verify_jwt] ✓ Found public key for kid='{kid}'")
 
-    try:
-        payload: Dict[str, Any] = pyjwt.decode(
-            token, pub_key, algorithms=["EdDSA"]
-        )
-        exp = payload.get("exp")
-        iat = payload.get("iat")
-        sub = payload.get("sub")
-        logger.info(f"[verify_jwt] ✓ JWT signature valid: sub='{sub}', iat={iat}, exp={exp}")
-        return payload
-    except pyjwt.ExpiredSignatureError as exc:
-        exp = None
+    # Determine decode approach based on audience requirement
+    # Phase 1a/1b: We need to handle three cases:
+    #   1. Token has aud that matches → accept
+    #   2. Token has NO aud → accept with warning (legacy grace period)
+    #   3. Token has aud that DOES NOT match → reject
+    #
+    # We cannot rely on pyjwt's audience validation alone because older
+    # versions raise various exception types for missing aud vs mismatched
+    # aud.  Instead we inspect the token's aud claim BEFORE decoding.
+
+    if audience is not None:
         try:
-            unverified_payload = pyjwt.decode(token, options={"verify_signature": False})
-            exp = unverified_payload.get("exp")
-        except:
-            pass
-        logger.warning(f"[verify_jwt] ✗ JWT expired (exp={exp}): {exc}")
-        return None
-    except pyjwt.InvalidSignatureError as exc:
-        logger.error(f"[verify_jwt] ✗ JWT invalid signature (kid='{kid}'): {exc}")
-        return None
-    except pyjwt.DecodeError as exc:
-        logger.warning(f"[verify_jwt] ✗ JWT decode error (kid='{kid}'): {exc}")
-        return None
-    except Exception as exc:
-        logger.error(f"[verify_jwt] ✗ Unexpected JWT verification error (kid='{kid}'): {exc}")
-        return None
+            unverified = pyjwt.decode(token, options={"verify_signature": False})
+        except Exception:
+            unverified = {}
+        token_has_aud = "aud" in unverified
+
+        if token_has_aud:
+            # Token has aud claim — validate against expected audience
+            try:
+                payload = pyjwt.decode(
+                    token, pub_key,
+                    algorithms=["EdDSA"],
+                    audience=audience,
+                    options={"verify_aud": True},
+                )
+            except pyjwt.InvalidAudienceError:
+                actual_aud = unverified.get("aud", "unknown")
+                sub = unverified.get("sub", "unknown")
+                logger.warning(
+                    "[verify_jwt] ✗ JWT audience mismatch: sub='%s', aud='%s', expected='%s'",
+                    sub, actual_aud, audience,
+                )
+                return None
+            except pyjwt.ExpiredSignatureError as exc:
+                exp = _get_exp_from_unverified(token)
+                logger.warning(f"[verify_jwt] ✗ JWT expired (exp={exp}): {exc}")
+                return None
+            except pyjwt.InvalidSignatureError as exc:
+                logger.error(f"[verify_jwt] ✗ JWT invalid signature (kid='{kid}'): {exc}")
+                return None
+            except pyjwt.DecodeError as exc:
+                logger.warning(f"[verify_jwt] ✗ JWT decode error (kid='{kid}'): {exc}")
+                return None
+            except Exception as exc:
+                logger.error(f"[verify_jwt] ✗ Unexpected JWT verification error (kid='{kid}'): {exc}")
+                return None
+        else:
+            # Phase 1a: Grace period — legacy token without aud claim
+            sub = unverified.get("sub", "unknown")
+            logger.warning(
+                "⚠️  Legacy JWT detected for sub '%s' (no 'aud' claim). "
+                "Accepting with grace-period fallback. "
+                "This fallback will be removed in Phase 1c.",
+                sub,
+            )
+            try:
+                payload = pyjwt.decode(token, pub_key, algorithms=["EdDSA"])
+            except pyjwt.ExpiredSignatureError as exc:
+                exp = _get_exp_from_unverified(token)
+                logger.warning(f"[verify_jwt] ✗ JWT expired (exp={exp}): {exc}")
+                return None
+            except pyjwt.InvalidSignatureError as exc:
+                logger.error(f"[verify_jwt] ✗ JWT invalid signature (kid='{kid}'): {exc}")
+                return None
+            except pyjwt.DecodeError as exc:
+                logger.warning(f"[verify_jwt] ✗ JWT decode error (kid='{kid}'): {exc}")
+                return None
+            except Exception as exc:
+                logger.error(f"[verify_jwt] ✗ Unexpected JWT verification error (kid='{kid}'): {exc}")
+                return None
+    else:
+        # No audience expected — legacy decode (no aud validation)
+        try:
+            payload = pyjwt.decode(token, pub_key, algorithms=["EdDSA"])
+        except pyjwt.ExpiredSignatureError as exc:
+            exp = _get_exp_from_unverified(token)
+            logger.warning(f"[verify_jwt] ✗ JWT expired (exp={exp}): {exc}")
+            return None
+        except pyjwt.InvalidSignatureError as exc:
+            logger.error(f"[verify_jwt] ✗ JWT invalid signature (kid='{kid}'): {exc}")
+            return None
+        except pyjwt.DecodeError as exc:
+            logger.warning(f"[verify_jwt] ✗ JWT decode error (kid='{kid}'): {exc}")
+            return None
+        except Exception as exc:
+            logger.error(f"[verify_jwt] ✗ Unexpected JWT verification error (kid='{kid}'): {exc}")
+            return None
+
+    exp = payload.get("exp")
+    iat = payload.get("iat")
+    sub = payload.get("sub")
+    logger.info(f"[verify_jwt] ✓ JWT signature valid: sub='{sub}', iat={iat}, exp={exp}")
+    return payload
