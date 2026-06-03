@@ -55,13 +55,14 @@ class PersistenceTransactionError(Exception):
     pass
 
 
-async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_cell(cell_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     """
     Execute content-manager-cell actions.
-    
+
     Args:
         cell_data: Cell execution data with 'action' and parameters
-        
+        **kwargs: Additional keyword arguments (e.g. user_id from router)
+
     Returns:
         Result dictionary with success flag and data
     """

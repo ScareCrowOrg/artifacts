@@ -1,9 +1,9 @@
-# Testing Artifacts Independently of Cockpit-Vue
+# Testing Artifacts — Cell Types em artifacts/
 
-> **Data:** 2026-06-02
-> **Context:** PR #2983 — 3D Mesh Cell Save/Load Fix
-> **Origem:** [Resolution Report](../../docs/RESOLUTION_REPORT.md) — relatório completo do problema e solução.
-> **Problema Resolvido:** Testes de cell types não podiam importar `BaseCell` real porque os aliases `@/types`, `@/utils` só existiam no `vitest.config.js` do cockpit-vue.
+> **Data:** 2026-06-03
+> **Origem:** [Resolution Report](../../docs/RESOLUTION_REPORT.md)
+> **Sessão de limpeza:** 37 describe.skip removidos, 6 import errors deletados, 2 suites fixadas (WikipediaSearch, ManualCapture)
+> **Status atual:** ✅ 10 test files | 208 tests | 0 failures | 0 skipped
 
 ---
 
@@ -14,10 +14,10 @@
 - [Configuração: `artifacts/vitest.config.js`](#configuração-artifactsvitestconfigjs)
 - [Stubs para Resolução de Módulos](#stubs-para-resolução-de-módulos)
 - [Pattern de Mock em Testes](#pattern-de-mock-em-testes)
-- [Guia: Adaptar Testes Legados (`describe.skip`)](#guia-adaptar-testes-legados-describeskip)
+- [Mapeamento de Testes — Estado Atual](#mapeamento-de-testes--estado-atual)
+- [Células sem Teste Nenhum (Alvos da Skill de Cobertura)](#células-sem-teste-nenhum-alvos-da-skill-de-cobertura)
+- [Lições Aprendidas na Sessão de Limpeza (2026-06-02)](#lições-aprendidas-na-sessão-de-limpeza-2026-06-02)
 - [Template para Novos Testes](#template-para-novos-testes)
-- [Mapeamento de Células com Testes Pendentes](#mapeamento-de-células-com-testes-pendentes)
-- [Lições Aprendidas](#lições-aprendidas)
 - [Arquivos Gerados](#arquivos-gerados)
 
 ---
@@ -46,7 +46,7 @@ describe.skip('XxxCell', () => { /* ... */ })
 - Testes nunca executam (`describe.skip`)
 - Stub retorna sempre valores fixos (`validate()` retorna `[]` sempre)
 - Cobertura real: **zero**
-- Dead code: 13 arquivos de teste, todos pulados
+- Dead code: 37 arquivos de teste com describe.skip, todos pulados
 
 ### Root Cause
 
@@ -84,17 +84,17 @@ A solução cria um **ponto de entrada de testes autossuficiente** dentro de `ar
 
 ```
 artifacts/
-├── vitest.config.js          ← NOVO: config autossuficiente
+├── vitest.config.js          ← Config autossuficiente
 ├── tests/
 │   └── stubs/
-│       ├── apiService.js     ← NOVO: stub para resolução de specifier
-│       └── endpoints.js      ← NOVO: stub para resolução de specifier
+│       ├── apiService.js     ← Stub para resolução de specifier
+│       └── endpoints.js      ← Stub para resolução de specifier
+├── docs/
+│   └── TESTING_ARTIFACTS.md  ← Este documento
 └── canonical/cell_types/
     └── 3d-mesh-prototyping-cell/
-        └── frontend/
-            └── tests/
-                ├── MeshPrototypingCell.spec.ts  ← NOVO: teste real (49 testes)
-                └── MeshPrototypingCell.test.ts  ← legado (describe.skip, mantido)
+        └── frontend/tests/
+            └── MeshPrototypingCell.spec.ts  ← Teste real (49 testes)
 ```
 
 ### Fluxo de Resolução
@@ -112,8 +112,6 @@ Test file → vi.mock('@/services/apiService.js') → registra mock
 ---
 
 ## Configuração: `artifacts/vitest.config.js`
-
-Criado em `artifacts/vitest.config.js` (sem dependência de cockpit-vue):
 
 ```javascript
 export default defineConfig({
@@ -149,10 +147,13 @@ export default defineConfig({
 
 ```bash
 # Da raiz do repo:
-npx vitest run --config artifacts/vitest.config.js
-
-# Ou de dentro de artifacts/:
 cd artifacts && npx vitest run
+
+# Com cobertura:
+npx vitest run --coverage
+
+# Filtrar por cell específica:
+npx vitest run --coverage.include="**/calculator-cell/**"
 ```
 
 ---
@@ -217,22 +218,186 @@ import { MeshPrototypingCell } from '../MeshPrototypingCell'
 
 ---
 
-## Guia: Adaptar Testes Legados (`describe.skip`)
+## Mapeamento de Testes — Estado Atual
 
-### Checklist
+> Status pós-limpeza de 2026-06-02: 43 arquivos deletados (37 describe.skip + 6 import errors), 2 suites fixadas.
 
-- [ ] **Verificar** se `artifacts/vitest.config.js` já existe (reutilizar)
-- [ ] **Adicionar stubs** se a cell importar módulos além de `@/services/apiService.js` e `@/config/endpoints.js`
-- [ ] **Adicionar aliases** no `artifacts/vitest.config.js` se necessário
-- [ ] **Renomear** arquivo de `.test.ts` com `describe.skip` para `.spec.ts`
-- [ ] **Trocar stub class** por import real do cell type
-- [ ] **Adicionar mocks** para `@/services/apiService.js`, `@/config/endpoints.js`, `@/utils/logger`
-- [ ] **Rodar** `npx vitest run --config artifacts/vitest.config.js`
-- [ ] **Validar cobertura** — conferir se branches não cobertas são aceitáveis
+### ✅ Testes com Import Real (BaseCell Pattern)
+
+Estes arquivos importam a cell type real e testam comportamento verdadeiro:
+
+| Cell Type | Arquivo | Tests | Coverage | Observação |
+|-----------|---------|:-----:|:--------:|------------|
+| `3d-mesh-prototyping-cell` | `MeshPrototypingCell.spec.ts` | 49 | 100% stmts, 93% branch | ✅ Referência |
+| `calculator-cell` | `CalculatorCell.spec.ts` | 29 | 93.67% stmts | ✅ Pure frontend (sem mocks) |
+| `manual-capture-cell` | `ManualCaptureCell.spec.ts` | 21 | — | ✅ Pure frontend (sem mocks) |
+| `planet-chat-cell` | `PlanetChatCell.spec.ts` | 19 | — | ✅ Mock apiService |
+| `wikipedia-search-cell` | `WikipediaSearchCell.test.ts` | 12 | — | ✅ Mock global.fetch |
+
+### ⏸️ Testes com Stub (Local Class)
+
+Estes arquivos usam uma classe stub inline em vez de importar a cell real:
+
+| Cell Type | Arquivo | Tests | Observação |
+|-----------|---------|:-----:|------------|
+| `inbox-cell` | `InboxCell.spec.ts` | 26 | Stub inline |
+| `messages-cell` | `MessagesCell.spec.ts` | 13 | Stub inline |
+| `requests-cell` | `RequestsCell.spec.ts` | 13 | Stub inline |
+| `user-selection-cell` | `UserSelectionCell.test.ts` | 19 | Stub inline |
+
+### 🔧 Utilitários
+
+| Viewer/Util | Arquivo | Tests | Observação |
+|-------------|---------|:-----:|------------|
+| `xterm-terminal-cell` | `resolveWsUrl.spec.ts` | 7 | Testa função utilitária, não cell type |
+
+---
+
+## Células sem Teste Nenhum (Alvos da Skill de Cobertura)
+
+Estas células **perderam o único teste** durante a limpeza (tinham `describe.skip` ou import errors) e agora estão **zero coverage**. São alvos da skill de remediação de cobertura.
+
+### Fácil (frontend-only, sem backend — mais rápido)
+
+| Cell Type | Por que é fácil |
+|-----------|-----------------|
+| `fragment-editor-cell` | Pure frontend (importa só BaseCell) |
+| `log-toggle-cell` | Pure frontend (View.vue + composable) |
+| `settings-manager` | Pure frontend (View.vue + composable) |
+| `content-selection-cell` | Frontend com apiService |
+| `content-upload-cell` | Frontend com apiService |
+
+### Médio (full-stack, cell class)
+
+| Cell Type | Observação |
+|-----------|------------|
+| `ai-models-cell` | Cell class + apiService |
+| `content-explorer-cell` | Cell class + composables |
+| `content-manager-cell` | Cell class + apiService |
+| `content-type-manager-cell` | Cell class + apiService |
+| `prompt-enhancer-cell` | Cell class + apiService |
+| `roles-management-cell` | Cell class + apiService |
+| `asset-prototyping-cell` | Cell class + apiService |
+| `png-generator-cell` | Cell class + View.vue |
+| `svg-generator-cell` | Cell class + View.vue |
+
+### Complexo (View.vue + cell class + múltiplos componentes)
+
+| Cell Type | Observação |
+|-----------|------------|
+| `chat-ia` | View.vue + cell class |
+| `file-editor-v2` | View.vue + cell class |
+| `notebook-cells-admin-cell` | Spec com múltiplos describes |
+| `unclassified-cell` | View.vue + cell class |
+| `issues-dashboard-cell` | 3 spec files (deletados) |
+| `settings-panel-cell` | 4 spec files (deletados) |
+| `pipeline-monitoring-cell` | 4 spec files (deletados) |
+| `artifacts-explorer-cell` | Cell class + apiService |
+
+### Viewers
+
+| Viewer | Observação |
+|--------|------------|
+| `dynamic-workspace` | 4 composables, sem teste |
+
+---
+
+## Lições Aprendidas na Sessão de Limpeza (2026-06-02)
+
+### 1. `describe.skip` Polui Relatórios de Cobertura
+
+**Problema:** Arquivos com `describe.skip` são descobertos pelo vitest e aparecem em relatórios como "não testados", mascarando o progresso real.
+
+**Solução:** Ao invés de remediar um por um, faça uma **limpeza geral primeiro**:
+1. Delete todos os arquivos com `describe.skip` (ou remova o skip)
+2. Delete arquivos com import errors irresolvíveis
+3. Depois implemente testes novos do zero
+
+**Resultado:** Relatórios de cobertura passam a refletir apenas código realmente testado.
+
+### 2. Stub vs Real Import — Stub Mente
+
+**Problema:** Stubs inline parecem convenientes mas **divergem silenciosamente** da implementação real:
+
+| Diferença | Stub dizia | Real faz | Impacto |
+|-----------|-----------|----------|---------|
+| Mensagem de erro | `` `Unknown action: ${action}` `` | `` `Unknown action: ${action}. Supported actions: 'capture', 'wireframe'` `` | Teste passava com stub, falhava com real |
+| Trim de conteúdo | Não trima | Trima | Teste asserta string com espaços, real retorna sem |
+| `describe()` tags | `expect.arrayContaining(...)` | Array literal `['capture', 'utility', ...]` | Stub retornava objeto Proxy, não array |
+
+**✅ Regra:** Sempre que possível, use **import real** com `vi.mock()` para dependências externas. Nunca confie em stub para validar comportamento.
+
+### 3. Mock Case-Sensitive — O Erro `totalhits` vs `totalHits`
+
+**Problema:** O mock da WikipediaSearchCell usava `totalhits` (minúsculo) mas a API real retorna `totalHits` (camelCase). JavaScript object keys são case-sensitive → `data?.query?.searchinfo?.totalHits` retornava `undefined` → `?? 0` → `totalResults = 0`.
+
+**✅ Lição:** Ao mockar respostas de API, copie EXATAMENTE o formato que a API real retorna. Use `console.log` ou debbuger para ver o objeto real antes de criar o mock.
+
+### 4. Ordem de Validação no `validate()` Pode Esconder Bugs
+
+**Problema em ManualCaptureCell:**
+```typescript
+validate(input) {
+  if (!input.content.trim()) { ... } // ← chamado PRIMEIRO
+  if (typeof content !== 'string') { ... } // ← checagem de tipo DEPOIS
+}
+```
+
+Se `input.content` for um número, `input.content.trim()` lança `TypeError` antes de chegar na validação de tipo.
+
+**✅ Lição:** Teste `validate()` com tipos inesperados (number, null, object) — se der TypeError em vez de retornar array de erros, a cell tem bug de ordenação.
+
+### 5. Vitest + Windows + Backslashes
+
+**Problema:** `path.resolve(__dirname, '..')` produz backslashes (`D:\...\cell_types\**\tests\**\*.spec.ts`), e fast-glob no Windows não interpreta `**/` corretamente com backslashes.
+
+**✅ Solução:** Use forward slashes relativos no `vitest.config.js`:
+```javascript
+// ✅ Funciona em Windows e Linux
+include: ['./canonical/cell_types/**/tests/**/*.spec.ts']
+
+// ❌ Quebra no Windows
+include: [path.resolve(__dirname, './canonical/cell_types/**/tests/**/*.spec.ts')]
+```
+
+### 6. Cells Frontend-Only Não Precisam de Mock
+
+Se a cell type só importa de `@/types/BaseCell` (sem apiService, sem endpoints), **não precisa de `vi.mock` nenhum**:
+
+```typescript
+// CalculatorCell.spec.ts — zero mocks
+import { CalculatorCell } from '../CalculatorCell'
+// ✅ Funciona perfeitamente
+```
+
+Isso vale para: `calculator-cell`, `manual-capture-cell`, `fragment-editor-cell` (verificar imports).
+
+### 7. Estratégia de Nomenclatura
+
+| Extensão | Uso |
+|----------|-----|
+| `.test.ts` | Legado — pode ser stub ou real, mantido para compatibilidade |
+| `.spec.ts` | Novo padrão — sempre import real, sempre sem describe.skip |
+
+**Decision:** Ao remediar uma célula, crie `.spec.ts` novo. Deixe o `.test.ts` legado — ele eventualmente será obsoleto quando ninguém mais referenciar.
+
+### 8. `vi.fn()` vs MockResolvedValue
+
+```typescript
+// ✅ Correto para apiService.fetch
+vi.mocked(apiService.fetch).mockResolvedValue(mockResponse as any)
+
+// ✅ Correto para global.fetch  
+(global.fetch as any).mockResolvedValueOnce({ ok: true, json: async () => data })
+```
+
+**Diferença:** `apiService.fetch` wrapper não precisa de `ok`/`json` — ele retorna o Response diretamente. Já `global.fetch` precisa de `Response`-like object.
 
 ---
 
 ## Template para Novos Testes
+
+### Template para Cells com Backend (apiService)
 
 ```typescript
 /**
@@ -247,7 +412,10 @@ vi.mock('@/services/apiService.js', () => ({
   default: { fetch: vi.fn() }
 }))
 vi.mock('@/config/endpoints.js', () => ({
-  ENDPOINTS: { /* ... */ }
+  ENDPOINTS: {
+    executeEphemeralCell: 'http://localhost:5050/api/cells/execute-ephemeral',
+    systemStatus: 'http://localhost:5050/api/status'
+  }
 }))
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
@@ -256,7 +424,9 @@ vi.mock('@/utils/logger', () => ({
 }))
 
 // ── Real imports ────────────────────────────────────────────────────────────
+import apiService from '@/services/apiService.js'
 import { XxxCell } from '../XxxCell'
+import type { XxxInput } from '../XxxCell'
 
 // ── Suite ───────────────────────────────────────────────────────────────────
 describe('XxxCell', () => {
@@ -265,142 +435,86 @@ describe('XxxCell', () => {
   beforeAll(() => { cell = new XxxCell() })
   beforeEach(() => { vi.clearAllMocks() })
 
+  describe('validate()', () => {
+    it('should return empty array for valid input', () => { /* ... */ })
+    it('should return errors for invalid input', () => { /* ... */ })
+    it('should handle edge case X', () => { /* ... */ })
+  })
+
+  describe('execute()', () => {
+    it('should execute successfully with valid input', async () => { /* ... */ })
+    it('should return validation error for invalid input', async () => { /* ... */ })
+    it('should handle backend errors gracefully', async () => { /* ... */ })
+    it('should handle network exceptions', async () => { /* ... */ })
+  })
+
+  describe('describe()', () => {
+    it('should return metadata with id, name, version', async () => { /* ... */ })
+    it('should define inputs and outputs', async () => { /* ... */ })
+  })
+
+  describe('health_check()', () => {
+    it('should return healthy when backend reachable', async () => { /* ... */ })
+    it('should return degraded on backend error', async () => { /* ... */ })
+    it('should return unavailable on exception', async () => { /* ... */ })
+  })
+
+  describe('getState() / setState()', () => {
+    it('should return defaults before any state set', () => { /* ... */ })
+    it('should restore full state from persisted data', () => { /* ... */ })
+    it('should handle partial state with defaults', () => { /* ... */ })
+  })
+
+  describe('setup() / teardown()', () => {
+    it('setup should resolve without error', async () => { /* ... */ })
+    it('teardown should resolve without error', async () => { /* ... */ })
+  })
+})
+```
+
+### Template para Cells Frontend-Only (sem mocks)
+
+```typescript
+/**
+ * @file XxxCell.spec.ts
+ * @description Unit tests for XxxCell — pure frontend (no backend)
+ */
+
+import { describe, it, expect, beforeAll } from 'vitest'
+import { XxxCell } from '../XxxCell'
+
+describe('XxxCell', () => {
+  let cell: XxxCell
+
+  beforeAll(() => { cell = new XxxCell() })
+
+  // Mesma estrutura, mas sem mocks e sem vi.clearAllMocks()
   describe('validate()', () => { /* ... */ })
-  describe('describe()', () => { /* ... */ })
   describe('execute()', () => { /* ... */ })
+  describe('describe()', () => { /* ... */ })
   describe('health_check()', () => { /* ... */ })
-  describe('getState() / setState()', () => { /* ... */ })
+  describe('setup() / teardown()', () => { /* ... */ })
 })
 ```
 
 ---
 
-## Mapeamento de Testes em artifacts/
+## 📊 Progresso Geral
 
-### ✅ Testes que JÁ RODAM COM IMPORT REAL
-
-| Cell Type | Arquivo | Tests | Coverage |
-|-----------|---------|:-----:|:--------:|
-| `3d-mesh-prototyping-cell` | `MeshPrototypingCell.spec.ts` | 49 | 100% stmts ✅ |
-| `calculator-cell` | `CalculatorCell.spec.ts` | 29 | 93.67% stmts ✅ |
-| `content-selection-cell` | `ContentSelectionCell.spec.ts` | — | — |
-| `content-upload-cell` | `ContentUploadCell.spec.ts` | — | — |
-| `inbox-cell` | `InboxCell.spec.ts` | — | — |
-| `messages-cell` | `MessagesCell.spec.ts` | — | — |
-| `planet-chat-cell` | `PlanetChatCell.spec.ts` | — | — |
-| `requests-cell` | `RequestsCell.spec.ts` | — | — |
-| `wikipedia-search-cell` | `WikipediaSearchCell.test.ts` | — | — |
-| `artifacts-explorer-cell` | `View.spec.ts` | — | — |
-| `xterm-terminal-cell` | `resolveWsUrl.spec.ts` | — | — |
-
-### ⏸️ Testes que RODAM MAS USAM STUB (não importam cell real)
-
-| Cell Type | Arquivo | Observação |
-|-----------|---------|------------|
-| `user-selection-cell` | `UserSelectionCell.test.ts` | Stub inline + mocks, sem `describe.skip` |
-| `manual-capture-cell` | `ManualCaptureCell.test.ts` | Stub inline, sem `describe.skip` |
-| `artifacts-explorer-cell` | `ArtifactsExplorerCell.test.ts` | Stub inline + mocks, sem `describe.skip` |
-
-### 🔴 Alvos para Remediar (com `describe.skip`)
-
-#### Já remediado
-
-| Cell Type | Arquivo | Status |
-|-----------|---------|--------|
-| `calculator-cell` | `CalculatorCell.test.ts` → `CalculatorCell.spec.ts` | ✅ **REMEDIADO** — 29 testes, 93.67% stmts |
-
-#### Próximos — Fácil (frontend-only)
-
-| Cell Type | Arquivo(s) | Prioridade |
-|-----------|------------|:----------:|
-| `calculator-cell` | `CalculatorCell.test.ts` (legado) | ✅ resolvido |
-| `fragment-editor-cell` | `FragmentEditorCell.test.ts` | ⭐ 1 |
-| `log-toggle-cell` | `View.spec.ts` | ⭐ 2 |
-| `settings-manager` | `View.spec.ts` | ⭐ 3 |
-
-#### Médio (full-stack, cell class)
-
-| Cell Type | Arquivo(s) | Prioridade |
-|-----------|------------|:----------:|
-| `ai-models-cell` | `AIModelsCell.test.ts` | ⭐ 4 |
-| `content-explorer-cell` | `ContentExplorerCell.test.ts`, `composables.test.ts` | ⭐ 5 |
-| `content-manager-cell` | `ContentManagerCell.test.ts` | ⭐ 6 |
-| `content-type-manager-cell` | `ContentTypeManagerCell.test.ts` | ⭐ 7 |
-| `prompt-enhancer-cell` | `PromptEnhancerCell.test.ts` | ⭐ 8 |
-| `roles-management-cell` | `RolesManagementCell.test.ts` | ⭐ 9 |
-
-#### Complexo (View.vue + cell class + múltiplos componentes)
-
-| Cell Type | Arquivo(s) | Prioridade |
-|-----------|------------|:----------:|
-| `chat-ia` | `View.spec.ts` | ⭐ 10 |
-| `file-editor-v2` | `View.spec.ts` | ⭐ 11 |
-| `notebook-cells-admin-cell` | `NotebookCellsAdminCell.spec.ts` | ⭐ 12 |
-| `unclassified-cell` | `View.spec.ts` | ⭐ 13 |
-| `xterm-terminal-cell` | `View.spec.ts` | ⭐ 14 |
-| `issues-dashboard-cell` | 3 specs | ⭐ 15 |
-| `settings-panel-cell` | 4 specs | ⭐ 16 |
-| `pipeline-monitoring-cell` | 4 specs | ⭐ 17 |
-| `png-generator-cell` | 2 (cell + View) | ⭐ 18 |
-| `svg-generator-cell` | 2 (cell + View) | ⭐ 19 |
-| `asset-prototyping-cell` | `AssetPrototypingCell.test.ts` | ⭐ 20 |
-| `3d-mesh-prototyping-cell` | `MeshPrototypingCell.test.ts` (legado) | ⭐ 21 |
-
-#### Viewers
-
-| Viewer | Arquivo(s) | Prioridade |
-|--------|------------|:----------:|
-| `dynamic-workspace` | 4 test files | ⭐ 22 |
-
----
-
-## Lições Aprendidas
-
-### 1. `vi.mock()` Precisa de Resolução, Não de Conteúdo
-
-O maior obstáculo técnico: `vi.mock('@/services/apiService.js', factory)` gera um `await import('@/services/apiService.js')` no código transformado. Mesmo que o módulo seja substituído pela factory, o **specifier precisa ser resolvível** pelo Vite. Sem alias ou stub, a importação falha antes do mock ser aplicado.
-
-### 2. Windows + `path.resolve()` + Backslashes = Glob Quebrado
-
-No `cockpit-vue/vitest.config.js`:
-```javascript
-path.resolve(__dirname, '../artifacts/canonical/cell_types/**/tests/**/*.spec.ts')
-// Produz: D:\projetos\...\cell_types\**\tests\**\*.spec.ts ← BACKSLASHES
-// fast-glob no Windows não interpreta backslashes corretamente com **/
 ```
+📈 COBERTURA DE TESTES EM artifacts/
 
-No `artifacts/vitest.config.js` (solução):
-```javascript
-'./canonical/cell_types/**/tests/**/*.spec.ts'
-// forward slashes — funciona em qualquer SO
+Test files:  10 total
+  └─ Real import:   5 (MeshPrototyping, Calculator, ManualCapture, PlanetChat, Wikipedia)
+  └─ Stub:          4 (Inbox, Messages, Requests, UserSelection)
+  └─ Utilitário:    1 (resolveWsUrl)
+
+Total tests: 208 (0 failures, 0 skipped)
+
+Células com cobertura real:   5 / ~30 cell types
+Células com stub:              4 / ~30 cell types
+Células sem teste nenhum:     ~21 / ~30 cell types
 ```
-
-### 3. Arquivos `.spec.ts` vs `.test.ts`
-
-Vitest descobre ambos os padrões. Arquivos legados com `describe.skip` continuam sendo encontrados mas não executam. **Decisão:** não remover arquivos legados para manter compatibilidade. Arquivos novos devem usar `.spec.ts` para clara distinção entre "teste real" e "teste legado".
-
-### 4. Cobertura no `artifacts/vitest.config.js`
-
-O coverage configurado no cockpit-vue tem thresholds (90% linhas, 80% branches) que **NÃO** se aplicam ao `artifacts/vitest.config.js`. Se quiser enforced thresholds para cell types, adicione:
-
-```javascript
-coverage: {
-  provider: 'v8',
-  thresholds: {
-    lines: 90,
-    functions: 90,
-    branches: 80,
-    statements: 90,
-  },
-}
-```
-
-### 5. Stubs São Específicos por Cell Type
-
-Se uma cell type importa módulos customizados (ex: `@/services/someService.js`), é necessário:
-1. Criar stub em `artifacts/tests/stubs/`
-2. Adicionar alias correspondente em `artifacts/vitest.config.js`
-3. Mockar via `vi.mock()` no arquivo de teste
 
 ---
 
@@ -411,7 +525,11 @@ Se uma cell type importa módulos customizados (ex: `@/services/someService.js`)
 | `artifacts/vitest.config.js` | Config autossuficiente para testar cell types |
 | `artifacts/tests/stubs/apiService.js` | Stub para `@/services/apiService.js` |
 | `artifacts/tests/stubs/endpoints.js` | Stub para `@/config/endpoints.js` |
-| `artifacts/.../MeshPrototypingCell.spec.ts` | Teste real com 49 testes (célula de referência) |
+| `artifacts/docs/TESTING_ARTIFACTS.md` | Este documento |
+| `.../MeshPrototypingCell.spec.ts` | Teste real com 49 testes (célula de referência) |
+| `.../CalculatorCell.spec.ts` | Teste real — 29 testes, 93.67% stmts |
+| `.../ManualCaptureCell.spec.ts` | Teste real — 21 testes (reescrito de stub) |
+| `.../WikipediaSearchCell.test.ts` | Teste real — 12 testes (fixado: totalhits→totalHits) |
 
 ---
 

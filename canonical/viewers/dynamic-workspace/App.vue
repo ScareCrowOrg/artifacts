@@ -979,8 +979,6 @@ onUnmounted(() => {
 async function initPersistence(): Promise<void> {
   await loadSavedLayouts()
   autoSave.enableAutoSave()
-  // Load persisted cells from MongoDB (graceful: warns if fails, never blocks)
-  loadPersistedCells()
   log.info('[App] Persistence initialized')
 }
 </script>
