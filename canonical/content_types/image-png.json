@@ -8,12 +8,14 @@
     "width": {
       "type": "integer",
       "description": "Image width in pixels",
-      "minimum": 1
+      "minimum": 1,
+      "optional": true
     },
     "height": {
       "type": "integer",
       "description": "Image height in pixels",
-      "minimum": 1
+      "minimum": 1,
+      "optional": true
     },
     "color_mode": {
       "type": "string",

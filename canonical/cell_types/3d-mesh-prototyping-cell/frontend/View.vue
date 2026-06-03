@@ -270,6 +270,19 @@ watch(meshBlobUrl, (newUrl, oldUrl) => {
 })
 
 /**
+ * Extract image dimensions (width, height) from a data URL.
+ * Creates an off-screen Image element and resolves once loaded.
+ */
+const getImageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+    img.onerror = () => reject(new Error('Failed to decode image for dimension extraction'))
+    img.src = dataUrl
+  })
+}
+
+/**
  * Handle image file upload
  * ARCHITECTURE: localPreview updated immediately for UI; async persist via ContentUploadCell
  */
@@ -311,6 +324,17 @@ const handleFileUpload = (event: Event) => {
 
       // 2. Async persist via ContentUploadCell (non-blocking, generation still works without it)
       try {
+        // 2a. Extract image dimensions for fragment metadata
+        let fragments: Record<string, any> = {}
+        try {
+          const { width, height } = await getImageDimensions(result)
+          fragments = { width, height }
+          logger.debug(`Image dimensions: ${width}x${height}`)
+        } catch (dimErr: any) {
+          // Non-critical: persist still works without dimension metadata
+          logger.warn('Could not extract image dimensions', dimErr)
+        }
+
         const uploader = new ContentUploadCell()
         const assigneeId = getCurrentAssigneeId()
         const persistResult = await uploader.execute({
@@ -318,6 +342,7 @@ const handleFileUpload = (event: Event) => {
           binary: result,
           assignee_id: assigneeId,
           content_type_id: 'image-png',
+          fragments,
         })
 
         if (persistResult.success) {
@@ -327,6 +352,13 @@ const handleFileUpload = (event: Event) => {
           logger.info('Input image persisted via ContentUploadCell', {
             contentId: output.content_id,
             dataRef: output.data_ref,
+            fragments,
+          })
+        } else {
+          // Persist responded but with failure (e.g. validation error on backend)
+          logger.warn('Image persist returned error (non-critical, generation still works)', {
+            error: persistResult.error,
+            errorCode: persistResult.error_code,
           })
         }
       } catch (persistErr: any) {

@@ -296,6 +296,8 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         origin_cell_id = cell_data.get("origin_cell_id")
         # Use assignee_id if provided, otherwise use user_id from current user context
         assignee_id = cell_data.get("assignee_id") or cell_data.get("user_id")
+        # Get authenticated user injected by cells_router.py
+        current_user = cell_data.get('_current_user')
 
         logger.info(f"[DEBUG] Extracted parameters:")
         logger.info(f"[DEBUG]   - content_type_id: {content_type_id}")
@@ -488,7 +490,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         
         # Insert to MongoDB
         try:
-            await db.insert("contents", content)
+            await db.insert("contents", content, current_user=current_user)
             logger.info(f"✓ Content saved to MongoDB: {content.id}")
         except Exception as db_error:
             # MongoDB failed → Cleanup R2

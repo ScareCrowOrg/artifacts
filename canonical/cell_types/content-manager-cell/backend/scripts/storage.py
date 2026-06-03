@@ -324,9 +324,11 @@ def get_storage_backend(assignee_id: str = None) -> StorageBackend:
     storage_mode = os.getenv("STORAGE_MODE", "local").lower()
     logger.debug(f"[DEBUG] STORAGE_MODE={storage_mode}")
 
-    # Determine base path: runtime/user/{assignee}/contents if assignee_id provided
+    # Determine base path: artifacts/runtime/user/{assignee}/contents if assignee_id provided
+    # NOTE: 'artifacts/runtime' prefix aligns with Docker volume mount at /app/artifacts/runtime/
+    # Without 'artifacts/' prefix, files would go to /app/runtime/... (inside container, not on host)
     if assignee_id:
-        default_local_path = f"runtime/user/{assignee_id}/contents"
+        default_local_path = f"artifacts/runtime/user/{assignee_id}/contents"
     else:
         default_local_path = "/data/content"
 
