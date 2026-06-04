@@ -10,6 +10,7 @@
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use tracing::info;
 
 /// Redis heartbeat key registered by Auth Proxy to signal readiness.
 pub const HEARTBEAT_KEY: &str = "state:service:auth-proxy:available";
@@ -66,7 +67,7 @@ pub fn is_binary_artifact(path: &str) -> bool {
 }
 
 pub fn classify_route(path: &str) -> RouteDecision {
-    if path == "/api/v1/auth/session-bind" {
+    if path == "/api/v1/auth/session-bind" || path == "/api/ws/rpc" {
         RouteDecision::BackendBypass
     } else if path.starts_with("/wss/") {
         RouteDecision::WssProxy
