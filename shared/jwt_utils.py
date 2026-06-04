@@ -256,8 +256,9 @@ def verify_jwt(
                 return None
     else:
         # No audience expected — legacy decode (no aud validation)
+        logger.debug(f"[DIAG] verify_jwt: no-audience branch, token[:20]={token[:20]!r}, kid='{kid}', pub_key_type='{type(pub_key).__name__}'")
         try:
-            payload = pyjwt.decode(token, pub_key, algorithms=["EdDSA"])
+            payload = pyjwt.decode(token, pub_key, algorithms=["EdDSA"], options={"verify_aud": False})
         except pyjwt.ExpiredSignatureError as exc:
             exp = _get_exp_from_unverified(token)
             logger.warning(f"[verify_jwt] ✗ JWT expired (exp={exp}): {exc}")
@@ -269,11 +270,14 @@ def verify_jwt(
             logger.warning(f"[verify_jwt] ✗ JWT decode error (kid='{kid}'): {exc}")
             return None
         except Exception as exc:
-            logger.error(f"[verify_jwt] ✗ Unexpected JWT verification error (kid='{kid}'): {exc}")
+            logger.error(f"[verify_jwt] ✗ Unexpected JWT verification error (kid='{kid}'): {type(exc).__name__}: {exc}")
             return None
 
+    aud_present = "aud" in payload
+    logger.debug(f"[DIAG] verify_jwt: decode success, payload has aud={aud_present}")
     exp = payload.get("exp")
     iat = payload.get("iat")
     sub = payload.get("sub")
-    logger.info(f"[verify_jwt] ✓ JWT signature valid: sub='{sub}', iat={iat}, exp={exp}")
+    aud = payload.get("aud")
+    logger.info(f"[verify_jwt] ✓ JWT signature valid: sub='{sub}', aud='{aud}', iat={iat}, exp={exp}")
     return payload
