@@ -950,7 +950,9 @@ onMounted(() => {
   if (store.status === 'ready') {
     initPersistence()
     // 🚨 DEBUG: Pre-load cell-type artifacts so cellFactory lookups work
-    explorerStore.loadCellTypes().catch((err: any) => {
+    explorerStore.loadCellTypes().then(() => {
+      console.log('[DIAG] [workspace:app] loadCellTypes completed; availableArtifacts count:', explorerStore.availableArtifacts?.length)
+    }).catch((err: any) => {
       console.warn('[App] Could not pre-load cell-type artifacts:', err?.message)
     })
   } else {
@@ -961,7 +963,9 @@ onMounted(() => {
           stopWatch()
           initPersistence()
           // 🚨 DEBUG: Pre-load cell-type artifacts so cellFactory lookups work
-          explorerStore.loadCellTypes().catch((err: any) => {
+          explorerStore.loadCellTypes().then(() => {
+            console.log('[DIAG] [workspace:app] loadCellTypes completed; availableArtifacts count:', explorerStore.availableArtifacts?.length)
+          }).catch((err: any) => {
             console.warn('[App] Could not pre-load cell-type artifacts:', err?.message)
           })
         }

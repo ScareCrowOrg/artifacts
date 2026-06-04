@@ -5,7 +5,7 @@ services:
     build:
       context: ../../../..
       dockerfile: artifacts/canonical/services/backend/Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-backend:staging20260604T072543
+    image: hub-staging.scareverse.net/registry/staging/scareverse-backend:staging20260604T174249
     ports:
       - 5050:5050
     volumes:
@@ -32,11 +32,12 @@ services:
       - UVICORN_RELOAD=${UVICORN_RELOAD:-false}
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
       - AUTH_TOKEN=${AUTH_TOKEN}
+      - JWT_AUDIENCE=
       - SECRET_KEY=${SECRET_KEY}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - PLANET_NAME=${PLANET_NAME}
+      - PLANET_NAME=${PLANET_NAME:-scare}
       - PLANET_OWNER_ID=${PLANET_OWNER_ID}
       - CORS_ORIGINS=${CORS_ORIGINS:-https://${PLANET_NAME}.scareverse.net,https://hub-staging.scareverse.net,https://hub.scareverse.net}
       - ADMIN_EMAIL=${ADMIN_EMAIL}

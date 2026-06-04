@@ -194,11 +194,14 @@ def verify_jwt(
     # aud.  Instead we inspect the token's aud claim BEFORE decoding.
 
     if audience is not None:
+        logger.info("[DIAG] verify_jwt: entered Branch A (audience is not None) — audience=%r", audience)
         try:
             unverified = pyjwt.decode(token, options={"verify_signature": False})
         except Exception:
             unverified = {}
         token_has_aud = "aud" in unverified
+        token_aud = unverified.get("aud", "N/A")
+        logger.info("[DIAG] verify_jwt Branch A: token_has_aud=%r, token_aud=%r", token_has_aud, token_aud)
 
         if token_has_aud:
             # Token has aud claim — validate against expected audience
@@ -213,8 +216,9 @@ def verify_jwt(
                 actual_aud = unverified.get("aud", "unknown")
                 sub = unverified.get("sub", "unknown")
                 logger.warning(
-                    "[verify_jwt] ✗ JWT audience mismatch: sub='%s', aud='%s', expected='%s'",
-                    sub, actual_aud, audience,
+                    "[verify_jwt] ✗ JWT audience mismatch: sub='%s', aud='%s', expected='%s', "
+                    "decode_options=%s",
+                    sub, actual_aud, audience, {"verify_aud": True},
                 )
                 return None
             except pyjwt.ExpiredSignatureError as exc:
@@ -256,7 +260,7 @@ def verify_jwt(
                 return None
     else:
         # No audience expected — legacy decode (no aud validation)
-        logger.debug(f"[DIAG] verify_jwt: no-audience branch, token[:20]={token[:20]!r}, kid='{kid}', pub_key_type='{type(pub_key).__name__}'")
+        logger.debug(f"[DIAG] verify_jwt: no-audience branch (Branch B), token[:20]={token[:20]!r}, kid='{kid}', pub_key_type='{type(pub_key).__name__}', options={{\"verify_aud\": False}}")
         try:
             payload = pyjwt.decode(token, pub_key, algorithms=["EdDSA"], options={"verify_aud": False})
         except pyjwt.ExpiredSignatureError as exc:
