@@ -84,6 +84,14 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
         return build_cors_response(StatusCode::OK, origin);
     }
 
+    // [DIAG] CORS context for non-OPTIONS requests
+    let cors_origin = req
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("(none)");
+    debug!("[DIAG] CORS-nonOPTIONS: method={}, origin={}, decision={:?}", method, cors_origin, decision);
+
     if matches!(decision, RouteDecision::Deny) {
         warn!("[AuthProxy] Request denied by route policy: {}", path);
         return build_error_response(StatusCode::FORBIDDEN);
@@ -572,6 +580,14 @@ async fn proxy_to_upstream(
         reqwest::header::HeaderValue::from_str(host_value).unwrap(),
     );
 
+    // Extract Origin header BEFORE consuming orig_req (into_body moves it).
+    // Convert to owned String so the value survives orig_req being moved.
+    let origin = orig_req
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.to_string());
+
     // Build upstream request.
     let mut upstream_req = state
         .http_client
@@ -620,6 +636,12 @@ async fn proxy_to_upstream(
     *response.headers_mut() = resp_headers;
 
     info!("[AuthProxy] Proxied {} → upstream ({})", full_path, status);
+    // [DIAG] Check if upstream response has CORS headers
+    let has_acao = response.headers().get("access-control-allow-origin").is_some();
+    let has_acac = response.headers().get("access-control-allow-credentials").is_some();
+    debug!("[DIAG] proxy_to_upstream: status={}, ACAO={}, ACAC={}", status, has_acao, has_acac);
+    // Add CORS headers from the original request's Origin (already extracted before body consume).
+    add_cors_headers(&mut response, origin.as_deref());
     response
 }
 
@@ -672,7 +694,52 @@ async fn proxy_to_backend(
     response
 }
 
+/// Add CORS headers to a response (only inserts if absent -- does not overwrite).
+///
+/// This ensures that every response leaving auth-proxy carries CORS headers,
+/// preventing "CORS error" opacity when upstream errors occur.
+/// Uses `*` as fallback when `origin` is `None`.
+fn add_cors_headers(resp: &mut Response, origin: Option<&str>) {
+    let origin_val = origin.unwrap_or("*");
+
+    // Access-Control-Allow-Origin: echo the request origin or *
+    if let Ok(val) = HeaderValue::from_str(origin_val) {
+        resp.headers_mut()
+            .entry(HeaderName::from_static("access-control-allow-origin"))
+            .or_insert(val);
+    } else {
+        resp.headers_mut()
+            .entry(HeaderName::from_static("access-control-allow-origin"))
+            .or_insert(HeaderValue::from_static("*"));
+    }
+
+    // Access-Control-Allow-Methods
+    resp.headers_mut()
+        .entry(HeaderName::from_static("access-control-allow-methods"))
+        .or_insert(HeaderValue::from_static("GET, POST, PUT, DELETE, PATCH, OPTIONS"));
+
+    // Access-Control-Allow-Headers
+    resp.headers_mut()
+        .entry(HeaderName::from_static("access-control-allow-headers"))
+        .or_insert(HeaderValue::from_static("Content-Type, Authorization, Cookie"));
+
+    // Access-Control-Allow-Credentials: only when origin is explicit (not *)
+    if origin_val != "*" {
+        resp.headers_mut()
+            .entry(HeaderName::from_static("access-control-allow-credentials"))
+            .or_insert(HeaderValue::from_static("true"));
+    }
+
+    // Access-Control-Expose-Headers
+    resp.headers_mut()
+        .entry(HeaderName::from_static("access-control-expose-headers"))
+        .or_insert(HeaderValue::from_static("Content-Type, Authorization"));
+}
+
 /// Build a JSON error response with the given status code.
+///
+/// CORS headers are added (with `*` as fallback origin) so that the browser
+/// does not hide the error behind an opaque "CORS error".
 fn build_error_response(status: StatusCode) -> Response {
     let body = serde_json::json!({ "error": status.canonical_reason().unwrap_or("Error") });
     let json = body.to_string();
@@ -683,55 +750,23 @@ fn build_error_response(status: StatusCode) -> Response {
         axum::http::header::CONTENT_TYPE,
         HeaderValue::from_static("application/json"),
     );
+    warn!("[DIAG] build_error_response: status={}, NO CORS headers attached", status);
+    add_cors_headers(&mut resp, None);
     resp
 }
 
 /// Build a CORS preflight response (OPTIONS) with appropriate Access-Control headers.
 /// Uses the requesting origin to avoid incompatibility with credentials (can't use * with credentials).
+/// Delegates common CORS headers to [`add_cors_headers`].
 fn build_cors_response(status: StatusCode, origin: &str) -> Response {
     let mut resp = Response::new(Body::empty());
     *resp.status_mut() = status;
-
-    // Echo back the origin if provided; otherwise allow all
-    // Note: When credentials are involved, must specify explicit origin (not *)
-    if let Ok(origin_val) = HeaderValue::from_str(origin) {
-        resp.headers_mut().insert(
-            HeaderName::from_static("access-control-allow-origin"),
-            origin_val,
-        );
-    } else {
-        resp.headers_mut().insert(
-            HeaderName::from_static("access-control-allow-origin"),
-            HeaderValue::from_static("*"),
-        );
-    }
-
-    // Allow common HTTP methods
-    resp.headers_mut().insert(
-        HeaderName::from_static("access-control-allow-methods"),
-        HeaderValue::from_static("GET, POST, PUT, DELETE, PATCH, OPTIONS"),
-    );
-
-    // Allow common headers
-    resp.headers_mut().insert(
-        HeaderName::from_static("access-control-allow-headers"),
-        HeaderValue::from_static("Content-Type, Authorization, Cookie"),
-    );
-
-    // Allow credentials (cookies) when origin is specified
-    if origin != "*" {
-        resp.headers_mut().insert(
-            HeaderName::from_static("access-control-allow-credentials"),
-            HeaderValue::from_static("true"),
-        );
-    }
-
+    add_cors_headers(&mut resp, Some(origin));
     // Cache preflight for 1 hour
     resp.headers_mut().insert(
         HeaderName::from_static("access-control-max-age"),
         HeaderValue::from_static("3600"),
     );
-
     resp
 }
 

@@ -10,7 +10,6 @@
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use tracing::info;
 
 /// Redis heartbeat key registered by Auth Proxy to signal readiness.
 pub const HEARTBEAT_KEY: &str = "state:service:auth-proxy:available";
