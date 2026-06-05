@@ -1,0 +1,15 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e68]:
+    - banner [ref=e69]:
+      - heading "Hub ScareVerse" [level=1] [ref=e70]
+      - button "Menu do Usuário" [ref=e73] [cursor=pointer]:
+        - generic [ref=e74]: 👤
+        - generic [ref=e75]: ▼
+    - generic [ref=e76]:
+      - paragraph [ref=e77]: Falha ao vincular sessão (HTTP 401)
+      - button "Tentar novamente" [ref=e78] [cursor=pointer]
+  - generic [ref=e56]:
+    - generic "Toggle devtools panel" [ref=e57] [cursor=pointer]:
+      - img [ref=e58]
+    - generic "Toggle Component Inspector" [ref=e63] [cursor=pointer]:
+      - img [ref=e64]
