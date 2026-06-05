@@ -276,7 +276,9 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                                 error!("[WS] Response headers from upstream:\n{}", headers_text);
                                 error!("[WS] This means:");
                                 error!("[WS]   - Token validation failed? Check token format");
-                                error!("[WS]   - Handler not found? Check path: {}", full_path);
+                                error!("[WS]   - HTTP 403 → Backend called close() before accept(): token/owner validation rejected");
+                                error!("[WS]   - HTTP 404 → Path not found: {}", full_path);
+                                error!("[WS]   - HTTP 500 → Backend internal error");
                                 error!("[WS]   - Host mismatch? Expected upstream host, got Host: {}", original_host);
                                 error!("[WS] Handshake sent: GET {} HTTP/1.1", full_path);
                                 error!("[WS] Host header: {}", original_host);
