@@ -1,0 +1,5 @@
+Total messages: 100 (Errors: 1, Warnings: 2)
+Returning 2 messages for level "error"
+
+[ERROR] Failed to load resource: the server responded with a status of 401 () @ https://hub-staging.scareverse.net/api/v1/planets/online:0
+[ERROR] Failed to load resource: the server responded with a status of 404 () @ https://scare.scareverse.net/artifacts/canonical/cell_types/xterm-terminal-cell/frontend/translations/pt-BR.json:0

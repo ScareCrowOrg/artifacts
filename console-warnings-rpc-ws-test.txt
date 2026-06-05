@@ -1,0 +1,10 @@
+Total messages: 100 (Errors: 1, Warnings: 2)
+Returning 7 messages for level "warning"
+
+[WARNING] [viewer:rpc-ws] [useRpcWebSocket] Disconnected {code: 1012, reason: , wasClean: true} @ https://hub-staging.scareverse.net/src/utils/logger.js:232
+[WARNING] [viewer:rpc-ws] [useRpcWebSocket] Disconnected {code: 1006, reason: , wasClean: false} @ https://hub-staging.scareverse.net/src/utils/logger.js:232
+[ERROR] Failed to load resource: the server responded with a status of 401 () @ https://hub-staging.scareverse.net/api/v1/planets/online:0
+[WARNING] [planet:navigator] [PlanetNavigator] Failed to fetch online planets {error: Falha ao carregar planetas (HTTP 401)} @ https://hub-staging.scareverse.net/src/utils/logger.js:232
+[WARNING] [intlify] Not found 'layout.dynamicWorkspace.waitingHandshake' key in 'en-US' locale messages. @ https://scare.scareverse.net/artifacts/.vite/deps/vue-i18n.js?v=172d7d08:25
+[WARNING] [intlify] Not found 'layout.dynamicWorkspace.waitingHandshake' key in 'en-US' locale messages. @ https://scare.scareverse.net/artifacts/.vite/deps/vue-i18n.js?v=172d7d08:25
+[ERROR] Failed to load resource: the server responded with a status of 404 () @ https://scare.scareverse.net/artifacts/canonical/cell_types/xterm-terminal-cell/frontend/translations/pt-BR.json:0
