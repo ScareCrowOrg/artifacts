@@ -105,6 +105,7 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
     // Session validation happens HERE (before HTTP 101) so we can return 403
     // if the session is invalid — it is impossible to send 403 after 101.
     if crate::ws_proxy::is_websocket_upgrade_request(&req) {
+        info!("[WS] BIFURCATION: decision={:?}, path={}", decision, path);
         // BackendBypass routes need no session validation.
         if matches!(decision, RouteDecision::BackendBypass) {
             info!("[WS] BackendBypass WebSocket upgrade for path={}", path);
@@ -214,8 +215,8 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
         return match check_session(&state, &cookie_header, &path).await {
             Ok(()) => {
                 info!(
-                    "[WS] Session valid, proceeding with WebSocket upgrade for {}",
-                    path
+                    "[WS] Session valid, proceeding with WebSocket upgrade for {} to {}",
+                    path, upstream_base
                 );
                 crate::ws_proxy::proxy_ws_to_upstream(req, upstream_base).await
             }

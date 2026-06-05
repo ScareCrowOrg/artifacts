@@ -247,6 +247,7 @@ pub async fn proxy_ws_to_upstream(mut req: Request, upstream_base: &str) -> Resp
                             Ok((101, headers_text)) => {
                                 info!("[WS] 🎉 UPSTREAM ACCEPTED UPGRADE!");
                                 info!("[WS] ✅ HTTP 101 Switching Protocols received");
+                                info!("[WS] BACKEND_RESPONSE: status=101, path={}", full_path);
 
                                 // Log response headers for diagnostic purposes
                                 info!("[WS-DEBUG] Upstream Response Headers:\n{}", headers_text);
