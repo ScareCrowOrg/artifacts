@@ -1,6 +1,0 @@
-58. [GET] https://hub-staging.scareverse.net/api/v1/planets/online => [200] 
-60. [POST] https://hub-staging.scareverse.net/cdn-cgi/rum? => [204] 
-66. [POST] https://hub-staging.scareverse.net/api/auth/issue-planet-token => [200] 
-67. [POST] https://scare.scareverse.net/api/v1/auth/session-bind => [401] 
-
-Note: 63 static requests not shown, run with "static" option to see them.

@@ -1,5 +1,0 @@
-Total messages: 95 (Errors: 2, Warnings: 0)
-Returning 2 messages for level "error"
-
-[ERROR] Failed to load resource: the server responded with a status of 401 () @ https://scare.scareverse.net/api/v1/auth/session-bind:0
-[ERROR] [viewer:shell] [ViewerShell] Session bootstrap failed {error: Falha ao vincular sessão (HTTP 401)} @ https://hub-staging.scareverse.net/src/utils/logger.js:235
