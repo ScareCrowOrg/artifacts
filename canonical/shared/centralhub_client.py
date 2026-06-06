@@ -55,6 +55,30 @@ class CentralHubClient:
             await self._client.aclose()
             self._client = None
 
+    async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ):
+        """Generic HTTP request via CentralHub.
+
+        Args:
+            method: HTTP method
+            path: Request path
+            json: JSON body
+            params: Query parameters
+            headers: Request headers
+
+        Returns:
+            httpx.Response object
+        """
+        client = await self._get_client()
+        return await client.request(method, path, json=json, params=params, headers=headers)
+
     async def health_check(self) -> Dict[str, Any]:
         """Check CentralHub health status."""
         try:
@@ -88,14 +112,13 @@ class CentralHubClient:
     ) -> Optional[Dict[str, Any]]:
         """Find a single document via CentralHub proxy."""
         try:
-            client = await self._get_client()
-            response = await client.post(
-                "/api/proxy/database/find_one",
+            resp = await self.request(
+                "POST", "/api/proxy/database/find_one",
                 json={"collection": collection, "query": query, "user_id": user_id, "caller": caller},
-                headers=headers or None,
+                headers=headers,
             )
-            response.raise_for_status()
-            result = response.json()
+            resp.raise_for_status()
+            result = resp.json()
             return result.get("data")
         except HTTPError as exc:
             logger.error("CentralHub find_one failed: %s", exc)
@@ -116,9 +139,8 @@ class CentralHubClient:
     ) -> List[Dict[str, Any]]:
         """Find multiple documents via CentralHub proxy."""
         try:
-            client = await self._get_client()
-            response = await client.post(
-                "/api/proxy/database/find_many",
+            resp = await self.request(
+                "POST", "/api/proxy/database/find_many",
                 json={
                     "collection": collection,
                     "query": query or {},
@@ -128,10 +150,10 @@ class CentralHubClient:
                     "user_id": user_id,
                     "caller": caller,
                 },
-                headers=headers or None,
+                headers=headers,
             )
-            response.raise_for_status()
-            result = response.json()
+            resp.raise_for_status()
+            result = resp.json()
             return result.get("data", [])
         except HTTPError as exc:
             logger.error("CentralHub find_many failed: %s", exc)
@@ -149,14 +171,13 @@ class CentralHubClient:
     ) -> Dict[str, Any]:
         """Insert a document via CentralHub proxy."""
         try:
-            client = await self._get_client()
-            response = await client.post(
-                "/api/proxy/database/insert_one",
+            resp = await self.request(
+                "POST", "/api/proxy/database/insert_one",
                 json={"collection": collection, "document": document, "user_id": user_id, "caller": caller},
-                headers=headers or None,
+                headers=headers,
             )
-            response.raise_for_status()
-            return response.json().get("data", {})
+            resp.raise_for_status()
+            return resp.json().get("data", {})
         except HTTPError as exc:
             logger.error("CentralHub insert_one failed: %s", exc)
             raise
@@ -173,9 +194,8 @@ class CentralHubClient:
     ) -> Dict[str, Any]:
         """Update a document via CentralHub proxy."""
         try:
-            client = await self._get_client()
-            response = await client.post(
-                "/api/proxy/database/update_one",
+            resp = await self.request(
+                "POST", "/api/proxy/database/update_one",
                 json={
                     "collection": collection,
                     "query": query,
@@ -184,10 +204,10 @@ class CentralHubClient:
                     "user_id": user_id,
                     "caller": caller,
                 },
-                headers=headers or None,
+                headers=headers,
             )
-            response.raise_for_status()
-            return response.json().get("data", {})
+            resp.raise_for_status()
+            return resp.json().get("data", {})
         except HTTPError as exc:
             logger.error("CentralHub update_one failed: %s", exc)
             raise
@@ -202,14 +222,13 @@ class CentralHubClient:
     ) -> int:
         """Delete a document via CentralHub proxy."""
         try:
-            client = await self._get_client()
-            response = await client.post(
-                "/api/proxy/database/delete_one",
+            resp = await self.request(
+                "POST", "/api/proxy/database/delete_one",
                 json={"collection": collection, "query": query, "user_id": user_id, "caller": caller},
-                headers=headers or None,
+                headers=headers,
             )
-            response.raise_for_status()
-            return response.json().get("data", {}).get("deleted_count", 0)
+            resp.raise_for_status()
+            return resp.json().get("data", {}).get("deleted_count", 0)
         except HTTPError as exc:
             logger.error("CentralHub delete_one failed: %s", exc)
             raise
