@@ -1,2 +1,0 @@
-
-Note: 183 static requests not shown, run with "static" option to see them.
