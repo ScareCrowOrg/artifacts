@@ -138,10 +138,16 @@
       "cloud-api",
       "gpu"
     ],
-    "dependencies": [
-      "sf3d-runtime",
-      "three.js"
-    ],
+    "dependencies": {
+      "services": [
+        "sf3d-runtime",
+        "three.js"
+      ],
+      "cell_types": [
+        "content-selection-cell",
+        "content-upload-cell"
+      ]
+    },
     "tags": [
       "3d",
       "mesh",

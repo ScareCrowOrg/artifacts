@@ -55,6 +55,11 @@
       "description": "Allow multiple file selection"
     }
   },
+  "_discovery": {
+    "dependencies": {
+      "cell_types": ["content-manager-cell"]
+    }
+  },
   "output_schema": {
     "content_id": {
       "type": "string",
