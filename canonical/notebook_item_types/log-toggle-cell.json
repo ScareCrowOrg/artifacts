@@ -9,6 +9,10 @@
     "view": [
       "frontend/View.vue"
     ],
+    "basecell": [
+      "frontend/LogToggleCell.ts"
+    ],
+    "handler": [],
     "scripts": [
       "backend/scripts/main.py"
     ],
