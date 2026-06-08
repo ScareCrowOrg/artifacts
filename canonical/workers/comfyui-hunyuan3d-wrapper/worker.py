@@ -14,7 +14,28 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict
 
-import httpx
+# DIAG: hunyuan3d-worker-httpx-crash — remover apos fix
+try:
+    import httpx
+except Exception as _httpx_import_err:
+    import traceback as _traceback
+    print(
+        f"[Hunyuan3D-Worker] CRITICAL: Failed to import httpx: {_httpx_import_err}",
+        file=sys.stderr,
+    )
+    print(
+        f"[Hunyuan3D-Worker] Traceback:\n{_traceback.format_exc()}",
+        file=sys.stderr,
+    )
+    print(
+        f"[Hunyuan3D-Worker] Python version: {sys.version}",
+        file=sys.stderr,
+    )
+    print(
+        f"[Hunyuan3D-Worker] sys.path: {sys.path}",
+        file=sys.stderr,
+    )
+    raise
 
 try:
     from canonical.shared.base_worker import BaseWorker

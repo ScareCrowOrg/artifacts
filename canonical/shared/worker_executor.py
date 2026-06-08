@@ -137,6 +137,13 @@ class WorkerExecutor:
             logger.debug("[%s] Worker stdout (%d bytes): %s", job_id, len(stdout_bytes), raw_output[:500])
 
             if not raw_output:
+                # DIAG: hunyuan3d-worker-httpx-crash -- remover apos fix
+                _diag_full_stderr = stderr_bytes.decode() if stderr_bytes else "(no stderr)"
+                logger.error(
+                    "DIAG [%s] Worker produced no stdout. exit_code=%s. "
+                    "Full stderr (%d bytes):\n%s",
+                    job_id, proc.returncode, len(_diag_full_stderr), _diag_full_stderr,
+                )
                 raise ValueError(
                     f"Worker {worker_name} produced no stdout output. "
                     f"stderr: {stderr_bytes.decode()[:500]}"
@@ -201,6 +208,13 @@ class WorkerExecutor:
         try:
             await self._run_command([sys.executable, "-m", "venv", str(venv_dir)])
             logger.info("Venv created successfully for worker: %s", worker_name)
+            # DIAG: hunyuan3d-worker-httpx-crash -- remover apos fix
+            try:
+                bin_contents = [str(p) for p in (venv_dir / "bin").iterdir()]
+                logger.info("DIAG [%s] Venv bin/ directory contents (%d items): %s",
+                            worker_name, len(bin_contents), bin_contents)
+            except Exception as _diag_venv_err:
+                logger.warning("DIAG [%s] Could not list venv bin/ contents: %s", worker_name, _diag_venv_err)
         except RuntimeError as exc:
             logger.error("Failed to create venv for worker %s: %s", worker_name, exc)
             raise
@@ -208,11 +222,65 @@ class WorkerExecutor:
         requirements = worker_dir / "requirements.txt"
         if requirements.exists():
             logger.info("Installing requirements for worker: %s (file=%s)", worker_name, requirements)
+            # DIAG: hunyuan3d-worker-httpx-crash -- remover apos fix
+            try:
+                req_content = requirements.read_text()
+                logger.info("DIAG [%s] requirements.txt content:\n%s", worker_name, req_content)
+            except Exception as _diag_req_err:
+                logger.warning("DIAG [%s] Could not read requirements.txt: %s", worker_name, _diag_req_err)
             try:
                 await self._run_command(
                     [str(python_exe), "-m", "pip", "install", "--quiet", "-r", str(requirements)]
                 )
                 logger.info("Requirements installed successfully for worker: %s", worker_name)
+                # DIAG: hunyuan3d-worker-httpx-crash -- remover apos fix
+                try:
+                    _pip_list_proc = await asyncio.create_subprocess_exec(
+                        str(python_exe), "-m", "pip", "list", "--format=columns",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    _pip_stdout, _pip_stderr = await _pip_list_proc.communicate()
+                    logger.info("DIAG [%s] pip list (exit=%d):\n%s",
+                                worker_name, _pip_list_proc.returncode, _pip_stdout.decode()[:2500])
+                    if _pip_stderr:
+                        logger.warning("DIAG [%s] pip list stderr:\n%s", worker_name, _pip_stderr.decode()[:1000])
+                except Exception as _diag_pip_list_err:
+                    logger.warning("DIAG [%s] pip list failed: %s", worker_name, _diag_pip_list_err)
+
+                # PERMANENTE: verificar se httpx funciona apos pip install (1 retry se falhar)
+                _pip_ok = False
+                for _retry_attempt in range(2):
+                    _verify_proc = await asyncio.create_subprocess_exec(
+                        str(python_exe), "-c", "import httpx; print(httpx.__version__)",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    _v_out, _v_err = await _verify_proc.communicate()
+                    if _verify_proc.returncode == 0:
+                        _pip_ok = True
+                        _ver = _v_out.decode().strip() if _v_out else "unknown"
+                        logger.info(
+                            "[%s] Pip install verified: httpx %s imported successfully (attempt %d)",
+                            worker_name, _ver, _retry_attempt + 1,
+                        )
+                        break
+                    else:
+                        _v_err_text = _v_err.decode()[:500] if _v_err else "(no stderr)"
+                        logger.warning(
+                            "[%s] Pip install verification FAILED (attempt %d): httpx import error. stderr: %s",
+                            worker_name, _retry_attempt + 1, _v_err_text,
+                        )
+                        if _retry_attempt == 0:
+                            logger.info("[%s] Retrying pip install once...", worker_name)
+                            await self._run_command(
+                                [str(python_exe), "-m", "pip", "install", "--quiet", "-r", str(requirements)]
+                            )
+                if not _pip_ok:
+                    raise RuntimeError(
+                        f"Pip install verification failed for {worker_name}: "
+                        "httpx import failed after 2 attempts"
+                    )
             except RuntimeError as exc:
                 logger.error("Failed to install requirements for worker %s: %s", worker_name, exc)
                 raise

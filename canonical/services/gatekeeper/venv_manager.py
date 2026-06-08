@@ -227,27 +227,39 @@ class VenvManager:
 
     async def _verify_venv(self, worker_name: str, python_exe: Path) -> bool:
         """
-        Verify *python_exe* is functional by running a trivial one-liner.
+        Verify *python_exe* is functional by testing Python and real worker
+        dependencies (httpx).
 
         Returns:
             True if verification passed, False otherwise.
         """
         try:
+            # PERMANENTE: melhoria de observabilidade — test real worker dependencies
             return_code = await self._run_async(
-                [str(python_exe), "-c", "import sys; sys.exit(0)"],
+                [str(python_exe), "-c", "import sys; import httpx; sys.exit(0)"],
                 timeout=5,
             )
             if return_code == 0:
-                logger.debug("[%s] Venv verification passed", worker_name)
+                logger.debug("[%s] Venv verification passed (sys + httpx)", worker_name)
                 return True
             logger.warning(
                 "[%s] Venv verification returned non-zero: %d",
                 worker_name,
                 return_code,
             )
+            # DIAG: hunyuan3d-worker-httpx-crash -- remover apos fix
+            logger.info(
+                "DIAG [%s] Venv verification failed (exit=%d) — worker will fail on first job",
+                worker_name, return_code,
+            )
             return False
         except Exception as exc:
             logger.warning("[%s] Venv verification failed: %s", worker_name, exc)
+            # DIAG: hunyuan3d-worker-httpx-crash -- remover apos fix
+            logger.info(
+                "DIAG [%s] Venv verification threw exception: %s",
+                worker_name, exc,
+            )
             return False
 
     async def _rebuild_venv(self, worker_name: str) -> None:
