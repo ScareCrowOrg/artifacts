@@ -88,9 +88,10 @@ PYEOF
 # omegaconf + rembg — missing transitive dependencies for Hy3D shape model
 # Kijai's requirements.txt doesn't include them, but runtime lazy-imports them
 # rembg[cpu] includes onnxruntime backend
-# Pin coverage<7.0: rembg → pymatting → numba → coverage.types.Tracer
-# coverage 7.x removed coverage.types, breaking numba 0.59.x (Python 3.11)
-RUN python3.11 -m pip install --no-cache-dir omegaconf "rembg[cpu]" timm "coverage<7.0"
+# Pin coverage>=7.0: rembg → pymatting → numba → coverage.types.Tracer
+# coverage 6.x removed coverage.types; only 7.x+ has the types.py module.
+# Also: /app/artifacts/coverage/ (from repo) shadows pip package — keep tenant clean.
+RUN python3.11 -m pip install --no-cache-dir omegaconf "rembg[cpu]" timm "coverage>=7.0"
 
 # ScareVerse Wrapper (FastAPI + BaseService heartbeat)
 WORKDIR /app
