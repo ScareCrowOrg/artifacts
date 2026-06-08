@@ -412,16 +412,33 @@ const openContentSelector = () => {
  * Handle user selection of a persisted content item (G5)
  */
 const handleContentSelected = (content: any) => {
-  cellInstance.contentId = content.content_id
+  // BUG #2 FIX: Backend returns "id", not "content_id"
+  const resolvedId = content.id || content.content_id
+  cellInstance.contentId = resolvedId
   cellInstance.contentDataRef = content.data_ref
   selectedContentName.value = content.filename
 
-  // Display image directly from data_ref URL
-  localPreview.value = content.data_ref
-  localError.value = null
+  // BUG #1 FIX: data_ref is "file://..." which browser cannot load as img src.
+  // Convert file:// path to auth-proxy HTTP URL (/artifacts/runtime/...).
+  // Auth-proxy (RuntimeFileServer) intercepts /artifacts/runtime/*,
+  // validates session via cookie, and serves the file from disk.
+  if (content.data_ref && typeof content.data_ref === 'string') {
+    if (content.data_ref.startsWith('file://')) {
+      // file://artifacts/runtime/user/... -> /artifacts/runtime/user/...
+      localPreview.value = content.data_ref.replace(/^file:\/\//, '/')
+      localError.value = null
+    } else {
+      // data URL (upload flow) or other browser-loadable format
+      localPreview.value = content.data_ref
+      localError.value = null
+    }
+  } else {
+    localError.value = 'Selected content has no data reference'
+    logger.warn('Content selected without data_ref', { content })
+  }
 
   logger.info('Content selected', {
-    contentId: content.content_id,
+    contentId: resolvedId,
     dataRef: content.data_ref,
     filename: content.filename,
   })
@@ -438,20 +455,24 @@ const resolveInputImageForGeneration = async (): Promise<string> => {
     return localPreview.value
   }
 
-  // Have a data_ref URL — fetch binary and convert to base64
-  if (localPreview.value && cellInstance.contentDataRef) {
+  // Have an HTTP URL (auth-proxy /artifacts/... or presigned R2) — fetch and convert to base64.
+  // The auth-proxy handles session validation via cookie; no auth header needed.
+  if (localPreview.value?.startsWith('http') || localPreview.value?.startsWith('/')) {
     try {
-      const response = await apiFetch(cellInstance.contentDataRef)
+      const response = await apiFetch(localPreview.value)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const blob = await response.blob()
-      return new Promise((resolve, reject) => {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve(reader.result as string)
         reader.onerror = () => reject(new Error('Failed to convert blob to base64'))
         reader.readAsDataURL(blob)
       })
+      // Cache in localPreview for future calls (save refetch on retry)
+      localPreview.value = dataUrl
+      return dataUrl
     } catch (err: any) {
-      logger.error('Failed to resolve input image for generation', err)
+      logger.error('Failed to resolve HTTP URL for generation', err)
       throw new Error('Cannot resolve input image: ' + err.message)
     }
   }
@@ -680,9 +701,20 @@ onMounted(async () => {
   // Hydrate input image: data_ref URL (new) → base64 (legacy fallback)
   if (!localPreview.value) {
     if (props.cell?.initial_data?.input_data_ref) {
-      // NEW: Runtime URL from ContentManagerCell — Vite serves it directly
-      localPreview.value = props.cell.initial_data.input_data_ref
-      logger.info('Hydrated localPreview from input_data_ref URL')
+      // BUG #3 FIX: data_ref is "file://artifacts/runtime/..." which browser cannot load as img src.
+      // Convert file:// to auth-proxy HTTP URL (/artifacts/runtime/...) for browser rendering.
+      const ref = props.cell.initial_data.input_data_ref
+      if (ref.startsWith('file://')) {
+        // file://artifacts/runtime/... -> /artifacts/runtime/... (auth-proxy serves this)
+        localPreview.value = ref.replace(/^file:\/\//, '/')
+        logger.info('Hydrated localPreview from input_data_ref (file:// to HTTP URL)', { ref })
+      } else if (!ref.startsWith('r2://')) {
+        // Directly usable (HTTP or data URL)
+        localPreview.value = ref
+        logger.info('Hydrated localPreview from input_data_ref URL')
+      } else {
+        logger.info('Skipped localPreview hydration (R2 ref, not directly loadable)', { ref })
+      }
     } else if (props.cell?.initial_data?.inputImage) {
       // LEGACY: Base64 data URL fallback
       localPreview.value = props.cell.initial_data.inputImage

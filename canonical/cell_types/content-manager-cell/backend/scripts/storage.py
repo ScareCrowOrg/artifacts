@@ -116,7 +116,6 @@ class LocalStorage(StorageBackend):
             meta_path.write_text(json.dumps(metadata, indent=2, default=str))
 
         logger.info(f"Uploaded to local storage: {file_path}")
-
         return f"file://{file_path}"
     
     def get_presigned_url(self, content_id: str, filename: str, expires_in: int = 3600) -> Optional[str]:

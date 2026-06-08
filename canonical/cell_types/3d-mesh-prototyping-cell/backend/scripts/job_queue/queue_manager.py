@@ -321,9 +321,7 @@ async def queue_3d_generation_job(
             # Default to hunyuan3d for unknown types
             queue_key = "scareverse:hunyuan3d-jobs:queue"
 
-        queue_len = await redis_client.lpush(queue_key, json.dumps(job_data))
-        # DIAG: hunyuan3d-worker-httpx-crash -- remover apos fix
-        logger.info(f"DIAG [{job_id}] LPUSH to queue '{queue_key}' succeeded. Queue length: {queue_len}")
+        await redis_client.lpush(queue_key, json.dumps(job_data))
 
         logger.info(f"Job {job_id} queued successfully")
         

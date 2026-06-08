@@ -247,19 +247,9 @@ class VenvManager:
                 worker_name,
                 return_code,
             )
-            # DIAG: hunyuan3d-worker-httpx-crash -- remover apos fix
-            logger.info(
-                "DIAG [%s] Venv verification failed (exit=%d) — worker will fail on first job",
-                worker_name, return_code,
-            )
             return False
         except Exception as exc:
             logger.warning("[%s] Venv verification failed: %s", worker_name, exc)
-            # DIAG: hunyuan3d-worker-httpx-crash -- remover apos fix
-            logger.info(
-                "DIAG [%s] Venv verification threw exception: %s",
-                worker_name, exc,
-            )
             return False
 
     async def _rebuild_venv(self, worker_name: str) -> None:
