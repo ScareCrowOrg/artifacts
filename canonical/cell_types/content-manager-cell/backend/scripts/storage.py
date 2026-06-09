@@ -120,7 +120,14 @@ class LocalStorage(StorageBackend):
         logger.info(f"[DIAG] LocalStorage.upload file_path (pre-resolve)={file_path}")
         resolved = file_path.resolve()
         logger.info(f"[DIAG] LocalStorage.upload file_path (post-resolve)={resolved}")
-        return f"file://{resolved}"
+
+        # data_ref: relative path from artifacts/, NOT absolute /app/artifacts/...
+        # This ensures MongoDB stores portable refs: file://artifacts/runtime/...
+        # Frontend converts file:// → / → /artifacts/runtime/... (auth-proxy URL)
+        ref_str = str(resolved)
+        if ref_str.startswith('/app/'):
+            ref_str = ref_str[len('/app/'):]  # strip /app/ prefix
+        return f"file://{ref_str}"
     
     def get_presigned_url(self, content_id: str, filename: str, expires_in: int = 3600) -> Optional[str]:
         """Local storage doesn't support presigned URLs."""
