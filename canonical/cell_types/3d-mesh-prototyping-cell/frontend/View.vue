@@ -473,6 +473,10 @@ const resolveInputImageForGeneration = async (): Promise<string> => {
   // Have an HTTP URL (auth-proxy /artifacts/... or presigned R2) — fetch and convert to base64.
   // The auth-proxy handles session validation via cookie; no auth header needed.
   if (localPreview.value?.startsWith('http') || localPreview.value?.startsWith('/')) {
+    logger.debug('DIAG [resolveInputImage] fetching URL for generation:', {
+      url: localPreview.value,
+      previewType: 'http_or_relative'
+    })
     try {
       const response = await apiFetch(localPreview.value)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -484,6 +488,7 @@ const resolveInputImageForGeneration = async (): Promise<string> => {
         reader.readAsDataURL(blob)
       })
       // Cache in localPreview for future calls (save refetch on retry)
+      logger.debug('DIAG [resolveInputImage] caching fetched URL as base64: url=%s, dataUrl_length=%s', localPreview.value, dataUrl.length)
       localPreview.value = dataUrl
       return dataUrl
     } catch (err: any) {

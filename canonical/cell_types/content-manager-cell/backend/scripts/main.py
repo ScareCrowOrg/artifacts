@@ -103,6 +103,9 @@ async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         limit = cell_data.get("limit", 20)
         offset = cell_data.get("offset", 0)
 
+        logger.debug("DIAG [handle_list] incoming: filters_dict=%s, limit=%s, offset=%s",
+                     filters_dict, limit, offset)
+
         # Validate pagination parameters
         if limit < 1 or limit > 100:
             return {
@@ -124,6 +127,8 @@ async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             tags=filters_dict.get("tags"),
             is_latest=filters_dict.get("is_latest")
         )
+        logger.debug("DIAG [handle_list] ContentQueryFilters built: content_type_id=%s, assignee_id=%s, origin_cell_id=%s, tags=%s, is_latest=%s",
+                     filters.content_type_id, filters.assignee_id, filters.origin_cell_id, filters.tags, filters.is_latest)
 
         # Get authenticated user injected by cells_router.py
         current_user = cell_data.get('_current_user')
@@ -131,9 +136,11 @@ async def handle_list(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         # Query contents from ContentManager (RBAC enforced)
         content_manager = ContentManager()
         all_contents = await content_manager.query_contents(filters, current_user=current_user)
-        
+
         # Apply pagination
         total = len(all_contents)
+        logger.debug("DIAG [handle_list] query result: total=%s, offset=%s, limit=%s, returned_count=%s",
+                     total, offset, limit, min(limit, max(0, total - offset)))
         paginated_contents = all_contents[offset:offset + limit]
         
         # Format response
@@ -504,8 +511,12 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             )
             logger.info(f"[DEBUG] MongoDB data_ref updated to: {data_ref}")
         except Exception as update_err:
-            # Non-critical: file exists in storage, MongoDB has empty data_ref
-            logger.warning(f"[DEBUG] data_ref update failed (non-critical): {update_err}")
+            # Non-critical: file exists in storage, MongoDB still has pending:{uuid}
+            logger.warning(
+                "DIAG [handle_persist] data_ref update failed (non-critical): "
+                "content_id=%s, old_data_ref=pending:%s, new_data_ref=%s, error=%s",
+                content_id, content_id, data_ref, update_err
+            )
 
         # Step 5: Success! Return created content metadata
         return {

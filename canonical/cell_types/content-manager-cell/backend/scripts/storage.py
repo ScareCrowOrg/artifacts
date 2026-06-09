@@ -118,7 +118,7 @@ class LocalStorage(StorageBackend):
 
         logger.info(f"Uploaded to local storage: {file_path}")
         logger.info(f"[DEBUG] LocalStorage absolute file path: {file_path.resolve()}")
-        return f"file://{file_path}"
+        return f"file://{file_path.resolve()}"
     
     def get_presigned_url(self, content_id: str, filename: str, expires_in: int = 3600) -> Optional[str]:
         """Local storage doesn't support presigned URLs."""

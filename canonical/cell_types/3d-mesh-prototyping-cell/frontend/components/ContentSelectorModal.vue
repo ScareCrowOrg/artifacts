@@ -35,11 +35,21 @@ const open = async () => {
     })
     if (result.success) {
       availableContents.value = (result.output as any).contents || []
+      // DIAG: detect G13 key mismatch — backend returns "id", template uses "content_id"
+      if (availableContents.value.length > 0) {
+        const first = availableContents.value[0]
+        logger.debug('DIAG [ContentSelectorModal] first item keys:', {
+          id: first.id,
+          content_id: first.content_id,
+          all_keys: Object.keys(first)
+        })
+      }
     } else {
       contentsError.value = result.error || 'Failed to load contents'
     }
   } catch (err: any) {
     contentsError.value = err.message
+    logger.error('ContentSelectorModal list failed:', err)
   } finally {
     contentsLoading.value = false
   }
