@@ -128,6 +128,12 @@ pub async fn check_runtime_access(
     // This replaces the old SISMEMBER check which incorrectly compared assignee_id (UUID)
     // against the allowed_artifacts set (which contains cell type slugs, not UUIDs).
     let session_key = format!("state:session:{}", session_id);
+    // DIAG [3d-mesh-guest-403-render]: Log context before self-access check
+    warn!(
+        "[RuntimeFileServer-DIAG] Self-access check: session_id={}, assignee_id={}, \
+         is_owner={:?}, reading key='{}'",
+        session_id, assignee_id, is_owner, session_key,
+    );
     let session_data: Option<String> = redis::cmd("GET")
         .arg(&session_key)
         .query_async(&mut conn)
@@ -181,6 +187,26 @@ pub async fn check_runtime_access(
                 "[RuntimeFileServer] Runtime access DENIED: session data not found for \
                  session_id={}",
                 session_id
+            );
+            // DIAG [3d-mesh-guest-403-render]: Check the alternative key session:{sid}
+            // which IS created by auth_session_router.py (unlike state:session:{sid}).
+            // This confirms the Redis key mismatch root cause.
+            let alt_key = format!("session:{}", session_id);
+            let alt_data: Option<String> = redis::cmd("GET")
+                .arg(&alt_key)
+                .query_async(&mut conn)
+                .await
+                .unwrap_or(None);
+            warn!(
+                "[RuntimeFileServer-DIAG] Alternative key '{}' check: {}",
+                alt_key,
+                if alt_data.is_some() {
+                    format!("EXISTS (len={}, prefix='{}')",
+                        alt_data.as_ref().unwrap().len(),
+                        &alt_data.as_ref().unwrap()[..std::cmp::min(80, alt_data.as_ref().unwrap().len())])
+                } else {
+                    "NIL".to_string()
+                }
             );
             false
         }
