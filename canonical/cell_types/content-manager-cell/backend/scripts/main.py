@@ -389,10 +389,13 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
 
         # Create content request with placeholder data_ref
         # (will be updated after storage upload succeeds)
+        # NOTE: data_ref="" causes MongoDB unique index conflict (E11000) on 2nd content.
+        # Fix: each content_id is a unique UUID, so f"pending:{content_id}" is always unique.
+        logger.debug("3DMesh-DEBUG: Creating content request with data_ref placeholder. content_id=%s, data_ref='pending:%s'", content_id, content_id)
         create_request = CreateContentRequest(
             content_type_id=content_type_id,
             assignee_id=assignee_id,
-            data_ref="",
+            data_ref=f"pending:{content_id}",
             filename=filename,
             size_bytes=size_bytes,
             fragments=fragments,
@@ -403,6 +406,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
 
         # Step 2: Insert to MongoDB FIRST (before storage upload).
         # If this fails, nothing was created — no cleanup needed.
+        logger.debug("3DMesh-DEBUG: Inserting to MongoDB: content_id=%s, data_ref=%r, filename=%s", content_id, create_request.data_ref, create_request.filename)
         try:
             content = await content_manager.create_content(
                 create_request,
@@ -412,6 +416,15 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             logger.info(f"[DEBUG] MongoDB insert OK: content.id={content.id}")
         except Exception as db_error:
             logger.error(f"[DEBUG] MongoDB insert failed: {db_error}", exc_info=True)
+            # Detect E11000 duplicate key on unique index (e.g. data_ref empty string conflict)
+            if "E11000" in str(db_error):
+                logger.warning(
+                    "3DMesh-DEBUG: MongoDB E11000 duplicate key detected. "
+                    "content_id=%s, data_ref=%r. "
+                    "Likely cause: data_ref unique index rejects second '' value. "
+                    "Pending fix: use unique placeholder per content_id.",
+                    content_id, create_request.data_ref
+                )
             return {
                 "success": False,
                 "action": "persist",
@@ -481,6 +494,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         # HybridDatabase.update() expects doc_id: str, and CentralHubProvider.update()
         # builds query={"_id": doc_id}. Passing {"id": content_id} would produce
         # query={"_id": {"id": "uuid"}} which MongoDB silently matches zero documents.
+        logger.debug("3DMesh-DEBUG: Updating MongoDB data_ref: content_id=%s, placeholder -> %s", content_id, data_ref)
         try:
             await db.update(
                 "contents",
