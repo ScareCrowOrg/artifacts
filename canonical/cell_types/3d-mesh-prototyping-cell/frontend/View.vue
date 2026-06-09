@@ -347,23 +347,38 @@ const handleFileUpload = (event: Event) => {
 
         if (persistResult.success) {
           const output = persistResult.output as any
-          cellInstance.contentId = output.content_id
+          // FIX #ID3: Backend returns "id" not "content_id" — use both
+          const contentId = output.id || output.content_id
+          cellInstance.contentId = contentId
           cellInstance.contentDataRef = output.data_ref
           logger.info('Input image persisted via ContentUploadCell', {
-            contentId: output.content_id,
+            contentId,
             dataRef: output.data_ref,
             fragments,
           })
         } else {
           // Persist responded but with failure (e.g. validation error on backend)
+          // Show user-visible message so they know the image wasn't saved for future use
+          const persistMsg = persistResult.error || 'Unknown persist error'
+          localError.value = `Image upload failed (generation still works): ${persistMsg}`
           logger.warn('Image persist returned error (non-critical, generation still works)', {
-            error: persistResult.error,
+            error: persistMsg,
             errorCode: persistResult.error_code,
+            inputFilename: file.name,
+            inputAssigneeId: assigneeId,
+            inputContentType: 'image-png',
           })
         }
       } catch (persistErr: any) {
         // Non-critical: user can still generate without persistence
-        logger.warn('Image persist failed (non-critical, generation still works)', persistErr)
+        // Show user-visible message so they know the image wasn't saved for future use
+        localError.value = `Image persist failed (generation still works): ${persistErr.message}`
+        logger.warn('Image persist failed (non-critical, generation still works)', {
+          error: persistErr.message,
+          inputFilename: file.name,
+          inputAssigneeId: assigneeId,
+          inputContentType: 'image-png',
+        })
       }
     } catch (err: any) {
       localError.value = `Image load failed: ${err.message}`
