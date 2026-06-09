@@ -60,8 +60,9 @@ const emit = defineEmits<{
     <button
       @click="emit('download-mesh')"
       class="px-4 py-2 bg-accent dark:bg-accent-light hover:bg-accent-dark dark:hover:bg-accent rounded transition"
+      :title="$t('artifacts.meshPrototypingCell.downloadMesh')"
     >
-      Download GLB
+      {{ $t('artifacts.meshPrototypingCell.download') }}
     </button>
   </div>
 </template>

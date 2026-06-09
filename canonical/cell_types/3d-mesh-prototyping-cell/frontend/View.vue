@@ -642,52 +642,58 @@ const generate3DMesh = async () => {
 }
 
 /**
- * Download generated GLB mesh
+ * Read a Blob/File as a base64 data URL
  */
-const downloadMesh = () => {
-  if (!meshBlobUrl.value && !uploadedGLBFile.value) return
+const readBlobAsDataURL = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Failed to read blob'))
+    reader.readAsDataURL(blob)
+  })
+}
 
-  logger.info('Downloading GLB mesh')
-
+/**
+ * Download generated GLB mesh
+ *
+ * Cross-origin iframe: Chrome blocks the `download` attribute on anchor
+ * elements inside cross-origin iframes. Delegate the download to the host
+ * shell (cockpit-vue) via postMessage so it runs in the same-origin context.
+ */
+const downloadMesh = async () => {
   try {
-    if (uploadedGLBFile.value) {
-      // Manual upload mode - use file blob
-      const blob = uploadedGLBFile.value
-      const link = document.createElement('a')
-      link.href = URL.createObjectURL(blob)
-      link.download = uploadedGLBFile.value.name || `mesh_${Date.now()}.glb`
-      link.click()
-      URL.revokeObjectURL(link.href)
-      logger.debug('GLB download initiated (manual upload)')
+    const source = meshBlobUrl.value
+    if (!source && !uploadedGLBFile.value) return
 
-    } else if (meshBlobUrl.value && meshBlobUrl.value.startsWith('/runtime/')) {
-      // NEW: Direct URL (Redis Magro) — fetch then download
-      fetch(meshBlobUrl.value)
-        .then(res => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          return res.blob()
-        })
-        .then(blob => {
-          const link = document.createElement('a')
-          link.href = URL.createObjectURL(blob)
-          link.download = `mesh_${Date.now()}.glb`
-          link.click()
-          URL.revokeObjectURL(link.href)
-          logger.debug('GLB download initiated (Redis Magro URL)')
-        })
-        .catch(err => {
-          logger.error('Error downloading mesh from URL', err)
-          localError.value = 'Failed to download mesh file'
-        })
+    logger.info('Downloading GLB mesh')
+
+    let url: string
+    let filename: string
+
+    if (uploadedGLBFile.value) {
+      // Manual upload mode — read file as base64 data URL
+      url = await readBlobAsDataURL(uploadedGLBFile.value)
+      filename = uploadedGLBFile.value.name || `mesh_${Date.now()}.glb`
+    } else if (source) {
+      // Generated or Redis Magro URL — fetch blob then convert to data URL
+      const response = await fetch(source)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const blob = await response.blob()
+      url = await readBlobAsDataURL(blob)
+      filename = `mesh_${Date.now()}.glb`
     } else {
-      // Generated mesh blob URL (legacy base64)
-      const link = document.createElement('a')
-      link.href = meshBlobUrl.value!
-      link.download = `mesh_${Date.now()}.glb`
-      link.click()
-      logger.debug('GLB download initiated (blob URL)')
+      return
     }
-  } catch (err) {
+
+    // Delegate download to Cockpit host shell (same-origin context)
+    window.top.postMessage({
+      type: 'FILE_DOWNLOAD',
+      payload: { url, filename },
+      timestamp: Date.now(),
+    }, '*')
+
+    logger.info('GLB download requested via host shell', { filename })
+  } catch (err: any) {
     logger.error('Error downloading mesh', err)
     localError.value = 'Failed to download mesh file'
   }
