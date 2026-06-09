@@ -501,7 +501,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         # HybridDatabase.update() expects doc_id: str, and CentralHubProvider.update()
         # builds query={"_id": doc_id}. Passing {"id": content_id} would produce
         # query={"_id": {"id": "uuid"}} which MongoDB silently matches zero documents.
-        logger.debug("3DMesh-DEBUG: Updating MongoDB data_ref: content_id=%s, placeholder -> %s", content_id, data_ref)
+        logger.info("[DIAG] handle_persist: calling db.update(collection='contents', doc_id='%s', updates={'$set': {'data_ref': '%s'}})", content_id, data_ref)
         try:
             await db.update(
                 "contents",

@@ -117,8 +117,10 @@ class LocalStorage(StorageBackend):
             meta_path.write_text(json.dumps(metadata, indent=2, default=str))
 
         logger.info(f"Uploaded to local storage: {file_path}")
-        logger.info(f"[DEBUG] LocalStorage absolute file path: {file_path.resolve()}")
-        return f"file://{file_path.resolve()}"
+        logger.info(f"[DIAG] LocalStorage.upload file_path (pre-resolve)={file_path}")
+        resolved = file_path.resolve()
+        logger.info(f"[DIAG] LocalStorage.upload file_path (post-resolve)={resolved}")
+        return f"file://{resolved}"
     
     def get_presigned_url(self, content_id: str, filename: str, expires_in: int = 3600) -> Optional[str]:
         """Local storage doesn't support presigned URLs."""
@@ -329,7 +331,7 @@ def get_storage_backend(assignee_id: str = None) -> StorageBackend:
     # NOTE: 'artifacts/runtime' prefix aligns with Docker volume mount at /app/artifacts/runtime/
     # Without 'artifacts/' prefix, files would go to /app/runtime/... (inside container, not on host)
     if assignee_id:
-        default_local_path = f"artifacts/runtime/user/{assignee_id}/contents"
+        default_local_path = f"/app/artifacts/runtime/user/{assignee_id}/contents"
     else:
         default_local_path = "/data/content"
 

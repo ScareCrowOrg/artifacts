@@ -427,6 +427,8 @@ const openContentSelector = () => {
  * Handle user selection of a persisted content item (G5)
  */
 const handleContentSelected = (content: any) => {
+  logger.info('[DIAG] handleContentSelected received content', { content })
+  logger.info('[DIAG] handleContentSelected data_ref value:', content.data_ref)
   // BUG #2 FIX: Backend returns "id", not "content_id"
   const resolvedId = content.id || content.content_id
   cellInstance.contentId = resolvedId
@@ -442,10 +444,23 @@ const handleContentSelected = (content: any) => {
       // file://artifacts/runtime/user/... -> /artifacts/runtime/user/...
       localPreview.value = content.data_ref.replace(/^file:\/\//, '/')
       localError.value = null
-    } else {
-      // data URL (upload flow) or other browser-loadable format
+    } else if (
+      content.data_ref.startsWith('data:') ||
+      content.data_ref.startsWith('http://') ||
+      content.data_ref.startsWith('https://')
+    ) {
+      // data URL (upload flow) or http/https URL (browser-loadable)
       localPreview.value = content.data_ref
       localError.value = null
+    } else if (content.data_ref.startsWith('pending:')) {
+      // Pending data_ref — update_one falhou ou ainda esta em andamento
+      localError.value = 'This content is still being processed. Please try again later.'
+      localPreview.value = null
+      logger.warn('[DIAG] Content has pending data_ref', { dataRef: content.data_ref })
+    } else {
+      localError.value = 'Selected content has no valid data reference'
+      localPreview.value = null
+      logger.warn('[DIAG] Content selected with unrecognized data_ref', { dataRef: content.data_ref })
     }
   } else {
     localError.value = 'Selected content has no data reference'
