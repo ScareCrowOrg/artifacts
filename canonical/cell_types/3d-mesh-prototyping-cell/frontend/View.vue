@@ -494,7 +494,7 @@ const resolveInputImageForGeneration = async (): Promise<string> => {
       previewType: 'http_or_relative'
     })
     try {
-      const response = await apiFetch(localPreview.value)
+      const response = await fetch(localPreview.value)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const blob = await response.blob()
       const dataUrl = await new Promise<string>((resolve, reject) => {
