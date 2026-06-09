@@ -477,10 +477,14 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             }
 
         # Step 4: Update MongoDB record with real data_ref from storage
+        # NOTE: doc_id is a plain string (the document's _id), NOT a dict filter.
+        # HybridDatabase.update() expects doc_id: str, and CentralHubProvider.update()
+        # builds query={"_id": doc_id}. Passing {"id": content_id} would produce
+        # query={"_id": {"id": "uuid"}} which MongoDB silently matches zero documents.
         try:
             await db.update(
                 "contents",
-                {"id": content_id},
+                content_id,  # plain string, not {"id": content_id}
                 {"$set": {"data_ref": data_ref}},
                 current_user=current_user
             )

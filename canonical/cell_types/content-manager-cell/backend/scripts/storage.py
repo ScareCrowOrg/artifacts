@@ -97,6 +97,7 @@ class LocalStorage(StorageBackend):
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
         logger.info(f"LocalStorage initialized: {self.base_path}")
+        logger.info(f"[DEBUG] LocalStorage absolute base_path: {self.base_path.resolve()}")
     
     def _get_file_path(self, content_id: str, filename: str) -> Path:
         """Get full file path for content."""
@@ -116,6 +117,7 @@ class LocalStorage(StorageBackend):
             meta_path.write_text(json.dumps(metadata, indent=2, default=str))
 
         logger.info(f"Uploaded to local storage: {file_path}")
+        logger.info(f"[DEBUG] LocalStorage absolute file path: {file_path.resolve()}")
         return f"file://{file_path}"
     
     def get_presigned_url(self, content_id: str, filename: str, expires_in: int = 3600) -> Optional[str]:
@@ -339,7 +341,11 @@ def get_storage_backend(assignee_id: str = None) -> StorageBackend:
         if not r2_enabled:
             logger.warning("R2 mode requested but R2_ENABLED=false. Falling back to local storage.")
             local_path = os.getenv("STORAGE_LOCAL_PATH", default_local_path)
-            logger.info(f"[DEBUG] Using LocalStorage at {local_path}")
+            logger.info(f"[DEBUG] Using LocalStorage (R2 fallback) at {local_path}")
+            logger.info(f"[DEBUG] CWD when initializing storage (R2 fallback): {Path.cwd()}")
+            resolved = Path(local_path).resolve()
+            logger.info(f"[DEBUG] Resolved absolute path (R2 fallback): {resolved}")
+            logger.info(f"[DEBUG] Volume mount check (R2 fallback) — does {resolved} exist? {resolved.exists()}")
             return LocalStorage(local_path)
 
         # Get R2 credentials
@@ -386,4 +392,8 @@ def get_storage_backend(assignee_id: str = None) -> StorageBackend:
     # Default to local storage
     local_path = os.getenv("STORAGE_LOCAL_PATH", default_local_path)
     logger.info(f"[DEBUG] Using LocalStorage (default) at {local_path}")
+    logger.info(f"[DEBUG] CWD when initializing storage: {Path.cwd()}")
+    resolved = Path(local_path).resolve()
+    logger.info(f"[DEBUG] Resolved absolute path would be: {resolved}")
+    logger.info(f"[DEBUG] Volume mount check — does {resolved} exist? {resolved.exists()}")
     return LocalStorage(local_path)
