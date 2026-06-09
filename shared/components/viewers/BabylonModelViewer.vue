@@ -224,8 +224,15 @@ const loadModel = async () => {
   try {
     // Detect if Blob URL and force extension
     const pluginExtension = props.url.startsWith('blob:') ? '.glb' : undefined
+
+    // DIAG [3d-mesh-guest-403-render]: Log EXACT URL being loaded into SceneLoader
+    logger.debug(
+      '[DIAG-3d403] Babylon SceneLoader.ImportMeshAsync: url=%s pluginExtension=%s',
+      props.url, pluginExtension,
+    )
+
     const result = await SceneLoader.ImportMeshAsync('', '', props.url, scene, undefined, pluginExtension)
-    
+
     if (result.meshes.length === 0) {
       throw new Error('No meshes found in model')
     }
@@ -237,10 +244,10 @@ const loadModel = async () => {
     const boundingInfo = loadedMesh.getHierarchyBoundingVectors(true)
     const size = boundingInfo.max.subtract(boundingInfo.min)
     const center = boundingInfo.min.add(size.scale(0.5))
-    
+
     // Move to origin
     loadedMesh.position = center.negate()
-    
+
     // Scale to fit in view
     const maxDim = Math.max(size.x, size.y, size.z)
     if (maxDim > 0) {
@@ -256,8 +263,18 @@ const loadModel = async () => {
       size: { x: size.x, y: size.y, z: size.z }
     })
   } catch (error) {
-    logger.error('Error loading model:', error)
-    loadError.value = `Failed to load model: ${error instanceof Error ? error.message : 'Unknown error'}`
+    // DIAG [3d-mesh-guest-403-render]: Detect HTTP 403 in Babylon.js error
+    const errMsg = error instanceof Error ? error.message : String(error)
+    const is403 = errMsg.includes('403') || errMsg.includes('Forbidden') || errMsg.includes('FORBIDDEN')
+    if (is403) {
+      logger.warn(
+        '[DIAG-3d403] *** HTTP 403 FORBIDDEN detected *** loading url=%s — this is the auth-proxy RBAC bug',
+        props.url,
+      )
+    } else {
+      logger.error('[DIAG-3d403] Babylon SceneLoader error for url=%s: %s', props.url, errMsg)
+    }
+    loadError.value = `Failed to load model: ${errMsg}`
   } finally {
     isLoading.value = false
   }

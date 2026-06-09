@@ -3,8 +3,8 @@
 //! The Auth Proxy (Rust/tokio) serves binary artifacts (.glb, .png, etc.)
 //! directly from disk using async file I/O, bypassing Vite entirely.
 //!
-//! Runtime artifacts additionally require a Redis RBAC check (`SISMEMBER`)
-//! against the session's `allowed_artifacts` set before serving.
+//! Runtime artifacts additionally require a self-access check: the session's
+//! `userId` must match the `assignee_id` in the URL path before serving.
 
 use std::path::Path;
 
@@ -88,10 +88,13 @@ pub fn extract_runtime_assignee(path: &str) -> Option<&str> {
     if assignee_id.is_empty() { None } else { Some(assignee_id) }
 }
 
-/// Check if a session has RBAC access to a specific runtime assignee's artifacts.
+/// Check if a session has access to a specific runtime assignee's artifacts.
 ///
-/// Uses Redis SISMEMBER on the session's allowed_artifacts set.
-/// Follows the same pattern as `check_viewer_access()`.
+/// Compares the session's `userId` with the `assignee_id` extracted from the URL path.
+/// If they match, the user is accessing their own runtime content (self-access allowed).
+/// If they differ, the session is attempting to access another user's artifacts (denied).
+///
+/// Planet owners bypass this check entirely (access all).
 ///
 /// **Fail-closed**: Redis errors → access denied.
 pub async fn check_runtime_access(
@@ -116,20 +119,72 @@ pub async fn check_runtime_access(
         }
     }
 
-    // Check guest allowance via Redis Set membership.
-    let allowances_key = format!("state:session:{}:allowed_artifacts", session_id);
-    let is_allowed: bool = redis::cmd("SISMEMBER")
-        .arg(&allowances_key)
-        .arg(assignee_id)
+    // Self-access check: compare the session's userId with the assignee_id from the URL path.
+    //
+    // Runtime artifacts live at /runtime/user/{assignee_id}/contents/{cell_id}/{filename}.
+    // The assignee_id (UUID from the URL) identifies which user owns the artifact.
+    // To allow access, the session's userId must match the assignee_id (self-access).
+    //
+    // This replaces the old SISMEMBER check which incorrectly compared assignee_id (UUID)
+    // against the allowed_artifacts set (which contains cell type slugs, not UUIDs).
+    let session_key = format!("state:session:{}", session_id);
+    let session_data: Option<String> = redis::cmd("GET")
+        .arg(&session_key)
         .query_async(&mut conn)
         .await
-        .unwrap_or(false);  // fail-closed: Redis error → deny
+        .unwrap_or(None);
 
-    debug!(
-        "[RuntimeFileServer] Runtime access check: assignee={} allowed={} (session={})",
-        assignee_id, is_allowed, session_id
-    );
-    is_allowed
+    match session_data {
+        Some(json_str) => {
+            match serde_json::from_str::<serde_json::Value>(&json_str) {
+                Ok(val) => {
+                    let user_id = val.get("userId").and_then(|v| v.as_str());
+                    match user_id {
+                        Some(uid) if uid == assignee_id => {
+                            debug!(
+                                "[RuntimeFileServer] Runtime access allowed: self-access \
+                                 (userId={} matches assignee_id={})",
+                                uid, assignee_id
+                            );
+                            true
+                        }
+                        Some(uid) => {
+                            debug!(
+                                "[RuntimeFileServer] Runtime access DENIED: session userId={} \
+                                 != assignee_id={}",
+                                uid, assignee_id
+                            );
+                            false
+                        }
+                        None => {
+                            warn!(
+                                "[RuntimeFileServer] Runtime access DENIED: no userId in \
+                                 session data: {}",
+                                json_str
+                            );
+                            false
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        "[RuntimeFileServer] Runtime access DENIED: failed to parse session \
+                         JSON: {}",
+                        e
+                    );
+                    false
+                }
+            }
+        }
+        None => {
+            warn!(
+                "[RuntimeFileServer] Runtime access DENIED: session data not found for \
+                 session_id={}",
+                session_id
+            );
+            false
+        }
+    }
 }
 
 /// Check if a session has access to a specific viewer.

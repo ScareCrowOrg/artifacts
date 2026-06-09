@@ -141,6 +141,15 @@ async def _auto_swap_large_fields(
             "relative_url": f"/{rel_path}",
         }
 
+    # PERMANENTE [3d-mesh-guest-403-render]: Log summary of relative_urls created
+    auto_swapped_keys = {k: v.get("relative_url", "N/A") for k, v in cleaned.items()
+                         if isinstance(v, dict) and "relative_url" in v}
+    if auto_swapped_keys:
+        logger.info(
+            "[PERMANENTE-3d403] Auto-swap relative_urls for assignee=%s: %s",
+            assignee_id, auto_swapped_keys,
+        )
+
     return cleaned
 
 
@@ -180,7 +189,15 @@ async def queue_3d_generation_job(
         # Generate unique job ID
         job_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat()
-        
+
+        # PERMANENTE [3d-mesh-guest-403-render]: Log assignee_id used in job queueing
+        # This value flows into the output path and determines which user "owns" the mesh.
+        # If empty/wrong, the auth-proxy RBAC check will fail to match.
+        logger.info(
+            "[PERMANENTE-3d403] Queueing 3D generation job: job_id=%s assignee_id=%s",
+            job_id, assignee_id or "NOT_PROVIDED",
+        )
+
         logger.info(f"Queueing 3D generation job: {job_id}")
         
         # Get Redis client and shared volume path
@@ -402,12 +419,22 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
 
             # NEW FORMAT: Worker returned relative_url (Redis Magro browser)
             if job_data.get("relative_url"):
-                logger.info("Job %s completed with relative_url: %s", job_id, job_data.get("relative_url"))
+                relative_url = job_data.get("relative_url")
+                logger.info("Job %s completed with relative_url: %s", job_id, relative_url)
+
+                # PERMANENTE [3d-mesh-guest-403-render]: Log the complete return payload
+                # The relative_url will be used by the frontend to fetch the GLB via auth-proxy.
+                # If this URL does not match the allowed_artifacts check format, 403 follows.
+                logger.info(
+                    "[PERMANENTE-3d403] Job %s completed: relative_url=%s content_id=%s assignee_id=%s",
+                    job_id, relative_url, job_data.get("content_id"), job_data.get("assignee_id", "unknown"),
+                )
+
                 metadata = {}
                 return {
                     "status": "completed",
                     "content_id": job_data.get("content_id"),
-                    "relative_url": job_data.get("relative_url"),
+                    "relative_url": relative_url,
                     "mesh_format": job_data.get("mesh_format", "glb"),
                     "metadata": metadata,
                 }
@@ -506,6 +533,14 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
                 if message:
                     metadata['message'] = message
                 
+                # PERMANENTE [3d-mesh-guest-403-render]: Log legacy completion path
+                # Uses base64 mesh_data (not relative_url). The frontend converts this
+                # to a blob URL and loads via Babylon.js. No auth-proxy involved.
+                logger.info(
+                    "[PERMANENTE-3d403] Job %s completed (legacy format): base64 mesh %d bytes",
+                    job_id, len(mesh_data),
+                )
+
                 return {
                     "status": "completed",
                     "mesh_data": mesh_data,

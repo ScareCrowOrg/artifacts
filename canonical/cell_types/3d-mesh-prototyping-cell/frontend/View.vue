@@ -229,20 +229,36 @@ const cameraPosition = computed(() => {
  * Memoized to avoid recreating URL on every access
  */
 const meshBlobUrl = computed(() => {
+  // DIAG [3d-mesh-guest-403-render]: Track what URL/type is flowing to Babylon.js
+  const gmType = typeof generatedMesh.value
+
   // Priority: Manual upload > Generated mesh
   if (uploadedGLBUrl.value) {
+    logger.debug('[DIAG-3d403] meshBlobUrl: using uploadedGLBUrl=%s', uploadedGLBUrl.value)
     return uploadedGLBUrl.value
   }
-  
-  if (!generatedMesh.value) return null
+
+  if (!generatedMesh.value) {
+    logger.debug('[DIAG-3d403] meshBlobUrl: generatedMesh is null/empty, returning null')
+    return null
+  }
 
   // NEW: Direct URL (relative_url from Redis Magro) — return as-is
   // Vite serves runtime/user/ assets directly, no blob conversion needed
-  if (typeof generatedMesh.value === 'string' && generatedMesh.value.startsWith('/runtime/')) {
+  if (gmType === 'string' && typeof generatedMesh.value === 'string' && generatedMesh.value.startsWith('/runtime/')) {
+    logger.debug(
+      '[DIAG-3d403] meshBlobUrl: direct URL path (Redis Magro): %s',
+      generatedMesh.value,
+    )
     return generatedMesh.value
   }
 
   try {
+    logger.debug(
+      '[DIAG-3d403] meshBlobUrl: converting base64 to blob URL (type=%s, value_preview=%s...)',
+      gmType,
+      gmType === 'string' ? generatedMesh.value.substring(0, 80) : 'N/A',
+    )
     const base64Data = generatedMesh.value.split(',')[1]
     const binaryData = atob(base64Data)
     const bytes = new Uint8Array(binaryData.length)
@@ -250,9 +266,11 @@ const meshBlobUrl = computed(() => {
       bytes[i] = binaryData.charCodeAt(i)
     }
     const blob = new Blob([bytes], { type: 'model/gltf-binary' })
-    return URL.createObjectURL(blob)
+    const blobUrl = URL.createObjectURL(blob)
+    logger.debug('[DIAG-3d403] meshBlobUrl: created blob URL: %s', blobUrl)
+    return blobUrl
   } catch (err: any) {
-    logger.error('Error creating blob URL', err)
+    logger.error('[DIAG-3d403] Error creating blob URL from generatedMesh', err)
     return null
   }
 })
