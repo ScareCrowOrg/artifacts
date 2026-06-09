@@ -442,7 +442,9 @@ const handleContentSelected = (content: any) => {
   if (content.data_ref && typeof content.data_ref === 'string') {
     if (content.data_ref.startsWith('file://')) {
       // file://artifacts/runtime/user/... -> /artifacts/runtime/user/...
-      localPreview.value = content.data_ref.replace(/^file:\/\//, '/')
+      // FIX (Iteration 4 Cycle 3): file:///app/artifacts/... → /artifacts/...
+      // Also handles legacy file://artifacts/... → /artifacts/... (backward compat)
+      localPreview.value = '/' + content.data_ref.replace(/^file:\/\//, '').replace(/^\/app/, '')
       localError.value = null
     } else if (
       content.data_ref.startsWith('data:') ||
@@ -741,7 +743,9 @@ onMounted(async () => {
       const ref = props.cell.initial_data.input_data_ref
       if (ref.startsWith('file://')) {
         // file://artifacts/runtime/... -> /artifacts/runtime/... (auth-proxy serves this)
-        localPreview.value = ref.replace(/^file:\/\//, '/')
+        // FIX (Iteration 4 Cycle 3): file:///app/artifacts/... → /artifacts/...
+        // Also handles legacy file://artifacts/... → /artifacts/... (backward compat)
+        localPreview.value = '/' + ref.replace(/^file:\/\//, '').replace(/^\/app/, '')
         logger.info('Hydrated localPreview from input_data_ref (file:// to HTTP URL)', { ref })
       } else if (!ref.startsWith('r2://')) {
         // Directly usable (HTTP or data URL)
