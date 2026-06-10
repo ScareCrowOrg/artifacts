@@ -123,6 +123,15 @@ class CentralHubClient:
         except HTTPError as exc:
             logger.error("CentralHub find_one failed: %s", exc)
             if getattr(exc, 'response', None) and exc.response.status_code == 403:
+                resp_body = ""
+                try:
+                    resp_body = exc.response.text
+                except Exception:
+                    pass
+                logger.warning(
+                    "CENTRALHUB-CLIENT-DEBUG: find_one 403 — collection=%s, user_id=%s, caller=%s, status=%s, body=%s",
+                    collection, user_id, caller, exc.response.status_code, resp_body
+                )
                 return None
             raise
 
@@ -158,6 +167,15 @@ class CentralHubClient:
         except HTTPError as exc:
             logger.error("CentralHub find_many failed: %s", exc)
             if getattr(exc, 'response', None) and exc.response.status_code == 403:
+                resp_body = ""
+                try:
+                    resp_body = exc.response.text
+                except Exception:
+                    pass
+                logger.warning(
+                    "CENTRALHUB-CLIENT-DEBUG: find_many 403 — collection=%s, user_id=%s, caller=%s, status=%s, body=%s, returning_empty_list=True",
+                    collection, user_id, caller, exc.response.status_code, resp_body
+                )
                 return []
             raise
 
