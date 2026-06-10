@@ -143,6 +143,7 @@ export const ENDPOINTS = {
 
   // System endpoints
   systemStatus: `${API_BASE}/api/status`,
+  systemHealth: `${API_BASE}/api/health`,  // Lightweight health check (public, no auth/scans)
   systemSeedData: `${API_BASE}/api/seed-data`,
 
   // Layout persistence endpoints

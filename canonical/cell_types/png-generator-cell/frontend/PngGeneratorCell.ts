@@ -413,8 +413,9 @@ export class PngGeneratorCell extends BaseCell {
     try {
       log.debug('Performing health check')
       
-      // Check if backend is reachable by calling system status endpoint
-      const response = await apiService.fetch(ENDPOINTS.systemStatus) as Response
+      // Check if backend is reachable by calling the lightweight health endpoint
+      // (public endpoint: no auth required, no DB scan, fast ping-only check)
+      const response = await apiService.fetch('/api/health') as Response
       
       if (!response.ok) {
         log.warn('Backend health check failed', { status: response.status })
