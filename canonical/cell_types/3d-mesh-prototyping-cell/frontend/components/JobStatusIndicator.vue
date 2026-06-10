@@ -23,6 +23,9 @@
  * @component
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   isGenerating: boolean
@@ -51,37 +54,37 @@ const statusColor = computed(() => {
 const statusLabel = computed(() => {
   switch (props.jobStatus) {
     case 'queued':
-      return 'Queued'
+      return t('artifacts.meshPrototypingCell.jobStatus.statusQueued')
     case 'processing':
-      return 'Processing...'
+      return t('artifacts.meshPrototypingCell.jobStatus.statusProcessing')
     case 'completed':
-      return 'Completed'
+      return t('artifacts.meshPrototypingCell.jobStatus.statusCompleted')
     case 'failed':
-      return 'Failed'
+      return t('artifacts.meshPrototypingCell.jobStatus.statusFailed')
     default:
-      return 'Idle'
+      return t('artifacts.meshPrototypingCell.jobStatus.statusIdle')
   }
 })
 
 const optimizationBadge = computed(() => {
   if (props.jobStatus !== 'completed') return null
-  
+
   if (props.blenderOptimized === true) {
     return {
-      label: 'Optimized',
+      label: t('artifacts.meshPrototypingCell.jobStatus.badgeOptimized.label'),
       color: 'bg-success dark:bg-success-light text-white',
       icon: '✓',
-      tooltip: 'Mesh optimized with Blender (GLB with Draco compression)'
+      tooltip: t('artifacts.meshPrototypingCell.jobStatus.badgeOptimized.tooltip')
     }
   } else if (props.blenderOptimized === false) {
     return {
-      label: 'Raw Mesh',
+      label: t('artifacts.meshPrototypingCell.jobStatus.badgeRaw.label'),
       color: 'bg-warning dark:bg-warning-light text-white',
       icon: '⚠',
-      tooltip: 'Mesh delivered without Blender optimization (OBJ format)'
+      tooltip: t('artifacts.meshPrototypingCell.jobStatus.badgeRaw.tooltip')
     }
   }
-  
+
   return null
 })
 </script>

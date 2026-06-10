@@ -178,7 +178,7 @@ const triggerFileInput = () => {
           <span v-else>{{ $t('artifacts.meshPrototypingCell.uploader.dropIdle') }}</span>
         </p>
         <p class="text-sm text-text-secondary dark:text-text-secondary-dark">
-          Supported format: .glb (GLTF Binary)
+          {{ $t('artifacts.meshPrototypingCell.uploader.supportedFormat') }}
         </p>
       </div>
 

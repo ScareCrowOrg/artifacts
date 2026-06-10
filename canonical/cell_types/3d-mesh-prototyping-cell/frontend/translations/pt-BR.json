@@ -1,0 +1,106 @@
+{
+  "artifacts": {
+    "meshPrototypingCell": {
+      "title": "Célula de Prototipagem 3D Mesh",
+      "description": "Gere malhas 3D volumétricas com volume de 360º a partir de imagens únicas usando reconstrução por IA",
+      "errorLabel": "Erro:",
+      "inputImageSection": {
+        "title": "Imagem de Entrada para Reconstrução 3D",
+        "description": "Gere malhas 3D volumétricas a partir de imagens 2D",
+        "supportedFormats": "Formatos suportados: PNG, JPG, JPEG",
+        "uploadNew": "📤 Enviar Nova",
+        "selectExisting": "📂 Selecionar Existente",
+        "browseLibrary": "📂 Procurar na Biblioteca",
+        "selected": "✅ Selecionado: {name}",
+        "solidifySilhouette": "Solidificar Silhueta",
+        "onlyForInstantMesh": "(Apenas para InstantMesh)",
+        "solidifyEnabled": "🔧 Ativado: Corrige geometria incompleta (bom para objetos com detalhes finos como pelos, bigodes)",
+        "solidifyDisabled": "⚡ Desativado: Modo rápido (bom para silhuetas limpas como caixas, formas simples)"
+      },
+      "inputImagePreview": {
+        "title": "📤 Pré-visualização da Imagem de Entrada",
+        "altText": "Entrada para reconstrução",
+        "noImage": "Nenhuma imagem selecionada. Envie ou selecione uma imagem acima."
+      },
+      "generationMode": {
+        "title": "Modo de Geração",
+        "cloudApi": {
+          "label": "Cloud API",
+          "description": "Geração rápida via API externa (requer chave de API)"
+        },
+        "localGpu": {
+          "label": "GPU Local",
+          "description": "Pipeline local via ComfyUI/Hunyuan3D (padrão)",
+          "badge": "Padrão"
+        },
+        "manualUpload": {
+          "label": "Upload Manual",
+          "description": "Envie seu próprio arquivo GLB para pré-visualização"
+        }
+      },
+      "generating": {
+        "processing": "Processando...",
+        "queueing": "Enfileirando...",
+        "generate": "Gerar Malha 3D",
+        "cloudApiSuffix": " (Cloud API)"
+      },
+      "viewer": {
+        "generating": "Gerando malha 3D...",
+        "noMesh": "Gere uma malha 3D para visualizá-la aqui"
+      },
+      "uploader": {
+        "dropActive": "Solte o arquivo GLB aqui",
+        "dropIdle": "Solte o arquivo GLB ou clique para navegar",
+        "tipLabel": "Dica:",
+        "tipMessage": "Envie seus próprios modelos GLB para pré-visualização instantânea no viewport 3D",
+        "supportedFormat": "Formato suportado: .glb (GLTF Binary)"
+      },
+      "jobStatus": {
+        "statusLabel": "Status:",
+        "jobIdLabel": "ID do Job:",
+        "statusIdle": "Ocioso",
+        "statusQueued": "Na Fila",
+        "statusProcessing": "Processando",
+        "statusCompleted": "Concluído",
+        "statusFailed": "Falhou",
+        "badgeOptimized": {
+          "label": "Otimizado",
+          "tooltip": "Malha otimizada com Blender (GLB com compressão Draco)"
+        },
+        "badgeRaw": {
+          "label": "Malha Bruta",
+          "tooltip": "Malha entregue sem otimização Blender (formato OBJ)"
+        }
+      },
+      "viewport": {
+        "viewOptimizationError": "Ver detalhes do erro de otimização"
+      },
+      "meshMetadata": {
+        "title": "Informações da Malha",
+        "optimizedMesh": "Malha Otimizada",
+        "rawMesh": "Malha Bruta (Otimização Ignorada)",
+        "optimizedDescription": "Processado com otimização Blender + compressão Draco",
+        "rawDescription": "A otimização Blender falhou - entregue como SF3D bruto",
+        "reason": "Motivo: {reason}",
+        "vertices": "Vértices:",
+        "faces": "Faces:",
+        "fileSize": "Tamanho do Arquivo:",
+        "format": "Formato:",
+        "formatOptimized": "GLB (otimizado)",
+        "formatRaw": "OBJ (bruto)",
+        "compression": "Compressão:",
+        "compressionDraco": "Draco (ativado)",
+        "compressionNone": "Nenhuma",
+        "pipeline": "Pipeline de Processamento:",
+        "pipelineSf3d": "Geração SF3D",
+        "pipelineBlender": "Otimização Blender",
+        "totalTime": "Tempo Total",
+        "generationTime": "Tempo de Geração",
+        "noteLabel": "Observação",
+        "notApplicable": "N/A"
+      },
+      "download": "Baixar GLB",
+      "downloadMesh": "Baixar malha 3D gerada como GLB"
+    }
+  }
+}

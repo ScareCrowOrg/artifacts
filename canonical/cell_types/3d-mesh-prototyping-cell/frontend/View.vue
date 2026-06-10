@@ -28,6 +28,7 @@
  * - Reactive viewport controls
  * 
  * @component
+ * @i18n-full-conversion 2026-06-09
  */
 
 import { ref, computed, watch, onMounted, onUnmounted, defineOptions, inject } from 'vue'
@@ -864,9 +865,9 @@ onUnmounted(() => {
 
 <template>
   <div class="mesh-prototyping-container bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark p-6 rounded-lg border border-border dark:border-border-dark">
-    <h2 class="text-2xl font-bold mb-4">3D Mesh Prototyping Cell</h2>
+    <h2 class="text-2xl font-bold mb-4">{{ $t('artifacts.meshPrototypingCell.title') }}</h2>
     <p class="text-text-secondary dark:text-text-secondary-dark mb-6">
-      Generate volumetric 3D meshes with 360º volume from single images using AI-powered reconstruction
+      {{ $t('artifacts.meshPrototypingCell.description') }}
     </p>
 
     <!-- Error Display -->
@@ -907,16 +908,16 @@ onUnmounted(() => {
       <div class="flex items-center gap-2 mb-4">
         <span class="text-2xl">📤</span>
         <h3 class="text-lg font-semibold text-text-primary dark:text-text-primary-dark">
-          Input Image for 3D Reconstruction
+          {{ $t('artifacts.meshPrototypingCell.inputImageSection.title') }}
         </h3>
       </div>
 
       <!-- Description -->
       <p class="text-sm text-text-secondary dark:text-text-secondary-dark mb-1">
-        Generate volumetric 3D meshes from 2D images
+        {{ $t('artifacts.meshPrototypingCell.inputImageSection.description') }}
       </p>
       <p class="text-xs text-text-secondary dark:text-text-secondary-dark mb-4">
-        Supported formats: PNG, JPG, JPEG
+        {{ $t('artifacts.meshPrototypingCell.inputImageSection.supportedFormats') }}
       </p>
 
       <!-- Input Source Mode Tabs: Upload New | Select Existing -->
@@ -928,7 +929,7 @@ onUnmounted(() => {
             : 'bg-surface text-text-secondary hover:bg-surface-hover'"
           class="px-4 py-2 rounded text-sm font-medium transition"
         >
-          📤 Upload New
+          {{ $t('artifacts.meshPrototypingCell.inputImageSection.uploadNew') }}
         </button>
         <button
           @click="inputSourceMode = 'select-existing'"
@@ -937,7 +938,7 @@ onUnmounted(() => {
             : 'bg-surface text-text-secondary hover:bg-surface-hover'"
           class="px-4 py-2 rounded text-sm font-medium transition"
         >
-          📂 Select Existing
+          {{ $t('artifacts.meshPrototypingCell.inputImageSection.selectExisting') }}
         </button>
       </div>
 
@@ -960,10 +961,10 @@ onUnmounted(() => {
           :disabled="isGenerating"
           class="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded text-sm transition"
         >
-          📂 Browse Library
+          {{ $t('artifacts.meshPrototypingCell.inputImageSection.browseLibrary') }}
         </button>
         <p v-if="selectedContentName" class="text-sm text-success mt-2">
-          ✅ Selected: {{ selectedContentName }}
+          {{ $t('artifacts.meshPrototypingCell.inputImageSection.selected', { name: selectedContentName }) }}
         </p>
       </div>
 
@@ -983,15 +984,15 @@ onUnmounted(() => {
         />
         <div class="flex-1">
           <div class="text-sm font-medium text-text-primary dark:text-text-primary-dark">
-            Solidify Silhouette
-            <span class="text-xs text-text-secondary dark:text-text-secondary-dark font-normal">(Only for InstantMesh)</span>
+            {{ $t('artifacts.meshPrototypingCell.inputImageSection.solidifySilhouette') }}
+            <span class="text-xs text-text-secondary dark:text-text-secondary-dark font-normal">{{ $t('artifacts.meshPrototypingCell.inputImageSection.onlyForInstantMesh') }}</span>
           </div>
           <div class="text-xs text-text-secondary dark:text-text-secondary-dark mt-1">
             <span v-if="localSolidifySilhouette">
-              🔧 Enabled: Fixes incomplete geometry (good for objects with fine details like fur, whiskers)
+              {{ $t('artifacts.meshPrototypingCell.inputImageSection.solidifyEnabled') }}
             </span>
             <span v-else>
-              ⚡ Disabled: Fast mode (good for clean silhouettes like boxes, simple shapes)
+              {{ $t('artifacts.meshPrototypingCell.inputImageSection.solidifyDisabled') }}
             </span>
           </div>
         </div>
@@ -1001,19 +1002,19 @@ onUnmounted(() => {
     <!-- Image Preview Container -->
     <div class="mb-6 p-4 bg-surface-light dark:bg-surface-dark-light rounded border border-border dark:border-border-dark">
       <label class="block text-sm font-medium mb-4 text-text-primary dark:text-text-primary-dark">
-        📤 Input Image Preview
+        {{ $t('artifacts.meshPrototypingCell.inputImagePreview.title') }}
       </label>
       <!-- Image preview / placeholder -->
       <div class="preview-container border-2 border-dashed border-border dark:border-border-dark p-4 rounded">
         <img
           v-if="displayImage"
           :src="displayImage"
-          alt="Input for reconstruction"
+          :alt="$t('artifacts.meshPrototypingCell.inputImagePreview.altText')"
           class="w-full h-auto rounded"
           style="max-height: 400px;"
         />
         <p v-else class="text-sm text-text-secondary dark:text-text-secondary-dark text-center py-8">
-          No image selected. Upload or select an image above.
+          {{ $t('artifacts.meshPrototypingCell.inputImagePreview.noImage') }}
         </p>
       </div>
     </div>
@@ -1025,10 +1026,10 @@ onUnmounted(() => {
       :disabled="!hasInputImage || isGenerating"
       class="bg-success dark:bg-success-light hover:bg-success-dark dark:hover:bg-success disabled:bg-surface-disabled dark:disabled:bg-surface-disabled disabled:cursor-not-allowed text-white font-semibold py-2 px-6 rounded mb-6 transition"
     >
-      <span v-if="isGenerating">{{ jobStatus === 'processing' ? 'Processing...' : 'Queueing...' }}</span>
+      <span v-if="isGenerating">{{ jobStatus === 'processing' ? $t('artifacts.meshPrototypingCell.generating.processing') : $t('artifacts.meshPrototypingCell.generating.queueing') }}</span>
       <span v-else>
-        Generate 3D Mesh
-        <span v-if="generationMode === 'cloud-api'"> (Cloud API)</span>
+        {{ $t('artifacts.meshPrototypingCell.generating.generate') }}
+        <span v-if="generationMode === 'cloud-api'">{{ $t('artifacts.meshPrototypingCell.generating.cloudApiSuffix') }}</span>
       </span>
     </button>
 
@@ -1064,7 +1065,7 @@ onUnmounted(() => {
       <!-- Show waiting message when generating -->
       <div v-else class="flex items-center justify-center h-full">
         <p class="text-text-secondary dark:text-text-secondary-dark">
-          {{ isGenerating ? 'Generating 3D mesh...' : 'Generate a 3D mesh to view it here' }}
+          {{ isGenerating ? $t('artifacts.meshPrototypingCell.viewer.generating') : $t('artifacts.meshPrototypingCell.viewer.noMesh') }}
         </p>
       </div>
     </div>

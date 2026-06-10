@@ -1,0 +1,106 @@
+{
+  "artifacts": {
+    "meshPrototypingCell": {
+      "title": "3D Mesh Prototyping Cell",
+      "description": "Generate volumetric 3D meshes with 360º volume from single images using AI-powered reconstruction",
+      "errorLabel": "Error:",
+      "inputImageSection": {
+        "title": "Input Image for 3D Reconstruction",
+        "description": "Generate volumetric 3D meshes from 2D images",
+        "supportedFormats": "Supported formats: PNG, JPG, JPEG",
+        "uploadNew": "📤 Upload New",
+        "selectExisting": "📂 Select Existing",
+        "browseLibrary": "📂 Browse Library",
+        "selected": "✅ Selected: {name}",
+        "solidifySilhouette": "Solidify Silhouette",
+        "onlyForInstantMesh": "(Only for InstantMesh)",
+        "solidifyEnabled": "🔧 Enabled: Fixes incomplete geometry (good for objects with fine details like fur, whiskers)",
+        "solidifyDisabled": "⚡ Disabled: Fast mode (good for clean silhouettes like boxes, simple shapes)"
+      },
+      "inputImagePreview": {
+        "title": "📤 Input Image Preview",
+        "altText": "Input for reconstruction",
+        "noImage": "No image selected. Upload or select an image above."
+      },
+      "generationMode": {
+        "title": "Generation Mode",
+        "cloudApi": {
+          "label": "Cloud API",
+          "description": "Fast generation via external API (requires API key)"
+        },
+        "localGpu": {
+          "label": "Local GPU",
+          "description": "Local pipeline via ComfyUI/Hunyuan3D (default)",
+          "badge": "Default"
+        },
+        "manualUpload": {
+          "label": "Manual Upload",
+          "description": "Upload your own GLB file for preview"
+        }
+      },
+      "generating": {
+        "processing": "Processing...",
+        "queueing": "Queueing...",
+        "generate": "Generate 3D Mesh",
+        "cloudApiSuffix": " (Cloud API)"
+      },
+      "viewer": {
+        "generating": "Generating 3D mesh...",
+        "noMesh": "Generate a 3D mesh to view it here"
+      },
+      "uploader": {
+        "dropActive": "Drop GLB file here",
+        "dropIdle": "Drop GLB file or click to browse",
+        "tipLabel": "Tip:",
+        "tipMessage": "Upload your own GLB models for instant preview in the 3D viewport",
+        "supportedFormat": "Supported format: .glb (GLTF Binary)"
+      },
+      "jobStatus": {
+        "statusLabel": "Status:",
+        "jobIdLabel": "Job ID:",
+        "statusIdle": "Idle",
+        "statusQueued": "Queued",
+        "statusProcessing": "Processing",
+        "statusCompleted": "Completed",
+        "statusFailed": "Failed",
+        "badgeOptimized": {
+          "label": "Optimized",
+          "tooltip": "Mesh optimized with Blender (GLB with Draco compression)"
+        },
+        "badgeRaw": {
+          "label": "Raw Mesh",
+          "tooltip": "Mesh delivered without Blender optimization (OBJ format)"
+        }
+      },
+      "viewport": {
+        "viewOptimizationError": "View optimization error details"
+      },
+      "meshMetadata": {
+        "title": "Mesh Information",
+        "optimizedMesh": "Optimized Mesh",
+        "rawMesh": "Raw Mesh (Optimization Skipped)",
+        "optimizedDescription": "Processed with Blender optimization + Draco compression",
+        "rawDescription": "Blender optimization failed - delivered raw SF3D output",
+        "reason": "Reason: {reason}",
+        "vertices": "Vertices:",
+        "faces": "Faces:",
+        "fileSize": "File Size:",
+        "format": "Format:",
+        "formatOptimized": "GLB (optimized)",
+        "formatRaw": "OBJ (raw)",
+        "compression": "Compression:",
+        "compressionDraco": "Draco (enabled)",
+        "compressionNone": "None",
+        "pipeline": "Processing Pipeline:",
+        "pipelineSf3d": "SF3D Generation",
+        "pipelineBlender": "Blender Optimization",
+        "totalTime": "Total Time",
+        "generationTime": "Generation Time",
+        "noteLabel": "Note",
+        "notApplicable": "N/A"
+      },
+      "download": "Download GLB",
+      "downloadMesh": "Download generated 3D mesh as GLB"
+    }
+  }
+}

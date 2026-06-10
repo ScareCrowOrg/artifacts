@@ -44,33 +44,37 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: GenerationMode): void
 }>()
 
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 const modes: Array<{
   value: GenerationMode
-  label: string
-  description: string
+  labelKey: string
+  descriptionKey: string
   icon: string
-  badge: string | null
+  badgeKey: string | null
 }> = [
   {
     value: 'cloud-api',
-    label: 'Cloud API',
-    description: 'Fast generation via external API (requires API key)',
+    labelKey: 'artifacts.meshPrototypingCell.generationMode.cloudApi.label',
+    descriptionKey: 'artifacts.meshPrototypingCell.generationMode.cloudApi.description',
     icon: '☁️',
-    badge: null
+    badgeKey: null
   },
   {
     value: 'local-gpu',
-    label: 'Local GPU',
-    description: 'Local pipeline via ComfyUI/Hunyuan3D (default)',
+    labelKey: 'artifacts.meshPrototypingCell.generationMode.localGpu.label',
+    descriptionKey: 'artifacts.meshPrototypingCell.generationMode.localGpu.description',
     icon: '⚡',
-    badge: 'Default'
+    badgeKey: 'artifacts.meshPrototypingCell.generationMode.localGpu.badge'
   },
   {
     value: 'manual-upload',
-    label: 'Manual Upload',
-    description: 'Upload your own GLB file for preview',
+    labelKey: 'artifacts.meshPrototypingCell.generationMode.manualUpload.label',
+    descriptionKey: 'artifacts.meshPrototypingCell.generationMode.manualUpload.description',
     icon: '📁',
-    badge: null
+    badgeKey: null
   }
 ]
 
@@ -96,7 +100,7 @@ const isSelected = (mode: GenerationMode) => {
 <template>
   <div class="generation-mode-switcher">
     <label class="block text-sm font-medium mb-3 text-text-primary dark:text-text-primary-dark">
-      Generation Mode
+      {{ $t('artifacts.meshPrototypingCell.generationMode.title') }}
     </label>
     
     <div class="grid grid-cols-3 gap-2">
@@ -117,28 +121,28 @@ const isSelected = (mode: GenerationMode) => {
       >
         <!-- Badge -->
         <span
-          v-if="mode.badge"
+          v-if="mode.badgeKey"
           :class="[
             'absolute top-2 right-2 px-2 py-0.5 text-xs font-semibold rounded',
-            mode.badge === 'Default'
+            mode.badgeKey === 'artifacts.meshPrototypingCell.generationMode.localGpu.badge'
               ? 'bg-success dark:bg-success-light text-white'
               : 'bg-warning dark:bg-warning-light text-white'
           ]"
         >
-          {{ mode.badge }}
+          {{ $t(mode.badgeKey) }}
         </span>
 
         <!-- Icon and Label -->
         <div class="flex items-center gap-2 mb-2">
           <span class="text-2xl">{{ mode.icon }}</span>
           <span class="font-semibold text-text-primary dark:text-text-primary-dark">
-            {{ mode.label }}
+            {{ $t(mode.labelKey) }}
           </span>
         </div>
 
         <!-- Description -->
         <p class="text-sm text-text-secondary dark:text-text-secondary-dark">
-          {{ mode.description }}
+          {{ $t(mode.descriptionKey) }}
         </p>
 
         <!-- Selected Indicator -->
