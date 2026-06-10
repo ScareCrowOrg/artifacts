@@ -421,6 +421,15 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 content_id=content_id
             )
             logger.info(f"[DEBUG] MongoDB insert OK: content.id={content.id}")
+            # PERMANENTE: Confirm content was actually persisted (has real content_id, version, created_at)
+            logger.warning(
+                "[PERSIST-PERMANENTE] Content persisted: id=%s, version=%s, created_at=%s, "
+                "data_ref=%s, assignee_id=%s, filename=%s, content_type_id=%s",
+                content.id, content.version,
+                content.created_at.isoformat() if content.created_at else "NODATE",
+                content.data_ref, content.assignee_id,
+                content.filename, content.content_type_id,
+            )
         except Exception as db_error:
             logger.error(f"[DEBUG] MongoDB insert failed: {db_error}", exc_info=True)
             # Detect E11000 duplicate key on unique index (e.g. data_ref empty string conflict)
