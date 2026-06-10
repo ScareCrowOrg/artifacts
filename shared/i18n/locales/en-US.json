@@ -1692,5 +1692,22 @@
   },
   "agentMode": {
     "creatingSession": "Creating agent session..."
+  },
+  "artifacts": {
+    "contentManager": {
+      "persistModal": {
+        "dimensions": "Dimensions:",
+        "size": "Size:",
+        "generated": "Generated:",
+        "prompt": "Prompt:",
+        "assetName": "Asset Name",
+        "namePlaceholder": "Enter asset name...",
+        "description": "Description",
+        "descriptionPlaceholder": "Enter description...",
+        "tags": "Tags",
+        "tagsPlaceholder": "Enter tags separated by commas...",
+        "makePublic": "Make this asset public"
+      }
+    }
   }
 }

@@ -1692,5 +1692,22 @@
   },
   "agentMode": {
     "creatingSession": "Criando sessão do agente..."
+  },
+  "artifacts": {
+    "contentManager": {
+      "persistModal": {
+        "dimensions": "Dimensões:",
+        "size": "Tamanho:",
+        "generated": "Gerado em:",
+        "prompt": "Prompt:",
+        "assetName": "Nome do Asset",
+        "namePlaceholder": "Digite o nome do asset...",
+        "description": "Descrição",
+        "descriptionPlaceholder": "Digite a descrição...",
+        "tags": "Tags",
+        "tagsPlaceholder": "Digite tags separadas por vírgulas...",
+        "makePublic": "Tornar este asset público"
+      }
+    }
   }
 }

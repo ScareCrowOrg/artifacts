@@ -80,7 +80,13 @@ async def execute_cell(cell_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     elif action == "load":
         return await handle_load(cell_data)
     elif action == "persist":
-        return await handle_persist(cell_data)
+        # DIAG: Log kwargs to verify user_id is present but was NOT forwarded to handle_persist
+        logger.debug("DIAG [execute_cell] action=persist: kwargs=%s, cell_data keys=%s, user_id_in_kwargs=%s",
+                     kwargs,
+                     list(cell_data.keys()),
+                     'user_id' in kwargs)
+        # FIX Bug #2a: Forward **kwargs (with user_id) to handle_persist()
+        return await handle_persist(cell_data, **kwargs)
     else:
         return {
             "success": False,
@@ -301,10 +307,22 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         tags = cell_data.get("tags", [])
         metadata = cell_data.get("metadata", {})
         origin_cell_id = cell_data.get("origin_cell_id")
-        # Use assignee_id if provided, otherwise use user_id from current user context
-        assignee_id = cell_data.get("assignee_id") or cell_data.get("user_id")
         # Get authenticated user injected by cells_router.py
         current_user = cell_data.get('_current_user')
+        # Use assignee_id if provided, otherwise user_id from kwargs, then _current_user.id as ultimate fallback
+        # FIX Bug #2b: _current_user.id now used as ultimate fallback for assignee_id
+        assignee_id = cell_data.get("assignee_id") or cell_data.get("user_id") or (current_user.id if current_user else None)
+
+        # DIAG: Log complete assignee_id fallback chain status
+        logger.debug("DIAG [handle_persist] assignee_id fallback chain: "
+                     "cell_data.assignee_id=%s, cell_data.user_id=%s, "
+                     "_current_user=%s, _current_user.id=%s, "
+                     "final_assignee_id=%s",
+                     cell_data.get("assignee_id"),
+                     cell_data.get("user_id"),
+                     'EXISTS' if current_user else 'MISSING',
+                     current_user.id if current_user else 'N/A',
+                     assignee_id)
 
         logger.info(f"[DEBUG] Extracted parameters:")
         logger.info(f"[DEBUG]   - content_type_id: {content_type_id}")

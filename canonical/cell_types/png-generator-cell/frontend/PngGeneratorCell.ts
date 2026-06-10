@@ -454,6 +454,12 @@ export class PngGeneratorCell extends BaseCell {
     data: Record<string, any>,
     options: ShowConfig
   ): Promise<void> {
+    // PERMANENTE: Confirm if show() is actually executed in the real flow
+    // (suspected dead code -- never called; real persistence goes via
+    // PersistModal.handlePersist() -> ContentManagerCell.execute() directly)
+    log.warn('PngGeneratorCell-PERMANENTE: show() WAS EXECUTED. If this log appears, '
+      + 'show() is NOT dead code. Remove this warning after confirming.',
+      { dataKeys: Object.keys(data), options })
     const startTime = performance.now()
     
     try {

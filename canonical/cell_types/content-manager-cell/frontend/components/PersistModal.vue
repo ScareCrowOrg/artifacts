@@ -244,12 +244,25 @@ async function handlePersist(): Promise<void> {
       .map(t => t.trim())
       .filter(t => t.length > 0)
 
+    // DIAG: Check if authService.getUser() is available and would provide assignee_id
+    const currentUser = authService.getUser()
+    const assigneeId = currentUser?.id
+    log.info('PersistModal-DIAG: authService.getUser()=%s, assignee_id would be=%s',
+      currentUser ? 'available' : 'UNAVAILABLE',
+      assigneeId || 'MISSING')
+    log.info('PersistModal-DIAG: payload keys before execute: action=persist, content_type_id=image-png, filename=%s, has_binary=%s, assignee_id_in_payload=%s',
+      `${formData.value.name}.png`,
+      props.assetData.image_data || props.assetData.generatedPng ? 'yes' : 'NO',
+      assigneeId ? 'YES (now included)' : 'N/A')
+
     // Build persistence request
     const result = await contentManager.execute({
       action: 'persist',
       content_type_id: 'image-png',
       filename: `${formData.value.name}.png`,
       binary: props.assetData.image_data || props.assetData.generatedPng,
+      // FIX Bug #1: Include assignee_id extracted from authService.getUser()
+      assignee_id: assigneeId,
       // Fragments are required fields for image-png ContentType
       fragments: {
         width: props.assetData.width,
@@ -276,7 +289,12 @@ async function handlePersist(): Promise<void> {
     }
   } catch (error: any) {
     log.error('Failed to persist asset', { error: error.message })
-    alert(`Failed to persist asset: ${error.message}`)
+    // FIX Bug #1 (alert sandbox): Emit error as confirm result instead of alert()
+    // alert() is blocked by iframe sandbox (allow-modals not set)
+    if (props.onConfirm) {
+      props.onConfirm({ success: false, error: error.message })
+    }
+    emit('confirm', { success: false, error: error.message })
   } finally {
     isPersisting.value = false
   }
