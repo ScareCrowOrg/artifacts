@@ -76,7 +76,10 @@ export interface PersistContentInput {
   action: 'persist'
   content_type_id: string
   filename: string
-  binary: string | ArrayBuffer  // Base64 string or ArrayBuffer
+  /** Base64 string or ArrayBuffer (required if source_path not provided) */
+  binary?: string | ArrayBuffer
+  /** Path to file already on disk (Redis Magro: avoids binary re-transmission). Alternative to binary. */
+  source_path?: string
   fragments?: Record<string, any>
   tags?: string[]
   metadata?: Record<string, any>
@@ -478,6 +481,11 @@ export class ContentManagerCell extends BaseCell {
         break
         
       case 'persist':
+        // DIAG: Log input fields to confirm source_path vs binary flow (Hypothesis C)
+        // After the fix (Ciclo 2), validate() accepts EITHER source_path OR binary.
+        // This log confirms which branch the payload uses at runtime.
+        console.debug('ContentManager-DIAG: validate(persist) keys=%j, has_source_path=%s, has_binary=%s',
+          Object.keys(input), !!input.source_path, !!input.binary)
         // Validate required persist fields
         if (!input.content_type_id) {
           errors.push({ field: 'content_type_id', message: 'content_type_id is required for persist action' })
@@ -497,8 +505,10 @@ export class ContentManagerCell extends BaseCell {
           errors.push({ field: 'filename', message: 'filename must be a string' })
         }
         
-        if (!input.binary) {
-          errors.push({ field: 'binary', message: 'binary is required for persist action' })
+        if (!input.binary && !input.source_path) {
+          errors.push({ field: 'binary', message: 'binary or source_path is required for persist action' })
+        } else if (input.source_path && typeof input.source_path !== 'string') {
+          errors.push({ field: 'source_path', message: 'source_path must be a string' })
         }
         break
     }

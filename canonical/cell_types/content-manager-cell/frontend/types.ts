@@ -96,8 +96,10 @@ export interface ContentPersistRequest {
   content_type_id: string
   /** Filename */
   filename: string
-  /** Base64-encoded binary or FormData */
-  binary: string | File
+  /** Base64-encoded binary or FormData (required if source_path not provided) */
+  binary?: string | File
+  /** Path to file already on disk (Redis Magro: avoids binary re-transmission). Alternative to binary. */
+  source_path?: string
   /** Content-specific metadata */
   fragments: Record<string, any>
   /** Optional tags */

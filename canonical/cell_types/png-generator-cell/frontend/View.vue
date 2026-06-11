@@ -661,6 +661,14 @@ const handlePersistAsset = async () => {
     keys: Object.keys(assetDataForModal.value)
   })
 
+  // DIAG: Detect if inline button was clicked while modal already open (Hypothesis B).
+  // If showPersistModal is already true, handlePersistAsset() was called but the
+  // modal was already visible — meaning Playwright likely clicked the inline button
+  // instead of the modal button. Both say "Persist Asset" in the DOM.
+  if (showPersistModal.value) {
+    console.debug('PNG-DEBUG: handlePersistAsset() RE-ENTRY — modal was ALREADY visible, inline button captured the click instead of modal')
+  }
+
   // Show modal
   showPersistModal.value = true
   persistSuccessMessage.value = null

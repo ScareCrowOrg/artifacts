@@ -218,6 +218,12 @@ const isPersisting = ref(false)
  * Handle asset persistence
  */
 async function handlePersist(): Promise<void> {
+  // DIAG: Confirm handlePersist() is entered. If this log does not appear,
+  // the function was NEVER entered (neither guard clause nor body executed).
+  // Possible causes: button disabled by !formData.name (Hypothesis A) or
+  // Playwright clicked inline button instead (Hypothesis B).
+  console.debug('PersistModal-DIAG: handlePersist() CALLED, name="%s", length=%d, isPersisting=%s',
+    formData.value.name, formData.value.name.length, isPersisting.value)
   if (!formData.value.name.trim()) {
     log.warn('Asset name is required')
     return
