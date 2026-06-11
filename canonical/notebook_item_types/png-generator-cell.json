@@ -92,9 +92,12 @@
       "gpu",
       "comfyui-runtime"
     ],
-    "dependencies": [
-      "comfyui"
-    ],
+    "dependencies": {
+      "cell_types": [
+        "comfyui",
+        "content-manager-cell"
+      ]
+    },
     "tags": [
       "image",
       "generation",

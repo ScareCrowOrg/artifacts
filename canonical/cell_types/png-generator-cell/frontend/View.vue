@@ -360,6 +360,8 @@ const DEFAULT_GENERATION_PARAMS = {
 // Local state - Initialize from props or initial_data
 const localPrompt = ref(props.prompt || initialData.value.prompt || '')
 const localGeneratedPng = ref(props.generatedPng || initialData.value.generatedPng || null)
+const localRelativeUrl = ref<string | null>(null)
+const localContentId = ref<string | null>(null)
 const localIsGenerating = ref(props.isGenerating || initialData.value.isGenerating || false)
 const localError = ref(props.error || initialData.value.error || null)
 const localNegativePrompt = ref(props.negativePrompt || initialData.value.negativePrompt || '')
@@ -494,7 +496,15 @@ const handleGenerate = async () => {
       } else {
         throw new Error('No image data in response')
       }
-      
+
+      // Redis Magro: store content reference for PersistModal propagation
+      if (output.relative_url) {
+        localRelativeUrl.value = output.relative_url
+      }
+      if (output.content_id) {
+        localContentId.value = output.content_id
+      }
+
       localError.value = null
     } else {
       throw new Error(result.error || 'Generation failed')
@@ -503,6 +513,8 @@ const handleGenerate = async () => {
     logger.error('PNG generation failed', { error: error.message })
     localError.value = error.message || 'Failed to generate image'
     localGeneratedPng.value = null
+    localRelativeUrl.value = null
+    localContentId.value = null
   } finally {
     localIsGenerating.value = false
   }
@@ -623,6 +635,8 @@ const handlePersistAsset = async () => {
   })
 
   // Prepare asset data for modal
+  // Redis Magro: include relative_url and content_id so PersistModal can use
+  // source_path (disk-backed) instead of binary (inline base64) for persistence
   assetDataForModal.value = {
     generatedPng: localGeneratedPng.value,
     image_data: localGeneratedPng.value,
@@ -630,8 +644,22 @@ const handlePersistAsset = async () => {
     width: localParams.value.width,
     height: localParams.value.height,
     timestamp: Date.now(),
-    generationParams: localParams.value
+    generationParams: localParams.value,
+    relative_url: localRelativeUrl.value,
+    content_id: localContentId.value,
   }
+
+  // DIAG: Log which fields are propagated to PersistModal
+  // If relative_url/content_id are MISSING here, PersistModal will always use binary path
+  console.debug('PNG-DEBUG: assetDataForModal fields:', {
+    hasGeneratedPng: !!assetDataForModal.value.generatedPng,
+    hasImageData: !!assetDataForModal.value.image_data,
+    hasPrompt: !!assetDataForModal.value.prompt,
+    hasRelativeUrl: 'relative_url' in assetDataForModal.value,
+    hasContentId: 'content_id' in assetDataForModal.value,
+    hasSourcePath: 'source_path' in assetDataForModal.value,
+    keys: Object.keys(assetDataForModal.value)
+  })
 
   // Show modal
   showPersistModal.value = true

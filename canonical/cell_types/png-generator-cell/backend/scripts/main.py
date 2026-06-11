@@ -314,7 +314,7 @@ async def execute_cell(cell_data: Dict[str, Any], user_id: Optional[str] = None)
 
     # Route to appropriate handler based on action
     if action == 'generate':
-        return await handle_generate_png(cell_data)
+        return await handle_generate_png(cell_data, user_id=user_id)
     elif action == 'removeBackground':
         return await handle_remove_background(cell_data)
     else:
@@ -326,7 +326,7 @@ async def execute_cell(cell_data: Dict[str, Any], user_id: Optional[str] = None)
         }
 
 
-async def handle_generate_png(cell_data: Dict[str, Any]) -> Dict[str, Any]:
+async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Handle PNG generation action.
 
@@ -335,6 +335,7 @@ async def handle_generate_png(cell_data: Dict[str, Any]) -> Dict[str, Any]:
 
     Args:
         cell_data: Cell data containing prompt and generation parameters
+        user_id: Optional user identifier for Redis Magro content reference
 
     Returns:
         Dict with generation results
@@ -388,16 +389,37 @@ async def handle_generate_png(cell_data: Dict[str, Any]) -> Dict[str, Any]:
             cfg_scale=cfg_scale,
             seed=seed,
             negative_prompt=negative_prompt,
-            asset_3d_mode=asset_3d_mode
+            asset_3d_mode=asset_3d_mode,
+            assignee_id=user_id,
         )
         
         if result.get("success"):
-            # Ensure proper Base64 prefix
+            # ==================================================================
+            # REDIS MAGRO: Detect if result contains content reference.
+            # If so, propagate relative_url and content_id to frontend without
+            # extracting image_base64 — let the frontend load via HTTP from the
+            # Runtime File Server instead.
+            # ==================================================================
+            if result.get("relative_url") or result.get("content_id"):
+                logger.info("REDIS MAGRO: handle_generate_png propagating content reference (relative_url=%s)",
+                            result.get("relative_url", "N/A"))
+                return {
+                    "success": True,
+                    "message": "PNG generated successfully (Redis Magro)",
+                    "prompt": prompt,
+                    "has_png": True,
+                    "content_id": result.get("content_id"),
+                    "relative_url": result.get("relative_url"),
+                    "mime_type": result.get("mime_type", "image/png"),
+                    "metadata": result.get("metadata", {})
+                }
+
+            # Legacy: result has inline base64 — wrap with data URI prefix
             image_data = result.get("image_base64", "")
             if not image_data.startswith("data:image/png;base64,"):
                 image_data = f"data:image/png;base64,{image_data}"
 
-            logger.info("PNG generation successful")
+            logger.info("PNG generation successful (legacy base64 inline)")
             return {
                 "success": True,
                 "message": "PNG generated successfully",
@@ -432,13 +454,14 @@ async def generate_png_from_prompt(
     cfg_scale: float = 7.0,
     seed: int = -1,
     negative_prompt: str = None,
-    asset_3d_mode: bool = False
+    asset_3d_mode: bool = False,
+    assignee_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Generate PNG image from a text prompt using Stable Diffusion.
-    
+
     Falls back to a placeholder if the Stable Diffusion service is unavailable.
-    
+
     When asset_3d_mode is enabled, orchestrates with Ollama to generate
     an optimized prompt before calling Stable Diffusion.
     
@@ -594,6 +617,7 @@ Generate the optimized negative prompt:"""
         logger.info(f"[SD Queue] Queueing image generation job via redis_client...")
 
         # Generate image with enhanced prompts via redis_client
+        # Redis Magro: pass assignee_id so worker can save PNG to disk
         result = await queue_image_generation_job(
             prompt=enhanced_prompt,
             negative_prompt=enhanced_negative,
@@ -601,11 +625,31 @@ Generate the optimized negative prompt:"""
             height=height,
             steps=steps,
             cfg_scale=cfg_scale,
-            seed=seed
+            seed=seed,
+            assignee_id=assignee_id,
         )
 
         if result.get("success"):
             logger.info(f"✅ Successfully generated PNG from prompt: {prompt[:50]}...")
+
+            # ==================================================================
+            # REDIS MAGRO: Detect if the result contains a content reference
+            # (relative_url) instead of inline base64.
+            # When present, pass it through to handle_generate_png() so the
+            # frontend receives the relative_url instead of base64 data.
+            # ==================================================================
+            if result.get("relative_url") or result.get("content_id"):
+                logger.info("REDIS MAGRO: Result contains content reference (relative_url=%s)",
+                            result.get("relative_url", "N/A"))
+                return {
+                    "success": True,
+                    "content_id": result.get("content_id"),
+                    "relative_url": result.get("relative_url"),
+                    "mime_type": result.get("mime_type", "image/png"),
+                    "prompt": prompt,
+                    "metadata": result.get("metadata", {})
+                }
+
             return {
                 "success": True,
                 "image_base64": result.get("image_base64"),

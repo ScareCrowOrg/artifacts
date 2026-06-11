@@ -75,10 +75,16 @@ export interface PngGeneratorInput {
 export interface PngGeneratorOutput {
   /** Whether execution was successful */
   success: boolean
-  
-  /** Base64-encoded generated/processed PNG */
+
+  /** Base64-encoded generated/processed PNG (legacy inline format) */
   generatedPng?: string
-  
+
+  /** Content reference URL for Redis Magro mode (e.g. /artifacts/runtime/user/.../file.png) */
+  relative_url?: string
+
+  /** Content identifier when using Redis Magro mode */
+  content_id?: string
+
   /** Whether PNG data is available */
   has_png?: boolean
   
@@ -201,16 +207,36 @@ export class PngGeneratorCell extends BaseCell {
       const responseData = await response.json() as any
       // Extract the result field if it exists (API wraps response in 'result' field)
       const result = (responseData.result || responseData) as PngGeneratorOutput
-      
+
+      // ======================================================================
+      // REDIS MAGRO (Content Reference): If the backend returned a relative_url
+      // instead of inline base64, convert it to a full URL for the <img> tag.
+      //
+      // The Runtime File Server serves files at:
+      //   {origin}/artifacts/runtime/user/{assignee}/contents/{id}/{file}
+      //
+      // We also set generatedPng from the URL for backward compatibility with
+      // View.vue which uses localGeneratedPng for both data-URI and HTTP URLs.
+      // ======================================================================
+      if (result.relative_url) {
+        log.info('REDIS MAGRO: Converting relative_url to full URL', {
+          relative_url: result.relative_url
+        })
+        // Build the full URL from the current origin
+        result.generatedPng = `${window.location.origin}${result.relative_url}`
+      }
+
       const executionTime = performance.now() - startTime
-      
-      log.info('Execution completed', { 
+
+      log.info('Execution completed', {
         success: result.success,
         hasPng: result.has_png,
-        executionTime 
+        relativeUrl: result.relative_url || null,
+        executionTime
       })
-      
+
       // Map backend response to CellResult
+      // artifacts: use generatedPng (now either data-URI or full URL) for preview
       return {
         success: result.success,
         output: result,

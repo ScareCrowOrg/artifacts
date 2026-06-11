@@ -246,8 +246,22 @@ async function handlePersist(): Promise<void> {
 
     // DIAG: Check if authService.getUser() is available and would provide assignee_id
     const currentUser = authService.getUser()
-    const assigneeId = currentUser?.id
-    log.info('PersistModal-DIAG: authService.getUser()=%s, assignee_id would be=%s',
+    // FIX (Ciclo 3 — Gemini): authService.getUser() retorna null no iframe MFE (Same-Origin Policy).
+    // Fallback: decodificar userId do JWT token via authService.getToken().
+    let assigneeId = currentUser?.id
+    if (!assigneeId) {
+      try {
+        const token = authService.getToken()
+        if (token) {
+          const payload = JSON.parse(atob(token.split('.')[1]))
+          assigneeId = payload.sub || null
+          log.info('PersistModal-DIAG: authService.getUser()=null, userId decoded from JWT sub=%s', assigneeId)
+        }
+      } catch (e) {
+        log.warn('PersistModal-DIAG: Failed to decode userId from JWT', e)
+      }
+    }
+    log.info('PersistModal-DIAG: authService.getUser()=%s, assignee_id=%s',
       currentUser ? 'available' : 'UNAVAILABLE',
       assigneeId || 'MISSING')
     log.info('PersistModal-DIAG: payload keys before execute: action=persist, content_type_id=image-png, filename=%s, has_binary=%s, assignee_id_in_payload=%s',
@@ -255,13 +269,20 @@ async function handlePersist(): Promise<void> {
       props.assetData.image_data || props.assetData.generatedPng ? 'yes' : 'NO',
       assigneeId ? 'YES (now included)' : 'N/A')
 
-    // Build persistence request
-    const result = await contentManager.execute({
+    // ======================================================================
+    // REDIS MAGRO: If the asset already has a relative_url (meaning it was
+    // generated locally and is already on disk at runtime/user/...), we
+    // send source_path instead of binary to avoid re-transmitting the
+    // base64 over the network. The backend will read the file from disk.
+    //
+    // If no relative_url (manual upload / external file), binary is sent
+    // as before for backward compatibility.
+    // ======================================================================
+    const assetUrl = props.assetData.relative_url || props.assetData.source_path
+    const persistPayload: Record<string, any> = {
       action: 'persist',
       content_type_id: 'image-png',
       filename: `${formData.value.name}.png`,
-      binary: props.assetData.image_data || props.assetData.generatedPng,
-      // FIX Bug #1: Include assignee_id extracted from authService.getUser()
       assignee_id: assigneeId,
       // Fragments are required fields for image-png ContentType
       fragments: {
@@ -276,7 +297,26 @@ async function handlePersist(): Promise<void> {
         generation_params: props.assetData.generation_params || props.assetData.generationParams,
         prompt: props.assetData.prompt
       }
-    })
+    }
+
+    if (assetUrl) {
+      // Asset is already on disk — send source_path reference only
+      // (Redis Magro: no binary re-transmission)
+      log.info('REDIS MAGRO: Asset has relative_url, sending source_path instead of binary', {
+        source_path: assetUrl
+      })
+      // Normalize: if it starts with http(s), it's a full URL — extract path
+      // The backend needs the path relative to /app/artifacts/
+      const normalizedPath = assetUrl.startsWith('http')
+        ? new URL(assetUrl).pathname.replace(/^\/artifacts\//, '')
+        : assetUrl
+      persistPayload.source_path = normalizedPath
+    } else {
+      // Legacy: asset from external source — send binary as before
+      persistPayload.binary = props.assetData.image_data || props.assetData.generatedPng
+    }
+
+    const result = await contentManager.execute(persistPayload)
 
     if (result.success) {
       log.info('Asset persisted successfully', { result })

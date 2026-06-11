@@ -362,9 +362,18 @@ class GateKeeper:
             key = f"{prefix}:{job_id}"
             # Wrap result in status envelope for backend compatibility
             wrapped_result = {"status": "success", "data": result}
+            # PERMANENTE: Log result size to monitor Redis Magro adoption
+            # When worker returns content_ref (~200B) instead of base64 (~300KB),
+            # this log will show ~99.9% reduction in payload size.
+            result_json = json.dumps(wrapped_result)
+            has_content_ref = "relative_url" in result or "content_id" in result
+            logger.info(
+                "[%s] GATEKEEPER-PERSIST: result_size=%d bytes, has_content_ref=%s, job_type=%s",
+                job_id, len(result_json), has_content_ref, job_type
+            )
             try:
                 rpush_start = time.time()
-                await self.redis_l1.rpush(key, json.dumps(wrapped_result))
+                await self.redis_l1.rpush(key, result_json)
                 await self.redis_l1.expire(key, ttl)
                 rpush_elapsed = time.time() - rpush_start
                 logger.info(

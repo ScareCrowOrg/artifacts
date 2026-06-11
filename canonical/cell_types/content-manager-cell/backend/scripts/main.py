@@ -7,6 +7,7 @@ Provides:
 - persist: Upload content to storage with validation
 """
 
+import asyncio
 import logging
 import sys
 import os
@@ -284,12 +285,13 @@ async def handle_load(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
-async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
+async def handle_persist(cell_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     """
     Handle persist action - upload content to storage.
 
     Args:
         cell_data: Contains content_type_id, filename, binary, fragments, etc.
+        **kwargs: Additional keyword arguments (e.g. user_id from router)
 
     Returns:
         Created content metadata
@@ -303,6 +305,7 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         content_type_id = cell_data.get("content_type_id")
         filename = cell_data.get("filename")
         binary_data = cell_data.get("binary")
+        source_path = cell_data.get("source_path")
         fragments = cell_data.get("fragments", {})
         tags = cell_data.get("tags", [])
         metadata = cell_data.get("metadata", {})
@@ -328,25 +331,26 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(f"[DEBUG]   - content_type_id: {content_type_id}")
         logger.info(f"[DEBUG]   - filename: {filename}")
         logger.info(f"[DEBUG]   - binary_data type: {type(binary_data).__name__}")
+        logger.info(f"[DEBUG]   - source_path: {source_path}")
         logger.info(f"[DEBUG]   - assignee_id: {assignee_id}")
-        
+
         # Validate required parameters
         if not content_type_id:
             return {
                 "success": False,
                 "error": "Missing 'content_type_id' parameter"
             }
-        
+
         if not filename:
             return {
                 "success": False,
                 "error": "Missing 'filename' parameter"
             }
-        
-        if not binary_data:
+
+        if not binary_data and not source_path:
             return {
                 "success": False,
-                "error": "Missing 'binary' parameter"
+                "error": "Missing 'binary' or 'source_path' parameter: provide at least one"
             }
 
         if not assignee_id:
@@ -355,19 +359,76 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 "error": "No assignee_id provided and no user context available"
             }
 
-        # Decode binary data
-        if isinstance(binary_data, str):
-            binary, detected_mime = decode_base64_binary(binary_data)
-            mime_type = detected_mime
-        elif isinstance(binary_data, bytes):
-            binary = binary_data
-            mime_type = extract_mime_type_from_filename(filename)
+        # ======================================================================
+        # REDIS MAGRO: Decide how to obtain the binary data.
+        # Option A (source_path): Asset is already on disk — read from runtime dir.
+        #   The source_path is relative to /app/artifacts/ e.g.:
+        #   "runtime/user/{assignee}/contents/{content_id}/{filename}.png"
+        # Option B (binary): Legacy mode — decode from base64 string.
+        # ======================================================================
+        if source_path and not binary_data:
+            # Redis Magro: read asset from disk instead of decoding base64
+            # Ensure path starts with artifacts/ for Docker volume mount at /app/
+            if source_path.startswith('/'):
+                source_path = source_path.lstrip('/')
+            # 🛡️ SECURITY: Anti-path-traversal. Resolve the absolute path to strip
+            # any "../" or symlink tricks, then verify it stays within the allowed
+            # runtime directory. This prevents authenticated users from reading
+            # arbitrary files (e.g. /etc/passwd) via a crafted source_path.
+            abs_source = os.path.realpath(os.path.join("/app", source_path))
+            allowed_base = os.path.realpath("/app/artifacts/runtime/")
+            if not abs_source.startswith(allowed_base + os.sep):
+                logger.error("REDIS MAGRO: Path traversal attempt blocked: source_path=%s resolved=%s",
+                             source_path, abs_source)
+                return {
+                    "success": False,
+                    "error": "Invalid source_path: path must be within runtime directory",
+                    "error_code": "SOURCE_PATH_INVALID"
+                }
+            logger.info("REDIS MAGRO: Reading asset from disk for persist: %s", abs_source)
+            try:
+                with open(abs_source, "rb") as f:
+                    binary = f.read()
+                logger.info("REDIS MAGRO: Read %d bytes from %s", len(binary), abs_source)
+                mime_type = extract_mime_type_from_filename(filename)
+            except FileNotFoundError:
+                logger.error("REDIS MAGRO: Source file not found: %s", abs_source)
+                return {
+                    "success": False,
+                    "error": f"Source file not found on disk: {source_path}",
+                    "error_code": "SOURCE_PATH_NOT_FOUND"
+                }
+            except Exception as read_err:
+                logger.error("REDIS MAGRO: Failed to read source file %s: %s",
+                             abs_source, read_err, exc_info=True)
+                return {
+                    "success": False,
+                    "error": f"Failed to read source file: {str(read_err)}",
+                    "error_code": "SOURCE_PATH_READ_ERROR"
+                }
+        elif source_path and binary_data:
+            # Both provided — log warning, prefer binary as the explicit upload
+            logger.warning("REDIS MAGRO: Both source_path and binary provided for persist; "
+                          "using binary (explicit upload). source_path=%s", source_path)
+        elif binary_data:
+            # Legacy: decode from base64
+            if isinstance(binary_data, str):
+                binary, detected_mime = decode_base64_binary(binary_data)
+                mime_type = detected_mime
+            elif isinstance(binary_data, bytes):
+                binary = binary_data
+                mime_type = extract_mime_type_from_filename(filename)
+            else:
+                return {
+                    "success": False,
+                    "error": "Invalid binary data format. Must be Base64 string or bytes."
+                }
         else:
             return {
                 "success": False,
-                "error": "Invalid binary data format. Must be Base64 string or bytes."
+                "error": "No binary or source_path provided: cannot obtain asset data"
             }
-        
+
         size_bytes = len(binary)
         
         # Validate ContentType and check size limits
@@ -528,25 +589,71 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         # HybridDatabase.update() expects doc_id: str, and CentralHubProvider.update()
         # builds query={"_id": doc_id}. Passing {"id": content_id} would produce
         # query={"_id": {"id": "uuid"}} which MongoDB silently matches zero documents.
-        logger.info("[DIAG] handle_persist: calling db.update(collection='contents', doc_id='%s', updates={'$set': {'data_ref': '%s'}})", content_id, data_ref)
-        try:
-            await db.update(
-                "contents",
-                content_id,  # plain string, not {"id": content_id}
-                {"$set": {"data_ref": data_ref}},
-                current_user=current_user
-            )
-            logger.info(f"[DEBUG] MongoDB data_ref updated to: {data_ref}")
-        except Exception as update_err:
+        #
+        # RETRY: CentralHub proxy may be temporarily unavailable (transient 500).
+        # We retry up to 3 times with exponential backoff before accepting the failure.
+        _update_ok = False
+        _last_update_err = None
+        _max_retries = 3
+        for _attempt in range(1, _max_retries + 1):
+            try:
+                logger.info("[DIAG] handle_persist: calling db.update (attempt %d/%d) collection='contents', doc_id='%s', updates={'$set': {'data_ref': '%s'}}",
+                            _attempt, _max_retries, content_id, data_ref)
+                await db.update(
+                    "contents",
+                    content_id,  # plain string, not {"id": content_id}
+                    {"$set": {"data_ref": data_ref}},
+                    current_user=current_user
+                )
+                logger.info(f"[DEBUG] MongoDB data_ref updated to: {data_ref}")
+                _update_ok = True
+                break
+            except Exception as update_err:
+                _last_update_err = update_err
+                # DIAG: Capture HTTP-level details from CentralHub error
+                _http_status = getattr(update_err, 'response', None)
+                _resp_body = ""
+                if _http_status is not None:
+                    try:
+                        _resp_body = _http_status.text[:500]
+                    except Exception:
+                        _resp_body = "<could not read>"
+                    logger.warning(
+                        "DIAG [handle_persist] CentralHub HTTP error details (attempt %d/%d): "
+                        "content_id=%s, status_code=%s, response_body=%s",
+                        _attempt, _max_retries, content_id, _http_status.status_code, _resp_body
+                    )
+                if _attempt < _max_retries:
+                    _backoff = 0.5 * (2 ** (_attempt - 1))  # 0.5s, 1s
+                    logger.warning(
+                        "DIAG [handle_persist] data_ref update failed (attempt %d/%d, retrying in %.1fs): "
+                        "content_id=%s, error=%s",
+                        _attempt, _max_retries, _backoff, content_id, update_err
+                    )
+                    await asyncio.sleep(_backoff)
+                else:
+                    logger.warning(
+                        "DIAG [handle_persist] data_ref update FAILED after %d attempts: "
+                        "content_id=%s, new_data_ref=%s, error=%s",
+                        _max_retries, content_id, data_ref, update_err
+                    )
+
+        if not _update_ok:
             # Non-critical: file exists in storage, MongoDB still has pending:{uuid}
+            # The file WAS saved to disk by LocalStorage. Only the MongoDB data_ref
+            # update failed. Include the correct data_ref in response metadata so
+            # a recovery mechanism can reconcile.
             logger.warning(
-                "DIAG [handle_persist] data_ref update failed (non-critical): "
-                "content_id=%s, old_data_ref=pending:%s, new_data_ref=%s, error=%s",
-                content_id, content_id, data_ref, update_err
+                "PERSIST-RECOVERY: data_ref for content_id=%s is '%s' (disk path). "
+                "MongoDB has 'pending:%s'. To recover: run "
+                "db.update('contents', '%s', {'$set': {'data_ref': '%s'}})",
+                content_id, data_ref, content_id, content_id, data_ref
             )
 
         # Step 5: Success! Return created content metadata
-        return {
+        # If the MongoDB data_ref update failed, include a warning + recovery info
+        # so the caller knows the disk file exists but MongoDB still has pending:{id}
+        _response = {
             "success": True,
             "action": "persist",
             "data": {
@@ -562,6 +669,23 @@ async def handle_persist(cell_data: Dict[str, Any]) -> Dict[str, Any]:
                 "origin_cell_id": content.origin_cell_id
             }
         }
+        # If MongoDB data_ref update failed, add recovery metadata
+        if not _update_ok:
+            _response["warning"] = (
+                f"Content saved to disk but MongoDB data_ref update failed. "
+                f"data_ref='{data_ref}' is the correct disk path. "
+                f"MongoDB still has 'pending:{content_id}'."
+            )
+            _response["recovery"] = {
+                "content_id": content_id,
+                "correct_data_ref": data_ref,
+                "pending_data_ref": f"pending:{content_id}",
+                "recovery_command": (
+                    f"db.update('contents', '{content_id}', "
+                    "{'$set': {'data_ref': '" + data_ref + "'}})"
+                )
+            }
+        return _response
         
     except ValueError as e:
         # Validation errors (fragments, file size, etc.)

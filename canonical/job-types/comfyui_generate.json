@@ -46,14 +46,19 @@
       "height": {"type": "integer", "default": 1024},
       "num_inference_steps": {"type": "integer", "default": 20},
       "guidance_scale": {"type": "number", "default": 7.0},
-      "seed": {"type": "integer", "default": -1}
+      "seed": {"type": "integer", "default": -1},
+      "assignee_id": {"type": "string", "description": "User ID for Redis Magro content reference — worker saves PNG to disk at runtime/user/{assignee_id}/contents/{content_id}/"},
+      "content_id": {"type": "string", "description": "Content UUID for Redis Magro content reference"}
     }
   },
 
   "output_schema": {
     "type": "object",
     "properties": {
-      "image_base64": {"type": "string"},
+      "image_base64": {"type": "string", "description": "Legacy: inline base64 PNG data (~300KB)"},
+      "content_id": {"type": "string", "description": "Redis Magro: content UUID for disk-backed reference"},
+      "relative_url": {"type": "string", "description": "Redis Magro: relative URL path to saved PNG file"},
+      "mime_type": {"type": "string", "description": "Redis Magro: MIME type of saved content"},
       "seed": {"type": "integer"}
     }
   }

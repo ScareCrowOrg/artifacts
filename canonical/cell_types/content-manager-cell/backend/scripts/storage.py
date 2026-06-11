@@ -325,6 +325,19 @@ def get_storage_backend(assignee_id: str = None) -> StorageBackend:
     When assignee_id is provided, the local storage path is scoped to
     runtime/user/{assignee_id}/contents for per-user content isolation.
 
+    STORAGE ARCHITECTURE (Local Runtime Magro):
+    ------------------------------------------
+    DEFAULT mode is "local" (STORAGE_MODE=local):
+      - Files are saved to /app/artifacts/runtime/user/{assignee}/contents/{id}/{file}
+      - The Runtime File Server (auth-proxy Rust) serves these files via HTTP
+        with streaming zero-copy and access verification
+      - This is the standard for locally-generated assets (PNG, GLB, etc.)
+
+    R2 mode (STORAGE_MODE=r2) is OPTIONAL and intended for EXPLICIT PUBLISH:
+      - Only activates when STORAGE_MODE=r2 AND R2_ENABLED=true AND credentials present
+      - Intended for community sharing / galaxy-wide distribution
+      - Local Runtime is the default; R2 is opt-in for publishing
+
     Args:
         assignee_id: Optional user identifier for runtime scoping
 

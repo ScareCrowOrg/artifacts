@@ -38,7 +38,8 @@ async def queue_image_generation_job(
     cfg_scale: float = 7.5,
     seed: int = -1,
     model: str = "stabilityai/stable-diffusion-xl-base-1.0",
-    timeout: float = 300.0
+    timeout: float = 300.0,
+    assignee_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Queue an image generation job to Redis for ComfyUI GPU Worker processing.
@@ -59,11 +60,17 @@ async def queue_image_generation_job(
         seed: Random seed (-1 for random)
         model: HuggingFace model ID
         timeout: Maximum time to wait for job completion in seconds
+        assignee_id: User ID for Redis Magro content reference.
+            When provided, the worker saves the PNG to disk at
+            runtime/user/{assignee_id}/contents/{job_id}/{filename}.png
+            instead of returning image_base64 inline (~300KB).
 
     Returns:
         Dict containing:
             - success: Boolean indicating success/failure
-            - image_base64: Base64-encoded PNG (if success)
+            - image_base64: Base64-encoded PNG (if success, legacy format)
+            - relative_url: Content reference URL (if success, Redis Magro format)
+            - content_id: Content identifier (if success, Redis Magro format)
             - error: Error message (if failure)
             - job_id: Unique job identifier
             - processing_time: Time taken by GPU worker
@@ -88,6 +95,17 @@ async def queue_image_generation_job(
             "model": model,
             "timestamp": time.time(),
         }
+        # Redis Magro: add assignee_id and content_id so the worker can save PNG to disk
+        # When assignee_id is provided, worker saves to runtime/user/{assignee_id}/contents/{job_id}/
+        # and returns a lightweight content reference instead of ~300KB base64
+        if assignee_id:
+            payload["assignee_id"] = assignee_id
+            payload["content_id"] = job_id
+        # DIAG: Log payload completeness — confirm assignee_id and content_id are now present
+        logger.debug("IMAGE-GEN-DEBUG: payload keys=%s, assignee_id=%s, content_id=%s",
+                     list(payload.keys()),
+                     payload.get("assignee_id", "MISSING"),
+                     payload.get("content_id", "MISSING"))
 
         # Enqueue via canonical redis_client (owner-first scheduling, single source of truth)
         try:
@@ -142,6 +160,36 @@ async def queue_image_generation_job(
         logger.debug("Result structure - keys: %s, has 'data' envelope: %s",
                     list(result.keys()), "data" in result)
 
+        # ======================================================================
+        # REDIS MAGRO (Content Reference): Detect if worker returned a content
+        # reference (relative_url) instead of inline base64.
+        #
+        # When the worker saves the PNG to disk at:
+        #   runtime/user/{assignee_id}/contents/{job_id}/{filename}.png
+        # it returns {"content_id": ..., "relative_url": "...", "mime_type": "image/png"}
+        #
+        # This eliminates ~500KB-1MB of base64 from Redis L1 — only ~200 bytes of JSON.
+        # Backward compatible: if "image_base64" is present (legacy), extract as before.
+        # ======================================================================
+        if "relative_url" in actual_result or "content_id" in actual_result:
+            # Redis Magro: content reference — return as-is, no base64 in Redis
+            logger.info("📦 REDIS MAGRO: result contains content reference (relative_url=%s, content_id=%s)",
+                        actual_result.get("relative_url", "N/A"),
+                        actual_result.get("content_id", "N/A"))
+            return {
+                "success": True,
+                "content_id": actual_result.get("content_id", job_id),
+                "relative_url": actual_result.get("relative_url", ""),
+                "mime_type": actual_result.get("mime_type", "image/png"),
+                "job_id": job_id,
+                "processing_time": actual_result.get("processing_time_ms", 0),
+                "metadata": {
+                    "model": actual_result.get("model", model),
+                    "prompt": prompt,
+                }
+            }
+
+        # Legacy: content has inline base64 — extract and return as before
         image_b64 = actual_result.get("image_base64", "")
         image_len = len(image_b64) if image_b64 else 0
         logger.info("📦 RETURN VALUE - image_base64 length: %d chars", image_len)
@@ -220,7 +268,8 @@ def queue_image_generation_job_sync(
     cfg_scale: float = 7.5,
     seed: int = -1,
     model: str = "stabilityai/stable-diffusion-xl-base-1.0",
-    timeout: float = 300.0
+    timeout: float = 300.0,
+    assignee_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Synchronous wrapper for queue_image_generation_job.
@@ -238,6 +287,7 @@ def queue_image_generation_job_sync(
         seed: Random seed (-1 for random)
         model: HuggingFace model ID
         timeout: Maximum wait time
+        assignee_id: User ID for Redis Magro content reference
 
     Returns:
         Dict with job result
@@ -251,7 +301,8 @@ def queue_image_generation_job_sync(
         cfg_scale=cfg_scale,
         seed=seed,
         model=model,
-        timeout=timeout
+        timeout=timeout,
+        assignee_id=assignee_id,
     ))
 
 
