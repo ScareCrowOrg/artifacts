@@ -104,6 +104,12 @@ pub async fn check_runtime_access(
 ) -> bool {
     let mut conn = state.redis_cm.clone();
 
+    // DIAG [local-runtime-magro iteration 5]: Log entry with full context
+    debug!(
+        "[RuntimeFileServer-DIAG] check_runtime_access entry: session_id={}, assignee_id={}",
+        session_id, assignee_id
+    );
+
     // Check if user is the planet owner (has access to all artifacts).
     let is_owner_key = format!("state:session:{}:is_owner", session_id);
     let is_owner: Option<String> = redis::cmd("GET")
@@ -117,6 +123,17 @@ pub async fn check_runtime_access(
             debug!("[RuntimeFileServer] Runtime access allowed: session owner");
             return true;
         }
+        debug!(
+            "[RuntimeFileServer-DIAG] is_owner key exists but value={:?} (not 'true'), \
+             proceeding to self-access check",
+            val
+        );
+    } else {
+        debug!(
+            "[RuntimeFileServer-DIAG] is_owner key '{}' not found in Redis, \
+             proceeding to self-access check",
+            is_owner_key
+        );
     }
 
     // Self-access check: compare the session's userId with the assignee_id from the URL path.

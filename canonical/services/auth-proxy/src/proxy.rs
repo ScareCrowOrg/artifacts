@@ -357,6 +357,12 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
             RouteDecision::RuntimeFileServer => {
                 let session_id = cookie_header.as_deref().and_then(extract_session_id);
                 let assignee_id = extract_runtime_assignee(&path);
+                // DIAG [local-runtime-magro iteration 5]: Log handler entry
+                debug!(
+                    "[RuntimeFileServer-DIAG] Handler entry: path={}, cookie_present={}, \
+                     session_id={:?}, assignee_id={:?}",
+                    path, cookie_header.is_some(), session_id, assignee_id
+                );
                 match (session_id, assignee_id) {
                     (Some(sid), Some(aid)) => {
                         if check_runtime_access(&state, &sid, &aid).await {
@@ -382,9 +388,26 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                             build_error_response(StatusCode::FORBIDDEN)
                         }
                     }
-                    _ => {
+                    (None, Some(aid)) => {
                         warn!(
-                            "[RuntimeFileServer] Missing session_id or assignee_id for runtime path: {}",
+                            "[RuntimeFileServer] Missing session_id (no session cookie) for \
+                             runtime path: {} (assignee: {})",
+                            path, aid
+                        );
+                        build_error_response(StatusCode::FORBIDDEN)
+                    }
+                    (Some(sid), None) => {
+                        warn!(
+                            "[RuntimeFileServer] Missing assignee_id (path format unexpected) \
+                             for runtime path: {} (session: {})",
+                            path, sid
+                        );
+                        build_error_response(StatusCode::FORBIDDEN)
+                    }
+                    (None, None) => {
+                        warn!(
+                            "[RuntimeFileServer] Missing BOTH session_id and assignee_id for \
+                             runtime path: {}",
                             path
                         );
                         build_error_response(StatusCode::FORBIDDEN)
