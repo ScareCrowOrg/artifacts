@@ -767,6 +767,15 @@ pub(crate) fn add_cors_headers(resp: &mut Response, origin: Option<&str>, host: 
         // with the same-origin check above — catches cases where Host header
         // might not be forwarded in some proxy setups).
         (Some(o), _) if o == "http://localhost:5173" || o == "https://localhost:5173" => o,
+        // Hub allowlist: fixed infrastructure hubs that are cross-origin to the
+        // planets they serve. These use `credentials: 'include'` and therefore
+        // require an explicit origin echo (not `*`) in Access-Control-Allow-Origin.
+        (Some(o), _)
+            if o == "https://hub-staging.scareverse.net"
+                || o == "https://hub.scareverse.net" =>
+        {
+            o
+        }
         // Fallback: unknown or missing origin → wildcard, no credentials.
         _ => "*",
     };
