@@ -17,6 +17,7 @@ use tokio::fs;
 use tokio_util::io::ReaderStream;
 use tracing::{debug, error, warn};
 
+use crate::proxy::add_cors_headers;
 use crate::AppState;
 
 /// Result of an artifact path resolution.
@@ -329,7 +330,7 @@ pub async fn check_viewer_access(
 ///
 /// This is critical for large binary artifacts (e.g. 50MB .glb files) to
 /// prevent memory exhaustion under concurrent WAN requests.
-pub async fn serve_file(file_path: &Path) -> Response {
+pub async fn serve_file(file_path: &Path, origin: Option<&str>, host: Option<&str>) -> Response {
     match fs::File::open(file_path).await {
         Ok(file) => {
             let content_type = match file_path.extension().and_then(|e| e.to_str()) {
@@ -363,6 +364,11 @@ pub async fn serve_file(file_path: &Path) -> Response {
                 axum::http::header::CONTENT_TYPE,
                 axum::http::HeaderValue::from_static(content_type),
             );
+            // Add CORS headers so cross-origin requests (e.g. from cockpit at
+            // hub-staging.scareverse.net) can read the file response. Uses dynamic
+            // same-origin validation: origin hostname is compared against the Host
+            // header instead of a static allowlist.
+            add_cors_headers(&mut resp, origin, host);
             resp
         }
         Err(e) => {
@@ -504,7 +510,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_serve_file_not_found() {
-        let result = serve_file(Path::new("/tmp/nonexistent-file-for-test-12345.glb")).await;
+        let result = serve_file(Path::new("/tmp/nonexistent-file-for-test-12345.glb"), None, None).await;
         assert_eq!(result.status(), StatusCode::NOT_FOUND);
     }
 }

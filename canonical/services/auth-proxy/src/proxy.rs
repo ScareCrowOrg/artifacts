@@ -80,8 +80,12 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
             .get(header::ORIGIN)
             .and_then(|v| v.to_str().ok())
             .unwrap_or("*");
-        info!("[AuthProxy] CORS preflight OPTIONS for {} (origin: {})", path, origin);
-        return build_cors_response(StatusCode::OK, origin);
+        let host = req
+            .headers()
+            .get(header::HOST)
+            .and_then(|v| v.to_str().ok());
+        info!("[AuthProxy] CORS preflight OPTIONS for {} (origin: {}, host: {:?})", path, origin, host);
+        return build_cors_response(StatusCode::OK, origin, host);
     }
 
     // [DIAG] CORS context for non-OPTIONS requests
@@ -335,7 +339,9 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                             "[FileServer] Serving canonical artifact: {} (path: {})",
                             path, file_path.display()
                         );
-                        serve_file(&file_path).await
+                        let origin = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok());
+                        let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok());
+                        serve_file(&file_path, origin, host).await
                     }
                     ArtifactResolution::NotFound => {
                         warn!("[FileServer] Artifact not found on disk, falling back: {}", path);
@@ -373,7 +379,9 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                                         "[RuntimeFileServer] Serving runtime artifact: {} (assignee: {}, path: {})",
                                         path, aid, file_path.display()
                                     );
-                                    serve_file(&file_path).await
+                                    let origin = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok());
+                                    let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok());
+                                    serve_file(&file_path, origin, host).await
                                 }
                                 _ => {
                                     warn!("[RuntimeFileServer] Runtime artifact not found: {} (assignee: {})", path, aid);
@@ -604,11 +612,16 @@ async fn proxy_to_upstream(
         reqwest::header::HeaderValue::from_str(host_value).unwrap(),
     );
 
-    // Extract Origin header BEFORE consuming orig_req (into_body moves it).
-    // Convert to owned String so the value survives orig_req being moved.
+    // Extract Origin and Host headers BEFORE consuming orig_req (into_body moves it).
+    // Convert to owned String so the values survive orig_req being moved.
     let origin = orig_req
         .headers()
         .get(header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.to_string());
+    let host = orig_req
+        .headers()
+        .get(header::HOST)
         .and_then(|v| v.to_str().ok())
         .map(|v| v.to_string());
 
@@ -664,8 +677,8 @@ async fn proxy_to_upstream(
     let has_acao = response.headers().get("access-control-allow-origin").is_some();
     let has_acac = response.headers().get("access-control-allow-credentials").is_some();
     debug!("[DIAG] proxy_to_upstream: status={}, ACAO={}, ACAC={}", status, has_acao, has_acac);
-    // Add CORS headers from the original request's Origin (already extracted before body consume).
-    add_cors_headers(&mut response, origin.as_deref());
+    // Add CORS headers from the original request's Origin and Host (already extracted before body consume).
+    add_cors_headers(&mut response, origin.as_deref(), host.as_deref());
     response
 }
 
@@ -718,13 +731,45 @@ async fn proxy_to_backend(
     response
 }
 
+/// Extract the hostname portion from an Origin URL by stripping the scheme prefix.
+///
+/// Examples:
+/// - `"https://scare.scareverse.net"` → `"scare.scareverse.net"`
+/// - `"http://localhost:5173"` → `"localhost:5173"`
+/// - `"https://qualquer-planeta.scareverse.net"` → `"qualquer-planeta.scareverse.net"`
+fn extract_hostname(origin: &str) -> &str {
+    origin
+        .strip_prefix("https://")
+        .or_else(|| origin.strip_prefix("http://"))
+        .unwrap_or(origin)
+}
+
 /// Add CORS headers to a response (only inserts if absent -- does not overwrite).
 ///
 /// This ensures that every response leaving auth-proxy carries CORS headers,
 /// preventing "CORS error" opacity when upstream errors occur.
-/// Uses `*` as fallback when `origin` is `None`.
-fn add_cors_headers(resp: &mut Response, origin: Option<&str>) {
-    let origin_val = origin.unwrap_or("*");
+///
+/// **Security**: Uses **dynamic same-origin validation** instead of a static
+/// allowlist. The origin's hostname (extracted from the Origin URL) is compared
+/// against the request's `Host` header. If they match, the origin is echoed with
+/// credentials (same-origin). `localhost:5173` is always permitted (dev mode).
+/// Unknown or missing origins fall back to `*` to prevent credential theft
+/// via CORS reflection.
+pub(crate) fn add_cors_headers(resp: &mut Response, origin: Option<&str>, host: Option<&str>) {
+    // Dynamic same-origin validation: compare Origin hostname against Host header.
+    // This works for any planet FQDN without requiring a hardcoded allowlist.
+    let origin_val = match (origin, host) {
+        // Same-origin: Origin hostname matches Host header → echo origin + credentials.
+        // This handles all planets (scare.scareverse.net, qualquer-planeta.scareverse.net, etc.)
+        // dynamically without a static allowlist.
+        (Some(o), Some(h)) if extract_hostname(o) == h => o,
+        // Localhost origins always allowed for development (belt-and-suspenders
+        // with the same-origin check above — catches cases where Host header
+        // might not be forwarded in some proxy setups).
+        (Some(o), _) if o == "http://localhost:5173" || o == "https://localhost:5173" => o,
+        // Fallback: unknown or missing origin → wildcard, no credentials.
+        _ => "*",
+    };
 
     // Access-Control-Allow-Origin: echo the request origin or *
     if let Ok(val) = HeaderValue::from_str(origin_val) {
@@ -775,17 +820,17 @@ fn build_error_response(status: StatusCode) -> Response {
         HeaderValue::from_static("application/json"),
     );
     warn!("[DIAG] build_error_response: status={}, NO CORS headers attached", status);
-    add_cors_headers(&mut resp, None);
+    add_cors_headers(&mut resp, None, None);
     resp
 }
 
 /// Build a CORS preflight response (OPTIONS) with appropriate Access-Control headers.
 /// Uses the requesting origin to avoid incompatibility with credentials (can't use * with credentials).
 /// Delegates common CORS headers to [`add_cors_headers`].
-fn build_cors_response(status: StatusCode, origin: &str) -> Response {
+fn build_cors_response(status: StatusCode, origin: &str, host: Option<&str>) -> Response {
     let mut resp = Response::new(Body::empty());
     *resp.status_mut() = status;
-    add_cors_headers(&mut resp, Some(origin));
+    add_cors_headers(&mut resp, Some(origin), host);
     // Cache preflight for 1 hour
     resp.headers_mut().insert(
         HeaderName::from_static("access-control-max-age"),
