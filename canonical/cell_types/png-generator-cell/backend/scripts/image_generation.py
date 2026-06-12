@@ -176,6 +176,22 @@ async def queue_image_generation_job(
             logger.info("📦 REDIS MAGRO: result contains content reference (relative_url=%s, content_id=%s)",
                         actual_result.get("relative_url", "N/A"),
                         actual_result.get("content_id", "N/A"))
+            # DIAG: log raw BRPOP payload size vs stripped return size
+            _raw_size = len(json.dumps(actual_result, default=str))
+            _stripped_size = len(json.dumps({
+                "success": True,
+                "content_id": actual_result.get("content_id", job_id),
+                "relative_url": actual_result.get("relative_url", ""),
+                "mime_type": actual_result.get("mime_type", "image/png"),
+                "job_id": job_id,
+                "processing_time": actual_result.get("processing_time_ms", 0),
+                "metadata": {
+                    "model": actual_result.get("model", model),
+                    "prompt": prompt,
+                }
+            }))
+            logger.info("📊 DIAG-PAYLOAD-SIZE: raw_payload=%d bytes → stripped=%d bytes (saved %d bytes)",
+                        _raw_size, _stripped_size, _raw_size - _stripped_size)
             return {
                 "success": True,
                 "content_id": actual_result.get("content_id", job_id),
@@ -250,6 +266,8 @@ async def brpop_result(
         if isinstance(parsed, dict) and 'image_base64' in parsed:
             image_b64_len = len(parsed.get('image_base64', ''))
             logger.info(f"✅ Result contains image_base64: {image_b64_len} chars")
+        elif isinstance(parsed, dict) and ('relative_url' in parsed or 'content_id' in parsed):
+            logger.info(f"📦 Magro content reference result (no base64 expected). Keys: {list(parsed.keys())}")
         else:
             logger.warning(f"⚠️ Result missing image_base64 field. Keys: {list(parsed.keys()) if isinstance(parsed, dict) else 'NOT A DICT'}")
         return parsed

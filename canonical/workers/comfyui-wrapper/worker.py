@@ -143,13 +143,15 @@ class ComfyUIWorker(BaseWorker):
                     # Return content reference (include image_base64 for backward compat)
                     self.logger.info("[%s] REDIS MAGRO: Returning content reference (content_id=%s, relative_url=%s)",
                                      self.job_id, save_content_id, f"/{rel_path}")
+                    # DIAG: log result dict size for before/after comparison when removing image_base64
+                    self.logger.info("[%s] DIAG-RESULT-SIZE: return dict with image_base64=%d chars (~%d KB)",
+                                     self.job_id, len(image_base64), len(image_base64) // 1024)
                     return {
                         "success": True,
                         "status": "success",
                         "content_id": save_content_id,
                         "relative_url": f"/{rel_path}",
                         "mime_type": mime_type,
-                        "image_base64": image_base64,  # Keep for backward compat
                     }
 
             # Legacy: return raw result (no assignee_id or no base64 data)
