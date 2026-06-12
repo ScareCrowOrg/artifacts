@@ -31,13 +31,57 @@ pub enum ArtifactResolution {
     PathTraversal,
 }
 
+/// Decode percent-encoded sequences in a URL path segment.
+///
+/// Converts `%XX` sequences to their decoded byte value (e.g. `%20` → space,
+/// `%2F` → `/`). Handles multi-byte UTF-8 sequences (e.g. `%C3%A1` → `á`).
+///
+/// **Backward compatibility**: If any percent sequence is malformed (a lone `%`,
+/// or `%` followed by non-hex characters), the original string is returned
+/// unchanged so existing behavior is preserved.
+fn percent_decode_path(path: &str) -> String {
+    if !path.contains('%') {
+        return path.to_string();
+    }
+
+    let mut bytes: Vec<u8> = Vec::with_capacity(path.len());
+    let mut chars = path.chars();
+
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let hex_chars: Vec<char> = chars.by_ref().take(2).collect();
+            if hex_chars.len() < 2 {
+                // Truncated: lone % at end — return original unchanged
+                return path.to_string();
+            }
+            let hex_str: String = hex_chars.into_iter().collect();
+            match u8::from_str_radix(&hex_str, 16) {
+                Ok(byte) => bytes.push(byte),
+                Err(_) => {
+                    // Invalid hex digits — return original unchanged
+                    return path.to_string();
+                }
+            }
+        } else {
+            // Preserve non-ASCII as UTF-8 bytes
+            let mut buf = [0u8; 4];
+            let encoded = c.encode_utf8(&mut buf);
+            bytes.extend_from_slice(encoded.as_bytes());
+        }
+    }
+
+    // Decode the byte sequence as UTF-8; fall back to original on failure
+    String::from_utf8(bytes).unwrap_or_else(|_| path.to_string())
+}
+
 /// Resolve a safe filesystem path for an artifact request.
 ///
 /// Canonical artifacts are at `/app/artifacts/{rel_path}`. This function:
 /// 1. Strips the `/artifacts/` prefix.
-/// 2. Joins with the base directory.
-/// 3. Uses `canonicalize()` to resolve symlinks and `..` segments.
-/// 4. Verifies the resolved path is within the base directory.
+/// 2. URL-decodes the relative path (handles `%20`, `%C3%A1`, etc.).
+/// 3. Joins with the base directory.
+/// 4. Uses `canonicalize()` to resolve symlinks and `..` segments.
+/// 5. Verifies the resolved path is within the base directory.
 ///
 /// Returns:
 /// - `ArtifactResolution::Found(path)` — safe path to read the file.
@@ -53,8 +97,10 @@ pub fn resolve_artifact_path(base_dir: &str, path: &str) -> ArtifactResolution {
     };
     let base = Path::new(base_dir);
 
-    // Join and canonicalize to resolve any `..` or symlinks.
-    let joined = base.join(rel);
+    // URL-decode the relative path to handle spaces and special chars in
+    // filenames (e.g. "boneca%20roxa.png" → "boneca roxa.png").
+    let decoded = percent_decode_path(rel);
+    let joined = base.join(&decoded);
     match joined.canonicalize() {
         Ok(resolved) => {
             if resolved.starts_with(base) {
@@ -406,7 +452,58 @@ mod tests {
     }
 
     #[test]
-    fn test_serve_file_not_found() {
+    fn test_percent_decode_noop_when_no_pct() {
+        // No percent sequences → returned as-is
+        assert_eq!(percent_decode_path("simple_file.png"), "simple_file.png");
+        assert_eq!(percent_decode_path(""), "");
+    }
+
+    #[test]
+    fn test_percent_decode_space() {
+        // %20 → space
+        assert_eq!(
+            percent_decode_path("runtime/user/abc/boneca%20roxa.png"),
+            "runtime/user/abc/boneca roxa.png"
+        );
+    }
+
+    #[test]
+    fn test_percent_decode_multi_byte() {
+        // %C3%A1 → á (U+00E1, 2-byte UTF-8)
+        let decoded = percent_decode_path("caf%C3%A9.png");
+        assert_eq!(decoded, "caf\u{e9}.png");
+    }
+
+    #[test]
+    fn test_percent_decode_mixed() {
+        // Mix of spaces and regular chars
+        let decoded = percent_decode_path("my%20folder/nested%20file.glb");
+        assert_eq!(decoded, "my folder/nested file.glb");
+    }
+
+    #[test]
+    fn test_percent_decode_malformed_lone_pct() {
+        // Lone % at end → return original unchanged
+        let original = "file%";
+        assert_eq!(percent_decode_path(original), original);
+    }
+
+    #[test]
+    fn test_percent_decode_malformed_invalid_hex() {
+        // %XY where XY is not valid hex → return original unchanged
+        let original = "file%ZZ.png";
+        assert_eq!(percent_decode_path(original), original);
+    }
+
+    #[test]
+    fn test_percent_decode_truncated_hex() {
+        // % followed by single valid hex char → truncated → return original
+        let original = "file%2";
+        assert_eq!(percent_decode_path(original), original);
+    }
+
+    #[tokio::test]
+    async fn test_serve_file_not_found() {
         let result = serve_file(Path::new("/tmp/nonexistent-file-for-test-12345.glb")).await;
         assert_eq!(result.status(), StatusCode::NOT_FOUND);
     }
