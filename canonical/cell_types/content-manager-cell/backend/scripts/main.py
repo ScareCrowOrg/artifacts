@@ -362,8 +362,8 @@ async def handle_persist(cell_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # ======================================================================
         # REDIS MAGRO: Decide how to obtain the binary data.
         # Option A (source_path): Asset is already on disk — read from runtime dir.
-        #   The source_path is relative to /app/artifacts/ e.g.:
-        #   "runtime/user/{assignee}/contents/{content_id}/{filename}.png"
+        #   Example: "artifacts/runtime/user/{assignee}/contents/{content_id}/{filename}.png"
+        #   After os.path.join("/app", source_path) → "/app/artifacts/runtime/user/.../file.png"
         # Option B (binary): Legacy mode — decode from base64 string.
         # ======================================================================
         if source_path and not binary_data:

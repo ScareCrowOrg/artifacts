@@ -316,7 +316,12 @@ async function handlePersist(): Promise<void> {
       const normalizedPath = assetUrl.startsWith('http')
         ? new URL(assetUrl).pathname.replace(/^\/artifacts\//, '')
         : assetUrl
-      persistPayload.source_path = normalizedPath
+      // REDIS MAGRO: Backend expects source_path that resolves inside the Docker
+      // container to /app/artifacts/runtime/.... normalizedPath is typically
+      // "/runtime/user/.../file.png", so we prepend 'artifacts' to make it
+      // "artifacts/runtime/user/.../file.png". The backend joins with /app
+      // to produce /app/artifacts/runtime/user/.../file.png.
+      persistPayload.source_path = `artifacts${normalizedPath}`
     } else {
       // Legacy: asset from external source — send binary as before
       persistPayload.binary = props.assetData.image_data || props.assetData.generatedPng
