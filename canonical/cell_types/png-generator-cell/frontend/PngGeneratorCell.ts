@@ -223,7 +223,13 @@ export class PngGeneratorCell extends BaseCell {
           relative_url: result.relative_url
         })
         // Build the full URL from the current origin
-        result.generatedPng = `${window.location.origin}${result.relative_url}`
+        // FIX: Prepend /artifacts so the URL routes through auth-proxy's
+        // RuntimeFileServer which provides CORS headers for cross-origin downloads.
+        // Without this prefix, the URL goes directly to the runtime file server
+        // which does not set CORS headers → FILE_DOWNLOAD fails with CORS error.
+        // See DEBUG_FLOW_ANALYSIS_6.md for full chain analysis.
+        const origin = window.location.origin.replace(/\/+$/, '')
+        result.generatedPng = `${origin}/artifacts${result.relative_url}`
       }
 
       const executionTime = performance.now() - startTime
