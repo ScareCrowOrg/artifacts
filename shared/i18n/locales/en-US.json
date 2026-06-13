@@ -1384,6 +1384,21 @@
     "tip2": "Mention viewBox dimensions if needed",
     "tip3": "Press Ctrl+Enter (or Cmd+Enter) to generate quickly"
   },
+  "imageContentCell": {
+    "title": "Image Viewer",
+    "noContent": "No content selected",
+    "loading": "Loading image...",
+    "error": "Error loading content: {message}",
+    "save": "Save",
+    "saving": "Saving...",
+    "saved": "Saved!",
+    "saveError": "Failed to save metadata",
+    "name": "Name",
+    "tags": "Tags (comma separated)",
+    "description": "Description",
+    "download": "Download",
+    "copy": "Copy"
+  },
   "pngGeneratorCell": {
     "title": "PNG Generator",
     "description": "Generate PNG images from text descriptions using Stable Diffusion AI",

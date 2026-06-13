@@ -373,10 +373,12 @@ const handleImageError = () => {
 const handleSaveMetadata = async () => {
   const contentId = initialContentId.value
   if (!contentId) {
+    logger.warn('Save attempted without content_id — aborting')
     localSaveError.value = 'No content ID available for saving'
     return
   }
 
+  logger.debug('[DIAG] handleSaveMetadata called', { contentId })
   localIsSaving.value = true
   localSaveError.value = null
   localSaveSuccess.value = false

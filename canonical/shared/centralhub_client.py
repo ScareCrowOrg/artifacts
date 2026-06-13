@@ -212,6 +212,17 @@ class CentralHubClient:
     ) -> Dict[str, Any]:
         """Update a document via CentralHub proxy."""
         try:
+            # Log value types to diagnose serialization issues
+            _types = {}
+            for _k, _v in update.items():
+                if isinstance(_v, dict):
+                    _types[_k] = {_kk: type(_vv).__name__ for _kk, _vv in _v.items()}
+                else:
+                    _types[_k] = type(_v).__name__
+            logger.info(
+                "[DIAG] CentralHubClient.update_one: update=%s, value_types=%s",
+                update, _types,
+            )
             resp = await self.request(
                 "POST", "/api/proxy/database/update_one",
                 json={

@@ -1384,6 +1384,21 @@
     "tip2": "Mencione dimensões do viewBox se necessário",
     "tip3": "Pressione Ctrl+Enter (ou Cmd+Enter) para gerar rapidamente"
   },
+  "imageContentCell": {
+    "title": "Visualizador de Imagem",
+    "noContent": "Nenhum conteúdo selecionado",
+    "loading": "Carregando imagem...",
+    "error": "Erro ao carregar conteúdo: {message}",
+    "save": "Salvar",
+    "saving": "Salvando...",
+    "saved": "Salvo!",
+    "saveError": "Erro ao salvar metadados",
+    "name": "Nome",
+    "tags": "Tags (separadas por vírgula)",
+    "description": "Descrição",
+    "download": "Baixar",
+    "copy": "Copiar"
+  },
   "pngGeneratorCell": {
     "title": "Gerador de PNG",
     "description": "Gere imagens PNG a partir de descrições textuais usando IA Stable Diffusion",

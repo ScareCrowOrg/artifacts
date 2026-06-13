@@ -260,6 +260,8 @@ export class ImageContentCell extends BaseCell {
     if (input.metadata !== undefined) body.metadata = input.metadata
     if (input.name !== undefined) body.name = input.name
 
+    log.debug('[DIAG] PATCH request body:', body)
+
     const response = await apiFetch(`/api/contents/${contentId}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
@@ -267,6 +269,7 @@ export class ImageContentCell extends BaseCell {
 
     if (!response.ok) {
       const errorText = await response.text()
+      log.error('[DIAG] PATCH failed:', { status: response.status, statusText: response.statusText, errorText })
 
       // Map status codes to meaningful errors
       if (response.status === 404) {
