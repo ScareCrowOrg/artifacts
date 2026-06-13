@@ -2,11 +2,11 @@
   "version": "0.1",
   "name": "stable-diffusion",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-stable-diffusion:staging20260602T081533",
-  "imageTag": "staging20260602T081533",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-stable-diffusion:staging20260613T144057",
+  "imageTag": "staging20260613T144057",
   "checksum": "sha256:cc466421d20df7a52355fe1694748ef35c82df566be1a139c5d84e53933bea0f",
   "dependencies": [],
   "generate_env_file": false,
   "totp_seed": false,
-  "lastBuilt": "2026-06-02T09:14:48.204Z"
+  "lastBuilt": "2026-06-13T15:13:30.537Z"
 }

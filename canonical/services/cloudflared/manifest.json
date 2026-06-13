@@ -2,8 +2,8 @@
   "version": "0.1",
   "name": "cloudflared",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-cloudflared:staging20260602T081533",
-  "imageTag": "staging20260602T081533",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-cloudflared:staging20260613T144057",
+  "imageTag": "staging20260613T144057",
   "dependencies": [],
   "generate_env_file": false,
   "totp_seed": false,
@@ -15,5 +15,5 @@
       "description": "JSON array of Cloudflare tunnel ingress rules, generated from planet_name (e.g. [{\"hostname\":\"planet.scareverse.net\",\"service\":\"http://traefik:80\"},{\"service\":\"http_status:404\"}])"
     }
   ],
-  "lastBuilt": "2026-06-02T09:14:48.186Z"
+  "lastBuilt": "2026-06-13T15:13:30.515Z"
 }
