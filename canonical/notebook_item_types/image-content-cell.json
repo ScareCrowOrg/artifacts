@@ -1,0 +1,62 @@
+{
+  "id": "image-content-cell",
+  "name": "Image Content Viewer",
+  "description": "Viewer for persisted image content with metadata editing and download. Ephemeral cell that displays images, allows editing tags/description/name, and provides download and copy-to-clipboard functionality.",
+  "version": "1.0.0",
+  "category": "ephemeral",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/ImageContentCell.ts"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "default_initial_data": {
+    "category": "ephemeral",
+    "content_id": null,
+    "relative_url": null
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "category": {
+      "type": "string",
+      "default": "ephemeral",
+      "description": "Cell category - 'ephemeral' marks this as ephemeral (not persisted)"
+    },
+    "content_id": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "UUID of the persisted content to display"
+    },
+    "relative_url": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Relative URL for direct file serving via Runtime File Server (e.g. /runtime/user/.../file.png)"
+    }
+  },
+  "_discovery": {
+    "labels": ["#image", "#viewer", "#metadata", "#download"],
+    "describe": "Ephemeral cell for viewing persisted image content. Supports image display via content_id or relative_url, inline metadata editing (tags, description, name) via PATCH /api/contents/{id}, download via postMessage FILE_DOWNLOAD, and clipboard copy. Integrates with PNG Generator Cell through CellFactory.addChildCell().",
+    "estimated_duration_seconds": 1,
+    "required_resources": ["backend"],
+    "dependencies": {
+      "cell_types": ["png-generator-cell"]
+    },
+    "tags": ["image", "viewer", "metadata", "download"],
+    "use_cases": [
+      "View persisted image content after PNG generation",
+      "Edit image metadata (tags, description, name)",
+      "Download images to local machine",
+      "Copy images to clipboard"
+    ]
+  },
+  "kind": "cell",
+  "updated_at": "2026-06-12T00:00:00",
+  "created_at": "2026-06-12T00:00:00",
+  "stage": "canonical"
+}

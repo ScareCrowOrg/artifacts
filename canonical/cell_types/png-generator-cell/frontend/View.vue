@@ -210,19 +210,18 @@
               </svg>
               <span>{{ isProcessingBackground ? $t('pngGeneratorCell.processing') : $t('pngGeneratorCell.cleanBackground') }}</span>
             </button>
+            <!-- Open in Viewer button: visible after successful generation with content reference -->
             <button
-              @click="handleCopy"
-              class="px-3 py-1 text-sm bg-surface-light dark:bg-surface-dark-light border border-border dark:border-border-dark rounded hover:bg-surface-hover dark:hover:bg-surface-dark-hover transition"
-              :title="$t('pngGeneratorCell.copyToClipboard')"
+              v-if="localContentId || localRelativeUrl"
+              @click="handleOpenViewer"
+              class="px-3 py-1 text-sm bg-accent dark:bg-accent-hover text-white rounded hover:bg-accent-hover dark:hover:bg-accent transition flex items-center gap-1"
+              :title="$t('pngGeneratorCell.openInViewer') || 'Open in Image Viewer'"
             >
-              {{ $t('pngGeneratorCell.copy') }}
-            </button>
-            <button
-              @click="handleDownload"
-              class="px-3 py-1 text-sm bg-surface-light dark:bg-surface-dark-light border border-border dark:border-border-dark rounded hover:bg-surface-hover dark:hover:bg-surface-dark-hover transition"
-              :title="$t('pngGeneratorCell.downloadPng')"
-            >
-              {{ $t('pngGeneratorCell.download') }}
+              <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              <span>{{ $t('pngGeneratorCell.openInViewer') || 'Open in Viewer' }}</span>
             </button>
           </div>
         </div>
@@ -253,11 +252,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from 'vue'
+import { ref, watch, computed, onMounted, inject } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { PngGeneratorCell } from './PngGeneratorCell'
 import type { PngGeneratorInput } from './PngGeneratorCell'
 import PersistModal from '#canonical/cell_types/content-manager-cell/frontend/components/PersistModal.vue'
+import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
 import type { CellResult } from '@/types/BaseCell'
 
 const logger = createLogger('component:png-generator-cell')
@@ -374,6 +374,9 @@ const localParams = ref({
 
 // Background removal state
 const isProcessingBackground = ref(false)
+
+// Inject CellFactory for creating child cells (image-content-cell)
+const cellFactory = inject<CellFactory>(CELL_FACTORY_KEY)
 
 // Persistence state
 const showPersistModal = ref(false)
@@ -520,45 +523,30 @@ const handleGenerate = async () => {
   }
 }
 
-const handleCopy = async () => {
+const handleOpenViewer = async () => {
   try {
-    if (!localGeneratedPng.value) return
-    
-    // Convert base64 to blob and copy to clipboard
-    const response = await fetch(localGeneratedPng.value)
-    const blob = await response.blob()
-    
-    await navigator.clipboard.write([
-      new ClipboardItem({ 'image/png': blob })
-    ])
-    
-    logger.info('PNG copied to clipboard')
+    const contentId = localContentId.value
+    const relativeUrl = localRelativeUrl.value
+
+    if (!contentId && !relativeUrl) {
+      logger.warn('No content_id or relative_url to open in viewer')
+      return
+    }
+
+    logger.info('Opening image in viewer', { contentId, relativeUrl })
+
+    if (cellFactory) {
+      await cellFactory.addChildCell('image-content-cell', {
+        content_id: contentId,
+        relative_url: relativeUrl,
+      })
+      logger.info('Image Content Cell created successfully')
+    } else {
+      logger.warn('CellFactory not available — cannot create image-content-cell')
+    }
   } catch (error: any) {
-    logger.error('Failed to copy PNG to clipboard', { error: error.message })
-    localError.value = 'Failed to copy image to clipboard'
-  }
-}
-
-const handleDownload = () => {
-  try {
-    if (!localGeneratedPng.value) return
-
-    // Cross-origin iframe: Chrome blocks the `download` attribute on anchor
-    // elements inside cross-origin iframes. Delegate the download to the host
-    // shell (cockpit-vue) via postMessage so it runs in the same-origin context.
-    window.top.postMessage({
-      type: 'FILE_DOWNLOAD',
-      payload: {
-        url: localGeneratedPng.value,
-        filename: `generated-image-${Date.now()}.png`
-      },
-      timestamp: Date.now()
-    }, '*')
-
-    logger.info('PNG download requested via host shell')
-  } catch (error: any) {
-    logger.error('Failed to request PNG download', { error: error.message })
-    localError.value = 'Failed to download image'
+    logger.error('Failed to open image in viewer', { error: error.message })
+    localError.value = 'Failed to open image viewer'
   }
 }
 
