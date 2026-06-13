@@ -399,19 +399,116 @@ async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] 
             # If so, propagate relative_url and content_id to frontend without
             # extracting image_base64 — let the frontend load via HTTP from the
             # Runtime File Server instead.
+            # Also auto-persist: create Content in MongoDB automatically so the
+            # image is searchable and editable without manual "Persist Asset".
             # ==================================================================
             if result.get("relative_url") or result.get("content_id"):
                 logger.info("REDIS MAGRO: handle_generate_png propagating content reference (relative_url=%s)",
                             result.get("relative_url", "N/A"))
+
+                # AUTO-PERSIST: Create Content in MongoDB automatically
+                # Graceful degradation: if this fails, generation still works
+                # with relative_url only (image is viewable but not editable).
+                auto_content_id = None
+                if result.get("relative_url"):
+                    try:
+                        current_user = cell_data.get('_current_user')
+                        if current_user and user_id:
+                            from app.services.content_manager import ContentManager, ContentTypeLoader
+                            from app.models.content_types import CreateContentRequest
+
+                            # Import storage backend from content-manager-cell
+                            _cm_scripts_dir = os.path.abspath(
+                                os.path.join(os.path.dirname(__file__),
+                                             '../../../../content-manager-cell/backend/scripts')
+                            )
+                            if _cm_scripts_dir not in sys.path:
+                                sys.path.insert(0, _cm_scripts_dir)
+                            from storage import get_storage_backend
+
+                            # Build absolute path from relative_url
+                            artifacts_dir = os.getenv("ARTIFACTS_ROOT", "/app/artifacts")
+                            abs_path = os.path.join(artifacts_dir, result["relative_url"].lstrip('/'))
+
+                            if os.path.exists(abs_path):
+                                with open(abs_path, "rb") as f:
+                                    binary = f.read()
+
+                                import uuid
+                                from datetime import datetime
+
+                                new_content_id = str(uuid.uuid4())
+                                filename = os.path.basename(abs_path)
+
+                                # Build fragments with generation metadata
+                                gen_meta = result.get("metadata", {})
+                                fragments = {
+                                    "name": f"Generated PNG - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                                    "width": gen_meta.get("width", width),
+                                    "height": gen_meta.get("height", height),
+                                    "generation_method": "ai",
+                                }
+
+                                # Create Content in MongoDB
+                                content_manager = ContentManager(ContentTypeLoader())
+                                create_request = CreateContentRequest(
+                                    content_type_id="image-png",
+                                    assignee_id=user_id,
+                                    data_ref=f"pending:{new_content_id}",
+                                    filename=filename,
+                                    size_bytes=len(binary),
+                                    fragments=fragments,
+                                    metadata={
+                                        "source": "png-generator",
+                                        "auto_persisted": True,
+                                        "prompt": prompt,
+                                    },
+                                )
+                                content = await content_manager.create_content(
+                                    create_request,
+                                    current_user=current_user,
+                                    content_id=new_content_id,
+                                )
+
+                                # Upload to storage
+                                storage = get_storage_backend(assignee_id=user_id)
+                                data_ref = storage.upload(
+                                    new_content_id, binary, filename, "image/png",
+                                    metadata={
+                                        "scareverse-content-id": new_content_id,
+                                        "content-type-id": "image-png",
+                                        "created-timestamp": datetime.utcnow().isoformat(),
+                                    },
+                                )
+
+                                # Update data_ref in MongoDB
+                                from app.database import db
+                                await db.update(
+                                    "contents", new_content_id,
+                                    {"$set": {"data_ref": data_ref}},
+                                    current_user=current_user,
+                                )
+
+                                auto_content_id = new_content_id
+                                logger.info("Auto-persist successful: content_id=%s, data_ref=%s", new_content_id, data_ref)
+                            else:
+                                logger.warning("Auto-persist: file not found at %s, skipping", abs_path)
+                        else:
+                            logger.debug("Auto-persist: no current_user or user_id available, skipping")
+                    except Exception as e:
+                        logger.warning("Auto-persist failed (non-blocking): %s", str(e), exc_info=True)
+
+                # Return result — use MongoDB _id if auto-persist succeeded
                 return {
                     "success": True,
                     "message": "PNG generated successfully (Redis Magro)",
                     "prompt": prompt,
                     "has_png": True,
-                    "content_id": result.get("content_id"),
+                    "content_id": auto_content_id or result.get("content_id"),
                     "relative_url": result.get("relative_url"),
                     "mime_type": result.get("mime_type", "image/png"),
-                    "metadata": result.get("metadata", {})
+                    "metadata": result.get("metadata", {}),
+                    "auto_persisted": auto_content_id is not None,
                 }
 
             # Legacy: result has inline base64 — wrap with data URI prefix

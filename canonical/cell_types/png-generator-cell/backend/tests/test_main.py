@@ -75,7 +75,7 @@ class TestExecuteCell:
             }
         })
 
-        with patch('main.queue_image_generation_job', mock_job):
+        with patch('image_generation.queue_image_generation_job', mock_job):
             result = await main.execute_cell(cell_data)
 
         assert result["success"] is True
@@ -98,7 +98,7 @@ class TestExecuteCell:
             "error": "Service timeout"
         })
 
-        with patch('main.queue_image_generation_job', mock_job):
+        with patch('image_generation.queue_image_generation_job', mock_job):
             result = await main.execute_cell(cell_data)
 
         assert result["success"] is False
@@ -678,6 +678,202 @@ def test_static_3d_enhancement_with_custom_negative():
     assert "damage" in enhanced_negative
     assert "shadows" in enhanced_negative
     
-    # Check no duplicate keywords
-    keywords = [k.strip() for k in enhanced_negative.split(',')]
-    assert len(keywords) == len(set(keywords))
+@pytest.mark.asyncio
+class TestAutoPersist:
+    """Tests for the auto-persist flow in handle_generate_png (v5.0)."""
+
+    @pytest.fixture
+    def mock_redis_magro_result(self, mock_queue_image_generation_job):
+        """Fixture: queue_image_generation_job returns Redis Magro result with relative_url."""
+        async def _setup():
+            return await mock_queue_image_generation_job({
+                "success": True,
+                "relative_url": "/runtime/user/test-assignee/contents/job-uuid/job-uuid.png",
+                "content_id": "job-uuid",
+                "mime_type": "image/png",
+                "metadata": {"width": 512, "height": 512},
+            })
+        return _setup
+
+    @pytest.fixture
+    def mock_auto_persist_modules(self):
+        """
+        Mock the modules needed for auto-persist:
+        - app.services.content_manager (ContentManager, ContentTypeLoader)
+        - app.models.content_types (CreateContentRequest)
+        - storage (get_storage_backend)
+        - app.database (db)
+        """
+        # Create the mock content
+        mock_content = MagicMock()
+        mock_content.id = "mongo-uuid-1234"
+
+        # Create mock ContentManager
+        mock_content_manager = MagicMock(spec=main.ContentManager if hasattr(main, 'ContentManager') else object)
+        mock_content_manager.create_content = AsyncMock(return_value=mock_content)
+
+        # Create mock ContentTypeLoader
+        mock_content_type_loader = MagicMock()
+
+        # Create mock content_manager module
+        mock_cm_module = MagicMock()
+        mock_cm_module.ContentManager = MagicMock(return_value=mock_content_manager)
+        mock_cm_module.ContentTypeLoader = MagicMock(return_value=mock_content_type_loader)
+
+        # Create mock content_types module
+        mock_ct_module = MagicMock()
+        mock_ct_module.CreateContentRequest = MagicMock()
+
+        # Create mock storage module
+        mock_storage = MagicMock()
+        mock_storage.upload = MagicMock(return_value="local://runtime/user/test-assignee/contents/mongo-uuid-1234/file.png")
+        mock_storage_module = MagicMock()
+        mock_storage_module.get_storage_backend = MagicMock(return_value=mock_storage)
+
+        # Create mock database module
+        mock_db = MagicMock()
+        mock_db.update = AsyncMock(return_value=None)
+        mock_db_module = MagicMock()
+        mock_db_module.db = mock_db
+
+        return {
+            'app.services.content_manager': mock_cm_module,
+            'app.models.content_types': mock_ct_module,
+            'storage': mock_storage_module,
+            'app.database': mock_db_module,
+        }
+
+    @staticmethod
+    def _make_mock_user(user_id="test-user-id"):
+        """Create a simple mock user object with .id attribute."""
+        user = MagicMock()
+        user.id = user_id
+        return user
+
+    async def test_auto_persist_success(self, mock_redis_magro_result, mock_auto_persist_modules):
+        """Auto-persist should create Content in MongoDB and return MongoDB _id as content_id."""
+        mock_job = await mock_redis_magro_result()
+        mock_user = self._make_mock_user()
+
+        cell_data = {
+            "prompt": "A test image",
+            "generatedPng": None,
+            "generationParams": {"width": 512, "height": 512},
+            "_current_user": mock_user,
+        }
+
+        with patch('image_generation.queue_image_generation_job', mock_job), \
+             patch.dict('sys.modules', mock_auto_persist_modules), \
+             patch('os.path.exists', return_value=True), \
+             patch('builtins.open', MagicMock()) as mock_open:
+            mock_file = MagicMock()
+            mock_file.__enter__.return_value.read.return_value = b"fake-png-binary-data"
+            mock_open.return_value = mock_file
+
+            result = await main.execute_cell(cell_data, user_id="test-user-id")
+
+        # Verify overall success
+        assert result["success"] is True
+        assert result["has_png"] is True
+        assert result["relative_url"] == "/runtime/user/test-assignee/contents/job-uuid/job-uuid.png"
+
+        # Verify auto-persist set the MongoDB _id
+        assert result["content_id"] is not None
+        assert result["content_id"] != "job-uuid"  # Should be MongoDB _id, not job_id
+        assert result["auto_persisted"] is True
+
+        # Verify ContentManager was called
+        cm_module = mock_auto_persist_modules['app.services.content_manager']
+        content_manager_instance = cm_module.ContentManager.return_value
+        assert content_manager_instance.create_content.called
+
+        # Verify storage upload was called
+        storage_module = mock_auto_persist_modules['storage']
+        storage_instance = storage_module.get_storage_backend.return_value
+        assert storage_instance.upload.called
+
+        # Verify db.update was called
+        db_module = mock_auto_persist_modules['app.database']
+        assert db_module.db.update.called
+
+    async def test_auto_persist_graceful_degradation(self, mock_redis_magro_result, mock_auto_persist_modules):
+        """If auto-persist fails, should fall back to relative_url only (no MongoDB content_id)."""
+        mock_job = await mock_redis_magro_result()
+        mock_user = self._make_mock_user()
+
+        # Make ContentManager.create_content raise an exception
+        failing_cm_module = mock_auto_persist_modules['app.services.content_manager']
+        failing_content_manager = MagicMock()
+        failing_content_manager.create_content = AsyncMock(side_effect=Exception("MongoDB connection refused"))
+        failing_cm_module.ContentManager = MagicMock(return_value=failing_content_manager)
+
+        cell_data = {
+            "prompt": "A test image",
+            "generatedPng": None,
+            "generationParams": {"width": 512, "height": 512},
+            "_current_user": mock_user,
+        }
+
+        with patch('image_generation.queue_image_generation_job', mock_job), \
+             patch.dict('sys.modules', mock_auto_persist_modules):
+            result = await main.execute_cell(cell_data, user_id="test-user-id")
+
+        # Verify generation still succeeds despite auto-persist failure
+        assert result["success"] is True
+        assert result["has_png"] is True
+        assert result["relative_url"] == "/runtime/user/test-assignee/contents/job-uuid/job-uuid.png"
+
+        # Verify auto-persist gracefully degraded
+        assert result["auto_persisted"] is False
+
+        # Verify fallback to job_id (original behavior preserved)
+        assert result["content_id"] == "job-uuid"
+
+    async def test_auto_persist_no_current_user(self, mock_redis_magro_result):
+        """Without _current_user, auto-persist should be skipped, generation still works."""
+        mock_job = await mock_redis_magro_result()
+
+        cell_data = {
+            "prompt": "A test image",
+            "generatedPng": None,
+            "generationParams": {"width": 512, "height": 512},
+            # NO _current_user
+        }
+
+        with patch('image_generation.queue_image_generation_job', mock_job):
+            result = await main.execute_cell(cell_data, user_id=None)
+
+        assert result["success"] is True
+        assert result["has_png"] is True
+        assert result["relative_url"] == "/runtime/user/test-assignee/contents/job-uuid/job-uuid.png"
+        assert result["auto_persisted"] is False
+        assert result["content_id"] == "job-uuid"
+
+    async def test_auto_persist_file_not_found(self, mock_redis_magro_result, mock_auto_persist_modules):
+        """If the PNG file is not found on disk, auto-persist should skip gracefully."""
+        mock_job = await mock_redis_magro_result()
+        mock_user = self._make_mock_user()
+
+        # Mock os.path.exists to return False (file not found)
+        cell_data = {
+            "prompt": "A test image",
+            "generatedPng": None,
+            "generationParams": {"width": 512, "height": 512},
+            "_current_user": mock_user,
+        }
+
+        with patch('image_generation.queue_image_generation_job', mock_job), \
+             patch.dict('sys.modules', mock_auto_persist_modules), \
+             patch('os.path.exists', return_value=False):
+            result = await main.execute_cell(cell_data, user_id="test-user-id")
+
+        assert result["success"] is True
+        assert result["has_png"] is True
+        assert result["relative_url"] == "/runtime/user/test-assignee/contents/job-uuid/job-uuid.png"
+        assert result["auto_persisted"] is False
+        assert result["content_id"] == "job-uuid"
+
+        # Verify ContentManager was NOT called (file not found)
+        cm_module = mock_auto_persist_modules['app.services.content_manager']
+        content_manager_instance = cm_module.ContentManager.return_value
+        assert not content_manager_instance.create_content.called

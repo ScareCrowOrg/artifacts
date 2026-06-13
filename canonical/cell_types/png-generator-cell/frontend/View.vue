@@ -166,33 +166,6 @@
           </h4>
           <div class="flex gap-2">
             <button
-              @click="handlePersistAsset"
-              :disabled="isPersisting"
-              class="px-3 py-1 text-sm bg-success dark:bg-green-700 text-white rounded hover:bg-green-600 dark:hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-              :title="$t('pngGeneratorCell.persistAsset') || 'Save asset to storage'"
-            >
-              <svg
-                v-if="isPersisting"
-                class="animate-spin h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <svg
-                v-if="!isPersisting"
-                class="h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
-              </svg>
-              <span>{{ isPersisting ? ($t('pngGeneratorCell.persisting') || 'Persisting...') : ($t('pngGeneratorCell.persistAsset') || 'Persist Asset') }}</span>
-            </button>
-            <button
               @click="handleCleanBackground"
               :disabled="isProcessingBackground"
               class="px-3 py-1 text-sm bg-primary dark:bg-primary-hover text-white rounded hover:bg-primary-light dark:hover:bg-primary transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
@@ -210,19 +183,6 @@
               </svg>
               <span>{{ isProcessingBackground ? $t('pngGeneratorCell.processing') : $t('pngGeneratorCell.cleanBackground') }}</span>
             </button>
-            <!-- Open in Viewer button: visible after successful generation with content reference -->
-            <button
-              v-if="localContentId || localRelativeUrl"
-              @click="handleOpenViewer"
-              class="px-3 py-1 text-sm bg-accent dark:bg-accent-hover text-white rounded hover:bg-accent-hover dark:hover:bg-accent transition flex items-center gap-1"
-              :title="$t('pngGeneratorCell.openInViewer') || 'Open in Image Viewer'"
-            >
-              <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              <span>{{ $t('pngGeneratorCell.openInViewer') || 'Open in Viewer' }}</span>
-            </button>
           </div>
         </div>
         <div class="preview-container bg-white dark:bg-gray-800 border border-border dark:border-border-dark rounded p-4 flex items-center justify-center min-h-[300px]">
@@ -234,20 +194,7 @@
         </div>
       </div>
       
-      <!-- Success Message for Persistence -->
-      <div v-if="persistSuccessMessage" class="success-section p-3 bg-success-light dark:bg-green-900 text-success-dark dark:text-green-100 rounded border border-success">
-        <p class="text-sm">{{ persistSuccessMessage }}</p>
-      </div>
     </div>
-    
-    <!-- Persist Modal Component -->
-    <PersistModal
-      v-if="showPersistModal"
-      :asset-data="assetDataForModal"
-      :is-visible="showPersistModal"
-      @confirm="handlePersistConfirm"
-      @cancel="handlePersistCancel"
-    />
   </div>
 </template>
 
@@ -256,9 +203,7 @@ import { ref, watch, computed, onMounted, inject } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { PngGeneratorCell } from './PngGeneratorCell'
 import type { PngGeneratorInput } from './PngGeneratorCell'
-import PersistModal from '#canonical/cell_types/content-manager-cell/frontend/components/PersistModal.vue'
 import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
-import type { CellResult } from '@/types/BaseCell'
 
 const logger = createLogger('component:png-generator-cell')
 
@@ -378,12 +323,6 @@ const isProcessingBackground = ref(false)
 // Inject CellFactory for creating child cells (image-content-cell)
 const cellFactory = inject<CellFactory>(CELL_FACTORY_KEY)
 
-// Persistence state
-const showPersistModal = ref(false)
-const isPersisting = ref(false)
-const persistSuccessMessage = ref<string | null>(null)
-const assetDataForModal = ref<Record<string, any>>({})
-
 // Watch for prop changes
 watch(() => props.prompt, (newVal) => { if (newVal !== undefined) localPrompt.value = newVal })
 watch(() => props.generatedPng, (newVal) => { if (newVal !== undefined) localGeneratedPng.value = newVal })
@@ -500,7 +439,7 @@ const handleGenerate = async () => {
         throw new Error('No image data in response')
       }
 
-      // Redis Magro: store content reference for PersistModal propagation
+      // Redis Magro: store content reference for auto-viewer
       if (output.relative_url) {
         localRelativeUrl.value = output.relative_url
       }
@@ -509,6 +448,21 @@ const handleGenerate = async () => {
       }
 
       localError.value = null
+
+      // AUTO-VIEWER: Create Image Content Cell automatically after successful generation
+      if (cellFactory && (localContentId.value || localRelativeUrl.value)) {
+        try {
+          await cellFactory.addChildCell('image-content-cell', {
+            content_id: localContentId.value,
+            relative_url: localRelativeUrl.value,
+          })
+          logger.info('Image Content Cell auto-created successfully')
+        } catch (autoViewError: any) {
+          logger.warn('Auto-viewer creation failed (non-blocking):', { error: autoViewError.message })
+        }
+      } else if (!cellFactory) {
+        logger.debug('Auto-viewer: CellFactory not available, skipping')
+      }
     } else {
       throw new Error(result.error || 'Generation failed')
     }
@@ -520,33 +474,6 @@ const handleGenerate = async () => {
     localContentId.value = null
   } finally {
     localIsGenerating.value = false
-  }
-}
-
-const handleOpenViewer = async () => {
-  try {
-    const contentId = localContentId.value
-    const relativeUrl = localRelativeUrl.value
-
-    if (!contentId && !relativeUrl) {
-      logger.warn('No content_id or relative_url to open in viewer')
-      return
-    }
-
-    logger.info('Opening image in viewer', { contentId, relativeUrl })
-
-    if (cellFactory) {
-      await cellFactory.addChildCell('image-content-cell', {
-        content_id: contentId,
-        relative_url: relativeUrl,
-      })
-      logger.info('Image Content Cell created successfully')
-    } else {
-      logger.warn('CellFactory not available — cannot create image-content-cell')
-    }
-  } catch (error: any) {
-    logger.error('Failed to open image in viewer', { error: error.message })
-    localError.value = 'Failed to open image viewer'
   }
 }
 
@@ -607,96 +534,9 @@ const handleCleanBackground = async () => {
   }
 }
 
-/**
- * Handle persist asset button click
- * Opens the persist modal with current asset data
- */
-const handlePersistAsset = async () => {
-  if (!localGeneratedPng.value) {
-    logger.warn('No PNG available to persist')
-    return
-  }
-
-  logger.info('Opening persist modal', { 
-    cellId: effectiveCellId.value,
-    hasPrompt: !!localPrompt.value
-  })
-
-  // Prepare asset data for modal
-  // Redis Magro: include relative_url and content_id so PersistModal can use
-  // source_path (disk-backed) instead of binary (inline base64) for persistence
-  assetDataForModal.value = {
-    generatedPng: localGeneratedPng.value,
-    image_data: localGeneratedPng.value,
-    prompt: localPrompt.value,
-    width: localParams.value.width,
-    height: localParams.value.height,
-    timestamp: Date.now(),
-    generationParams: localParams.value,
-    relative_url: localRelativeUrl.value,
-    content_id: localContentId.value,
-  }
-
-  // DIAG: Log which fields are propagated to PersistModal
-  // If relative_url/content_id are MISSING here, PersistModal will always use binary path
-  console.debug('PNG-DEBUG: assetDataForModal fields:', {
-    hasGeneratedPng: !!assetDataForModal.value.generatedPng,
-    hasImageData: !!assetDataForModal.value.image_data,
-    hasPrompt: !!assetDataForModal.value.prompt,
-    hasRelativeUrl: 'relative_url' in assetDataForModal.value,
-    hasContentId: 'content_id' in assetDataForModal.value,
-    hasSourcePath: 'source_path' in assetDataForModal.value,
-    keys: Object.keys(assetDataForModal.value)
-  })
-
-  // DIAG: Detect if inline button was clicked while modal already open (Hypothesis B).
-  // If showPersistModal is already true, handlePersistAsset() was called but the
-  // modal was already visible — meaning Playwright likely clicked the inline button
-  // instead of the modal button. Both say "Persist Asset" in the DOM.
-  if (showPersistModal.value) {
-    console.debug('PNG-DEBUG: handlePersistAsset() RE-ENTRY — modal was ALREADY visible, inline button captured the click instead of modal')
-  }
-
-  // Show modal
-  showPersistModal.value = true
-  persistSuccessMessage.value = null
-}
-
-/**
- * Handle persist modal confirmation
- * Called when user confirms persistence in the modal
- */
-const handlePersistConfirm = (result: CellResult) => {
-  logger.info('Asset persisted successfully', { result })
-  
-  // Close modal
-  showPersistModal.value = false
-  
-  // Show success message
-  if (result.success) {
-    const contentId = result.output?.id || 'unknown'
-    persistSuccessMessage.value = `Asset persisted successfully! (ID: ${contentId})`
-    
-    // Clear success message after 5 seconds
-    setTimeout(() => {
-      persistSuccessMessage.value = null
-    }, 5000)
-  }
-}
-
-/**
- * Handle persist modal cancellation
- * Called when user cancels persistence in the modal
- */
-const handlePersistCancel = () => {
-  logger.debug('Persist modal cancelled')
-  showPersistModal.value = false
-  assetDataForModal.value = {}
-}
-
 // Check cell health on mount
 onMounted(async () => {
-  console.log('[PNG_GENERATOR_CELL] onMounted - component mounted to DOM')
+  logger.debug('PNG Generator Cell mounted to DOM')
 
   logger.debug('PNG Generator Cell mounted', {
     cellId: effectiveCellId.value,
