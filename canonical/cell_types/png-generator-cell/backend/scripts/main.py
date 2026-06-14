@@ -327,24 +327,28 @@ async def execute_cell(cell_data: Dict[str, Any], user_id: Optional[str] = None)
 
 
 async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
+    current_user = cell_data.get('_current_user')  # Injected by router
     """
-    Handle PNG generation action.
+    Handle PNG generation action — async-only flow (v6.0).
 
-    Generates a PNG image from a text prompt.
-    Falls back to a mock placeholder if Stable Diffusion service is unavailable.
+    Generates a PNG image from a text prompt via Cloud GPU Worker.
+    Returns immediately with job_id for frontend polling.
 
     Args:
         cell_data: Cell data containing prompt and generation parameters
         user_id: Optional user identifier for Redis Magro content reference
 
     Returns:
-        Dict with generation results
+        Dict with:
+            - success: True if enqueued successfully
+            - job_id: UUID for job status polling
+            - status: "queued" | "failed"
     """
     prompt = cell_data.get('prompt', '')
     generated_png = cell_data.get('generatedPng', None)
 
-    logger.info(f"Generating PNG with prompt: {prompt[:50]}...")
-    
+    logger.info("Generating PNG with prompt: %s (async)", prompt[:50] if prompt else "N/A")
+
     # If PNG already exists, just return success
     if generated_png:
         return {
@@ -352,7 +356,7 @@ async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] 
             "message": "PNG already exists",
             "prompt": prompt,
             "has_png": True,
-            "generatedPng": generated_png
+            "generatedPng": generated_png,
         }
 
     # If no prompt provided, return without generating
@@ -362,7 +366,7 @@ async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] 
             "success": True,
             "message": "No prompt provided",
             "prompt": prompt,
-            "has_png": False
+            "has_png": False,
         }
 
     # Extract generation parameters if provided
@@ -376,11 +380,9 @@ async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] 
     # Extract 3D Asset Mode and negative prompt from cell_data
     negative_prompt = cell_data.get('negativePrompt', '')
     asset_3d_mode = cell_data.get('asset3dMode', False)
-    
+
     try:
-        # Call async generation function directly
-        # This works because execute_cell is now async and can be called
-        # from FastAPI's async context without creating a new event loop
+        # Call async generation function — returns immediately (no BRPOP)
         result = await generate_png_from_prompt(
             prompt=prompt,
             width=width,
@@ -391,167 +393,36 @@ async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] 
             negative_prompt=negative_prompt,
             asset_3d_mode=asset_3d_mode,
             assignee_id=user_id,
+            current_user=current_user,
         )
-        
+
         if result.get("success"):
-            # ==================================================================
-            # REDIS MAGRO: Detect if result contains content reference.
-            # If so, propagate relative_url and content_id to frontend without
-            # extracting image_base64 — let the frontend load via HTTP from the
-            # Runtime File Server instead.
-            # Also auto-persist: create Content in MongoDB automatically so the
-            # image is searchable and editable without manual "Persist Asset".
-            # ==================================================================
-            if result.get("relative_url") or result.get("content_id"):
-                logger.info("REDIS MAGRO: handle_generate_png propagating content reference (relative_url=%s)",
-                            result.get("relative_url", "N/A"))
-
-                # AUTO-PERSIST: Create Content in MongoDB automatically
-                # Graceful degradation: if this fails, generation still works
-                # with relative_url only (image is viewable but not editable).
-                auto_content_id = None
-                if result.get("relative_url"):
-                    try:
-                        current_user = cell_data.get('_current_user')
-                        if current_user and user_id:
-                            from app.services.content_manager import ContentManager, ContentTypeLoader
-                            from app.models.content_types import CreateContentRequest
-
-                            # Import storage backend from content-manager-cell
-                            logger.debug("[DIAG] __file__ = %s", __file__)
-                            _cm_scripts_dir = os.path.abspath(
-                                os.path.join(os.path.dirname(__file__),
-                                             '../../../content-manager-cell/backend/scripts')
-                            )
-                            logger.debug("[DIAG] Calculated _cm_scripts_dir = %s", _cm_scripts_dir)
-                            logger.debug("[DIAG] storage.py exists at _cm_scripts_dir: %s",
-                                         os.path.exists(os.path.join(_cm_scripts_dir, 'storage.py')))
-                            if _cm_scripts_dir not in sys.path:
-                                sys.path.insert(0, _cm_scripts_dir)
-                            from storage import get_storage_backend
-                            logger.info("[PERMANENTE] Storage backend imported from: %s", _cm_scripts_dir)
-
-                            # Build absolute path from relative_url
-                            artifacts_dir = os.getenv("ARTIFACTS_ROOT", "/app/artifacts")
-                            abs_path = os.path.join(artifacts_dir, result["relative_url"].lstrip('/'))
-
-                            if os.path.exists(abs_path):
-                                logger.debug("[DIAG] Auto-persist: reading file at %s", abs_path)
-                                with open(abs_path, "rb") as f:
-                                    binary = f.read()
-
-                                import uuid
-                                from datetime import datetime
-
-                                new_content_id = str(uuid.uuid4())
-                                filename = os.path.basename(abs_path)
-
-                                # Build fragments with generation metadata
-                                gen_meta = result.get("metadata", {})
-                                fragments = {
-                                    "name": f"Generated PNG - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-                                    "width": gen_meta.get("width", width),
-                                    "height": gen_meta.get("height", height),
-                                    "generation_method": "ai",
-                                }
-
-                                # Create Content in MongoDB
-                                logger.debug("[DIAG] Auto-persist: creating Content in MongoDB (new_content_id=%s)", new_content_id)
-                                content_manager = ContentManager(ContentTypeLoader())
-                                create_request = CreateContentRequest(
-                                    content_type_id="image-png",
-                                    assignee_id=user_id,
-                                    data_ref=f"pending:{new_content_id}",
-                                    filename=filename,
-                                    size_bytes=len(binary),
-                                    fragments=fragments,
-                                    metadata={
-                                        "source": "png-generator",
-                                        "auto_persisted": True,
-                                        "prompt": prompt,
-                                    },
-                                )
-                                content = await content_manager.create_content(
-                                    create_request,
-                                    current_user=current_user,
-                                    content_id=new_content_id,
-                                )
-                                logger.debug("[DIAG] Auto-persist: Content created, content.id=%s", getattr(content, 'id', 'N/A'))
-
-                                # Upload to storage
-                                logger.debug("[DIAG] Auto-persist: uploading to storage backend...")
-                                storage = get_storage_backend(assignee_id=user_id)
-                                data_ref = storage.upload(
-                                    new_content_id, binary, filename, "image/png",
-                                    metadata={
-                                        "scareverse-content-id": new_content_id,
-                                        "content-type-id": "image-png",
-                                        "created-timestamp": datetime.utcnow().isoformat(),
-                                    },
-                                )
-                                logger.debug("[DIAG] Auto-persist: storage upload complete, data_ref=%s", data_ref)
-
-                                # Update data_ref in MongoDB
-                                logger.debug("[DIAG] Auto-persist: updating data_ref in MongoDB...")
-                                from app.database import db
-                                await db.update(
-                                    "contents", new_content_id,
-                                    {"$set": {"data_ref": data_ref}},
-                                    current_user=current_user,
-                                )
-                                logger.debug("[DIAG] Auto-persist: MongoDB update complete")
-
-                                auto_content_id = new_content_id
-                                logger.info("Auto-persist successful: content_id=%s, data_ref=%s", new_content_id, data_ref)
-                            else:
-                                logger.warning("Auto-persist: file not found at %s, skipping", abs_path)
-                        else:
-                            logger.info("[PERMANENTE] Auto-persist skipped: no current_user or user_id available")
-                    except Exception as e:
-                        logger.exception("[PERMANENTE] Auto-persist failed (non-blocking): %s", str(e))
-
-                # Return result — use MongoDB _id if auto-persist succeeded
-                return {
-                    "success": True,
-                    "message": "PNG generated successfully (Redis Magro)",
-                    "prompt": prompt,
-                    "has_png": True,
-                    "content_id": auto_content_id or result.get("content_id"),
-                    "relative_url": result.get("relative_url"),
-                    "mime_type": result.get("mime_type", "image/png"),
-                    "metadata": result.get("metadata", {}),
-                    "auto_persisted": auto_content_id is not None,
-                }
-
-            # Legacy: result has inline base64 — wrap with data URI prefix
-            image_data = result.get("image_base64", "")
-            if not image_data.startswith("data:image/png;base64,"):
-                image_data = f"data:image/png;base64,{image_data}"
-
-            logger.info("PNG generation successful (legacy base64 inline)")
+            logger.info(
+                "PNG generation job enqueued: job_id=%s status=%s",
+                result.get("job_id", "N/A"),
+                result.get("status", "N/A"),
+            )
             return {
                 "success": True,
-                "message": "PNG generated successfully",
+                "message": "PNG generation queued",
                 "prompt": prompt,
-                "has_png": True,
-                "generatedPng": image_data,
-                "metadata": result.get("metadata", {})
+                "has_png": False,
+                "job_id": result.get("job_id"),
+                "status": result.get("status", "queued"),
             }
         else:
-            # Service failed - return error, no fake fallback
-            logger.error(f"PNG generation failed: {result.get('error')}")
+            logger.error("PNG generation failed: %s", result.get("error"))
             return {
                 "success": False,
                 "error": result.get("error", "SD generation failed"),
-                "prompt": prompt
+                "prompt": prompt,
             }
-    except Exception as e:
-        # Unexpected error - return error, no fake fallback
-        logger.error(f"Unexpected error during PNG generation: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error("Unexpected error during PNG generation: %s", exc, exc_info=True)
         return {
             "success": False,
-            "error": f"PNG generation error: {str(e)}",
-            "prompt": prompt
+            "error": f"PNG generation error: {str(exc)}",
+            "prompt": prompt,
         }
 
 
@@ -565,6 +436,7 @@ async def generate_png_from_prompt(
     negative_prompt: str = None,
     asset_3d_mode: bool = False,
     assignee_id: Optional[str] = None,
+    current_user: Any = None,
 ) -> Dict[str, Any]:
     """
     Generate PNG image from a text prompt using Stable Diffusion.
@@ -709,24 +581,21 @@ Generate the optimized negative prompt:"""
         else:
             logger.info(f"[User Prompt] NEGATIVE: (empty - no negative prompt provided)")
 
-    logger.info(f"Generating PNG - Asset 3D Mode: {asset_3d_mode}, Prompt length: {len(enhanced_prompt)}")
-    logger.info(f"[PNG Generation] FINAL PROMPT:\n{enhanced_prompt}")
-    logger.info(f"[PNG Generation] FINAL NEGATIVE PROMPT:\n{enhanced_negative}")
+    logger.info("Generating PNG - Asset 3D Mode: %s, Prompt length: %d",
+                asset_3d_mode, len(enhanced_prompt))
 
-    # Queue image generation job via redis_client (owner-first scheduling)
+    # Queue image generation job via redis_client (async, returns immediately)
     try:
-        import sys
-        import os
         script_dir = os.path.dirname(os.path.abspath(__file__))
         if script_dir not in sys.path:
             sys.path.insert(0, script_dir)
 
         from image_generation import queue_image_generation_job
 
-        logger.info(f"[SD Queue] Queueing image generation job via redis_client...")
+        logger.info("[SD Queue] Queueing image generation job via redis_client...")
 
         # Generate image with enhanced prompts via redis_client
-        # Redis Magro: pass assignee_id so worker can save PNG to disk
+        # Returns immediately with { success, job_id, status }
         result = await queue_image_generation_job(
             prompt=enhanced_prompt,
             negative_prompt=enhanced_negative,
@@ -736,54 +605,38 @@ Generate the optimized negative prompt:"""
             cfg_scale=cfg_scale,
             seed=seed,
             assignee_id=assignee_id,
+            current_user=current_user,
         )
 
         if result.get("success"):
-            logger.info(f"✅ Successfully generated PNG from prompt: {prompt[:50]}...")
-
-            # ==================================================================
-            # REDIS MAGRO: Detect if the result contains a content reference
-            # (relative_url) instead of inline base64.
-            # When present, pass it through to handle_generate_png() so the
-            # frontend receives the relative_url instead of base64 data.
-            # ==================================================================
-            if result.get("relative_url") or result.get("content_id"):
-                logger.info("REDIS MAGRO: Result contains content reference (relative_url=%s)",
-                            result.get("relative_url", "N/A"))
-                return {
-                    "success": True,
-                    "content_id": result.get("content_id"),
-                    "relative_url": result.get("relative_url"),
-                    "mime_type": result.get("mime_type", "image/png"),
-                    "prompt": prompt,
-                    "metadata": result.get("metadata", {})
-                }
-
+            logger.info(
+                "PNG generation job queued: job_id=%s",
+                result.get("job_id", "N/A"),
+            )
             return {
                 "success": True,
-                "image_base64": result.get("image_base64"),
+                "job_id": result.get("job_id"),
+                "status": result.get("status", "queued"),
                 "prompt": prompt,
-                "metadata": result.get("metadata", {})
             }
         else:
-            logger.error(f"❌ PNG generation failed: {result.get('error')}")
+            logger.error("PNG generation failed: %s", result.get("error"))
             return {
                 "success": False,
                 "error": result.get("error", "Unknown error"),
-                "prompt": prompt
+                "prompt": prompt,
             }
 
-    except ImportError as e:
-        # Image generation service not available in path
-        logger.error(f"Image generation service not available: {e}")
+    except ImportError as exc:
+        logger.error("Image generation service not available: %s", exc)
         return {
             "success": False,
             "error": "Image generation service not available (import failed)",
-            "prompt": prompt
+            "prompt": prompt,
         }
 
-    except Exception as e:
-        logger.error(f"Error generating PNG: {str(e)}", exc_info=True)
+    except Exception as exc:
+        logger.error("Error generating PNG: %s", exc, exc_info=True)
         return {
             "success": False,
             "error": f"Error generating PNG: {str(e)}",
@@ -794,7 +647,8 @@ Generate the optimized negative prompt:"""
 async def remove_background_from_png(
     input_image_base64: str,
     alpha_matting: bool = True,
-    timeout: float = 60.0
+    timeout: float = 60.0,
+    current_user: Any = None,
 ) -> Dict[str, Any]:
     """
     Remove background from PNG image using GPU Worker.
@@ -841,7 +695,8 @@ async def remove_background_from_png(
         result = await queue_background_removal_job(
             input_image_base64=input_image_base64,
             alpha_matting=alpha_matting,
-            timeout=timeout
+            timeout=timeout,
+            current_user=current_user,
         )
         
         if result.get("success"):
@@ -893,6 +748,7 @@ async def handle_remove_background(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict with removal results
     """
+    current_user = cell_data.get('_current_user')  # Injected by router
     generated_png = cell_data.get('generatedPng', None)
     alpha_matting = cell_data.get('alpha_matting', True)
 
@@ -913,7 +769,8 @@ async def handle_remove_background(cell_data: Dict[str, Any]) -> Dict[str, Any]:
         result = await remove_background_from_png(
             input_image_base64=generated_png,
             alpha_matting=alpha_matting,
-            timeout=120.0  # Extended timeout for background removal
+            timeout=120.0,  # Extended timeout for background removal
+            current_user=current_user,
         )
 
         if result.get("success"):

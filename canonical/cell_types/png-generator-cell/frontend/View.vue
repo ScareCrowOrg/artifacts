@@ -193,17 +193,19 @@
           />
         </div>
       </div>
-      
+
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, inject } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted, inject } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { PngGeneratorCell } from './PngGeneratorCell'
 import type { PngGeneratorInput } from './PngGeneratorCell'
 import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
+import { useJobPolling } from '#shared/composables/useJobPolling'
+import apiService from '@/services/apiService.js'
 
 const logger = createLogger('component:png-generator-cell')
 
@@ -320,6 +322,23 @@ const localParams = ref({
 // Background removal state
 const isProcessingBackground = ref(false)
 
+// Job polling state (async flow v6.0)
+const localJobId = ref<string | null>(null)
+const {
+  jobStatus: pollingJobStatus,
+  startPolling,
+  stopPolling,
+} = useJobPolling(
+  async (path: string, options?: RequestInit) => {
+    return apiService.fetch(path, options) as Promise<Response>
+  }
+)
+
+// Stop polling on unmount
+onUnmounted(() => {
+  stopPolling()
+})
+
 // Inject CellFactory for creating child cells (image-content-cell)
 const cellFactory = inject<CellFactory>(CELL_FACTORY_KEY)
 
@@ -353,7 +372,7 @@ watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localNegat
   if (updateTimeout) {
     clearTimeout(updateTimeout)
   }
-  
+
   updateTimeout = setTimeout(() => {
     if (props.cell) {
       emit('update:cell', {
@@ -370,7 +389,7 @@ watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localNegat
         }
       })
     }
-    
+
     // Also emit individual updates for backward compatibility
     emit('update:prompt', localPrompt.value)
     emit('update:generatedPng', localGeneratedPng.value)
@@ -388,11 +407,11 @@ const handleGenerate = async () => {
     return
   }
 
-  logger.info('Generating PNG image via BaseCell', { 
+  logger.info('Generating PNG image via BaseCell', {
     prompt: localPrompt.value,
     cellId: effectiveCellId.value
   })
-  
+
   // Emit generate event for backward compatibility
   emit('generate', {
     prompt: localPrompt.value,
@@ -400,10 +419,10 @@ const handleGenerate = async () => {
     asset3dMode: localAsset3dMode.value,
     generationParams: localParams.value
   })
-  
+
   localIsGenerating.value = true
   localError.value = null
-  
+
   try {
     // Validate input using cell's validate method
     const input: PngGeneratorInput = {
@@ -413,26 +432,68 @@ const handleGenerate = async () => {
       asset3dMode: localAsset3dMode.value,
       generationParams: localParams.value
     }
-    
+
     const validationErrors = cellInstance.validate(input)
-    
+
     if (validationErrors.length > 0) {
       const errorMessages = validationErrors.map(e => `${e.field}: ${e.message}`).join(', ')
       throw new Error(`Validation failed: ${errorMessages}`)
     }
-    
+
     // Execute using cell instance
     const result = await cellInstance.execute(input)
-    
-    logger.info('PNG generation completed', { 
+
+    logger.info('PNG generation completed', {
       success: result.success,
+      jobId: result.output?.job_id,
       executionTime: result.execution_time
     })
-    
+
     if (result.success && result.output) {
       const output = result.output as any
-      
-      // Extract generated PNG from result
+
+      // ASYNC FLOW (v6.0): Backend returned job_id — start polling
+      if (output.job_id) {
+        localJobId.value = output.job_id
+        logger.info('Starting job polling for job_id=' + output.job_id)
+        startPolling(output.job_id, {
+          intervalMs: 2000,
+          onComplete: async (job) => {
+            logger.info('Job completed, processing result', { job })
+            localIsGenerating.value = false
+
+            // If result has content reference, create viewer
+            if (job.relative_url) {
+              localRelativeUrl.value = job.relative_url
+              const origin = window.location.origin.replace(/\/+$/, '')
+              localGeneratedPng.value = `${origin}/artifacts${job.relative_url}`
+
+              // AUTO-VIEWER: Create Image Content Cell
+              if (cellFactory && job.content_id) {
+                try {
+                  await cellFactory.addChildCell('image-content-cell', {
+                    content_id: job.content_id,
+                    relative_url: job.relative_url,
+                  })
+                  logger.info('Image Content Cell auto-created after async job')
+                } catch (autoViewError: any) {
+                  logger.warn('Auto-viewer creation failed:', { error: autoViewError.message })
+                }
+              }
+            } else if (job.mesh_data) {
+              localGeneratedPng.value = job.mesh_data
+            }
+          },
+          onError: (err) => {
+            logger.error('Job failed', { error: err })
+            localError.value = err
+            localIsGenerating.value = false
+          },
+        })
+        return  // Polling handles the rest
+      }
+
+      // SYNC FLOW (legacy): Backend returned content directly
       if (output.generatedPng) {
         localGeneratedPng.value = output.generatedPng
       } else {
@@ -473,7 +534,10 @@ const handleGenerate = async () => {
     localRelativeUrl.value = null
     localContentId.value = null
   } finally {
-    localIsGenerating.value = false
+    // Only reset isGenerating if not in async polling flow
+    if (!localJobId.value) {
+      localIsGenerating.value = false
+    }
   }
 }
 
@@ -482,13 +546,13 @@ const handleCleanBackground = async () => {
     return
   }
 
-  logger.info('Cleaning background from PNG', { 
+  logger.info('Cleaning background from PNG', {
     cellId: effectiveCellId.value
   })
-  
+
   isProcessingBackground.value = true
   localError.value = null
-  
+
   try {
     // Validate input using cell's validate method
     const input: PngGeneratorInput = {
@@ -496,14 +560,14 @@ const handleCleanBackground = async () => {
       generatedPng: localGeneratedPng.value,
       alpha_matting: true
     }
-    
+
     const validationErrors = cellInstance.validate(input)
-    
+
     if (validationErrors.length > 0) {
       const errorMessages = validationErrors.map(e => `${e.field}: ${e.message}`).join(', ')
       throw new Error(`Validation failed: ${errorMessages}`)
     }
-    
+
     // Execute using cell instance
     const result = await cellInstance.execute(input)
 
@@ -514,7 +578,7 @@ const handleCleanBackground = async () => {
 
     if (result.success && result.output) {
       const output = result.output as any
-      
+
       // Extract transparent PNG from result
       if (output.generatedPng) {
         localGeneratedPng.value = output.generatedPng

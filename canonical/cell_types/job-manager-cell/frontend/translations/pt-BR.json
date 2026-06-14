@@ -1,0 +1,18 @@
+{
+    "jobManagerCell": {
+        "title": "Gerenciador de Jobs",
+        "jobStatus": "Status: {status}",
+        "jobId": "Job: {id}",
+        "allStatuses": "Todos os status",
+        "statusQueued": "Na fila",
+        "statusProcessing": "Processando",
+        "statusSuccess": "Sucesso",
+        "statusFailed": "Falhou",
+        "refresh": "Atualizar",
+        "noJobs": "Nenhum job encontrado",
+        "type": "Tipo",
+        "status": "Status",
+        "created": "Criado em",
+        "result": "Resultado"
+    }
+}

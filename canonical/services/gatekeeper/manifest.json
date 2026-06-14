@@ -2,11 +2,11 @@
   "version": "0.1",
   "name": "gatekeeper",
   "build": false,
-  "image": "hub-staging.scareverse.net/registry/staging/scareverse-gatekeeper:staging20260613T144057",
-  "imageTag": "staging20260613T144057",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-gatekeeper:staging20260614T184007",
+  "imageTag": "staging20260614T184007",
   "checksum": "sha256:6c9bc7ee434b67778e711079ca42885fb498308f5597c78efe3b95a719de9663",
   "dependencies": [],
   "generate_env_file": false,
   "totp_seed": true,
-  "lastBuilt": "2026-06-13T15:13:30.522Z"
+  "lastBuilt": "2026-06-14T18:41:16.372Z"
 }

@@ -307,6 +307,7 @@ Before starting any cell implementation, your cell MUST satisfy all of these:
 - [ ] **Implements `validate(input)`** - Validates input and returns ValidationError[]
 - [ ] **Creates type.json** - Cell type definition with symlink
 - [ ] **TypeScript for frontend** - All new frontend code uses TypeScript
+- [ ] **i18n translations** - `frontend/translations/en.json` + `pt-BR.json` com todas as chaves `$t()` (REQUIRED se houver View.vue)
 - [ ] **Documentation included** - `docs/README.md` with usage examples
 - [ ] **Tests included** - 90%+ coverage for backend and frontend
 
@@ -721,6 +722,9 @@ my-cell-type/
 │       └── test_main.py
 ├── frontend/                    # Optional: Frontend components
 │   ├── View.vue                 # Cell rendering component (TypeScript)
+│   ├── translations/            # REQUIRED if View.vue exists: i18n locale files
+│   │   ├── en.json              #   English translations for all $t('...') keys
+│   │   └── pt-BR.json           #   Brazilian Portuguese translations
 │   ├── composables.ts           # Optional: Vue composables (TypeScript)
 │   ├── store.ts                 # Optional: Pinia store (TypeScript)
 │   └── tests/                   # Recommended: Frontend tests
@@ -728,6 +732,71 @@ my-cell-type/
 └── docs/                        # REQUIRED: Documentation
     └── README.md
 ```
+
+## ⚠️ Cell-Specific i18n (Translations) — REQUIRED for View.vue
+
+**Every cell type with a `View.vue` MUST include a `frontend/translations/` directory with locale files.**
+
+### Why It Matters
+
+Without translation files, `$t('yourCell.key')` in the template returns the raw key string (e.g., `"imageContentCell.title"`) rather than the translated text. The fallback `|| 'Default text'` is NEVER reached because the raw key is a truthy string.
+
+### Required Files
+
+```
+frontend/translations/
+├── en.json              # English — fallbackLocale do vue-i18n
+└── pt-BR.json           # Brazilian Portuguese — locale padrão do sistema
+```
+
+### How It Works
+
+1. **Auto-discovery**: When a cell is added to the workspace, `useAutoLoadCellI18n` automatically fetches `/{cellType}/frontend/translations/{locale}.json` via HTTP
+2. **Merge**: The loaded messages are merged into the global vue-i18n instance via `mergeLocaleMessage()`
+3. **Cell-specific**: Each cell type's translations are isolated in its own namespace (the JSON key matches the namespace used in `$t()` calls)
+4. **Safety net**: Shared locale files (`artifacts/shared/i18n/locales/`) are statically imported at Vite build time and serve as a fallback if the cell-specific fetch fails
+
+### Pattern for View.vue
+
+Use the `$t('namespace.key') || 'Fallback text'` pattern in templates:
+
+```vue
+<h3>{{ $t('myCellType.title') || 'Default Title' }}</h3>
+```
+
+The corresponding `en.json`:
+```json
+{
+  "myCellType": {
+    "title": "Default Title",
+    "description": "Description of what this cell does"
+  }
+}
+```
+
+And `pt-BR.json`:
+```json
+{
+  "myCellType": {
+    "title": "Título Padrão",
+    "description": "Descrição do que esta célula faz"
+  }
+}
+```
+
+### Checklist
+
+- [ ] `frontend/translations/en.json` exists with all `$t()` keys
+- [ ] `frontend/translations/pt-BR.json` exists with Portuguese translations
+- [ ] All `$t('key')` calls have a fallback: `$t('key') || 'Fallback'`
+- [ ] Fallback text matches the value in `en.json` (consistency)
+- [ ] Keys are namespaced under the cell type name: `myCellType.title`, not `title`
+
+### See Also
+
+- `artifacts/canonical/cell_types/image-content-cell/frontend/translations/` — reference implementation
+- `artifacts/canonical/viewers/dynamic-workspace/composables/useAutoLoadCellI18n.ts` — auto-discovery loader
+- `artifacts/shared/i18n/index.js` — vue-i18n instance with `locale`, `fallbackLocale`, `missingHandler`
 
 ## Best Practices
 

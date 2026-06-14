@@ -1,0 +1,62 @@
+{
+  "id": "job-manager-cell",
+  "name": "Job Manager Cell",
+  "description": "Async job status display — embedded (progress bar) or standalone (job history list). Reusable across all cell types that use async execution.",
+  "version": "1.0.0",
+  "category": "ephemeral",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/JobManagerCell.ts"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "default_initial_data": {
+    "job_id": null,
+    "job_type_filter": null,
+    "user_filter": null,
+    "max_items": 10,
+    "poll_interval_ms": 2000,
+    "embedded": false
+  },
+  "allow_instance_override_refs": true,
+  "properties_schema": {
+    "embedded": {
+      "type": "boolean",
+      "default": false,
+      "description": "Embedded mode: inline progress bar with completion callback"
+    },
+    "job_id": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Single job to track (embedded mode only)"
+    },
+    "job_type_filter": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Filter jobs by type (standalone mode)"
+    },
+    "user_filter": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Filter jobs by user (standalone mode)"
+    },
+    "max_items": {
+      "type": "integer",
+      "default": 10,
+      "description": "Max jobs to display (standalone mode)"
+    },
+    "poll_interval_ms": {
+      "type": "integer",
+      "default": 2000,
+      "description": "Polling interval in milliseconds"
+    }
+  },
+  "kind": "cell",
+  "stage": "canonical"
+}

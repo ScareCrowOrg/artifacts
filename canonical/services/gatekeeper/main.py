@@ -263,6 +263,8 @@ class GateKeeper:
         """Route job to service executor or subprocess executor based on execution_model."""
         job_type = job.get("job_type") or job.get("type", "")
         job_id = job.get("job_id", "unknown")
+        # Extract user_id for JobConsumer notification (may be at top level or in payload)
+        user_id = job.get("user_id") or job.get("payload", {}).get("assignee_id", "")
 
         # DEBUG: Log complete job structure
         logger.info("[%s] === JOB DISPATCH INSPECTION ===", job_id)
@@ -307,7 +309,7 @@ class GateKeeper:
 
                 persist_start = time.time()
                 self.metrics.record_job_execution(job_type, time.time() - total_start, success=True)
-                await self._persist_success(job_id, result, source, job_type)
+                await self._persist_success(job_id, result, source, job_type, user_id)
                 persist_elapsed = time.time() - persist_start
                 logger.info("[%s] 💾 Result persistence: %.3fs", job_id, persist_elapsed)
             else:
@@ -319,7 +321,7 @@ class GateKeeper:
 
                 persist_start = time.time()
                 self.metrics.record_job_execution(job_type, time.time() - total_start, success=True)
-                await self._persist_success(job_id, result, source, job_type)
+                await self._persist_success(job_id, result, source, job_type, user_id)
                 persist_elapsed = time.time() - persist_start
                 logger.info("[%s] 💾 Result persistence: %.3fs", job_id, persist_elapsed)
 
@@ -327,19 +329,19 @@ class GateKeeper:
             elapsed = time.time() - total_start
             self.metrics.record_job_execution(job_type, elapsed, success=False)
             logger.error("[%s] ⏱️  Timeout: %s (after %.3fs)", job_id, exc, elapsed)
-            await self._persist_error(job_id, str(exc), source, job_type)
+            await self._persist_error(job_id, str(exc), source, job_type, user_id)
             await self.pooler.push_to_dead_letter(raw_job)
         except ValueError as exc:
             elapsed = time.time() - total_start
             self.metrics.record_job_execution(job_type, elapsed, success=False)
             logger.error("[%s] 🚨 Permanent failure: %s (after %.3fs)", job_id, exc, elapsed)
-            await self._persist_error(job_id, str(exc), source, job_type)
+            await self._persist_error(job_id, str(exc), source, job_type, user_id)
             await self.pooler.push_to_dead_letter(raw_job)
         except Exception as exc:
             elapsed = time.time() - total_start
             self.metrics.record_job_execution(job_type, elapsed, success=False)
             logger.error("[%s] ❌ Dispatch failed: %s (after %.3fs)", job_id, exc, elapsed, exc_info=True)
-            await self._persist_error(job_id, str(exc), source, job_type)
+            await self._persist_error(job_id, str(exc), source, job_type, user_id)
             await self.pooler.push_to_dead_letter(raw_job)
 
     # ------------------------------------------------------------------
@@ -352,6 +354,7 @@ class GateKeeper:
         result: Dict[str, Any],
         source: str,
         job_type: str = "",
+        user_id: str = "",
     ) -> None:
         route = config.JOB_TYPES_CONFIG.get(job_type, {})
         result_storage = route.get("result_storage", "hset_l2")
@@ -385,6 +388,30 @@ class GateKeeper:
                 )
             except Exception as exc:
                 logger.error("Failed to RPUSH result for job %s: %s", job_id, exc)
+
+            # ── PUBLISH notification for JobConsumer ─────────────────────
+            # Non-blocking: if Redis PUBLISH fails, JobConsumer reconciliation
+            # loop will recover via periodic scan of stuck "processing" jobs.
+            try:
+                publish_payload = json.dumps({
+                    "job_id": job_id,
+                    "result_key": key,
+                    "job_type": job_type,
+                    "user_id": user_id,
+                    "timestamp": time.time(),
+                })
+                await self.redis_l1.publish("scareverse:job-results", publish_payload)
+                logger.debug(
+                    "[%s] 📢 PUBLISHED job result notification for consumer",
+                    job_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "[%s] ⚠️  Failed to PUBLISH job result notification: %s "
+                    "(non-critical — reconciliation loop will recover)",
+                    job_id,
+                    exc,
+                )
         else:
             key = f"{config.JOB_STATE_KEY_PREFIX}:{job_id}"
             try:
@@ -409,6 +436,7 @@ class GateKeeper:
         error_msg: str,
         source: str,
         job_type: str = "",
+        user_id: str = "",
     ) -> None:
         route = config.JOB_TYPES_CONFIG.get(job_type, {})
         result_storage = route.get("result_storage", "hset_l2")

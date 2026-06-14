@@ -99,6 +99,11 @@ export interface PngGeneratorOutput {
   
   /** Additional metadata from backend */
   metadata?: Record<string, any>
+
+  /** ASYNC FLOW (v6.0): Job ID for frontend polling */
+  job_id?: string
+  /** ASYNC FLOW (v6.0): Job status (queued, processing, success, failed) */
+  status?: string
 }
 
 /**
@@ -233,6 +238,23 @@ export class PngGeneratorCell extends BaseCell {
       }
 
       const executionTime = performance.now() - startTime
+
+      // ASYNC FLOW (v6.0): Backend returned { job_id, status } — pass through
+      if (result.job_id) {
+        log.info('Async job created', {
+          jobId: result.job_id,
+          status: result.status,
+          executionTime,
+        })
+        return {
+          success: true,
+          output: result,
+          artifacts: [],
+          execution_time: executionTime,
+          execution_steps: ['validate', 'prepare-request', 'backend-execute', 'job-queued'],
+          quality_score: 1.0,
+        }
+      }
 
       log.info('Execution completed', {
         success: result.success,
