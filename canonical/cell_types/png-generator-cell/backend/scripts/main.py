@@ -418,19 +418,25 @@ async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] 
                             from app.models.content_types import CreateContentRequest
 
                             # Import storage backend from content-manager-cell
+                            logger.debug("[DIAG] __file__ = %s", __file__)
                             _cm_scripts_dir = os.path.abspath(
                                 os.path.join(os.path.dirname(__file__),
-                                             '../../../../content-manager-cell/backend/scripts')
+                                             '../../../content-manager-cell/backend/scripts')
                             )
+                            logger.debug("[DIAG] Calculated _cm_scripts_dir = %s", _cm_scripts_dir)
+                            logger.debug("[DIAG] storage.py exists at _cm_scripts_dir: %s",
+                                         os.path.exists(os.path.join(_cm_scripts_dir, 'storage.py')))
                             if _cm_scripts_dir not in sys.path:
                                 sys.path.insert(0, _cm_scripts_dir)
                             from storage import get_storage_backend
+                            logger.info("[PERMANENTE] Storage backend imported from: %s", _cm_scripts_dir)
 
                             # Build absolute path from relative_url
                             artifacts_dir = os.getenv("ARTIFACTS_ROOT", "/app/artifacts")
                             abs_path = os.path.join(artifacts_dir, result["relative_url"].lstrip('/'))
 
                             if os.path.exists(abs_path):
+                                logger.debug("[DIAG] Auto-persist: reading file at %s", abs_path)
                                 with open(abs_path, "rb") as f:
                                     binary = f.read()
 
@@ -450,6 +456,7 @@ async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] 
                                 }
 
                                 # Create Content in MongoDB
+                                logger.debug("[DIAG] Auto-persist: creating Content in MongoDB (new_content_id=%s)", new_content_id)
                                 content_manager = ContentManager(ContentTypeLoader())
                                 create_request = CreateContentRequest(
                                     content_type_id="image-png",
@@ -469,8 +476,10 @@ async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] 
                                     current_user=current_user,
                                     content_id=new_content_id,
                                 )
+                                logger.debug("[DIAG] Auto-persist: Content created, content.id=%s", getattr(content, 'id', 'N/A'))
 
                                 # Upload to storage
+                                logger.debug("[DIAG] Auto-persist: uploading to storage backend...")
                                 storage = get_storage_backend(assignee_id=user_id)
                                 data_ref = storage.upload(
                                     new_content_id, binary, filename, "image/png",
@@ -480,23 +489,26 @@ async def handle_generate_png(cell_data: Dict[str, Any], user_id: Optional[str] 
                                         "created-timestamp": datetime.utcnow().isoformat(),
                                     },
                                 )
+                                logger.debug("[DIAG] Auto-persist: storage upload complete, data_ref=%s", data_ref)
 
                                 # Update data_ref in MongoDB
+                                logger.debug("[DIAG] Auto-persist: updating data_ref in MongoDB...")
                                 from app.database import db
                                 await db.update(
                                     "contents", new_content_id,
                                     {"$set": {"data_ref": data_ref}},
                                     current_user=current_user,
                                 )
+                                logger.debug("[DIAG] Auto-persist: MongoDB update complete")
 
                                 auto_content_id = new_content_id
                                 logger.info("Auto-persist successful: content_id=%s, data_ref=%s", new_content_id, data_ref)
                             else:
                                 logger.warning("Auto-persist: file not found at %s, skipping", abs_path)
                         else:
-                            logger.debug("Auto-persist: no current_user or user_id available, skipping")
+                            logger.info("[PERMANENTE] Auto-persist skipped: no current_user or user_id available")
                     except Exception as e:
-                        logger.warning("Auto-persist failed (non-blocking): %s", str(e), exc_info=True)
+                        logger.exception("[PERMANENTE] Auto-persist failed (non-blocking): %s", str(e))
 
                 # Return result — use MongoDB _id if auto-persist succeeded
                 return {

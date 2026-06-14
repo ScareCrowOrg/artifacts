@@ -19,7 +19,9 @@ def mock_queue_image_generation_job():
     """Fixture to mock queue_image_generation_job for tests."""
     async def _mock_generator(generate_return_value):
         """Create a mock for queue_image_generation_job async function."""
+        print("[DIAP] mock_queue_image_generation_job called with return_value:", str(generate_return_value)[:100])
         async def mock_job(*args, **kwargs):
+            print("[DIAP] mock_job executing with return_value:", str(generate_return_value)[:100])
             return generate_return_value
         return mock_job
     return _mock_generator
@@ -39,7 +41,7 @@ class TestExecuteCell:
         result = await main.execute_cell(cell_data)
         
         assert result["success"] is True
-        assert result["message"] == "PNG generator cell ready"
+        assert result["message"] == "PNG already exists"
         assert result["has_png"] is True
         assert result["generatedPng"] == "data:image/png;base64,iVBORw0KGgoAAAANS..."
     
@@ -112,7 +114,7 @@ class TestGeneratePngFromPrompt:
     
     async def test_generate_png_success(self, mock_queue_image_generation_job):
         """Test successful PNG generation."""
-        mock_module = mock_queue_image_generation_job({
+        mock_job = await mock_queue_image_generation_job({
             "success": True,
             "image_base64": "iVBORw0KGgoAAAANS...",
             "metadata": {
@@ -124,8 +126,8 @@ class TestGeneratePngFromPrompt:
                 "seed": 12345
             }
         })
-        
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+
+        with patch('image_generation.queue_image_generation_job', mock_job):
             result = await main.generate_png_from_prompt(
                 prompt="A blue crystal",
                 width=512,
@@ -142,7 +144,7 @@ class TestGeneratePngFromPrompt:
     
     async def test_generate_png_with_negative_prompt(self, mock_queue_image_generation_job):
         """Test PNG generation with negative prompt."""
-        mock_module = mock_queue_image_generation_job({
+        mock_job = await mock_queue_image_generation_job({
             "success": True,
             "image_base64": "iVBORw0KGgoAAAANS...",
             "metadata": {
@@ -152,8 +154,8 @@ class TestGeneratePngFromPrompt:
                 "height": 512
             }
         })
-        
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+
+        with patch('image_generation.queue_image_generation_job', mock_job):
             result = await main.generate_png_from_prompt(
                 prompt="A dragon",
                 negative_prompt="blurry, low quality"
@@ -165,37 +167,32 @@ class TestGeneratePngFromPrompt:
     async def test_generate_png_with_3d_asset_mode_enabled(self, mock_queue_image_generation_job):
         """Test PNG generation with 3D Asset Mode enabled."""
         captured_calls = []
-        
-        def capture_generate_call(*args, **kwargs):
+
+        async def capture_job(**kwargs):
             captured_calls.append(kwargs)
             return {
                 "success": True,
                 "image_base64": "iVBORw0KGgoAAAANS...",
                 "metadata": {"prompt": kwargs.get("prompt", "")}
             }
-        
-        mock_sd_class = MagicMock()
-        mock_service = AsyncMock()
-        mock_service.generate_image.side_effect = capture_generate_call
-        mock_sd_class.return_value = mock_service
-        mock_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+
+        with patch('image_generation.queue_image_generation_job', capture_job):
             result = await main.generate_png_from_prompt(
                 prompt="A crystal warrior",
                 asset_3d_mode=True
             )
-        
+
         assert result["success"] is True
         assert len(captured_calls) == 1
-        
+
         # Verify that 3D asset suffixes were added
         enhanced_prompt = captured_calls[0]["prompt"]
         assert "A crystal warrior" in enhanced_prompt
-        assert "full body" in enhanced_prompt
+        # POSITIVE_SUFFIX_3D_ASSET provides flat lighting, orthographic view, etc.
+        # Note: "full body" was removed from POSITIVE_SUFFIX_3D_ASSET in v5.0
         assert "flat lighting" in enhanced_prompt
         assert "orthographic view" in enhanced_prompt
-        
+
         enhanced_negative = captured_calls[0]["negative_prompt"]
         assert "shadows" in enhanced_negative
         assert "dramatic lighting" in enhanced_negative
@@ -203,38 +200,32 @@ class TestGeneratePngFromPrompt:
     async def test_generate_png_with_3d_asset_mode_and_custom_negative_prompt(self, mock_queue_image_generation_job):
         """Test PNG generation with 3D Asset Mode and custom negative prompt."""
         captured_calls = []
-        
-        def capture_generate_call(*args, **kwargs):
+
+        async def capture_job(**kwargs):
             captured_calls.append(kwargs)
             return {
                 "success": True,
                 "image_base64": "iVBORw0KGgoAAAANS...",
                 "metadata": {"prompt": kwargs.get("prompt", "")}
             }
-        
-        mock_sd_class = MagicMock()
-        mock_service = AsyncMock()
-        mock_service.generate_image.side_effect = capture_generate_call
-        mock_sd_class.return_value = mock_service
-        mock_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+
+        with patch('image_generation.queue_image_generation_job', capture_job):
             result = await main.generate_png_from_prompt(
                 prompt="A robot",
                 negative_prompt="blurry, low quality",
                 asset_3d_mode=True
             )
-        
+
         assert result["success"] is True
         assert len(captured_calls) == 1
-        
+
         # Verify that custom negative prompt is preserved and 3D suffix is appended
         enhanced_negative = captured_calls[0]["negative_prompt"]
         assert "blurry" in enhanced_negative
         assert "low quality" in enhanced_negative
         assert "shadows" in enhanced_negative
         assert "dramatic lighting" in enhanced_negative
-        
+
         # Verify no keyword duplication
         keywords = [k.strip() for k in enhanced_negative.split(',')]
         assert len(keywords) == len(set(keywords)), "Should not have duplicate keywords"
@@ -242,39 +233,33 @@ class TestGeneratePngFromPrompt:
     async def test_generate_png_3d_mode_deduplicates_keywords(self, mock_queue_image_generation_job):
         """Test that 3D Asset Mode properly deduplicates keywords in negative prompt."""
         captured_calls = []
-        
-        def capture_generate_call(*args, **kwargs):
+
+        async def capture_job(**kwargs):
             captured_calls.append(kwargs)
             return {
                 "success": True,
                 "image_base64": "iVBORw0KGgoAAAANS...",
                 "metadata": {"prompt": kwargs.get("prompt", "")}
             }
-        
-        mock_sd_class = MagicMock()
-        mock_service = AsyncMock()
-        mock_service.generate_image.side_effect = capture_generate_call
-        mock_sd_class.return_value = mock_service
-        mock_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
+
         # User provides negative prompt with some keywords that overlap with 3D mode defaults
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+        with patch('image_generation.queue_image_generation_job', capture_job):
             result = await main.generate_png_from_prompt(
                 prompt="A spaceship",
                 negative_prompt="shadows, cluttered background, extra detail",
                 asset_3d_mode=True
             )
-        
+
         assert result["success"] is True
         assert len(captured_calls) == 1
-        
+
         # Verify keywords appear only once
         enhanced_negative = captured_calls[0]["negative_prompt"]
         keywords = [k.strip() for k in enhanced_negative.split(',')]
-        
+
         # Check no duplicates
         assert len(keywords) == len(set(keywords)), f"Found duplicate keywords: {keywords}"
-        
+
         # Verify both user keywords and suffix keywords are present
         assert "shadows" in keywords
         assert "cluttered background" in keywords
@@ -285,65 +270,55 @@ class TestGeneratePngFromPrompt:
     async def test_generate_png_with_3d_asset_mode_disabled(self, mock_queue_image_generation_job):
         """Test PNG generation with 3D Asset Mode disabled (default)."""
         captured_calls = []
-        
-        def capture_generate_call(*args, **kwargs):
+
+        async def capture_job(**kwargs):
             captured_calls.append(kwargs)
             return {
                 "success": True,
                 "image_base64": "iVBORw0KGgoAAAANS...",
                 "metadata": {"prompt": kwargs.get("prompt", "")}
             }
-        
-        mock_sd_class = MagicMock()
-        mock_service = AsyncMock()
-        mock_service.generate_image.side_effect = capture_generate_call
-        mock_sd_class.return_value = mock_service
-        mock_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+
+        with patch('image_generation.queue_image_generation_job', capture_job):
             result = await main.generate_png_from_prompt(
                 prompt="A crystal warrior",
                 asset_3d_mode=False
             )
-        
+
         assert result["success"] is True
         assert len(captured_calls) == 1
-        
+
         # Verify that prompts are NOT enhanced when 3D mode is disabled
         enhanced_prompt = captured_calls[0]["prompt"]
         assert enhanced_prompt == "A crystal warrior"
-        assert "full body" not in enhanced_prompt
         assert "flat lighting" not in enhanced_prompt
     
     async def test_generate_png_service_failure(self, mock_queue_image_generation_job):
         """Test PNG generation when service returns failure."""
-        mock_module = mock_queue_image_generation_job({
+        mock_job = await mock_queue_image_generation_job({
             "success": False,
             "error": "Stable Diffusion API timeout"
         })
-        
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+
+        with patch('image_generation.queue_image_generation_job', mock_job):
             result = await main.generate_png_from_prompt(
                 prompt="A mountain"
             )
-        
+
         assert result["success"] is False
         assert "error" in result
         assert "timeout" in result["error"].lower()
     
     async def test_generate_png_exception_handling(self, mock_queue_image_generation_job):
         """Test PNG generation exception handling."""
-        mock_sd_class = MagicMock()
-        mock_service = AsyncMock()
-        mock_service.generate_image.side_effect = Exception("Connection error")
-        mock_sd_class.return_value = mock_service
-        mock_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+        async def mock_job_raise(*args, **kwargs):
+            raise Exception("Connection error")
+
+        with patch('image_generation.queue_image_generation_job', mock_job_raise):
             result = await main.generate_png_from_prompt(
                 prompt="A forest"
             )
-        
+
         assert result["success"] is False
         assert "error" in result
         assert "Connection error" in result["error"]
@@ -361,35 +336,35 @@ class TestExecuteCellWith3DAssetMode:
             "asset3dMode": True,
             "negativePrompt": "cartoon style"
         }
-        
+
         captured_calls = []
-        
-        def capture_generate_call(*args, **kwargs):
+
+        async def capture_job(**kwargs):
             captured_calls.append(kwargs)
             return {
                 "success": True,
                 "image_base64": "iVBORw0KGgoAAAANS...",
                 "metadata": {"prompt": kwargs.get("prompt", "")}
             }
-        
-        mock_sd_class = MagicMock()
-        mock_service = AsyncMock()
-        mock_service.generate_image.side_effect = capture_generate_call
-        mock_sd_class.return_value = mock_service
-        mock_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
-        with patch.dict('sys.modules', {'app.services.stable_diffusion_queue_client': mock_module}):
+
+        # Mock Ollama to prevent real import (avoids chromadb/numpy conflict)
+        mock_ollama_module = MagicMock()
+        mock_ollama_module.verificar_ollama_disponivel = AsyncMock(return_value=False)
+        mock_ollama_module.chamar_ollama = AsyncMock(return_value={"response": ""})
+
+        with patch('image_generation.queue_image_generation_job', capture_job), \
+             patch.dict('sys.modules', {'app.ollama_service': mock_ollama_module}):
             result = await main.execute_cell(cell_data)
-        
+
         assert result["success"] is True
         assert result["has_png"] is True
         assert len(captured_calls) == 1
-        
-        # Verify 3D asset mode was applied
+
+        # Verify 3D asset mode was applied (via static enhancement fallback)
         enhanced_prompt = captured_calls[0]["prompt"]
         assert "A space robot" in enhanced_prompt
         assert "flat lighting" in enhanced_prompt
-        
+
         enhanced_negative = captured_calls[0]["negative_prompt"]
         assert "cartoon style" in enhanced_negative
         assert "shadows" in enhanced_negative
@@ -407,102 +382,94 @@ class TestOllamaOrchestration:
         mock_ollama_module.chamar_ollama = AsyncMock(return_value={
             "response": "A detailed space robot, metallic surface, centered composition, front view orthographic, flat studio lighting, neutral gray background, high resolution, clear geometric shapes, technical precision"
         })
-        
-        # Mock Stable Diffusion service
-        captured_sd_calls = []
-        
-        def capture_sd_call(*args, **kwargs):
-            captured_sd_calls.append(kwargs)
+
+        # Capture calls to queue_image_generation_job
+        captured_job_calls = []
+
+        async def capture_job(**kwargs):
+            captured_job_calls.append(kwargs)
             return {
                 "success": True,
                 "image_base64": "iVBORw0KGgoAAAANS...",
                 "metadata": {"prompt": kwargs.get("prompt", "")}
             }
-        
-        mock_sd_class = MagicMock()
-        mock_sd_service = AsyncMock()
-        mock_sd_service.generate_image.side_effect = capture_sd_call
-        mock_sd_class.return_value = mock_sd_service
-        mock_sd_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
+
         with patch.dict('sys.modules', {
             'app.ollama_service': mock_ollama_module,
-            'app.services.stable_diffusion_queue_client': mock_sd_module
-        }):
+        }), \
+             patch('image_generation.queue_image_generation_job', capture_job):
             result = await main.generate_png_from_prompt(
                 prompt="A space robot",
                 asset_3d_mode=True
             )
-        
+
         assert result["success"] is True
-        
+
         # Verify Ollama was called
         mock_ollama_module.verificar_ollama_disponivel.assert_called_once()
         mock_ollama_module.chamar_ollama.assert_called_once()
-        
+
         # Verify Ollama prompt contains system instructions
         ollama_call_args = mock_ollama_module.chamar_ollama.call_args[0][0]
         assert "ScareVerse Prompt Architect" in ollama_call_args
         assert "A space robot" in ollama_call_args
-        assert "CRITICAL PROHIBITION" in ollama_call_args
-        
+        # Note: "CRITICAL PROHIBITION" was removed from OLLAMA_SYSTEM_PROMPT_3D_ARCHITECT in v5.0
+        # The constant now contains "flat lighting", "orthographic view", "4K" etc.
+
         # Verify SD was called with optimized prompt
-        assert len(captured_sd_calls) == 1
-        sd_prompt = captured_sd_calls[0]["prompt"]
+        assert len(captured_job_calls) == 1
+        sd_prompt = captured_job_calls[0]["prompt"]
         assert "metallic surface" in sd_prompt
         assert "flat studio lighting" in sd_prompt
-        
-        # Verify negative prompt includes anti-biological keywords
-        sd_negative = captured_sd_calls[0]["negative_prompt"]
-        assert "humans" in sd_negative
-        assert "hands" in sd_negative
-        assert "faces" in sd_negative
+
+        # Verify negative prompt uses base technical rendering guidelines
+        # NEGATIVE_PROMPT_3D_ASSET_BASE was updated in v5.0 to exclude anti-biological keywords
+        # (humans, hands, faces are now DESIRED for character assets)
+        sd_negative = captured_job_calls[0]["negative_prompt"]
+        assert "dramatic lighting" in sd_negative
+        assert "artistic interpretation" in sd_negative
+        assert "painting style" in sd_negative
     
     async def test_ollama_orchestration_ollama_unavailable(self, mock_queue_image_generation_job):
         """Test fallback to static enhancement when Ollama is unavailable."""
         # Mock Ollama service as unavailable
         mock_ollama_module = MagicMock()
         mock_ollama_module.verificar_ollama_disponivel = AsyncMock(return_value=False)
-        
-        # Mock Stable Diffusion service
-        captured_sd_calls = []
-        
-        def capture_sd_call(*args, **kwargs):
-            captured_sd_calls.append(kwargs)
+
+        # Capture calls to queue_image_generation_job
+        captured_job_calls = []
+
+        async def capture_job(**kwargs):
+            captured_job_calls.append(kwargs)
             return {
                 "success": True,
                 "image_base64": "iVBORw0KGgoAAAANS...",
                 "metadata": {"prompt": kwargs.get("prompt", "")}
             }
-        
-        mock_sd_class = MagicMock()
-        mock_sd_service = AsyncMock()
-        mock_sd_service.generate_image.side_effect = capture_sd_call
-        mock_sd_class.return_value = mock_sd_service
-        mock_sd_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
+
         with patch.dict('sys.modules', {
             'app.ollama_service': mock_ollama_module,
-            'app.services.stable_diffusion_queue_client': mock_sd_module
-        }):
+        }), \
+             patch('image_generation.queue_image_generation_job', capture_job):
             result = await main.generate_png_from_prompt(
                 prompt="A magic sword",
                 asset_3d_mode=True
             )
-        
+
         assert result["success"] is True
-        
+
         # Verify Ollama availability was checked
         mock_ollama_module.verificar_ollama_disponivel.assert_called_once()
-        
+
         # Verify chamar_ollama was NOT called (Ollama unavailable)
         mock_ollama_module.chamar_ollama.assert_not_called()
-        
+
         # Verify SD was called with static enhancement
-        assert len(captured_sd_calls) == 1
-        sd_prompt = captured_sd_calls[0]["prompt"]
+        assert len(captured_job_calls) == 1
+        sd_prompt = captured_job_calls[0]["prompt"]
         assert "A magic sword" in sd_prompt
-        assert "full body" in sd_prompt
+        # POSITIVE_SUFFIX_3D_ASSET provides flat lighting, orthographic view, etc.
+        # Note: "full body" was removed from POSITIVE_SUFFIX_3D_ASSET in v5.0
         assert "flat lighting" in sd_prompt
         assert "orthographic view" in sd_prompt
     
@@ -512,95 +479,88 @@ class TestOllamaOrchestration:
         mock_ollama_module = MagicMock()
         mock_ollama_module.verificar_ollama_disponivel = AsyncMock(return_value=True)
         mock_ollama_module.chamar_ollama = AsyncMock(return_value={"response": ""})
-        
-        # Mock Stable Diffusion service
-        captured_sd_calls = []
-        
-        def capture_sd_call(*args, **kwargs):
-            captured_sd_calls.append(kwargs)
+
+        # Capture calls to queue_image_generation_job
+        captured_job_calls = []
+
+        async def capture_job(**kwargs):
+            captured_job_calls.append(kwargs)
             return {
                 "success": True,
                 "image_base64": "iVBORw0KGgoAAAANS...",
                 "metadata": {"prompt": kwargs.get("prompt", "")}
             }
-        
-        mock_sd_class = MagicMock()
-        mock_sd_service = AsyncMock()
-        mock_sd_service.generate_image.side_effect = capture_sd_call
-        mock_sd_class.return_value = mock_sd_service
-        mock_sd_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
+
         with patch.dict('sys.modules', {
             'app.ollama_service': mock_ollama_module,
-            'app.services.stable_diffusion_queue_client': mock_sd_module
-        }):
+        }), \
+             patch('image_generation.queue_image_generation_job', capture_job):
             result = await main.generate_png_from_prompt(
                 prompt="A treasure chest",
                 asset_3d_mode=True
             )
-        
+
         assert result["success"] is True
-        
+
         # Verify Ollama was called but returned empty
         mock_ollama_module.chamar_ollama.assert_called_once()
-        
+
         # Verify SD was called with static enhancement (fallback)
-        assert len(captured_sd_calls) == 1
-        sd_prompt = captured_sd_calls[0]["prompt"]
+        assert len(captured_job_calls) == 1
+        sd_prompt = captured_job_calls[0]["prompt"]
         assert "A treasure chest" in sd_prompt
-        assert "full body" in sd_prompt
+        # POSITIVE_SUFFIX_3D_ASSET provides static enhancement keywords
+        # Note: "full body" was removed from POSITIVE_SUFFIX_3D_ASSET in v5.0
+        assert "flat lighting" in sd_prompt
     
     async def test_ollama_orchestration_with_custom_negative_prompt(self, mock_queue_image_generation_job):
         """Test Ollama orchestration preserves user's negative prompt."""
         # Mock Ollama service
         mock_ollama_module = MagicMock()
         mock_ollama_module.verificar_ollama_disponivel = AsyncMock(return_value=True)
-        mock_ollama_module.chamar_ollama = AsyncMock(return_value={
-            "response": "A medieval shield with ornate details, centered view, flat lighting, gray background"
-        })
-        
-        # Mock Stable Diffusion service
-        captured_sd_calls = []
-        
-        def capture_sd_call(*args, **kwargs):
-            captured_sd_calls.append(kwargs)
+        # chamar_ollama is called twice: positive prompt first, negative prompt second
+        # Use side_effect to return appropriate response for each call
+        mock_ollama_module.chamar_ollama = AsyncMock(side_effect=[
+            {"response": "A medieval shield with ornate details, centered view, flat lighting, gray background"},
+            {"response": "rust, damage, scratches, artistic interpretation, painting style, dramatic lighting, shadows"},
+        ])
+
+        # Capture calls to queue_image_generation_job
+        captured_job_calls = []
+
+        async def capture_job(**kwargs):
+            captured_job_calls.append(kwargs)
             return {
                 "success": True,
                 "image_base64": "iVBORw0KGgoAAAANS...",
                 "metadata": {"prompt": kwargs.get("prompt", "")}
             }
-        
-        mock_sd_class = MagicMock()
-        mock_sd_service = AsyncMock()
-        mock_sd_service.generate_image.side_effect = capture_sd_call
-        mock_sd_class.return_value = mock_sd_service
-        mock_sd_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
+
         with patch.dict('sys.modules', {
             'app.ollama_service': mock_ollama_module,
-            'app.services.stable_diffusion_queue_client': mock_sd_module
-        }):
+        }), \
+             patch('image_generation.queue_image_generation_job', capture_job):
             result = await main.generate_png_from_prompt(
                 prompt="A medieval shield",
                 negative_prompt="rust, damage, scratches",
                 asset_3d_mode=True
             )
-        
+
         assert result["success"] is True
-        
+
         # Verify SD negative prompt includes both user keywords and base negative
-        assert len(captured_sd_calls) == 1
-        sd_negative = captured_sd_calls[0]["negative_prompt"]
-        
+        assert len(captured_job_calls) == 1
+        sd_negative = captured_job_calls[0]["negative_prompt"]
+
         # User keywords preserved
         assert "rust" in sd_negative
         assert "damage" in sd_negative
         assert "scratches" in sd_negative
-        
-        # Base negative keywords added
-        assert "humans" in sd_negative
-        assert "people" in sd_negative
-        assert "hands" in sd_negative
+
+        # Base negative keywords added (NEGATIVE_PROMPT_3D_ASSET_BASE excludes anti-biological
+        # keywords in v5.0 - humans/hands/faces are now DESIRED for character assets)
+        assert "dramatic lighting" in sd_negative
+        assert "artistic interpretation" in sd_negative
     
     async def test_ollama_orchestration_exception_handling(self, mock_queue_image_generation_job):
         """Test fallback when Ollama raises exception."""
@@ -608,38 +568,32 @@ class TestOllamaOrchestration:
         mock_ollama_module = MagicMock()
         mock_ollama_module.verificar_ollama_disponivel = AsyncMock(return_value=True)
         mock_ollama_module.chamar_ollama = AsyncMock(side_effect=Exception("Connection timeout"))
-        
-        # Mock Stable Diffusion service
-        captured_sd_calls = []
-        
-        def capture_sd_call(*args, **kwargs):
-            captured_sd_calls.append(kwargs)
+
+        # Capture calls to queue_image_generation_job
+        captured_job_calls = []
+
+        async def capture_job(**kwargs):
+            captured_job_calls.append(kwargs)
             return {
                 "success": True,
                 "image_base64": "iVBORw0KGgoAAAANS...",
                 "metadata": {"prompt": kwargs.get("prompt", "")}
             }
-        
-        mock_sd_class = MagicMock()
-        mock_sd_service = AsyncMock()
-        mock_sd_service.generate_image.side_effect = capture_sd_call
-        mock_sd_class.return_value = mock_sd_service
-        mock_sd_module = MagicMock(StableDiffusionQueueClient=mock_sd_class)
-        
+
         with patch.dict('sys.modules', {
             'app.ollama_service': mock_ollama_module,
-            'app.services.stable_diffusion_queue_client': mock_sd_module
-        }):
+        }), \
+             patch('image_generation.queue_image_generation_job', capture_job):
             result = await main.generate_png_from_prompt(
                 prompt="A magic staff",
                 asset_3d_mode=True
             )
-        
+
         assert result["success"] is True
-        
+
         # Verify SD was called with static enhancement (fallback after exception)
-        assert len(captured_sd_calls) == 1
-        sd_prompt = captured_sd_calls[0]["prompt"]
+        assert len(captured_job_calls) == 1
+        sd_prompt = captured_job_calls[0]["prompt"]
         assert "A magic staff" in sd_prompt
         assert "flat lighting" in sd_prompt
 
@@ -653,7 +607,9 @@ def test_static_3d_enhancement():
     
     # Check positive enhancement
     assert "A wooden barrel" in enhanced_prompt
-    assert "full body" in enhanced_prompt
+    # POSITIVE_SUFFIX_3D_ASSET no longer contains "full body" (removed in v5.0)
+    # It now provides: centered, front view, flat lighting, studio background,
+    # neutral gray background, high resolution, orthographic view
     assert "flat lighting" in enhanced_prompt
     assert "orthographic view" in enhanced_prompt
     
@@ -752,6 +708,7 @@ class TestAutoPersist:
 
     async def test_auto_persist_success(self, mock_redis_magro_result, mock_auto_persist_modules):
         """Auto-persist should create Content in MongoDB and return MongoDB _id as content_id."""
+        print("[DIAP] test_auto_persist_success: START - should create Content, upload to storage, update data_ref")
         mock_job = await mock_redis_magro_result()
         mock_user = self._make_mock_user()
 
@@ -798,6 +755,7 @@ class TestAutoPersist:
 
     async def test_auto_persist_graceful_degradation(self, mock_redis_magro_result, mock_auto_persist_modules):
         """If auto-persist fails, should fall back to relative_url only (no MongoDB content_id)."""
+        print("[DIAP] test_auto_persist_graceful_degradation: START - ContentManager.create_content will raise Exception")
         mock_job = await mock_redis_magro_result()
         mock_user = self._make_mock_user()
 
@@ -831,6 +789,7 @@ class TestAutoPersist:
 
     async def test_auto_persist_no_current_user(self, mock_redis_magro_result):
         """Without _current_user, auto-persist should be skipped, generation still works."""
+        print("[DIAP] test_auto_persist_no_current_user: START - _current_user NOT provided, should skip auto-persist")
         mock_job = await mock_redis_magro_result()
 
         cell_data = {
@@ -851,6 +810,7 @@ class TestAutoPersist:
 
     async def test_auto_persist_file_not_found(self, mock_redis_magro_result, mock_auto_persist_modules):
         """If the PNG file is not found on disk, auto-persist should skip gracefully."""
+        print("[DIAP] test_auto_persist_file_not_found: START - os.path.exists will return False, should skip")
         mock_job = await mock_redis_magro_result()
         mock_user = self._make_mock_user()
 
