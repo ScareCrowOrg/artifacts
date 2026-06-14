@@ -33,6 +33,9 @@ const i18n = createI18n({
   fallbackWarn: false
 })
 
+// PERMANENTE: log registered locale codes at startup for debugging
+console.debug('[i18n-PERMANENTE] i18n startup: locale=' + String(i18n.global.locale.value) + ', fallbackLocale=en-US, registeredLocales=[pt-BR, en-US]')
+
 export default i18n
 
 /**

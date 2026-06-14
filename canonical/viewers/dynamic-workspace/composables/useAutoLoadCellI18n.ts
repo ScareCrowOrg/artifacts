@@ -50,13 +50,21 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
   // This ensures templates use correct locale when translations are merged
   const syncLocale = (locale: string) => {
     const normalizedLocale = normalizeLocale(locale)
-    if (i18nComposer.locale.value !== normalizedLocale) {
+    const prevLocale = i18nComposer.locale.value
+    if (prevLocale !== normalizedLocale) {
       log.debug('[useAutoLoadCellI18n] Syncing i18n locale', {
-        from: i18nComposer.locale.value,
+        from: prevLocale,
         to: normalizedLocale,
       })
       i18nComposer.locale.value = normalizedLocale
     }
+    log.debug('[useAutoLoadCellI18n-DIAG] syncLocale', {
+      inputLocale: locale,
+      normalizedLocale,
+      wasAltered: prevLocale !== normalizedLocale,
+      prevLocale,
+      finalLocale: i18nComposer.locale.value,
+    })
   }
 
   // Track loaded cells to avoid duplicate requests: "cellTypeName-locale"
@@ -73,6 +81,8 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
    * with raw keys, then translations appear as they load.
    */
   i18nGlobal.missingHandler = (locale: string, key: string) => {
+    // Log missing key for diagnostic purposes
+    log.debug('[useAutoLoadCellI18n-DIAG] Translation key missing', { locale, key })
     // Return the key itself for missing translations during async load
     return key
   }
@@ -116,6 +126,11 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
       try {
         const response = await fetch(translationPath)
         if (!response.ok) {
+          log.debug('[useAutoLoadCellI18n-DIAG] Translation fetch failed', {
+            translationPath,
+            status: response.status,
+            statusText: response.statusText,
+          })
           throw new Error(`HTTP ${response.status}`)
         }
         messages = await response.json()
@@ -128,6 +143,12 @@ export function useAutoLoadCellI18n(cells: Ref<GridCell[]>): void {
           error: fetchError instanceof Error ? fetchError.message : String(fetchError),
         })
         loadedKeys.add(key) // Mark as attempted to avoid retries
+        log.debug('[useAutoLoadCellI18n-DIAG] Skip triggered (fetch error)', {
+          key,
+          translationPath,
+          cellTypeName,
+          normalizedLocale,
+        })
         return
       }
 

@@ -1,0 +1,24 @@
+{
+  "imageContentCell": {
+    "title": "Visualizador de Imagem",
+    "description": "Visualizar e editar conteudo de imagem persistido",
+    "loading": "Carregando conteudo de imagem...",
+    "errorTitle": "Falha ao carregar conteudo",
+    "noContent": "Nenhum conteudo de imagem",
+    "noContentDescription": "Forneca um content_id ou relative_url para exibir uma imagem.",
+    "imageNotAvailable": "Imagem indisponivel",
+    "metadata": "Metadados",
+    "nameLabel": "Nome",
+    "namePlaceholder": "Nome do conteudo",
+    "tagsLabel": "Tags",
+    "tagsPlaceholder": "tag1, tag2, tag3",
+    "tagsHint": "Tags separadas por virgula",
+    "descriptionLabel": "Descricao",
+    "descriptionPlaceholder": "Descricao do conteudo",
+    "saving": "Salvando...",
+    "save": "Salvar",
+    "saveSuccess": "Metadados salvos!",
+    "download": "Baixar",
+    "copy": "Copiar"
+  }
+}

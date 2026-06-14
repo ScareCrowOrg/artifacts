@@ -1,0 +1,24 @@
+{
+  "imageContentCell": {
+    "title": "Image Viewer",
+    "description": "View and edit persisted image content",
+    "loading": "Loading image content...",
+    "errorTitle": "Failed to load content",
+    "noContent": "No image content",
+    "noContentDescription": "Provide a content_id or relative_url to display an image.",
+    "imageNotAvailable": "Image not available",
+    "metadata": "Metadata",
+    "nameLabel": "Name",
+    "namePlaceholder": "Content name",
+    "tagsLabel": "Tags",
+    "tagsPlaceholder": "tag1, tag2, tag3",
+    "tagsHint": "Comma-separated tags",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Content description",
+    "saving": "Saving...",
+    "save": "Save",
+    "saveSuccess": "Metadata saved!",
+    "download": "Download",
+    "copy": "Copy"
+  }
+}
