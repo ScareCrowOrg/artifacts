@@ -95,7 +95,8 @@
     "dependencies": {
       "cell_types": [
         "comfyui",
-        "content-manager-cell"
+        "content-manager-cell",
+        "job-manager-cell"
       ]
     },
     "tags": [

@@ -23,6 +23,11 @@
     "cleanBackground": "Limpar Fundo",
     "processing": "Processando...",
     "persistAsset": "💾 Persistir Asset",
-    "persisting": "Persistindo..."
+    "persisting": "Persistindo...",
+    "recentJobs": "Trabalhos Recentes",
+    "pendingJobs": "Trabalhos Pendentes",
+    "noRecentJobs": "Nenhum trabalho recente",
+    "viewResult": "Ver resultado →",
+    "viewAllJobs": "Ver todos os trabalhos PNG →"
   }
 }

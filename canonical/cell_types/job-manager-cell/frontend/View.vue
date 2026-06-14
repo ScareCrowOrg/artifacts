@@ -61,6 +61,15 @@
             <option value="success">{{ $t('jobManagerCell.statusSuccess') }}</option>
             <option value="failed">{{ $t('jobManagerCell.statusFailed') }}</option>
           </select>
+          <select
+            v-model="localJobTypeFilter"
+            class="text-sm px-2 py-1 border border-border dark:border-border-dark bg-surface dark:bg-surface-dark rounded"
+          >
+            <option value="">{{ $t('jobManagerCell.allTypes') }}</option>
+            <option v-if="jobTypeOptions" v-for="type in jobTypeOptions" :key="type" :value="type">
+              {{ type }}
+            </option>
+          </select>
           <button
             @click="refreshJobs"
             class="px-3 py-1 text-sm bg-primary text-white rounded hover:bg-primary-hover transition"
@@ -147,6 +156,7 @@ interface Props {
   cell?: any
   jobId?: string
   jobTypeFilter?: string
+  jobTypeOptions?: string[]
   userFilter?: string
   maxItems?: number
   pollIntervalMs?: number
@@ -158,6 +168,7 @@ const props = withDefaults(defineProps<Props>(), {
   cell: undefined,
   jobId: undefined,
   jobTypeFilter: undefined,
+  jobTypeOptions: undefined,
   userFilter: undefined,
   maxItems: 10,
   pollIntervalMs: 2000,
@@ -182,6 +193,7 @@ const localError = ref<string | null>(null)
 const isLoading = ref(false)
 const localJobs = ref<JobRecord[]>([])
 const localStatusFilter = ref(props.status || initialData.value.status || '')
+const localJobTypeFilter = ref<string>(props.jobTypeFilter || initialData.value.job_type_filter || '')
 const isTerminal = computed(() =>
   ['success', 'completed', 'failed', 'error', 'not_found'].includes(localJobStatus.value)
 )
@@ -192,7 +204,7 @@ async function refreshJobs() {
   try {
     const result = await cellInstance.execute({
       status: localStatusFilter.value || undefined,
-      job_type: props.jobTypeFilter || initialData.value.job_type_filter || undefined,
+      job_type: localJobTypeFilter.value || undefined,
       max_items: props.maxItems || initialData.value.max_items || 10,
     })
     if (result.success && result.output) {
@@ -270,6 +282,11 @@ function formatDate(dateStr?: string): string {
 
 // Watch for status filter changes
 watch(localStatusFilter, () => {
+  refreshJobs()
+})
+
+// Watch for job type filter changes
+watch(localJobTypeFilter, () => {
   refreshJobs()
 })
 

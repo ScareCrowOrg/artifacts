@@ -158,42 +158,59 @@
         <p class="text-sm">{{ localError }}</p>
       </div>
 
-      <!-- Preview Section -->
-      <div v-if="localGeneratedPng" class="preview-section">
-        <div class="flex items-center justify-between mb-2">
-          <h4 class="text-sm font-medium text-text-secondary dark:text-text-secondary-dark">
-            {{ $t('pngGeneratorCell.preview') }}
-          </h4>
-          <div class="flex gap-2">
-            <button
-              @click="handleCleanBackground"
-              :disabled="isProcessingBackground"
-              class="px-3 py-1 text-sm bg-primary dark:bg-primary-hover text-white rounded hover:bg-primary-light dark:hover:bg-primary transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-              :title="$t('pngGeneratorCell.cleanBackground')"
-            >
-              <svg
-                v-if="isProcessingBackground"
-                class="animate-spin h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <span>{{ isProcessingBackground ? $t('pngGeneratorCell.processing') : $t('pngGeneratorCell.cleanBackground') }}</span>
-            </button>
+      <!-- Job History Section (substitui preview inline) -->
+      <div class="job-history-section mt-4">
+        <h4 class="text-sm font-medium text-text-secondary dark:text-text-secondary-dark mb-2">
+          {{ $t('pngGeneratorCell.recentJobs') }}
+        </h4>
+
+        <!-- Loading -->
+        <div v-if="localJobsLoading" class="text-center py-4">
+          <svg class="animate-spin h-5 w-5 text-primary mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+        </div>
+
+        <!-- Empty state -->
+        <div v-else-if="localRecentJobs.length === 0" class="text-center py-6 text-text-secondary dark:text-text-secondary-dark text-sm">
+          {{ $t('pngGeneratorCell.noRecentJobs') }}
+        </div>
+
+        <!-- Job list -->
+        <div v-else class="space-y-1">
+          <div v-for="job in localRecentJobs" :key="job.id || job.job_id"
+               class="flex items-center gap-2 py-1.5 px-2 rounded text-xs hover:bg-surface-light dark:hover:bg-surface-dark-light">
+            <!-- Status indicator -->
+            <span v-if="job.status === 'processing' || job.status === 'queued'"
+                  class="w-2 h-2 rounded-full bg-blue-500 animate-pulse inline-block"></span>
+            <span v-else-if="job.status === 'success' || job.status === 'completed'"
+                  class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+            <span v-else-if="job.status === 'failed'"
+                  class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+            <span v-else class="w-2 h-2 rounded-full bg-gray-400 inline-block"></span>
+
+            <!-- Status text -->
+            <span class="text-text-secondary min-w-[60px]">{{ job.status }}</span>
+
+            <!-- Date -->
+            <span class="text-text-secondary font-mono">{{ formatJobDate(job.enqueued_at) }}</span>
+
+            <!-- Completed job → link to Job Manager -->
+            <span v-if="(job.status === 'success' || job.status === 'completed') && (job.relative_url || job.content_id)"
+                  class="ml-auto text-primary hover:underline cursor-pointer" @click="openJobManager">
+              {{ $t('pngGeneratorCell.viewResult') }}
+            </span>
           </div>
         </div>
-        <div class="preview-container bg-white dark:bg-gray-800 border border-border dark:border-border-dark rounded p-4 flex items-center justify-center min-h-[300px]">
-          <img
-            :src="localGeneratedPng"
-            alt="Generated PNG"
-            class="max-w-full max-h-[500px] object-contain"
-          />
-        </div>
-      </div>
 
+        <!-- Open full Job Manager -->
+        <button v-if="cellFactory && localRecentJobs.length > 0"
+                @click="openJobManager"
+                class="mt-3 text-xs text-primary hover:underline">
+          {{ $t('pngGeneratorCell.viewAllJobs') }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -286,7 +303,6 @@ const initialData = computed(() => {
 const emit = defineEmits<{
   (e: 'update:cell', value: any): void
   (e: 'update:prompt', value: string): void
-  (e: 'update:generatedPng', value: string | null): void
   (e: 'update:isGenerating', value: boolean): void
   (e: 'update:error', value: string | null): void
   (e: 'update:negativePrompt', value: string): void
@@ -306,9 +322,6 @@ const DEFAULT_GENERATION_PARAMS = {
 
 // Local state - Initialize from props or initial_data
 const localPrompt = ref(props.prompt || initialData.value.prompt || '')
-const localGeneratedPng = ref(props.generatedPng || initialData.value.generatedPng || null)
-const localRelativeUrl = ref<string | null>(null)
-const localContentId = ref<string | null>(null)
 const localIsGenerating = ref(props.isGenerating || initialData.value.isGenerating || false)
 const localError = ref(props.error || initialData.value.error || null)
 const localNegativePrompt = ref(props.negativePrompt || initialData.value.negativePrompt || '')
@@ -319,8 +332,9 @@ const localParams = ref({
   ...props.generationParams
 })
 
-// Background removal state
-const isProcessingBackground = ref(false)
+// Job history state
+const localRecentJobs = ref<any[]>([])
+const localJobsLoading = ref(false)
 
 // Job polling state (async flow v6.0)
 const localJobId = ref<string | null>(null)
@@ -339,12 +353,11 @@ onUnmounted(() => {
   stopPolling()
 })
 
-// Inject CellFactory for creating child cells (image-content-cell)
+// Inject CellFactory for creating child cells (job-manager-cell)
 const cellFactory = inject<CellFactory>(CELL_FACTORY_KEY)
 
 // Watch for prop changes
 watch(() => props.prompt, (newVal) => { if (newVal !== undefined) localPrompt.value = newVal })
-watch(() => props.generatedPng, (newVal) => { if (newVal !== undefined) localGeneratedPng.value = newVal })
 watch(() => props.isGenerating, (newVal) => { if (newVal !== undefined) localIsGenerating.value = newVal })
 watch(() => props.error, (newVal) => { if (newVal !== undefined) localError.value = newVal })
 watch(() => props.negativePrompt, (newVal) => { if (newVal !== undefined) localNegativePrompt.value = newVal })
@@ -355,7 +368,6 @@ watch(() => props.generationParams, (newVal) => { if (newVal) localParams.value 
 watch(() => props.cell?.initial_data, (newVal) => {
   if (newVal) {
     if (newVal.prompt !== undefined) localPrompt.value = newVal.prompt
-    if (newVal.generatedPng !== undefined) localGeneratedPng.value = newVal.generatedPng
     if (newVal.isGenerating !== undefined) localIsGenerating.value = newVal.isGenerating
     if (newVal.error !== undefined) localError.value = newVal.error
     if (newVal.negativePrompt !== undefined) localNegativePrompt.value = newVal.negativePrompt
@@ -367,7 +379,7 @@ watch(() => props.cell?.initial_data, (newVal) => {
 // Watch for local changes and emit updates (update cell object)
 // Use debounced updates to prevent excessive emit calls
 let updateTimeout: ReturnType<typeof setTimeout> | null = null
-watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localNegativePrompt, localAsset3dMode, localParams], () => {
+watch([localPrompt, localIsGenerating, localError, localNegativePrompt, localAsset3dMode, localParams], () => {
   // Debounce updates to avoid excessive emit calls (waits for 100ms of inactivity)
   if (updateTimeout) {
     clearTimeout(updateTimeout)
@@ -380,7 +392,6 @@ watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localNegat
         initial_data: {
           ...props.cell.initial_data,
           prompt: localPrompt.value,
-          generatedPng: localGeneratedPng.value,
           isGenerating: localIsGenerating.value,
           error: localError.value,
           negativePrompt: localNegativePrompt.value,
@@ -392,7 +403,6 @@ watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localNegat
 
     // Also emit individual updates for backward compatibility
     emit('update:prompt', localPrompt.value)
-    emit('update:generatedPng', localGeneratedPng.value)
     emit('update:isGenerating', localIsGenerating.value)
     emit('update:error', localError.value)
     emit('update:negativePrompt', localNegativePrompt.value)
@@ -400,6 +410,54 @@ watch([localPrompt, localGeneratedPng, localIsGenerating, localError, localNegat
     emit('update:generationParams', localParams.value)
   }, 100) // 100ms debounce
 }, { deep: true })
+
+// Fetch recent jobs from backend
+const fetchRecentJobs = async () => {
+  localJobsLoading.value = true
+  try {
+    const response = await apiService.fetch(
+      '/api/cells/jobs?job_type=comfyui_generate&limit=10',
+      { method: 'GET' }
+    )
+    const data = await response.json()
+    const now = Date.now()
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000
+    localRecentJobs.value = (data.jobs || []).filter((job: any) => {
+      const enqueuedAt = new Date(job.enqueued_at || job.created_at).getTime()
+      return (now - enqueuedAt) < TWENTY_FOUR_HOURS
+    })
+  } catch (err: any) {
+    logger.error('Failed to fetch recent jobs', { error: err.message })
+    // Graceful fallback: don't show error, just hide the section
+    localRecentJobs.value = []
+  } finally {
+    localJobsLoading.value = false
+  }
+}
+
+// Open Job Manager Cell contextualized for PNG jobs
+const openJobManager = async () => {
+  if (!cellFactory) return
+  try {
+    await cellFactory.addChildCell('job-manager-cell', {
+      job_type_filter: 'comfyui_generate',
+    })
+    logger.info('Job Manager Cell created from PNG Generator')
+  } catch (err: any) {
+    logger.warn('Failed to open Job Manager', { error: err.message })
+  }
+}
+
+// Format date for compact display
+const formatJobDate = (dateStr?: string): string => {
+  if (!dateStr) return '—'
+  try {
+    const d = new Date(dateStr)
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return dateStr.substring(0, 10)
+  }
+}
 
 // Methods
 const handleGenerate = async () => {
@@ -459,30 +517,11 @@ const handleGenerate = async () => {
         startPolling(output.job_id, {
           intervalMs: 2000,
           onComplete: async (job) => {
-            logger.info('Job completed, processing result', { job })
+            logger.info('Job completed, refreshing job list', { job })
             localIsGenerating.value = false
 
-            // If result has content reference, create viewer
-            if (job.relative_url) {
-              localRelativeUrl.value = job.relative_url
-              const origin = window.location.origin.replace(/\/+$/, '')
-              localGeneratedPng.value = `${origin}/artifacts${job.relative_url}`
-
-              // AUTO-VIEWER: Create Image Content Cell
-              if (cellFactory && job.content_id) {
-                try {
-                  await cellFactory.addChildCell('image-content-cell', {
-                    content_id: job.content_id,
-                    relative_url: job.relative_url,
-                  })
-                  logger.info('Image Content Cell auto-created after async job')
-                } catch (autoViewError: any) {
-                  logger.warn('Auto-viewer creation failed:', { error: autoViewError.message })
-                }
-              }
-            } else if (job.mesh_data) {
-              localGeneratedPng.value = job.mesh_data
-            }
+            // Refresh the recent jobs list to show the completed job
+            await fetchRecentJobs()
           },
           onError: (err) => {
             logger.error('Job failed', { error: err })
@@ -495,44 +534,21 @@ const handleGenerate = async () => {
 
       // SYNC FLOW (legacy): Backend returned content directly
       if (output.generatedPng) {
-        localGeneratedPng.value = output.generatedPng
+        logger.info('Sync generation completed')
       } else {
         throw new Error('No image data in response')
       }
 
-      // Redis Magro: store content reference for auto-viewer
-      if (output.relative_url) {
-        localRelativeUrl.value = output.relative_url
-      }
-      if (output.content_id) {
-        localContentId.value = output.content_id
-      }
-
       localError.value = null
 
-      // AUTO-VIEWER: Create Image Content Cell automatically after successful generation
-      if (cellFactory && (localContentId.value || localRelativeUrl.value)) {
-        try {
-          await cellFactory.addChildCell('image-content-cell', {
-            content_id: localContentId.value,
-            relative_url: localRelativeUrl.value,
-          })
-          logger.info('Image Content Cell auto-created successfully')
-        } catch (autoViewError: any) {
-          logger.warn('Auto-viewer creation failed (non-blocking):', { error: autoViewError.message })
-        }
-      } else if (!cellFactory) {
-        logger.debug('Auto-viewer: CellFactory not available, skipping')
-      }
+      // Refresh recent jobs after sync generation as well
+      await fetchRecentJobs()
     } else {
       throw new Error(result.error || 'Generation failed')
     }
   } catch (error: any) {
     logger.error('PNG generation failed', { error: error.message })
     localError.value = error.message || 'Failed to generate image'
-    localGeneratedPng.value = null
-    localRelativeUrl.value = null
-    localContentId.value = null
   } finally {
     // Only reset isGenerating if not in async polling flow
     if (!localJobId.value) {
@@ -541,64 +557,7 @@ const handleGenerate = async () => {
   }
 }
 
-const handleCleanBackground = async () => {
-  if (!localGeneratedPng.value || isProcessingBackground.value) {
-    return
-  }
-
-  logger.info('Cleaning background from PNG', {
-    cellId: effectiveCellId.value
-  })
-
-  isProcessingBackground.value = true
-  localError.value = null
-
-  try {
-    // Validate input using cell's validate method
-    const input: PngGeneratorInput = {
-      action: 'removeBackground',
-      generatedPng: localGeneratedPng.value,
-      alpha_matting: true
-    }
-
-    const validationErrors = cellInstance.validate(input)
-
-    if (validationErrors.length > 0) {
-      const errorMessages = validationErrors.map(e => `${e.field}: ${e.message}`).join(', ')
-      throw new Error(`Validation failed: ${errorMessages}`)
-    }
-
-    // Execute using cell instance
-    const result = await cellInstance.execute(input)
-
-    logger.info('Background removal completed', {
-      success: result.success,
-      executionTime: result.execution_time
-    })
-
-    if (result.success && result.output) {
-      const output = result.output as any
-
-      // Extract transparent PNG from result
-      if (output.generatedPng) {
-        localGeneratedPng.value = output.generatedPng
-        localError.value = null
-        logger.info('PNG updated with transparent background')
-      } else {
-        throw new Error('No image data in background removal response')
-      }
-    } else {
-      throw new Error(result.error || 'Background removal failed')
-    }
-  } catch (error: any) {
-    logger.error('Background removal failed', { error: error.message })
-    localError.value = error.message || 'Failed to remove background'
-  } finally {
-    isProcessingBackground.value = false
-  }
-}
-
-// Check cell health on mount
+// Check cell health and load recent jobs on mount
 onMounted(async () => {
   logger.debug('PNG Generator Cell mounted to DOM')
 
@@ -622,7 +581,12 @@ onMounted(async () => {
   } catch (error: any) {
     logger.error('Cell health check failed', { error: error.message })
   }
+
+  // Fetch recent PNG jobs
+  await fetchRecentJobs()
 })
+
+// HandleGenerate is no longer responsible for creating auto-viewers or managing preview state
 </script>
 
 <style scoped>

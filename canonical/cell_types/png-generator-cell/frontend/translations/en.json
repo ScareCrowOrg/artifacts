@@ -23,6 +23,11 @@
     "cleanBackground": "Clean Background",
     "processing": "Processing...",
     "persistAsset": "💾 Persist Asset",
-    "persisting": "Persisting..."
+    "persisting": "Persisting...",
+    "recentJobs": "Recent Jobs",
+    "pendingJobs": "Pending Jobs",
+    "noRecentJobs": "No recent jobs",
+    "viewResult": "View result →",
+    "viewAllJobs": "View all PNG jobs →"
   }
 }

@@ -13,6 +13,8 @@
         "type": "Type",
         "status": "Status",
         "created": "Created",
-        "result": "Result"
+        "result": "Result",
+        "allTypes": "All types",
+        "typeFilter": "Job Type"
     }
 }
