@@ -250,10 +250,10 @@ export class JobManagerCell extends BaseCell {
   }
 
   /**
-   * Retry a failed job.
+   * Retry a job — re-enqueues with original payload.
    *
    * Calls POST /api/cells/jobs/{jobId}/retry.
-   * Only visible for jobs in ``failed`` status.
+   * Accepts failed, cancelled, or stuck queued jobs.
    */
   async retryJob(jobId: string): Promise<CellResult> {
     const startTime = performance.now()

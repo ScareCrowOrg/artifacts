@@ -158,9 +158,9 @@
                   {{ $t('jobManagerCell.cancel') }}
                 </button>
 
-                <!-- Retry button -->
+                <!-- Retry button (failed, cancelled, or stuck queued) -->
                 <button
-                  v-if="job.status === 'failed' && !isActionLoading(job.id || job.job_id)"
+                  v-if="(job.status === 'failed' || job.status === 'cancelled' || job.status === 'queued') && !isActionLoading(job.id || job.job_id)"
                   @click="handleRetry(job)"
                   class="inline-block mr-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
                 >
@@ -180,7 +180,7 @@
 
                 <!-- Empty state: no actions available -->
                 <span
-                  v-if="!job.content_id && !job.relative_url && job.status !== 'queued' && job.status !== 'processing' && job.status !== 'failed' && !isActionLoading(job.id || job.job_id)"
+                  v-if="!job.content_id && !job.relative_url && job.status !== 'queued' && job.status !== 'processing' && job.status !== 'failed' && job.status !== 'cancelled' && !isActionLoading(job.id || job.job_id)"
                   class="text-text-secondary dark:text-text-secondary-dark"
                 >—</span>
               </td>
@@ -189,6 +189,17 @@
         </table>
       </div>
     </div>
+
+    <!-- Confirmation Modal -->
+    <ConfirmModal
+      :visible="confirmModal.visible"
+      :title="confirmModal.title"
+      :message="confirmModal.message"
+      :danger="confirmModal.danger"
+      :loading="confirmModal.loading"
+      @confirm="onConfirmModalConfirm"
+      @cancel="onConfirmModalCancel"
+    />
 
     <!-- Toast notification -->
     <div
@@ -206,6 +217,7 @@ import { ref, watch, computed, onMounted, onUnmounted, reactive } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { JobManagerCell } from './JobManagerCell'
 import type { JobRecord } from './JobManagerCell'
+import ConfirmModal from '@artifacts/shared/components/ConfirmModal.vue'
 
 const logger = createLogger('component:job-manager-cell')
 
@@ -271,14 +283,50 @@ function setActionLoading(jobId: string | undefined, loading: boolean) {
   }
 }
 
+// ── Confirm Modal State ──
+const confirmModal = reactive({
+  visible: false,
+  title: '',
+  message: '',
+  danger: false,
+  loading: false,
+  resolve: null as ((value: boolean) => void) | null,
+})
+
+function showConfirm(title: string, message: string, danger = false): Promise<boolean> {
+  return new Promise((resolve) => {
+    confirmModal.title = title
+    confirmModal.message = message
+    confirmModal.danger = danger
+    confirmModal.visible = true
+    confirmModal.loading = false
+    confirmModal.resolve = resolve
+  })
+}
+
+function onConfirmModalConfirm() {
+  confirmModal.visible = false
+  confirmModal.resolve?.(true)
+}
+
+function onConfirmModalCancel() {
+  confirmModal.visible = false
+  confirmModal.resolve?.(false)
+}
+
 /**
- * Confirm dialog then cancel the job.
+ * Confirm modal then cancel the job.
  */
 async function handleCancel(job: JobRecord) {
   const jobId = job.id || job.job_id
   if (!jobId) return
 
-  if (!confirm(`Cancel job ${jobId.substring(0, 8)}...?`)) return
+  const confirmed = await showConfirm(
+    'Cancel Job',
+    `Cancel job ${jobId.substring(0, 8)}...? This will stop the job and mark it as cancelled.`,
+    false,
+  )
+  if (!confirmed) return
 
   setActionLoading(jobId, true)
   try {
@@ -297,13 +345,18 @@ async function handleCancel(job: JobRecord) {
 }
 
 /**
- * Confirm dialog then retry the job.
+ * Confirm modal then retry the job.
  */
 async function handleRetry(job: JobRecord) {
   const jobId = job.id || job.job_id
   if (!jobId) return
 
-  if (!confirm(`Retry job ${jobId.substring(0, 8)}...?`)) return
+  const confirmed = await showConfirm(
+    'Retry Job',
+    `Re-enqueue job ${jobId.substring(0, 8)}...? The job will be reprocessed with its original payload.`,
+    false,
+  )
+  if (!confirmed) return
 
   setActionLoading(jobId, true)
   try {
