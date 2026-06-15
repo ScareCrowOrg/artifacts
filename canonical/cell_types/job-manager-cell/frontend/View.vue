@@ -100,7 +100,8 @@
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.type') }}</th>
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.status') }}</th>
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.created') }}</th>
-              <th class="pb-2">{{ $t('jobManagerCell.result') }}</th>
+              <th class="pb-2 pr-3">{{ $t('jobManagerCell.result') }}</th>
+              <th class="pb-2">{{ $t('jobManagerCell.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -130,20 +131,78 @@
                 <span v-else-if="job.status === 'failed'" class="text-red-600 dark:text-red-400" :title="job.error_message">
                   {{ job.error_message ? job.error_message.substring(0, 40) + '...' : 'Failed' }}
                 </span>
+                <span v-else-if="job.status === 'cancelled'" class="text-gray-500 dark:text-gray-400">
+                  {{ $t('jobManagerCell.statusCancelled') }}
+                </span>
                 <span v-else class="text-text-secondary dark:text-text-secondary-dark">
                   {{ job.status }}
                 </span>
+              </td>
+              <td class="py-2 text-xs whitespace-nowrap">
+                <!-- Result View Link -->
+                <a
+                  v-if="job.status === 'success' && (job.content_id || job.relative_url)"
+                  :href="job.content_id ? '/content/' + job.content_id : job.relative_url"
+                  target="_blank"
+                  class="inline-block mr-2 px-2 py-1 text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-800"
+                >
+                  {{ $t('jobManagerCell.viewResult') }}
+                </a>
+
+                <!-- Cancel button -->
+                <button
+                  v-if="(job.status === 'queued' || job.status === 'processing') && !isActionLoading(job.id || job.job_id)"
+                  @click="handleCancel(job)"
+                  class="inline-block mr-1 px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
+                >
+                  {{ $t('jobManagerCell.cancel') }}
+                </button>
+
+                <!-- Retry button -->
+                <button
+                  v-if="job.status === 'failed' && !isActionLoading(job.id || job.job_id)"
+                  @click="handleRetry(job)"
+                  class="inline-block mr-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                >
+                  {{ $t('jobManagerCell.retry') }}
+                </button>
+
+                <!-- Loading spinner for in-progress actions -->
+                <span
+                  v-if="isActionLoading(job.id || job.job_id)"
+                  class="inline-flex items-center gap-1 text-text-secondary dark:text-text-secondary-dark"
+                >
+                  <svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                </span>
+
+                <!-- Empty state: no actions available -->
+                <span
+                  v-if="!job.content_id && !job.relative_url && job.status !== 'queued' && job.status !== 'processing' && job.status !== 'failed' && !isActionLoading(job.id || job.job_id)"
+                  class="text-text-secondary dark:text-text-secondary-dark"
+                >—</span>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
+
+    <!-- Toast notification -->
+    <div
+      v-if="toastMessage"
+      class="fixed bottom-4 right-4 z-50 px-4 py-2 rounded shadow-lg text-sm text-white transition-opacity duration-300"
+      :class="toastType === 'success' ? 'bg-green-600' : 'bg-red-600'"
+    >
+      {{ toastMessage }}
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted, reactive } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { JobManagerCell } from './JobManagerCell'
 import type { JobRecord } from './JobManagerCell'
@@ -184,6 +243,83 @@ const emit = defineEmits<{
 }>()
 
 const initialData = computed(() => props.cell?.initial_data || {})
+
+// Toast notification state
+const toastMessage = ref<string | null>(null)
+const toastType = ref<'success' | 'error'>('success')
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+function showToast(message: string, type: 'success' | 'error' = 'success') {
+  toastMessage.value = message
+  toastType.value = type
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    toastMessage.value = null
+  }, 3000)
+}
+
+// Per-job loading state (keyed by job ID)
+const actionLoading = reactive<Record<string, boolean>>({})
+
+function isActionLoading(jobId: string | undefined): boolean {
+  return jobId ? !!actionLoading[jobId] : false
+}
+
+function setActionLoading(jobId: string | undefined, loading: boolean) {
+  if (jobId) {
+    actionLoading[jobId] = loading
+  }
+}
+
+/**
+ * Confirm dialog then cancel the job.
+ */
+async function handleCancel(job: JobRecord) {
+  const jobId = job.id || job.job_id
+  if (!jobId) return
+
+  if (!confirm(`Cancel job ${jobId.substring(0, 8)}...?`)) return
+
+  setActionLoading(jobId, true)
+  try {
+    const result = await cellInstance.cancelJob(jobId)
+    if (result.success) {
+      job.status = 'cancelled'
+      showToast('Job cancelled', 'success')
+    } else {
+      showToast(result.error || 'Failed to cancel job', 'error')
+    }
+  } catch (err: any) {
+    showToast(err.message || 'Failed to cancel job', 'error')
+  } finally {
+    setActionLoading(jobId, false)
+  }
+}
+
+/**
+ * Confirm dialog then retry the job.
+ */
+async function handleRetry(job: JobRecord) {
+  const jobId = job.id || job.job_id
+  if (!jobId) return
+
+  if (!confirm(`Retry job ${jobId.substring(0, 8)}...?`)) return
+
+  setActionLoading(jobId, true)
+  try {
+    const result = await cellInstance.retryJob(jobId)
+    if (result.success) {
+      job.status = 'queued'
+      showToast('Job re-enqueued', 'success')
+    } else {
+      showToast(result.error || 'Failed to retry job', 'error')
+    }
+  } catch (err: any) {
+    showToast(err.message || 'Failed to retry job', 'error')
+  } finally {
+    setActionLoading(jobId, false)
+  }
+}
 
 // Local state
 const isEmbedded = computed(() => props.embedded || !!initialData.value.embedded || !!props.jobId)

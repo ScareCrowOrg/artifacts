@@ -218,6 +218,68 @@ export class JobManagerCell extends BaseCell {
     }
   }
 
+  /**
+   * Cancel a queued or processing job.
+   *
+   * Calls POST /api/cells/jobs/{jobId}/cancel.
+   * Only visible for jobs in ``queued`` or ``processing`` status.
+   */
+  async cancelJob(jobId: string): Promise<CellResult> {
+    const startTime = performance.now()
+    if (!jobId) {
+      return { success: false, output: {}, execution_time: 0, error: 'jobId is required' }
+    }
+    try {
+      const response = await apiService.fetch(
+        `/api/cells/jobs/${jobId}/cancel`,
+        { method: 'POST' },
+      ) as Response
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body.detail || `Cancel failed: ${response.statusText}`)
+      }
+      return {
+        success: true,
+        output: await response.json(),
+        execution_time: performance.now() - startTime,
+      }
+    } catch (error: any) {
+      log.error('cancelJob failed', { jobId, error: error.message })
+      return { success: false, output: {}, execution_time: performance.now() - startTime, error: error.message || 'Cancel failed' }
+    }
+  }
+
+  /**
+   * Retry a failed job.
+   *
+   * Calls POST /api/cells/jobs/{jobId}/retry.
+   * Only visible for jobs in ``failed`` status.
+   */
+  async retryJob(jobId: string): Promise<CellResult> {
+    const startTime = performance.now()
+    if (!jobId) {
+      return { success: false, output: {}, execution_time: 0, error: 'jobId is required' }
+    }
+    try {
+      const response = await apiService.fetch(
+        `/api/cells/jobs/${jobId}/retry`,
+        { method: 'POST' },
+      ) as Response
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body.detail || `Retry failed: ${response.statusText}`)
+      }
+      return {
+        success: true,
+        output: await response.json(),
+        execution_time: performance.now() - startTime,
+      }
+    } catch (error: any) {
+      log.error('retryJob failed', { jobId, error: error.message })
+      return { success: false, output: {}, execution_time: performance.now() - startTime, error: error.message || 'Retry failed' }
+    }
+  }
+
   /** Start polling for a job (used by View.vue in embedded mode). */
   startPolling(jobId: string, intervalMs: number, onUpdate: (job: JobRecord) => void, onError: (err: string) => void): void {
     this._stopPolling()

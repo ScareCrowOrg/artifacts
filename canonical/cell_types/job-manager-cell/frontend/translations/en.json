@@ -15,6 +15,17 @@
         "created": "Created",
         "result": "Result",
         "allTypes": "All types",
-        "typeFilter": "Job Type"
+        "typeFilter": "Job Type",
+        "actions": "Actions",
+        "cancel": "Cancel",
+        "retry": "Retry",
+        "viewResult": "View Result",
+        "cancelConfirm": "Cancel job {id}?",
+        "retryConfirm": "Retry job {id}?",
+        "cancelSuccess": "Job cancelled",
+        "retrySuccess": "Job re-enqueued",
+        "cancelFailed": "Failed to cancel job",
+        "retryFailed": "Failed to retry job",
+        "statusCancelled": "Cancelled"
     }
 }

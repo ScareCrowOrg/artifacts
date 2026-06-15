@@ -35,6 +35,7 @@ class GateKeeperMetrics:
         self.job_execution_times: Dict[str, List[float]] = {}   # job_type → [seconds]
         self.job_successes: Dict[str, int] = {}                  # job_type → count
         self.job_failures: Dict[str, int] = {}                   # job_type → count
+        self.job_backpressure: Dict[str, int] = {}               # job_type → count (resource contention)
 
     # ------------------------------------------------------------------
     # Recording
@@ -59,6 +60,10 @@ class GateKeeperMetrics:
         self.venv_rebuild_counts[worker_name] = (
             self.venv_rebuild_counts.get(worker_name, 0) + 1
         )
+
+    def record_job_backpressure(self, job_type: str) -> None:
+        """Increment the backpressure (resource contention) counter for *job_type*."""
+        self.job_backpressure[job_type] = self.job_backpressure.get(job_type, 0) + 1
 
     def record_job_execution(
         self,
@@ -105,6 +110,7 @@ class GateKeeperMetrics:
             job_stats[job_type] = {
                 "successes": self.job_successes.get(job_type, 0),
                 "failures": self.job_failures.get(job_type, 0),
+                "backpressure": self.job_backpressure.get(job_type, 0),
                 "avg_exec_time_sec": _avg(times),
                 "min_exec_time_sec": min(times) if times else 0.0,
                 "max_exec_time_sec": max(times) if times else 0.0,
@@ -161,6 +167,13 @@ class GateKeeperMetrics:
         lines.append("# TYPE job_failures_total counter")
         for job_type, count in self.job_failures.items():
             lines.append(f'job_failures_total{{job_type="{job_type}"}} {count}')
+
+        lines.append(
+            "# HELP job_backpressure_total Total job backpressure events per job_type"
+        )
+        lines.append("# TYPE job_backpressure_total counter")
+        for job_type, count in self.job_backpressure.items():
+            lines.append(f'job_backpressure_total{{job_type="{job_type}"}} {count}')
 
         lines.append(
             "# HELP job_execution_time_seconds Average job execution time per job_type"

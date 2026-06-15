@@ -15,6 +15,17 @@
         "created": "Criado em",
         "result": "Resultado",
         "allTypes": "Todos os tipos",
-        "typeFilter": "Tipo de Job"
+        "typeFilter": "Tipo de Job",
+        "actions": "Ações",
+        "cancel": "Cancelar",
+        "retry": "Repetir",
+        "viewResult": "Ver Resultado",
+        "cancelConfirm": "Cancelar job {id}?",
+        "retryConfirm": "Repetir job {id}?",
+        "cancelSuccess": "Job cancelado",
+        "retrySuccess": "Job re-enfileirado",
+        "cancelFailed": "Falha ao cancelar job",
+        "retryFailed": "Falha ao repetir job",
+        "statusCancelled": "Cancelado"
     }
 }

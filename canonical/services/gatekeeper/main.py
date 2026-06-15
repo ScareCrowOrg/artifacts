@@ -147,6 +147,15 @@ class GateKeeper:
         self.discovered_workers = self._worker_discovery.discover()
         self._worker_discovery.log_summary()
 
+        # ── Resource-aware scheduling counters ──
+        self._active_gpu_jobs = 0
+        self._active_cpu_jobs = 0
+        self._max_concurrent_gpu = int(os.environ.get("MAX_CONCURRENT_GPU_JOBS", "1"))
+        logger.info(
+            "Resource-aware scheduling: MAX_CONCURRENT_GPU_JOBS=%d",
+            self._max_concurrent_gpu,
+        )
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -283,8 +292,56 @@ class GateKeeper:
             await self.pooler.push_to_dead_letter(raw_job)
             return
 
+        # ── Cancel check: verify job wasn't cancelled by user ──
+        try:
+            cancelled = await self.redis_l1.sismember("scareverse:cancelled-jobs", job_id)
+            if cancelled:
+                logger.info(
+                    "PERMANENTE [%s] Job was cancelled by user — skipping execution",
+                    job_id,
+                )
+                await self.redis_l1.srem("scareverse:cancelled-jobs", job_id)  # cleanup
+                # Don't persist — job status already "cancelled" in MongoDB
+                self.metrics.record_job_execution(job_type, 0, success=False)
+                return
+        except Exception as _exc:
+            # Fail-open: if Redis is unavailable, proceed with execution
+            logger.warning(
+                "[%s] Failed to check cancelled-jobs set (fail-open) — proceeding: %s",
+                job_id, _exc,
+            )
+
+        # ── Resource-aware scheduling: check queue_type ──
+        queue_type = route.get("queue_type", "cpu")
+        if queue_type == "gpu" and self._active_gpu_jobs >= self._max_concurrent_gpu:
+            logger.info(
+                "PERMANENTE [%s] GPU slot occupied (active=%d, max=%d) — re-enqueueing job=%s",
+                job_id, self._active_gpu_jobs, self._max_concurrent_gpu, job_id,
+            )
+            # Re-enqueue at the end of the queue for later retry
+            try:
+                await self.redis_l1.rpush(queue_name, raw_job)
+                self.metrics.record_job_backpressure(job_type)
+                logger.info(
+                    "[%s] Job re-enqueued due to GPU backpressure — queue=%s",
+                    job_id, queue_name,
+                )
+            except Exception as _re_exc:
+                logger.error(
+                    "[%s] Failed to re-enqueue GPU job (discarding): %s",
+                    job_id, _re_exc,
+                )
+            return
+
         execution_model = route.get("execution_model", "service")
         total_start = time.time()
+
+        # Increment resource counter (decremented in finally)
+        _is_gpu = queue_type == "gpu"
+        if _is_gpu:
+            self._active_gpu_jobs += 1
+        else:
+            self._active_cpu_jobs += 1
 
         try:
             if execution_model == "subprocess":
@@ -343,6 +400,12 @@ class GateKeeper:
             logger.error("[%s] ❌ Dispatch failed: %s (after %.3fs)", job_id, exc, elapsed, exc_info=True)
             await self._persist_error(job_id, str(exc), source, job_type, user_id)
             await self.pooler.push_to_dead_letter(raw_job)
+        finally:
+            # Decrement resource counter (guaranteed even on exception)
+            if _is_gpu:
+                self._active_gpu_jobs = max(0, self._active_gpu_jobs - 1)
+            else:
+                self._active_cpu_jobs = max(0, self._active_cpu_jobs - 1)
 
     # ------------------------------------------------------------------
     # Result Persistence
