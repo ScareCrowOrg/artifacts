@@ -139,15 +139,14 @@
                 </span>
               </td>
               <td class="py-2 text-xs whitespace-nowrap">
-                <!-- Result View Link -->
-                <a
-                  v-if="job.status === 'success' && (job.content_id || job.relative_url)"
-                  :href="job.content_id ? '/content/' + job.content_id : job.relative_url"
-                  target="_blank"
+                <!-- Result View Link — abre no workspace (so visivel dentro do Dynamic Workspace) -->
+                <button
+                  v-if="cellFactory && job.status === 'success' && (job.content_id || job.relative_url)"
+                  @click="handleViewResult(job)"
                   class="inline-block mr-2 px-2 py-1 text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-800"
                 >
                   {{ $t('jobManagerCell.viewResult') }}
-                </a>
+                </button>
 
                 <!-- Cancel button -->
                 <button
@@ -213,15 +212,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onUnmounted, reactive } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted, reactive, inject } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { JobManagerCell } from './JobManagerCell'
 import type { JobRecord } from './JobManagerCell'
 import ConfirmModal from '#artifacts/shared/components/ConfirmModal.vue'
+import { CELL_FACTORY_KEY, type CellFactory } from '#artifacts/canonical/shared/cellFactory'
 
 const logger = createLogger('component:job-manager-cell')
 
 const cellInstance = new JobManagerCell()
+
+// Inject CellFactory for opening content in child cells (null if outside workspace)
+const cellFactory = inject<CellFactory | null>(CELL_FACTORY_KEY, null)
 
 interface Props {
   cell?: any
@@ -312,6 +315,24 @@ function onConfirmModalConfirm() {
 function onConfirmModalCancel() {
   confirmModal.visible = false
   confirmModal.resolve?.(false)
+}
+
+/**
+ * Open the job result in an ImageContentCell inside the workspace.
+ * So visivel quando cellFactory esta disponivel (dentro do Dynamic Workspace).
+ */
+async function handleViewResult(job: JobRecord) {
+  const jobId = job.id || job.job_id
+  if (!jobId || !cellFactory) return
+
+  try {
+    await cellFactory.addChildCell('image-content-cell', {
+      content_id: job.content_id || undefined,
+      relative_url: job.relative_url || undefined,
+    })
+  } catch (err: any) {
+    logger.error('[%s] Failed to open ImageContentCell: %s', jobId, err)
+  }
 }
 
 /**
