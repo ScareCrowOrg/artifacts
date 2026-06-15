@@ -217,7 +217,7 @@ import { ref, watch, computed, onMounted, onUnmounted, reactive } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { JobManagerCell } from './JobManagerCell'
 import type { JobRecord } from './JobManagerCell'
-import ConfirmModal from '@artifacts/shared/components/ConfirmModal.vue'
+import ConfirmModal from '#artifacts/shared/components/ConfirmModal.vue'
 
 const logger = createLogger('component:job-manager-cell')
 
