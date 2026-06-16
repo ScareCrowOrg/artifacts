@@ -13,6 +13,7 @@ ASYNC FLOW (v6.0):
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from typing import Any, Dict, Optional
@@ -102,6 +103,7 @@ async def queue_background_removal_job(
                 payload=payload,
                 owner_user_id="cell-script",
                 job_id=job_id,
+                planet_id=os.getenv("PLANET_NAME", ""),
             )
             logger.info("Job enqueued via canonical redis_client to %s: %s", location, job_id)
         except Exception as exc:

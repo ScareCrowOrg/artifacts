@@ -26,6 +26,8 @@
         "retrySuccess": "Job re-enfileirado",
         "cancelFailed": "Falha ao cancelar job",
         "retryFailed": "Falha ao repetir job",
-        "statusCancelled": "Cancelado"
+        "statusCancelled": "Cancelado",
+        "statusArchived": "Arquivado",
+        "planet": "Planeta"
     }
 }

@@ -60,6 +60,8 @@
             <option value="processing">{{ $t('jobManagerCell.statusProcessing') }}</option>
             <option value="success">{{ $t('jobManagerCell.statusSuccess') }}</option>
             <option value="failed">{{ $t('jobManagerCell.statusFailed') }}</option>
+            <option value="cancelled">{{ $t('jobManagerCell.statusCancelled') }}</option>
+            <option value="archived">{{ $t('jobManagerCell.statusArchived') }}</option>
           </select>
           <select
             v-model="localJobTypeFilter"
@@ -99,6 +101,7 @@
             <tr class="text-left text-text-secondary dark:text-text-secondary-dark border-b border-border dark:border-border-dark">
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.type') }}</th>
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.status') }}</th>
+              <th class="pb-2 pr-3">{{ $t('jobManagerCell.planet') }}</th>
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.created') }}</th>
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.result') }}</th>
               <th class="pb-2">{{ $t('jobManagerCell.actions') }}</th>
@@ -119,6 +122,11 @@
                   :class="statusClass(job.status)"
                 >
                   {{ job.status }}
+                </span>
+              </td>
+              <td class="py-2 pr-3 text-text-secondary dark:text-text-secondary-dark text-xs">
+                <span :title="job.planet_id || ''">
+                  {{ job.planet_id || '—' }}
                 </span>
               </td>
               <td class="py-2 pr-3 text-text-secondary dark:text-text-secondary-dark text-xs">
@@ -146,6 +154,15 @@
                   class="inline-block mr-2 px-2 py-1 text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-800"
                 >
                   {{ $t('jobManagerCell.viewResult') }}
+                </button>
+
+                <!-- Archive button (final status only, not already archived) -->
+                <button
+                  v-if="(job.status === 'success' || job.status === 'failed' || job.status === 'cancelled') && localStatusFilter !== 'archived' && !isActionLoading(job.id || job.job_id)"
+                  @click="handleArchive(job)"
+                  class="inline-block mr-1 px-2 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+                >
+                  Archive
                 </button>
 
                 <!-- Cancel button -->
@@ -400,6 +417,38 @@ async function handleRetry(job: JobRecord) {
   }
 }
 
+/**
+ * Confirm modal then archive the job.
+ * On success, removes the job from the active list.
+ */
+async function handleArchive(job: JobRecord) {
+  const jobId = job.id || job.job_id
+  if (!jobId) return
+
+  const confirmed = await showConfirm(
+    'Archive Job',
+    `Archive job ${jobId.substring(0, 8)}...? The job will be moved to the archive and removed from the active list.`,
+    false,
+  )
+  if (!confirmed) return
+
+  setActionLoading(jobId, true)
+  try {
+    const result = await cellInstance.archiveJob(jobId)
+    if (result.success) {
+      // Remove from local list (it's now archived)
+      localJobs.value = localJobs.value.filter(j => (j.id || j.job_id) !== jobId)
+      showToast('Job archived', 'success')
+    } else {
+      showToast(result.error || 'Failed to archive job', 'error')
+    }
+  } catch (err: any) {
+    showToast(err.message || 'Failed to archive job', 'error')
+  } finally {
+    setActionLoading(jobId, false)
+  }
+}
+
 // Local state
 const isEmbedded = computed(() => props.embedded || !!initialData.value.embedded || !!props.jobId)
 const localJobId = ref<string | null>(props.jobId || initialData.value.job_id || null)
@@ -417,14 +466,25 @@ const isTerminal = computed(() =>
 async function refreshJobs() {
   isLoading.value = true
   try {
-    const result = await cellInstance.execute({
-      status: localStatusFilter.value || undefined,
-      job_type: localJobTypeFilter.value || undefined,
-      max_items: props.maxItems || initialData.value.max_items || 10,
-    })
-    if (result.success && result.output) {
-      const data = result.output as any
-      localJobs.value = data.jobs || []
+    if (localStatusFilter.value === 'archived') {
+      const result = await cellInstance.listArchivedJobs({
+        job_type: localJobTypeFilter.value || undefined,
+        limit: props.maxItems || initialData.value.max_items || 10,
+      })
+      if (result.success && result.output) {
+        const data = result.output as any
+        localJobs.value = data.jobs || []
+      }
+    } else {
+      const result = await cellInstance.execute({
+        status: localStatusFilter.value || undefined,
+        job_type: localJobTypeFilter.value || undefined,
+        max_items: props.maxItems || initialData.value.max_items || 10,
+      })
+      if (result.success && result.output) {
+        const data = result.output as any
+        localJobs.value = data.jobs || []
+      }
     }
   } catch (err: any) {
     logger.error('Failed to refresh jobs', err)
