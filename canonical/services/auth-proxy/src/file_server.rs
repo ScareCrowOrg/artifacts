@@ -191,7 +191,15 @@ pub async fn check_runtime_access(
     //
     // This replaces the old SISMEMBER check which incorrectly compared assignee_id (UUID)
     // against the allowed_artifacts set (which contains cell type slugs, not UUIDs).
-    let session_key = format!("state:session:{}", session_id);
+    // FIX ITERATION_2: Changed from "state:session:{}" to "session:{}" so that
+    // auth-proxy reads the SAME primary key that bind_session() maintains.
+    // Previously auth-proxy read "state:session:{sid}" (a duplicate that was only
+    // created once during session-bind and never renewed on session refresh), while
+    // the backend reads "session:{sid}" (the SSOT that stays current). This mismatch
+    // caused 403 Forbidden for valid sessions when "state:session:{sid}" expired but
+    // "session:{sid}" was still valid. The "state:session:{sid}" duplicate creation
+    // in auth_session_router.py has been removed — auth-proxy now reads the SSOT.
+    let session_key = format!("session:{}", session_id);
     // DIAG [3d-mesh-guest-403-render]: Log context before self-access check
     warn!(
         "[RuntimeFileServer-DIAG] Self-access check: session_id={}, assignee_id={}, \
