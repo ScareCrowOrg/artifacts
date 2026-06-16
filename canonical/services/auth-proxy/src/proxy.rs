@@ -369,6 +369,15 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                      session_id={:?}, assignee_id={:?}",
                     path, cookie_header.is_some(), session_id, assignee_id
                 );
+                // DIAG [job-manager-view-result iteration 1]: Log handling request and extracted assignee_id
+                debug!(
+                    "[RuntimeFileServer] handling request: path={}",
+                    path
+                );
+                debug!(
+                    "[RuntimeFileServer] extracted assignee_id={:?}",
+                    assignee_id
+                );
                 match (session_id, assignee_id) {
                     (Some(sid), Some(aid)) => {
                         if check_runtime_access(&state, &sid, &aid).await {

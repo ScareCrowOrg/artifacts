@@ -326,6 +326,11 @@ async function handleViewResult(job: JobRecord) {
   if (!jobId || !cellFactory) return
 
   try {
+      logger.debug('DIAG [handleViewResult] Opening ImageContentCell: job_id=%s, content_id=%s, relative_url=%s',
+        jobId,
+        job.content_id || 'undefined',
+        job.relative_url || 'undefined',
+      )
     await cellFactory.addChildCell('image-content-cell', {
       content_id: job.content_id || undefined,
       relative_url: job.relative_url || undefined,

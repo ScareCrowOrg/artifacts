@@ -272,8 +272,21 @@ class GateKeeper:
         """Route job to service executor or subprocess executor based on execution_model."""
         job_type = job.get("job_type") or job.get("type", "")
         job_id = job.get("job_id", "unknown")
-        # Extract user_id for JobConsumer notification (may be at top level or in payload)
-        user_id = job.get("user_id") or job.get("payload", {}).get("assignee_id", "")
+        # Extract user_id for JobConsumer notification — prioritize payload.assignee_id
+        # (real UUID) over top-level job.user_id (which may be "cell-script" fixed string).
+        user_id = (
+            job.get("payload", {}).get("assignee_id")
+            or job.get("user_id")
+            or ""
+        )
+        logger.warning(
+            "GATEKEEPER-PERMANENTE: extracted user_id='%s' from job. "
+            "payload.assignee_id='%s' (preferred), job.user_id='%s'. "
+            "If user_id is now a real UUID, the fix is working.",
+            user_id,
+            job.get("payload", {}).get("assignee_id", "N/A"),
+            job.get("user_id", "N/A"),
+        )
 
         # DEBUG: Log complete job structure
         logger.info("[%s] === JOB DISPATCH INSPECTION ===", job_id)
@@ -463,6 +476,10 @@ class GateKeeper:
                     "user_id": user_id,
                     "timestamp": time.time(),
                 })
+                logger.debug(
+                    "GATEKEEPER-DIAG: Publishing notification payload: %s",
+                    publish_payload,
+                )
                 await self.redis_l1.publish("scareverse:job-results", publish_payload)
                 logger.debug(
                     "[%s] 📢 PUBLISHED job result notification for consumer",

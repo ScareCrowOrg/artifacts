@@ -219,6 +219,11 @@ pub async fn check_runtime_access(
                             true
                         }
                         Some(uid) => {
+                            warn!(
+                                "[RuntimeFileServer-PERMANENTE] Runtime access DENIED: session userId={} \
+                                 != assignee_id={}",
+                                uid, assignee_id
+                            );
                             debug!(
                                 "[RuntimeFileServer] Runtime access DENIED: session userId={} \
                                  != assignee_id={}",

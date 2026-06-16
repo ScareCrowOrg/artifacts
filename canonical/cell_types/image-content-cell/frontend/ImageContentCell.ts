@@ -171,6 +171,8 @@ export class ImageContentCell extends BaseCell {
       output.content = { relative_url: relativeUrl }
 
       log.info('Image URL built from relative_url', { imageUrl: output.imageUrl })
+      // PERMANENTE: Log the final image URL for debugging 403/auth-proxy issues
+      log.warn('[ImageContentCell] PERMANENTE: loading image from URL=' + output.imageUrl)
 
       return {
         success: true,

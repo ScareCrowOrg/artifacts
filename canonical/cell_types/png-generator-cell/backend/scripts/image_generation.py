@@ -98,6 +98,7 @@ async def queue_image_generation_job(
         if assignee_id:
             payload["assignee_id"] = assignee_id
             payload["content_id"] = job_id
+            logger.debug("PNG-DIAG: payload.assignee_id=%s payload.content_id=%s", assignee_id, job_id)
 
         # ── Step 1: Create JobDocument in MongoDB ──
         try:
@@ -126,6 +127,11 @@ async def queue_image_generation_job(
         try:
             from canonical.shared.redis_client import create_job
 
+            logger.warning(
+                "PNG-PERMANENTE: owner_user_id='cell-script' (FIXED STRING) — top-level user_id will be "
+                "'cell-script', not real assignee UUID. payload.assignee_id=%s",
+                assignee_id or "NOT_SET",
+            )
             enqueued_job_id, location = await create_job(
                 job_type="comfyui_generate",
                 payload=payload,
