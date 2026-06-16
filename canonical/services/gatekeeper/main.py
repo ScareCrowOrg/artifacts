@@ -276,6 +276,7 @@ class GateKeeper:
         # (real UUID) over top-level job.user_id (which may be "cell-script" fixed string).
         user_id = (
             job.get("payload", {}).get("assignee_id")
+            or job.get("assignee_id")          # top-level: create_job() spreads **payload into top-level
             or job.get("user_id")
             or ""
         )
