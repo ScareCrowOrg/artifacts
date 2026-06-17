@@ -1,10 +1,15 @@
 /**
- * Job Polling Composable for 3D Mesh Generation
- * 
- * Extracts job polling logic from View.vue for better modularity and reusability.
- * Handles Redis-based job status polling with configurable intervals.
- * 
- * @module useJobPolling
+ * DEPRECATED — DO NOT USE
+ *
+ * This local composable has been replaced by #shared/composables/useJobPolling.
+ *
+ * The shared composable polls GET /api/cells/job-status/{job_id} (MongoDB SSOT)
+ * instead of the Redis-only endpoint used by this local version.
+ *
+ * Kept temporarily for backward compatibility. New code MUST use shared composable.
+ *
+ * @deprecated Use #shared/composables/useJobPolling instead
+ * @module useJobPolling (DEPRECATED)
  */
 
 import { ref, Ref } from 'vue'

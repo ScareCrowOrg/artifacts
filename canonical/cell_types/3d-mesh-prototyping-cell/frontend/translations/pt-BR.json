@@ -100,7 +100,11 @@
         "notApplicable": "N/A"
       },
       "download": "Baixar GLB",
-      "downloadMesh": "Baixar malha 3D gerada como GLB"
+      "downloadMesh": "Baixar malha 3D gerada como GLB",
+      "recentJobs": "Jobs 3D Recentes",
+      "noRecentJobs": "Nenhum job de geração 3D recente",
+      "viewResult": "Abrir no GLB Viewer",
+      "viewAllJobs": "Ver todos os jobs no Job Manager"
     }
   }
 }

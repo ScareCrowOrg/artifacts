@@ -145,7 +145,8 @@
       ],
       "cell_types": [
         "content-selection-cell",
-        "content-upload-cell"
+        "content-upload-cell",
+        "glb-content-viewer"
       ]
     },
     "tags": [
