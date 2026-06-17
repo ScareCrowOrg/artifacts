@@ -60,8 +60,6 @@
             <option value="processing">{{ $t('jobManagerCell.statusProcessing') }}</option>
             <option value="success">{{ $t('jobManagerCell.statusSuccess') }}</option>
             <option value="failed">{{ $t('jobManagerCell.statusFailed') }}</option>
-            <option value="cancelled">{{ $t('jobManagerCell.statusCancelled') }}</option>
-            <option value="archived">{{ $t('jobManagerCell.statusArchived') }}</option>
           </select>
           <select
             v-model="localJobTypeFilter"
@@ -101,7 +99,6 @@
             <tr class="text-left text-text-secondary dark:text-text-secondary-dark border-b border-border dark:border-border-dark">
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.type') }}</th>
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.status') }}</th>
-              <th class="pb-2 pr-3">{{ $t('jobManagerCell.planet') }}</th>
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.created') }}</th>
               <th class="pb-2 pr-3">{{ $t('jobManagerCell.result') }}</th>
               <th class="pb-2">{{ $t('jobManagerCell.actions') }}</th>
@@ -122,11 +119,6 @@
                   :class="statusClass(job.status)"
                 >
                   {{ job.status }}
-                </span>
-              </td>
-              <td class="py-2 pr-3 text-text-secondary dark:text-text-secondary-dark text-xs">
-                <span :title="job.planet_id || ''">
-                  {{ job.planet_id || '—' }}
                 </span>
               </td>
               <td class="py-2 pr-3 text-text-secondary dark:text-text-secondary-dark text-xs">
@@ -154,15 +146,6 @@
                   class="inline-block mr-2 px-2 py-1 text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-800"
                 >
                   {{ $t('jobManagerCell.viewResult') }}
-                </button>
-
-                <!-- Archive button (final status only, not already archived) -->
-                <button
-                  v-if="(job.status === 'success' || job.status === 'failed' || job.status === 'cancelled') && localStatusFilter !== 'archived' && !isActionLoading(job.id || job.job_id)"
-                  @click="handleArchive(job)"
-                  class="inline-block mr-1 px-2 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
-                >
-                  Archive
                 </button>
 
                 <!-- Cancel button -->
@@ -335,46 +318,25 @@ function onConfirmModalCancel() {
 }
 
 /**
- * Open the job result in the appropriate viewer cell inside the workspace.
- * Routes to glb-content-viewer for 3D mesh jobs, image-content-cell for all others.
- * Only visible when cellFactory is available (inside Dynamic Workspace).
+ * Open the job result in an ImageContentCell inside the workspace.
+ * So visivel quando cellFactory esta disponivel (dentro do Dynamic Workspace).
  */
 async function handleViewResult(job: JobRecord) {
   const jobId = job.id || job.job_id
   if (!jobId || !cellFactory) return
 
-  // PERMANENTE: Log job type BEFORE deciding which viewer to create
-  logger.warn('PERMANENTE [handleViewResult] job_id=%s, type=%s, cell_type=%s, content_id=%s, relative_url=%s',
-    jobId,
-    job.type || 'undefined',
-    job.cell_type || 'undefined',
-    job.content_id || 'undefined',
-    job.relative_url || 'undefined',
-  )
-
-  // Determine the correct viewer cell type based on job type
-  const jobType = job.type || ''
-  const is3DJob = jobType === 'hunyuan3d_generate' || jobType.includes('hunyuan3d') || jobType.includes('3d') || jobType.includes('mesh')
-  const viewerType = is3DJob ? 'glb-content-viewer' : 'image-content-cell'
-
-  // PERMANENTE: Log which viewer was chosen based on job type
-  logger.warn('PERMANENTE [handleViewResult] Determined viewer cell_type=%s for job.type=%s', viewerType, job.type || 'undefined')
-
   try {
-      logger.debug('DIAG [handleViewResult] Opening %s: job_id=%s, content_id=%s, relative_url=%s',
-        viewerType,
+      logger.debug('DIAG [handleViewResult] Opening ImageContentCell: job_id=%s, content_id=%s, relative_url=%s',
         jobId,
         job.content_id || 'undefined',
         job.relative_url || 'undefined',
       )
-      // DIAG: Log which viewer cell_type is being created (for debugging routing decisions)
-      logger.warn('DIAG [handleViewResult] Creating child cell_type=%s for job.type=%s', viewerType, job.type || 'undefined')
-    await cellFactory.addChildCell(viewerType, {
+    await cellFactory.addChildCell('image-content-cell', {
       content_id: job.content_id || undefined,
       relative_url: job.relative_url || undefined,
     })
   } catch (err: any) {
-    logger.error('[%s] PERMANENTE: Failed to open child cell for job type=%s, content_id=%s: %s', jobId, job.type || 'unknown', job.content_id || 'undefined', err)
+    logger.error('[%s] Failed to open ImageContentCell: %s', jobId, err)
   }
 }
 
@@ -438,38 +400,6 @@ async function handleRetry(job: JobRecord) {
   }
 }
 
-/**
- * Confirm modal then archive the job.
- * On success, removes the job from the active list.
- */
-async function handleArchive(job: JobRecord) {
-  const jobId = job.id || job.job_id
-  if (!jobId) return
-
-  const confirmed = await showConfirm(
-    'Archive Job',
-    `Archive job ${jobId.substring(0, 8)}...? The job will be moved to the archive and removed from the active list.`,
-    false,
-  )
-  if (!confirmed) return
-
-  setActionLoading(jobId, true)
-  try {
-    const result = await cellInstance.archiveJob(jobId)
-    if (result.success) {
-      // Remove from local list (it's now archived)
-      localJobs.value = localJobs.value.filter(j => (j.id || j.job_id) !== jobId)
-      showToast('Job archived', 'success')
-    } else {
-      showToast(result.error || 'Failed to archive job', 'error')
-    }
-  } catch (err: any) {
-    showToast(err.message || 'Failed to archive job', 'error')
-  } finally {
-    setActionLoading(jobId, false)
-  }
-}
-
 // Local state
 const isEmbedded = computed(() => props.embedded || !!initialData.value.embedded || !!props.jobId)
 const localJobId = ref<string | null>(props.jobId || initialData.value.job_id || null)
@@ -487,25 +417,14 @@ const isTerminal = computed(() =>
 async function refreshJobs() {
   isLoading.value = true
   try {
-    if (localStatusFilter.value === 'archived') {
-      const result = await cellInstance.listArchivedJobs({
-        job_type: localJobTypeFilter.value || undefined,
-        limit: props.maxItems || initialData.value.max_items || 10,
-      })
-      if (result.success && result.output) {
-        const data = result.output as any
-        localJobs.value = data.jobs || []
-      }
-    } else {
-      const result = await cellInstance.execute({
-        status: localStatusFilter.value || undefined,
-        job_type: localJobTypeFilter.value || undefined,
-        max_items: props.maxItems || initialData.value.max_items || 10,
-      })
-      if (result.success && result.output) {
-        const data = result.output as any
-        localJobs.value = data.jobs || []
-      }
+    const result = await cellInstance.execute({
+      status: localStatusFilter.value || undefined,
+      job_type: localJobTypeFilter.value || undefined,
+      max_items: props.maxItems || initialData.value.max_items || 10,
+    })
+    if (result.success && result.output) {
+      const data = result.output as any
+      localJobs.value = data.jobs || []
     }
   } catch (err: any) {
     logger.error('Failed to refresh jobs', err)

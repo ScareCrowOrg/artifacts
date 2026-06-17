@@ -161,14 +161,12 @@ async def queue_3d_generation_job(
     target_size_mb: float = 5.0,
     model_type: str = "hunyuan3d",
     assignee_id: str = None,
-    job_id: str = None,
-    planet_id: str = "",
 ) -> Dict[str, Any]:
     """
     Queue a 3D generation job to Redis for processing by Windows Worker.
 
     Phase 6 Hybrid Architecture with Model Routing:
-    1. Generate unique job_id (or use provided one)
+    1. Generate unique job_id
     2. Write input image to shared volume
     3. Queue job metadata to Redis (includes model_type for routing)
     4. Return job_id for client polling
@@ -180,9 +178,6 @@ async def queue_3d_generation_job(
         compression_level: Draco compression level (0-10)
         target_size_mb: Target file size in MB
         model_type: 3D generation model to use ('hunyuan3d', default: 'hunyuan3d')
-        assignee_id: User identifier for content path scoping
-        job_id: Pre-generated job ID (if None, generates new)
-        planet_id: Planet name for job tracking (from os.getenv("PLANET_NAME", ""))
 
     Returns:
         Dict containing:
@@ -191,8 +186,8 @@ async def queue_3d_generation_job(
             - error: Error message if failed
     """
     try:
-        # Generate unique job ID (or use provided one)
-        job_id = job_id or str(uuid.uuid4())
+        # Generate unique job ID
+        job_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat()
 
         # PERMANENTE [3d-mesh-guest-403-render]: Log assignee_id used in job queueing
@@ -287,7 +282,6 @@ async def queue_3d_generation_job(
             "output_dir": worker_output_dir,
             "image_base64": image_data,  # For worker (comfyui-hunyuan3d-wrapper expects this key)
             "assignee_id": assignee_id or "unknown",  # Worker uses this for output path scoping
-            "planet_id": planet_id,  # Planet tracking for async jobs
             "parameters": json.dumps({
                 "target_faces": target_faces,
                 "enable_draco": enable_draco,

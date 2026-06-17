@@ -26,8 +26,6 @@
         "retrySuccess": "Job re-enqueued",
         "cancelFailed": "Failed to cancel job",
         "retryFailed": "Failed to retry job",
-        "statusCancelled": "Cancelled",
-        "statusArchived": "Archived",
-        "planet": "Planet"
+        "statusCancelled": "Cancelled"
     }
 }

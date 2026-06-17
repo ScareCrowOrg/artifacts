@@ -439,6 +439,10 @@ const fetchRecentJobs = async () => {
 const openJobManager = async () => {
   if (!cellFactory) return
   try {
+    logger.debug(
+      '[DIAG] openJobManager — opening job-manager-cell with job_type_filter=comfyui_generate. '
+      + 'Chain: PNG Generator -> JobManager -> ImageContentCell (content_id passed later in handleViewResult)',
+    )
     await cellFactory.addChildCell('job-manager-cell', {
       job_type_filter: 'comfyui_generate',
     })

@@ -100,11 +100,7 @@
         "notApplicable": "N/A"
       },
       "download": "Download GLB",
-      "downloadMesh": "Download generated 3D mesh as GLB",
-      "recentJobs": "Recent 3D Jobs",
-      "noRecentJobs": "No recent 3D generation jobs",
-      "viewResult": "Open in GLB Viewer",
-      "viewAllJobs": "View all jobs in Job Manager"
+      "downloadMesh": "Download generated 3D mesh as GLB"
     }
   }
 }
