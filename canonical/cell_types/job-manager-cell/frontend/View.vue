@@ -335,25 +335,46 @@ function onConfirmModalCancel() {
 }
 
 /**
- * Open the job result in an ImageContentCell inside the workspace.
- * So visivel quando cellFactory esta disponivel (dentro do Dynamic Workspace).
+ * Open the job result in the appropriate viewer cell inside the workspace.
+ * Routes to glb-content-viewer for 3D mesh jobs, image-content-cell for all others.
+ * Only visible when cellFactory is available (inside Dynamic Workspace).
  */
 async function handleViewResult(job: JobRecord) {
   const jobId = job.id || job.job_id
   if (!jobId || !cellFactory) return
 
+  // PERMANENTE: Log job type BEFORE deciding which viewer to create
+  logger.warn('PERMANENTE [handleViewResult] job_id=%s, type=%s, cell_type=%s, content_id=%s, relative_url=%s',
+    jobId,
+    job.type || 'undefined',
+    job.cell_type || 'undefined',
+    job.content_id || 'undefined',
+    job.relative_url || 'undefined',
+  )
+
+  // Determine the correct viewer cell type based on job type
+  const jobType = job.type || ''
+  const is3DJob = jobType === 'hunyuan3d_generate' || jobType.includes('hunyuan3d') || jobType.includes('3d') || jobType.includes('mesh')
+  const viewerType = is3DJob ? 'glb-content-viewer' : 'image-content-cell'
+
+  // PERMANENTE: Log which viewer was chosen based on job type
+  logger.warn('PERMANENTE [handleViewResult] Determined viewer cell_type=%s for job.type=%s', viewerType, job.type || 'undefined')
+
   try {
-      logger.debug('DIAG [handleViewResult] Opening ImageContentCell: job_id=%s, content_id=%s, relative_url=%s',
+      logger.debug('DIAG [handleViewResult] Opening %s: job_id=%s, content_id=%s, relative_url=%s',
+        viewerType,
         jobId,
         job.content_id || 'undefined',
         job.relative_url || 'undefined',
       )
-    await cellFactory.addChildCell('image-content-cell', {
+      // DIAG: Log which viewer cell_type is being created (for debugging routing decisions)
+      logger.warn('DIAG [handleViewResult] Creating child cell_type=%s for job.type=%s', viewerType, job.type || 'undefined')
+    await cellFactory.addChildCell(viewerType, {
       content_id: job.content_id || undefined,
       relative_url: job.relative_url || undefined,
     })
   } catch (err: any) {
-    logger.error('[%s] Failed to open ImageContentCell: %s', jobId, err)
+    logger.error('[%s] PERMANENTE: Failed to open child cell for job type=%s, content_id=%s: %s', jobId, job.type || 'unknown', job.content_id || 'undefined', err)
   }
 }
 

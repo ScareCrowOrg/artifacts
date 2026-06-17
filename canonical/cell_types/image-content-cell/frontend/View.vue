@@ -364,6 +364,10 @@ const loadContent = async () => {
 
 /** Handle image load error (broken URL) */
 const handleImageError = () => {
+  // DIAG: Detect when URL is a GLB file (incompatible with <img> tag)
+  if (localImageUrl.value && localImageUrl.value.endsWith('.glb')) {
+    logger.warn('DIAG [handleImageError] URL ends with .glb — 3D model cannot be rendered by <img> tag. Should use glb-content-viewer instead.')
+  }
   logger.warn('Image failed to load', { imageUrl: localImageUrl.value })
   localError.value = 'Failed to load image — the URL may be invalid or the file may have been deleted.'
   localImageUrl.value = null

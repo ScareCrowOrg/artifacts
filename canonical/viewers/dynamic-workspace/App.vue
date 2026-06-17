@@ -473,6 +473,8 @@ function findCellTypeByName(type: string): CellTypeDefinition | null {
 
 const cellFactory: CellFactory = {
   async addChildCell(type: string, initialData?: Record<string, any>) {
+    // PERMANENTE: Log every child cell creation request (type + initial data)
+    log.warn('PERMANENTE [addChildCell] Creating cell type=%s, initialData=%j', type, initialData)
     let cellTypeDef = findCellTypeByName(type)
 
     // Lazy-load cell types if not yet loaded

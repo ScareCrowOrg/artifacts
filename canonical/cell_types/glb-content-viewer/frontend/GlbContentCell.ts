@@ -145,6 +145,13 @@ export class GlbContentCell extends BaseCell {
     const contentId = input.content_id
     const relativeUrl = input.relative_url
 
+    // DIAG: Log routing decision — which path will be used for loading
+    log.debug('DIAG [handleLoad] Choosing path: %s (relative_url=%s, content_id=%s)',
+      relativeUrl ? 'relative_url (direct)' : contentId ? 'content_id (API fetch)' : 'neither (empty)',
+      relativeUrl || 'null',
+      contentId || 'null',
+    )
+
     // Build output scaffolding
     const output: GlbContentOutput = {
       success: false,
