@@ -196,9 +196,9 @@
             <!-- Date -->
             <span class="text-text-secondary font-mono">{{ formatJobDate(job.enqueued_at) }}</span>
 
-            <!-- Completed job → link to Job Manager -->
+            <!-- Completed job → link to Image Viewer -->
             <span v-if="(job.status === 'success' || job.status === 'completed') && (job.relative_url || job.content_id)"
-                  class="ml-auto text-primary hover:underline cursor-pointer" @click="openJobManager">
+                  class="ml-auto text-primary hover:underline cursor-pointer" @click="openImageViewer(job)">
               {{ $t('pngGeneratorCell.viewResult') }}
             </span>
           </div>
@@ -432,6 +432,28 @@ const fetchRecentJobs = async () => {
     localRecentJobs.value = []
   } finally {
     localJobsLoading.value = false
+  }
+}
+
+/**
+ * Open Image Content Viewer for a completed job
+ */
+const openImageViewer = async (job: any) => {
+  if (!cellFactory) {
+    logger.warn('Cannot open Image Viewer: cellFactory not available')
+    return
+  }
+  try {
+    const initialData: Record<string, any> = {}
+    if (job.relative_url) {
+      initialData.relative_url = job.relative_url
+    } else if (job.content_id) {
+      initialData.content_id = job.content_id
+    }
+    await cellFactory.addChildCell('image-content-cell', initialData)
+    logger.info('Image Content Viewer created from PNG Generator', { jobId: job.id || job.job_id })
+  } catch (err: any) {
+    logger.warn('Failed to open Image Viewer', { error: err.message })
   }
 }
 

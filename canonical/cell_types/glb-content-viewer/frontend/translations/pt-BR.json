@@ -1,0 +1,25 @@
+{
+  "glbContentCell": {
+    "title": "Visualizador 3D",
+    "description": "Visualizar e baixar modelos 3D GLB/GLTF",
+    "loading": "Carregando modelo 3D...",
+    "errorTitle": "Falha ao carregar modelo 3D",
+    "noContent": "Nenhum modelo 3D",
+    "noContentDescription": "Forneça um content_id ou relative_url para exibir um modelo 3D.",
+    "modelNotAvailable": "Modelo 3D indisponível",
+    "download": "Baixar",
+    "retry": "Tentar novamente",
+    "autoRotate": "Rotação automática",
+    "autoRotateOn": "Rotação: Ligada",
+    "autoRotateOff": "Rotação: Desligada",
+    "wireframe": "Wireframe",
+    "wireframeOn": "Wireframe: Ligado",
+    "wireframeOff": "Wireframe: Desligado",
+    "grid": "Grade",
+    "gridOn": "Grade: Ligada",
+    "gridOff": "Grade: Desligada",
+    "vertices": "Vertices",
+    "fileSize": "Tamanho",
+    "format": "Formato"
+  }
+}

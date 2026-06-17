@@ -33,6 +33,7 @@ export interface JobRecord {
   error_message?: string
   enqueued_at?: string
   completed_at?: string
+  planet_id?: string
 }
 
 export interface JobManagerInput {
@@ -277,6 +278,70 @@ export class JobManagerCell extends BaseCell {
     } catch (error: any) {
       log.error('retryJob failed', { jobId, error: error.message })
       return { success: false, output: {}, execution_time: performance.now() - startTime, error: error.message || 'Retry failed' }
+    }
+  }
+
+  /**
+   * Archive a completed job — moves from jobs_runtime to jobs_archived_runtime.
+   *
+   * Calls POST /api/cells/jobs/{jobId}/archive.
+   * Only visible for jobs in final status (success, failed, cancelled).
+   */
+  async archiveJob(jobId: string): Promise<CellResult> {
+    const startTime = performance.now()
+    if (!jobId) {
+      return { success: false, output: {}, execution_time: 0, error: 'jobId is required' }
+    }
+    try {
+      const response = await apiService.fetch(
+        `/api/cells/jobs/${jobId}/archive`,
+        { method: 'POST' },
+      ) as Response
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body.detail || `Archive failed: ${response.statusText}`)
+      }
+      return {
+        success: true,
+        output: await response.json(),
+        execution_time: performance.now() - startTime,
+      }
+    } catch (error: any) {
+      log.error('archiveJob failed', { jobId, error: error.message })
+      return { success: false, output: {}, execution_time: performance.now() - startTime, error: error.message || 'Archive failed' }
+    }
+  }
+
+  /**
+   * List archived jobs for the current user.
+   *
+   * Calls GET /api/cells/jobs/archived with optional filters.
+   */
+  async listArchivedJobs(filters: { job_type?: string; limit?: number; offset?: number } = {}): Promise<CellResult> {
+    const startTime = performance.now()
+    try {
+      const queryParams = new URLSearchParams()
+      if (filters.job_type) queryParams.set('job_type', filters.job_type)
+      if (filters.limit) queryParams.set('limit', String(filters.limit))
+      if (filters.offset) queryParams.set('offset', String(filters.offset))
+
+      const response = await apiService.fetch(
+        `/api/cells/jobs/archived?${queryParams.toString()}`,
+      ) as Response
+
+      if (!response.ok) {
+        throw new Error(`List archived jobs failed: ${response.statusText}`)
+      }
+
+      const data: { jobs: JobRecord[]; total: number } = await response.json()
+      return {
+        success: true,
+        output: data,
+        execution_time: performance.now() - startTime,
+      }
+    } catch (error: any) {
+      log.error('listArchivedJobs failed', { error: error.message })
+      return { success: false, output: {}, execution_time: performance.now() - startTime, error: error.message || 'List archived failed' }
     }
   }
 

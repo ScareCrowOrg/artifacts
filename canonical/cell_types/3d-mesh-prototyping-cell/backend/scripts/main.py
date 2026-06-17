@@ -275,6 +275,11 @@ async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, An
     Jobs are queued to Redis and processed asynchronously.
     Supports multiple 3D generation models via model_type parameter.
 
+    ASYNC FLOW (v6.0):
+    1. Create JobDocument in MongoDB (SSOT)
+    2. LPUSH job to Redis queue via queue_3d_generation_job()
+    3. Return { job_id, status: "queued" } immediately — no BRPOP
+
     Args:
         cell_data: Cell instance data with input image and parameters
 
@@ -297,7 +302,49 @@ async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, An
     assignee_id = cell_data.get("assignee_id") or cell_data.get("user_id")
     logger.info("[Redis Magro] assignee_id: %s", assignee_id)
 
-    # Queue job to Redis (non-blocking)
+    # Extract _current_user injected by cells_router.py for create_job_document()
+    # The backend injects this in cell_data['_current_user'] at line 868 of cells_router.py
+    current_user = cell_data.get('_current_user')
+    logger.info("[Async Job] _current_user present: %s", current_user is not None)
+
+    # Extract planet_id from environment
+    planet_id = os.getenv("PLANET_NAME", "")
+
+    # ── Step 1: Generate job_id ──
+    import uuid
+    job_id = str(uuid.uuid4())
+    logger.info("[Async Job] Generated job_id: %s", job_id)
+
+    # ── Step 2: Create JobDocument in MongoDB ──
+    try:
+        from app.models.job import create_job_document
+
+        await create_job_document(
+            job_id=job_id,
+            job_type="hunyuan3d_generate",
+            user_id=assignee_id or "cell-script",
+            payload={
+                "model_type": model_type,
+                "assignee_id": assignee_id,
+                "input_image_available": bool(input_image),
+            },
+            cell_type="3d-mesh-prototyping-cell",
+            status="queued",
+            current_user=current_user,
+            planet_id=planet_id,
+        )
+        logger.info("[Async Job] JobDocument created: %s", job_id)
+    except ImportError:
+        logger.warning(
+            "create_job_document not available (app.models.job not imported) — "
+            "continuing without MongoDB persistence"
+        )
+    except Exception as jdoc_err:
+        logger.warning(
+            "Failed to create JobDocument (non-blocking): %s", jdoc_err
+        )
+
+    # ── Step 3: LPUSH to Redis queue ──
     job_result = await queue_3d_generation_job(
         input_image=input_image,
         target_faces=reconstruction_params.get('targetFaces', 50000),
@@ -306,13 +353,16 @@ async def handle_local_gpu_generation(cell_data: Dict[str, Any]) -> Dict[str, An
         target_size_mb=reconstruction_params.get('targetFileSizeMB', 5),
         model_type=model_type,
         assignee_id=assignee_id,
+        job_id=job_id,
+        planet_id=planet_id,
     )
-    
+
     if job_result.get("success"):
-        logger.info(f"Job queued successfully: {job_result.get('job_id')}")
+        logger.info(f"Job queued successfully: {job_id}")
         return {
             "success": True,
-            "job_id": job_result.get("job_id"),
+            "job_id": job_id,
+            "status": "queued",
             "mode": "local-gpu",
             "message": "3D mesh generation job queued successfully"
         }

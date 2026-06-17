@@ -358,6 +358,7 @@ async def create_job(
     payload: Dict[str, Any],
     owner_user_id: str,
     job_id: Optional[str] = None,
+    planet_id: str = "",
 ) -> Tuple[str, str]:
     """
     Create a job with owner-first scheduling.
@@ -407,6 +408,7 @@ async def create_job(
         "job_id": job_id,
         "job_type": job_type,
         "user_id": owner_user_id,
+        "planet_id": planet_id,
         "queue": queue,
         **payload,
     }

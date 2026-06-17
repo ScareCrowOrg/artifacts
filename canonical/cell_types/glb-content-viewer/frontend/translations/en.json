@@ -1,0 +1,25 @@
+{
+  "glbContentCell": {
+    "title": "3D Model Viewer",
+    "description": "View and download 3D GLB/GLTF model content",
+    "loading": "Loading 3D model...",
+    "errorTitle": "Failed to load 3D model",
+    "noContent": "No 3D model content",
+    "noContentDescription": "Provide a content_id or relative_url to display a 3D model.",
+    "modelNotAvailable": "3D model not available",
+    "download": "Download",
+    "retry": "Try again",
+    "autoRotate": "Auto-rotate",
+    "autoRotateOn": "Auto-rotate: On",
+    "autoRotateOff": "Auto-rotate: Off",
+    "wireframe": "Wireframe",
+    "wireframeOn": "Wireframe: On",
+    "wireframeOff": "Wireframe: Off",
+    "grid": "Grid",
+    "gridOn": "Grid: On",
+    "gridOff": "Grid: Off",
+    "vertices": "Vertices",
+    "fileSize": "File size",
+    "format": "Format"
+  }
+}
