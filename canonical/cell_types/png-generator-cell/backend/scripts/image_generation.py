@@ -113,6 +113,7 @@ async def queue_image_generation_job(
                 cell_type="png-generator-cell",
                 status="queued",
                 current_user=current_user,
+                planet_id=os.getenv("PLANET_NAME", ""),
             )
         except ImportError:
             logger.warning(
