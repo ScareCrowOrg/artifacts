@@ -357,6 +357,18 @@ class GateKeeper:
         else:
             self._active_cpu_jobs += 1
 
+        # ── Publish "processing" status for frontend polling ──
+        try:
+            progress_key = f"scareverse:job-progress:{job_id}"
+            progress_data = json.dumps({
+                "status": "processing",
+                "started_at": time.time(),
+            })
+            timeout = route.get("configuration", {}).get("timeout_seconds", 300)
+            await self.redis_l1.set(progress_key, progress_data, ex=timeout + 60)
+        except Exception as exc:
+            logger.warning("[%s] Failed to set progress key (non-blocking): %s", job_id, exc)
+
         try:
             if execution_model == "subprocess":
                 # Extract input_data from job payload (which may be desempacotar at top level)

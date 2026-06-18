@@ -327,6 +327,12 @@ const loadContent = async () => {
     if (result.success && result.output) {
       const output = result.output as any
 
+      // DIAG: Log output.content structure to detect missing metadata (tags/fragments/metadata)
+      logger.warn('DIAG [loadContent] output.content keys: tags=%s, fragments=%s, metadata=%s',
+        output.content?.tags ? 'present' : 'MISSING',
+        output.content?.fragments ? 'present' : 'MISSING',
+        output.content?.metadata ? 'present' : 'MISSING')
+
       // Store image URL
       if (output.imageUrl) {
         localImageUrl.value = output.imageUrl
@@ -417,6 +423,10 @@ const handleSaveMetadata = async () => {
     if (result.success) {
       localSaveSuccess.value = true
       logger.info('Metadata saved successfully', { contentId })
+
+      // DIAG: Log whether updatedContent is available but NOT being used to refresh localContent
+      logger.warn('DIAG [handleSaveMetadata] updatedContent available=%s, localContent would be refreshed if used',
+        result.output?.updatedContent ? 'yes' : 'no')
 
       // Clear success message after 3 seconds
       setTimeout(() => {

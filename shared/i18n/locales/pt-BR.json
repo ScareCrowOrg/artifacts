@@ -1423,7 +1423,8 @@
     "cleanBackground": "Remover Fundo",
     "processing": "Processando...",
     "persistAsset": "💾 Persistir Asset",
-    "persisting": "Persistindo..."
+    "persisting": "Persistindo...",
+    "jobEnqueued": "Sua solicitação foi registrada! Acompanhe o progresso na lista abaixo."
   },
   "threejsSceneGeneratorCell": {
     "title": "Gerador de Cenas Three.js",
@@ -1724,5 +1725,8 @@
         "makePublic": "Tornar este asset público"
       }
     }
+  },
+  "meshPrototypingCell": {
+    "jobEnqueued": "Sua solicitação foi registrada! Acompanhe o progresso na lista abaixo."
   }
 }

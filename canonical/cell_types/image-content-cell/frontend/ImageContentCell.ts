@@ -168,7 +168,31 @@ export class ImageContentCell extends BaseCell {
       const origin = window.location.origin.replace(/\/+$/, '')
       output.imageUrl = `${origin}/artifacts${relativeUrl}`
       output.success = true
+      // Start with relative_url as fallback content
       output.content = { relative_url: relativeUrl }
+
+      // PERMANENTE: Log decision path — when relative_url exists, content_id (and its metadata) is ignored
+      log.warn('[ImageContentCell] PERMANENTE handleLoad decision: relative_url=%s, content_id=%s, taking path=%s',
+        relativeUrl || 'null', contentId || 'null', 'relative_url (short-circuit — metadata NEVER loaded)')
+
+      // FIX [debug-fixer ITERATION_6]: When content_id is ALSO present, fetch full content from API
+      // so View.vue can hydrate tags, fragments, and metadata in the form.
+      if (contentId) {
+        try {
+          const metaResponse = await apiFetch(`/api/contents/${contentId}`)
+          if (metaResponse.ok) {
+            const content = await metaResponse.json()
+            output.content = content
+            log.info('Content metadata loaded from API alongside relative_url', { contentId })
+          } else {
+            log.warn('Failed to load content metadata from API, fell back to relative_url only',
+              { contentId, status: metaResponse.status })
+          }
+        } catch (metaError) {
+          log.warn('Error loading content metadata from API, fell back to relative_url only',
+            { contentId, error: (metaError as Error).message })
+        }
+      }
 
       log.info('Image URL built from relative_url', { imageUrl: output.imageUrl })
       // PERMANENTE: Log the final image URL for debugging 403/auth-proxy issues

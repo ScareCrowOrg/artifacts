@@ -158,6 +158,15 @@
         <p class="text-sm">{{ localError }}</p>
       </div>
 
+      <!-- Toast notification -->
+      <div
+        v-if="toastMessage"
+        class="fixed bottom-4 right-4 z-50 px-4 py-2 rounded shadow-lg text-sm text-white transition-opacity duration-300"
+        :class="toastType === 'success' ? 'bg-green-600' : 'bg-red-600'"
+      >
+        {{ toastMessage }}
+      </div>
+
       <!-- Job History Section (substitui preview inline) -->
       <div class="job-history-section mt-4">
         <h4 class="text-sm font-medium text-text-secondary dark:text-text-secondary-dark mb-2">
@@ -217,14 +226,19 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted, inject } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/logger'
 import { PngGeneratorCell } from './PngGeneratorCell'
 import type { PngGeneratorInput } from './PngGeneratorCell'
 import { CELL_FACTORY_KEY, type CellFactory } from '#canonical/shared/cellFactory'
 import { useJobPolling } from '#shared/composables/useJobPolling'
+import { useToast } from '#shared/composables/useToast'
 import apiService from '@/services/apiService.js'
 
 const logger = createLogger('component:png-generator-cell')
+const { t } = useI18n()
+
+const { toastMessage, toastType, showToast } = useToast()
 
 // Initialize PngGeneratorCell instance
 const cellInstance = new PngGeneratorCell()
@@ -540,20 +554,21 @@ const handleGenerate = async () => {
       // ASYNC FLOW (v6.0): Backend returned job_id — start polling
       if (output.job_id) {
         localJobId.value = output.job_id
+        // DESBLOQUEIA botão imediatamente — usuário pode enfileirar mais jobs
+        localIsGenerating.value = false
+        // Feedback: mensagem de confirmação
+        showToast(t('pngGeneratorCell.jobEnqueued'), 'success')
         logger.info('Starting job polling for job_id=' + output.job_id)
         startPolling(output.job_id, {
           intervalMs: 2000,
           onComplete: async (job) => {
             logger.info('Job completed, refreshing job list', { job })
-            localIsGenerating.value = false
-
             // Refresh the recent jobs list to show the completed job
             await fetchRecentJobs()
           },
           onError: (err) => {
             logger.error('Job failed', { error: err })
             localError.value = err
-            localIsGenerating.value = false
           },
         })
         return  // Polling handles the rest

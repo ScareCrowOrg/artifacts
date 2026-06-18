@@ -1423,7 +1423,8 @@
     "cleanBackground": "Clean Background",
     "processing": "Processing...",
     "persistAsset": "💾 Persist Asset",
-    "persisting": "Persisting..."
+    "persisting": "Persisting...",
+    "jobEnqueued": "Your request has been submitted! Track its progress in the list below."
   },
   "threejsSceneGeneratorCell": {
     "title": "Three.js Scene Generator",
@@ -1724,5 +1725,8 @@
         "makePublic": "Make this asset public"
       }
     }
+  },
+  "meshPrototypingCell": {
+    "jobEnqueued": "Your request has been submitted! Track its progress in the list below."
   }
 }

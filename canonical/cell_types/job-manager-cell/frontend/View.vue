@@ -235,6 +235,7 @@ import { JobManagerCell } from './JobManagerCell'
 import type { JobRecord } from './JobManagerCell'
 import ConfirmModal from '#artifacts/shared/components/ConfirmModal.vue'
 import { CELL_FACTORY_KEY, type CellFactory } from '#artifacts/canonical/shared/cellFactory'
+import { useToast } from '#shared/composables/useToast'
 
 const logger = createLogger('component:job-manager-cell')
 
@@ -276,19 +277,10 @@ const emit = defineEmits<{
 
 const initialData = computed(() => props.cell?.initial_data || {})
 
-// Toast notification state
-const toastMessage = ref<string | null>(null)
-const toastType = ref<'success' | 'error'>('success')
-let toastTimer: ReturnType<typeof setTimeout> | null = null
+const { toastMessage, toastType, showToast } = useToast()
 
-function showToast(message: string, type: 'success' | 'error' = 'success') {
-  toastMessage.value = message
-  toastType.value = type
-  if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => {
-    toastMessage.value = null
-  }, 3000)
-}
+// Standalone auto-polling timer (5s interval)
+let standalonePollTimer: ReturnType<typeof setInterval> | null = null
 
 // Per-job loading state (keyed by job ID)
 const actionLoading = reactive<Record<string, boolean>>({})
@@ -593,11 +585,19 @@ onMounted(() => {
     startEmbeddedPolling()
   } else if (!isEmbedded.value) {
     refreshJobs()
+    // Standalone auto-polling: refresh job list every 5 seconds
+    standalonePollTimer = setInterval(() => {
+      refreshJobs()
+    }, 5000)
   }
 })
 
 onUnmounted(() => {
   stopEmbeddedPolling()
+  if (standalonePollTimer) {
+    clearInterval(standalonePollTimer)
+    standalonePollTimer = null
+  }
 })
 </script>
 

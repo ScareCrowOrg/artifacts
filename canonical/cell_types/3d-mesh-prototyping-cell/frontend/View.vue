@@ -220,6 +220,15 @@
         {{ $t('artifacts.meshPrototypingCell.viewAllJobs') }}
       </button>
     </div>
+
+    <!-- Toast notification -->
+    <div
+      v-if="toastMessage"
+      class="fixed bottom-4 right-4 z-50 px-4 py-2 rounded shadow-lg text-sm text-white transition-opacity duration-300"
+      :class="toastType === 'success' ? 'bg-green-600' : 'bg-red-600'"
+    >
+      {{ toastMessage }}
+    </div>
   </div>
 </template>
 
@@ -239,6 +248,7 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted, defineOptions, inject } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/logger'
 import { MeshPrototypingCell } from './MeshPrototypingCell'
 import type { MeshPrototypingInput } from './MeshPrototypingCell'
@@ -246,6 +256,7 @@ import { apiFetch } from '@/services/apiService'
 import { CELL_STATE_BRIDGE_KEY, CELL_FACTORY_KEY } from '#canonical/shared/cellFactory'
 import type { CellStateBridge, CellFactory } from '#canonical/shared/cellFactory'
 import { useJobPolling } from '#shared/composables/useJobPolling'
+import { useToast } from '#shared/composables/useToast'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import JobStatusIndicator from './components/JobStatusIndicator.vue'
 import GenerationModeSwitcher from './components/GenerationModeSwitcher.vue'
@@ -256,6 +267,9 @@ import ContentSelectorModal from './components/ContentSelectorModal.vue'
 defineOptions({ name: 'MeshPrototypingCellView' })
 
 const logger = createLogger('component:3d-mesh-prototyping-cell')
+const { t } = useI18n()
+
+const { toastMessage, toastType, showToast } = useToast()
 
 // Initialize MeshPrototypingCell instance
 const cellInstance = new MeshPrototypingCell()
@@ -662,19 +676,21 @@ const generate3DMesh = async () => {
 
       if (output.job_id) {
         // Async job (local-gpu mode) - start polling
+        // DESBLOQUEIA botão imediatamente — usuário pode enfileirar mais jobs
+        localIsGenerating.value = false
+        // Feedback: mensagem de confirmação
+        showToast(t('meshPrototypingCell.jobEnqueued'), 'success')
         logger.info(`Job queued: ${output.job_id}`)
         startPolling(output.job_id, {
           intervalMs: 2000,
           onComplete: async (job: any) => {
             localError.value = null
-            localIsGenerating.value = false
             logger.info('3D mesh generation completed', { job })
             // Refresh the recent jobs list to show the completed job
             await fetchRecentJobs()
           },
           onError: (err: string) => {
             localError.value = err
-            localIsGenerating.value = false
             logger.error('Job failed', err)
           }
         })
