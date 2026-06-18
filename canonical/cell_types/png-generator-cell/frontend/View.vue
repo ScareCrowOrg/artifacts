@@ -447,7 +447,8 @@ const openImageViewer = async (job: any) => {
     const initialData: Record<string, any> = {}
     if (job.relative_url) {
       initialData.relative_url = job.relative_url
-    } else if (job.content_id) {
+    }
+    if (job.content_id) {
       initialData.content_id = job.content_id
     }
     await cellFactory.addChildCell('image-content-cell', initialData)
