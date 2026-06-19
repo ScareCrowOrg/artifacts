@@ -104,7 +104,8 @@
       "recentJobs": "Jobs 3D Recentes",
       "noRecentJobs": "Nenhum job de geração 3D recente",
       "viewResult": "Abrir no GLB Viewer",
-      "viewAllJobs": "Ver todos os jobs no Job Manager"
+      "viewAllJobs": "Ver todos os jobs no Job Manager",
+      "jobEnqueued": "Job de malha 3D enfileirado com sucesso!"
     }
   }
 }

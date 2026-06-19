@@ -28,6 +28,7 @@
     "pendingJobs": "Trabalhos Pendentes",
     "noRecentJobs": "Nenhum trabalho recente",
     "viewResult": "Ver resultado →",
-    "viewAllJobs": "Ver todos os trabalhos PNG →"
+    "viewAllJobs": "Ver todos os trabalhos PNG →",
+    "jobEnqueued": "Job de PNG enfileirado com sucesso!"
   }
 }

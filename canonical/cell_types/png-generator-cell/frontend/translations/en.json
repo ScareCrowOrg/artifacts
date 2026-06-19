@@ -28,6 +28,7 @@
     "pendingJobs": "Pending Jobs",
     "noRecentJobs": "No recent jobs",
     "viewResult": "View result →",
-    "viewAllJobs": "View all PNG jobs →"
+    "viewAllJobs": "View all PNG jobs →",
+    "jobEnqueued": "PNG job enqueued successfully!"
   }
 }

@@ -104,7 +104,8 @@
       "recentJobs": "Recent 3D Jobs",
       "noRecentJobs": "No recent 3D generation jobs",
       "viewResult": "Open in GLB Viewer",
-      "viewAllJobs": "View all jobs in Job Manager"
+      "viewAllJobs": "View all jobs in Job Manager",
+      "jobEnqueued": "3D mesh job enqueued successfully!"
     }
   }
 }
