@@ -105,7 +105,14 @@ async def queue_image_generation_job(
         try:
             from app.models.job import create_job_document
 
-            await create_job_document(
+            logger.debug(
+                "DIAG [queue_image_generation_job] Calling create_job_document: "
+                "job_id=%s, user_id=%s, current_user=%s",
+                job_id,
+                assignee_id or "cell-script",
+                current_user,
+            )
+            jdoc_result = await create_job_document(
                 job_id=job_id,
                 job_type="comfyui_generate",
                 user_id=assignee_id or "cell-script",
@@ -115,6 +122,23 @@ async def queue_image_generation_job(
                 current_user=current_user,
                 planet_id=os.getenv("PLANET_NAME", ""),
             )
+            logger.debug(
+                "DIAG [queue_image_generation_job] create_job_document returned: "
+                "doc=%s (type=%s)",
+                jdoc_result,
+                type(jdoc_result).__name__,
+            )
+            if jdoc_result is None:
+                logger.critical(
+                    "PERMANENTE [queue_image_generation_job] MongoDB insert FAILED for job=%s. "
+                    "Aborting queue chain to prevent ghost job — job was NOT enqueued.",
+                    job_id,
+                )
+                return {
+                    "success": False,
+                    "error": "Database persistence failed. Job was not enqueued to protect data integrity. "
+                             "Please try again or contact support if the issue persists.",
+                }
         except ImportError:
             logger.warning(
                 "create_job_document not available (app.models.job not imported) — "
@@ -129,6 +153,12 @@ async def queue_image_generation_job(
         try:
             from canonical.shared.redis_client import create_job
 
+            logger.debug(
+                "DIAG [queue_image_generation_job] Calling create_job: "
+                "owner_user_id=%s, assignee_id in payload=%s",
+                "cell-script",
+                assignee_id or "NOT_SET",
+            )
             logger.warning(
                 "PNG-PERMANENTE: owner_user_id='cell-script' (FIXED STRING) — top-level user_id will be "
                 "'cell-script', not real assignee UUID. payload.assignee_id=%s",
@@ -137,18 +167,23 @@ async def queue_image_generation_job(
             enqueued_job_id, location = await create_job(
                 job_type="comfyui_generate",
                 payload=payload,
-                owner_user_id="cell-script",
+                owner_user_id=assignee_id or "cell-script",
                 job_id=job_id,
                 planet_id=os.getenv("PLANET_NAME", ""),
             )
             logger.info("Job enqueued via canonical redis_client to %s: %s", location, job_id)
         except Exception as exc:
             logger.warning("canonical create_job unavailable (%s); using direct LPUSH fallback", exc)
+            logger.debug(
+                "DIAG [queue_image_generation_job] create_job failed, "
+                "using direct LPUSH fallback: %s",
+                exc,
+            )
             redis_client = await get_redis_client()
             job_data = {
                 "job_id": job_id,
                 "job_type": "comfyui_generate",
-                "user_id": "cell-script",
+                "user_id": assignee_id or "cell-script",
                 "queue": "scareverse:comfyui-jobs:queue",
                 **payload,
             }
