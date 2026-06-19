@@ -47,6 +47,12 @@ class CentralHubRedisClient:
         self.auth_token = auth_token
         self.timeout = timeout
 
+        token_preview = auth_token[:20] + "..." if len(auth_token) > 20 else auth_token
+        logger.info(
+            "[CentralHubRedisClient] Initializing with auth_token: %s (len=%d, url=%s)",
+            token_preview, len(auth_token), self.base_url
+        )
+
         # Create HTTP client with connection pooling
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
@@ -125,6 +131,8 @@ class CentralHubRedisClient:
 
         try:
             post_start = time.time()
+            token_preview = self.auth_token[:20] + "..." if len(self.auth_token) > 20 else self.auth_token
+            logger.info("[BRPOP] ▶️ Sending POST /api/redis/jobs/dequeue (Authorization: Bearer %s...)", token_preview)
             logger.debug("[BRPOP POST] starting HTTP request...")
 
             response = await self.client.post(
@@ -153,14 +161,25 @@ class CentralHubRedisClient:
 
         except httpx.HTTPStatusError as e:
             total_elapsed = time.time() - brpop_start
-            logger.error(
-                "[BRPOP ERROR] total=%.3fs HTTP %s - %s (queues=%s)",
-                total_elapsed,
-                e.response.status_code,
-                e.response.text[:200],
-                queue_names,
-                exc_info=True,
-            )
+            token_preview = self.auth_token[:20] + "..." if len(self.auth_token) > 20 else self.auth_token
+            if e.response.status_code == 401:
+                logger.critical(
+                    "[BRPOP AUTH FAILURE] total=%.3fs HTTP 401 - CentralHub rejected our token. "
+                    "Token preview: %s (len=%d). Queues: %s. Response: %s",
+                    total_elapsed,
+                    token_preview, len(self.auth_token),
+                    queue_names,
+                    e.response.text[:500],
+                )
+            else:
+                logger.error(
+                    "[BRPOP ERROR] total=%.3fs HTTP %s - %s (queues=%s)",
+                    total_elapsed,
+                    e.response.status_code,
+                    e.response.text[:200],
+                    queue_names,
+                    exc_info=True,
+                )
             raise
         except Exception as e:
             total_elapsed = time.time() - brpop_start

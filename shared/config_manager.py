@@ -192,10 +192,14 @@ def get_config(key: str) -> Optional[str]:
         # Check lazy secrets cache first (per-process, no TTL)
         hit, cached_value = _secrets_cache_get(secret_name)
         if hit:
+            logger.info("[Config] ✅ Secrets cache HIT for 'vault.%s' — returning cached value (preview: %s...)",
+                        secret_name, cached_value[:15] if len(cached_value) >= 15 else cached_value)
             return cached_value
+        logger.info("[Config] Secrets cache MISS for 'vault.%s' — will request from SecretClient", secret_name)
 
         client = _get_secret_client()
         if client is not None:
+            logger.info("[Config] ▶️ Calling SecretClient.request_secret('%s') (timeout: 60s)", secret_name)
             try:
                 value = client.request_secret(secret_name)
                 if value is not None:
@@ -211,11 +215,16 @@ def get_config(key: str) -> Optional[str]:
                 )
         # Fallback: env var with VAULT_ prefix stripped
         env_key = secret_name.upper().replace(":", "_").replace(".", "_").replace("-", "_")
+        logger.info("[Config] SecretClient returned None for '%s' — falling back to env var '%s'", secret_name, env_key)
         env_value = os.getenv(env_key)
         if env_value is not None:
+            env_preview = env_value[:15] if len(env_value) >= 15 else env_value
+            logger.info("[Config] ✅ Env var '%s' found: '%s...' (len=%d) — caching and returning",
+                        env_key, env_preview, len(env_value))
             # Cache env fallback too (for consistency)
             _secrets_cache_set(secret_name, env_value)
             return env_value
+        logger.warning("[Config] ❌ Env var '%s' also NOT SET for secret '%s' — returning None", env_key, secret_name)
         return None
 
     # ------------------------------------------------------------------
