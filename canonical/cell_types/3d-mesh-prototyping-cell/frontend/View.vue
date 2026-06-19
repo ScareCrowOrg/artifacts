@@ -679,7 +679,7 @@ const generate3DMesh = async () => {
         // DESBLOQUEIA botão imediatamente — usuário pode enfileirar mais jobs
         localIsGenerating.value = false
         // Feedback: mensagem de confirmação
-        showToast(t('meshPrototypingCell.jobEnqueued'), 'success')
+        showToast(t('artifacts.meshPrototypingCell.jobEnqueued'), 'success')
         logger.info(`Job queued: ${output.job_id}`)
         startPolling(output.job_id, {
           intervalMs: 2000,
