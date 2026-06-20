@@ -27,13 +27,20 @@ logger = logging.getLogger(__name__)
 async def execute_cell(cell_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute content-explorer-cell actions.
-    
+
     Args:
         cell_data: Cell execution data with 'action' and parameters
-        
+
     Returns:
         Result dictionary with success flag and data
     """
+    # DIAG: Log entry to confirm execute_cell was called and what data was received
+    logger.debug(
+        "DIAG [content-explorer-cell] execute_cell entered: action=%s, data_keys=%s, has_current_user=%s",
+        cell_data.get("action", "N/A"),
+        list(cell_data.keys()),
+        "_current_user" in cell_data,
+    )
     action = cell_data.get("action", "list")
     
     if action == "list":
