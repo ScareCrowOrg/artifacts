@@ -1,0 +1,16 @@
+{
+  "artifactsManager": {
+    "metadata": "Metadados",
+    "allow": "🔐 Permitir",
+    "saving": "Salvando…",
+    "allowSuccess": "Usuário {name} adicionado à lista de permissão",
+    "allowFailed": "Falha ao conceder permissão",
+    "noData": "Nenhum dado de artefato disponível.",
+    "noDataDescription": "Nenhum artefato foi selecionado para gerenciamento.",
+    "allowCancelled": "Permissão cancelada",
+    "allowUnavailable": "Ação de permissão não disponível",
+    "description": "Descrição",
+    "version": "Versão",
+    "clickToToggle": "clique para alternar"
+  }
+}

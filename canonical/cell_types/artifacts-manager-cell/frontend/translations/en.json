@@ -1,0 +1,16 @@
+{
+  "artifactsManager": {
+    "metadata": "Metadata",
+    "allow": "🔐 Allow",
+    "saving": "Saving…",
+    "allowSuccess": "User {name} added to allowance list",
+    "allowFailed": "Failed to grant permission",
+    "noData": "No artifact data available.",
+    "noDataDescription": "No artifact was selected for management.",
+    "allowCancelled": "Allowance cancelled",
+    "allowUnavailable": "Allow action not available",
+    "description": "Description",
+    "version": "Version",
+    "clickToToggle": "click to toggle"
+  }
+}

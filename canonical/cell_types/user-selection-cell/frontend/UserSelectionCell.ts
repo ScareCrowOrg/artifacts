@@ -3,7 +3,7 @@
  * @description UserSelectionCell — ephemeral BaseCell for user selection via modal overlay.
  *
  * This cell is NOT instantiated by users directly (category: "ephemeral").
- * It is invoked programmatically by other cells (e.g. ArtifactsExplorerCell.allowArtifact())
+ * It is invoked programmatically by other cells (e.g. ArtifactsManagerCell.allowArtifact())
  * via its show() method, which returns a Promise<SelectableUser | null>.
  *
  * Flow:

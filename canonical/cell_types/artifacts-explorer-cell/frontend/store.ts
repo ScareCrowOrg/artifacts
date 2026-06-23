@@ -71,6 +71,7 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const selectedArtifact = ref<ExplorerArtifact | null>(null)
+  const manageArtifactTarget = ref<ExplorerArtifact | null>(null)
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -127,6 +128,26 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
     selectedArtifact.value = null
   }
 
+  /**
+   * Trigger the manage flow for an artifact.
+   * Sets manageArtifactTarget which App.vue watches to open the artifacts-manager-cell.
+   */
+  function triggerManageArtifact(artifact: ExplorerArtifact): void {
+    log.info('[ArtifactsExplorerStore] Manage triggered', {
+      name: artifact.identity.name,
+      artifactId: artifact.artifact_id,
+    })
+    manageArtifactTarget.value = artifact
+  }
+
+  /**
+   * Clear the manage target after App.vue has processed it.
+   */
+  function clearManageArtifactTarget(): void {
+    log.debug('[ArtifactsExplorerStore] Manage target cleared')
+    manageArtifactTarget.value = null
+  }
+
   // ── Computed (derived from availableArtifacts) ────────────────────────────────
 
   /**
@@ -167,10 +188,13 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
     isLoading,
     error,
     selectedArtifact,
+    manageArtifactTarget,
     availableCellTypes,
     loadArtifacts,
     loadCellTypes,
     selectArtifact,
     clearSelection,
+    triggerManageArtifact,
+    clearManageArtifactTarget,
   }
 })

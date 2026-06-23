@@ -570,6 +570,61 @@ watch(
   },
 )
 
+// ── Explorer store watcher: Manage Artifact (artifacts-manager-cell) ──────────
+// When the user clicks "Manage" on a cell-type artifact in the explorer,
+// explorerStore.manageArtifactTarget is set. This watcher reacts, closes the modal,
+// and opens the artifacts-manager-cell in the grid with artifact data as initialData.
+watch(
+  () => explorerStore.manageArtifactTarget,
+  async (artifact: ExplorerArtifact | null) => {
+    if (!artifact) return
+
+    // Close the explorer modal
+    isExplorerModalOpen.value = false
+    modalCell.value = null
+
+    log.info('[App] Explorer manage artifact, creating manager cell', {
+      name: artifact.identity.name,
+      artifactId: artifact.artifact_id,
+    })
+
+    // Build CellTypeDefinition for artifacts-manager-cell
+    const managerType: CellTypeDefinition = {
+      name: 'artifacts-manager-cell',
+      id: 'artifacts-manager-cell',
+      description: 'Artifact detail manager',
+      version: '1.0.0',
+      can_render_dynamically: true,
+      default_refs: {
+        basecell: ['frontend/ArtifactsManagerCell.ts'],
+        view: ['frontend/View.vue'],
+      },
+    }
+
+    try {
+      await handleCellTypeSelected(managerType, {
+        artifact_id: artifact.artifact_id,
+        artifact_name: artifact.identity.name,
+        artifact_description: artifact.identity.description,
+        artifact_icon: artifact.identity.icon,
+        artifact_type: artifact.artifact_type,
+        metadata: artifact.metadata || {},
+        stage: artifact.stage,
+        version: artifact.version,
+        identity: artifact.identity,
+        runtime: artifact.runtime,
+        execution_model: artifact.execution_model,
+      })
+    } catch (err: any) {
+      log.error('[App] Failed to create manager cell', {
+        error: err?.message,
+      })
+    } finally {
+      explorerStore.clearManageArtifactTarget()
+    }
+  },
+)
+
 function handleRemoveCell(cellId: string): void {
   removeCell(cellId)
   log.info('[App] Cell removed', { cellId })

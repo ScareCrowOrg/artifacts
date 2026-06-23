@@ -15,8 +15,6 @@ import type {
 } from '@/types/BaseCell'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
-import { UserSelectionCell } from '#canonical/cell_types/user-selection-cell/frontend/UserSelectionCell'
-import type { SelectableUser } from '#canonical/cell_types/user-selection-cell/frontend/store'
 
 const log = createLogger('cell:artifacts-explorer')
 
@@ -24,8 +22,6 @@ const log = createLogger('cell:artifacts-explorer')
 type FilterMode = 'all' | 'cells_only'
 
 export class ArtifactsExplorerCell extends BaseCell {
-  /** UserSelectionCell instance — created once and reused for all allowArtifact() calls. */
-  private readonly _userSelectionCell = new UserSelectionCell()
   /**
    * Execute: returns all artifacts from the unified Artifact Runtime Map API.
    * Accepts an optional `filter_mode` input:
@@ -118,57 +114,6 @@ export class ArtifactsExplorerCell extends BaseCell {
     }
   }
 
-  /**
-   * Allow an artifact: opens the user-selection overlay, and if the user
-   * confirms, persists the allowance via POST /api/local/allowance.
-   *
-   * Phase 1: captures the user selection, calls the backend, and returns
-   * the selected user on success.
-   *
-   * - If the user cancels (null): returns null without calling the backend.
-   * - If the backend call fails: throws an Error so the View can handle it.
-   *
-   * @param artifactId - The ID of the artifact to grant allowance for
-   * @returns The selected user, or null on cancel
-   */
-  async allowArtifact(artifactId: string): Promise<SelectableUser | null> {
-    log.info('[ArtifactsExplorerCell] allowArtifact() called', { artifactId })
-    const user = await this._userSelectionCell.show({}, {
-      mode: 'pick-one',
-      title: 'Select user for allowance',
-    })
-
-    if (!user) {
-      log.debug('[ArtifactsExplorerCell] allowArtifact() cancelled', { artifactId })
-      return null
-    }
-
-    log.info('[ArtifactsExplorerCell] allowArtifact() user selected, persisting', {
-      artifactId,
-      selected: user.name,
-    })
-
-    const response = await apiFetch('/api/local/allowance', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ artifact_id: artifactId, user_id: user.id }),
-    })
-
-    if (!response.ok) {
-      const detail = await response.text()
-      log.error('[ArtifactsExplorerCell] allowArtifact() backend error', {
-        status: response.status,
-        detail,
-      })
-      throw new Error(`Failed to grant permission (${response.status}): ${detail}`)
-    }
-
-    log.info('[ArtifactsExplorerCell] allowArtifact() persisted successfully', {
-      artifactId,
-      userId: user.id,
-    })
-    return user
-  }
 }
 
 export default ArtifactsExplorerCell

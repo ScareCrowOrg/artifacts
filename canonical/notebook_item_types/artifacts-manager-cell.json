@@ -1,0 +1,28 @@
+{
+  "id": "artifacts-manager-cell",
+  "name": "Artifacts Manager",
+  "description": "Artifact detail manager. Displays metadata and provides management actions (Allow) for artifacts discovered in the explorer.",
+  "version": "1.0.0",
+  "category": "workspace",
+  "icon": "⚙️",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": ["frontend/View.vue"],
+    "basecell": ["frontend/ArtifactsManagerCell.ts"],
+    "docs": ["docs/README.md"]
+  },
+  "default_initial_data": {
+    "artifact_id": "",
+    "artifact_data": {}
+  },
+  "properties_schema": {
+    "artifact_id": {
+      "type": "string",
+      "description": "The artifact ID from the Artifact Runtime Map"
+    },
+    "artifact_data": {
+      "type": "object",
+      "description": "Full artifact record data (identity, runtime, execution_model, metadata, stage, version)"
+    }
+  }
+}

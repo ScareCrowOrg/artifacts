@@ -51,6 +51,7 @@
     <!-- Search -->
     <div class="px-4 pt-2 pb-2">
       <input
+        ref="searchInput"
         v-model="searchQuery"
         type="text"
         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
@@ -165,31 +166,16 @@
                   </span>
                 </div>
 
-                <!-- Allow button (cell-type artifacts only) -->
+                <!-- Manage button (cell-type artifacts only) — opens artifacts-manager-cell -->
                 <button
                   v-if="artifact.artifact_type === 'cell-type'"
-                  class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-600 text-white rounded text-xs font-medium hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  :aria-label="`Allow user access to ${artifact.identity.name}`"
-                  :disabled="allowanceLoading[artifact.artifact_id]"
-                  @click="handleAllowArtifact(artifact)"
+                  class="inline-flex items-center gap-1 px-2 py-1 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700 transition-colors"
+                  :aria-label="`Manage ${artifact.identity.name}`"
+                  @click="handleManageArtifact(artifact)"
                 >
-                  <span v-if="allowanceLoading[artifact.artifact_id]">⏳ Saving…</span>
-                  <span v-else>🔐 Allow</span>
+                  ⚙️ Manage
                 </button>
               </div>
-
-              <!-- Allowance feedback message -->
-              <p
-                v-if="allowanceFeedback[artifact.artifact_id]"
-                class="mt-1.5 text-xs font-medium"
-                :class="
-                  allowanceFeedback[artifact.artifact_id]?.type === 'error'
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-emerald-600 dark:text-emerald-400'
-                "
-              >
-                {{ allowanceFeedback[artifact.artifact_id].message }}
-              </p>
             </div>
           </div>
         </div>
@@ -197,8 +183,6 @@
     </div>
   </div>
 
-  <!-- UserSelectionCell overlay (mounted via Teleport inside View.vue) -->
-  <UserSelectionView />
 </template>
 
 <script setup lang="ts">
@@ -218,11 +202,10 @@
  *  - cell: { cellTypeName, cellType, initialData } (from resolveViewSpec)
  */
 
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { useArtifactsExplorerStore } from './store'
 import type { ExplorerArtifact, FilterMode } from './store'
-import UserSelectionView from '#canonical/cell_types/user-selection-cell/frontend/View.vue'
 
 const log = createLogger('cell:artifacts-explorer:view')
 
@@ -235,18 +218,11 @@ const props = defineProps<{
 // ── Store & Local State ────────────────────────────────────────────────────────
 const explorerStore = useArtifactsExplorerStore()
 const searchQuery = ref('')
+const searchInput = ref<HTMLInputElement | null>(null)
 
 /** Active category tab key. Defaults to 'all'. */
 const activeCategory = ref<'all' | 'cell-type' | 'service' | 'job-type'>('all')
 
-/** Allowance feedback messages per artifact_id (auto-cleared after 3s). */
-const allowanceFeedback = ref<Record<string, { type: 'success' | 'error'; message: string }>>({})
-
-/** Loading state per artifact_id while the allowance backend call is in flight. */
-const allowanceLoading = ref<Record<string, boolean>>({})
-
-/** Track active feedback timeouts so they can be cleared on unmount. */
-const feedbackTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
 // ── Derived filter_mode from cell initialData / props ─────────────────────────
 const filterMode = computed<FilterMode>(() => {
@@ -331,54 +307,12 @@ function handleSelectArtifact(artifact: ExplorerArtifact): void {
   explorerStore.selectArtifact(artifact)
 }
 
-async function handleAllowArtifact(artifact: ExplorerArtifact): Promise<void> {
-  log.info('[ArtifactsExplorerView] Allow clicked', { artifactId: artifact.artifact_id })
-  if (!props.cellInstance) {
-    log.warn('[ArtifactsExplorerView] No cellInstance available for allowArtifact()')
-    return
-  }
-
-  allowanceLoading.value[artifact.artifact_id] = true
-  try {
-    const user = await props.cellInstance.allowArtifact(artifact.artifact_id)
-    if (user) {
-      allowanceFeedback.value[artifact.artifact_id] = {
-        type: 'success',
-        message: `User ${user.name} added to allowance list`,
-      }
-      log.info('[ArtifactsExplorerView] Allowance granted', {
-        artifactId: artifact.artifact_id,
-        name: user.name,
-      })
-    } else {
-      log.debug('[ArtifactsExplorerView] Allow cancelled', { artifactId: artifact.artifact_id })
-    }
-  } catch (error) {
-    allowanceFeedback.value[artifact.artifact_id] = {
-      type: 'error',
-      message: 'Failed to grant permission',
-    }
-    log.error('[ArtifactsExplorerView] Allowance error', {
-      artifactId: artifact.artifact_id,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  } finally {
-    allowanceLoading.value[artifact.artifact_id] = false
-  }
-
-  // Schedule feedback clearance after 3 s (only when a message was set)
-  if (allowanceFeedback.value[artifact.artifact_id]) {
-    const prior = feedbackTimeouts.get(artifact.artifact_id)
-    if (prior !== undefined) {
-      clearTimeout(prior)
-      feedbackTimeouts.delete(artifact.artifact_id)
-    }
-    const tid = setTimeout(() => {
-      delete allowanceFeedback.value[artifact.artifact_id]
-      feedbackTimeouts.delete(artifact.artifact_id)
-    }, 3000)
-    feedbackTimeouts.set(artifact.artifact_id, tid)
-  }
+async function handleManageArtifact(artifact: ExplorerArtifact): Promise<void> {
+  log.info('[ArtifactsExplorerView] Manage clicked', {
+    name: artifact.identity.name,
+    artifactId: artifact.artifact_id,
+  })
+  explorerStore.triggerManageArtifact(artifact)
 }
 
 function loadArtifacts(): void {
@@ -386,14 +320,6 @@ function loadArtifacts(): void {
 }
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────────
-onBeforeUnmount(() => {
-  // Clear all pending feedback timeouts to prevent memory leaks on unmount
-  for (const tid of feedbackTimeouts.values()) {
-    clearTimeout(tid)
-  }
-  feedbackTimeouts.clear()
-})
-
 onMounted(async () => {
   // [DEBUG-2887] Log mount context: props, filterMode, store state
   log.info('[DEBUG-2887][ArtifactsExplorerView] onMounted', {
@@ -423,6 +349,10 @@ onMounted(async () => {
       count: explorerStore.availableArtifacts.length,
     })
   }
+
+  // Auto-focus search input on mount
+  await nextTick()
+  searchInput.value?.focus()
 })
 </script>
 
