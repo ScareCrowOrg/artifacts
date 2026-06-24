@@ -46,6 +46,52 @@
         >{{ formattedMetadata }}</pre>
       </div>
 
+      <!-- Allowed Users -->
+      <div class="mb-4">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          {{ $t('artifactsManager.allowedUsers') }}
+        </h3>
+
+        <!-- Loading -->
+        <div v-if="isLoadingAllowances" class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <span>⏳</span>
+          <span>{{ $t('artifactsManager.loading') }}</span>
+        </div>
+
+        <!-- Error -->
+        <div v-else-if="allowanceError" class="text-sm text-red-500 dark:text-red-400">
+          {{ allowanceError }}
+        </div>
+
+        <!-- Empty -->
+        <div v-else-if="allowanceUsers.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+          {{ $t('artifactsManager.noAllowedUsers') }}
+        </div>
+
+        <!-- List -->
+        <ul v-else class="space-y-1">
+          <li
+            v-for="entry in allowanceUsers"
+            :key="entry.user_id"
+            class="flex items-center justify-between py-1.5 px-2 bg-gray-50 dark:bg-gray-800 rounded"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              <span v-if="entry.avatar_url" class="w-5 h-5 rounded-full flex-shrink-0 bg-cover" :style="{ backgroundImage: `url(${entry.avatar_url})` }"></span>
+              <span v-else class="w-5 h-5 rounded-full flex-shrink-0 bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                {{ (entry.name || entry.user_id).charAt(0).toUpperCase() }}
+              </span>
+              <span class="text-sm text-gray-700 dark:text-gray-300 truncate">{{ entry.name || entry.user_id }}</span>
+            </div>
+            <button
+              class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              :disabled="removingUsers.has(entry.user_id)"
+              :title="$t('artifactsManager.removeAllowance')"
+              @click="handleRemoveAllowance(entry.user_id)"
+            >−</button>
+          </li>
+        </ul>
+      </div>
+
       <!-- Allow Button -->
       <div class="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
         <button
@@ -91,11 +137,11 @@
  *  - cell: { cellTypeName, cellType, initialData } (from resolveViewSpec)
  */
 
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/logger'
 import UserSelectionView from '#canonical/cell_types/user-selection-cell/frontend/View.vue'
-import type { ArtifactsManagerCell } from './ArtifactsManagerCell'
+import type { ArtifactsManagerCell, AllowanceEntry } from './ArtifactsManagerCell'
 
 const log = createLogger('cell:artifacts-manager:view')
 const { t } = useI18n()
@@ -165,6 +211,12 @@ const feedback = ref<string | null>(null)
 const feedbackType = ref<'success' | 'error' | 'info'>('info')
 const metadataExpanded = ref(true)
 
+// ── Allowance List State (Buffer Local Pattern) ──────────────────────────────
+const allowanceUsers = ref<AllowanceEntry[]>([])
+const isLoadingAllowances = ref(false)
+const allowanceError = ref<string | null>(null)
+const removingUsers = ref<Set<string>>(new Set())
+
 let feedbackTimeout: ReturnType<typeof setTimeout> | null = null
 
 // ── Computed ───────────────────────────────────────────────────────────────────
@@ -208,6 +260,8 @@ async function handleAllow(): Promise<void> {
         artifactId: localArtifactId.value,
         name: user.name,
       })
+      // Reload allowances list to include the newly granted user
+      await loadAllowances()
     } else {
       feedback.value = t('artifactsManager.allowCancelled')
       feedbackType.value = 'info'
@@ -239,7 +293,88 @@ function scheduleFeedbackClear(): void {
   }, 3000)
 }
 
+// ── Allowance Handlers ────────────────────────────────────────────────────────
+
+/**
+ * Load the list of users with allowance for the current artifact.
+ * Called on mount and after successful allowance grants.
+ */
+async function loadAllowances(): Promise<void> {
+  if (!localArtifactId.value) return
+
+  const cell = props.cellInstance
+  if (!cell || typeof cell.listAllowances !== 'function') {
+    log.warn('[ArtifactsManagerView] cellInstance does not support listAllowances()')
+    return
+  }
+
+  isLoadingAllowances.value = true
+  allowanceError.value = null
+  try {
+    allowanceUsers.value = await cell.listAllowances(localArtifactId.value)
+    log.info('[ArtifactsManagerView] Allowances loaded', {
+      artifactId: localArtifactId.value,
+      count: allowanceUsers.value.length,
+    })
+  } catch (error) {
+    allowanceError.value = t('artifactsManager.allowanceLoadFailed')
+    log.error('[ArtifactsManagerView] Failed to load allowances', {
+      artifactId: localArtifactId.value,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  } finally {
+    isLoadingAllowances.value = false
+  }
+}
+
+/**
+ * Handle remove (minus) button click.
+ * Calls cellInstance.removeAllowance() if available.
+ * Removes from local list on success, shows feedback on error.
+ */
+async function handleRemoveAllowance(userId: string): Promise<void> {
+  if (!localArtifactId.value) return
+
+  const cell = props.cellInstance
+  if (!cell || typeof cell.removeAllowance !== 'function') {
+    log.warn('[ArtifactsManagerView] cellInstance does not support removeAllowance()')
+    return
+  }
+
+  removingUsers.value = new Set([...removingUsers.value, userId])
+  try {
+    await cell.removeAllowance(localArtifactId.value, userId)
+    // Remove from local list immediately on success
+    allowanceUsers.value = allowanceUsers.value.filter(u => u.user_id !== userId)
+    feedback.value = t('artifactsManager.allowanceRemoved')
+    feedbackType.value = 'success'
+    log.info('[ArtifactsManagerView] Allowance removed', {
+      artifactId: localArtifactId.value,
+      userId,
+    })
+  } catch (error) {
+    feedback.value = t('artifactsManager.allowanceRemoveFailed')
+    feedbackType.value = 'error'
+    log.error('[ArtifactsManagerView] Failed to remove allowance', {
+      artifactId: localArtifactId.value,
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  } finally {
+    const next = new Set(removingUsers.value)
+    next.delete(userId)
+    removingUsers.value = next
+  }
+
+  scheduleFeedbackClear()
+}
+
 // ── Lifecycle ──────────────────────────────────────────────────────────────────
+onMounted(async () => {
+  if (localArtifactId.value) {
+    await loadAllowances()
+  }
+})
 onBeforeUnmount(() => {
   if (feedbackTimeout !== null) {
     clearTimeout(feedbackTimeout)

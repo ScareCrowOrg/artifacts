@@ -11,6 +11,12 @@
     "allowUnavailable": "Allow action not available",
     "description": "Description",
     "version": "Version",
-    "clickToToggle": "click to toggle"
+    "clickToToggle": "click to toggle",
+    "allowedUsers": "Allowed Users",
+    "noAllowedUsers": "No users with permission",
+    "allowanceLoadFailed": "Failed to load allowances",
+    "allowanceRemoved": "Permission removed",
+    "allowanceRemoveFailed": "Failed to remove permission",
+    "removeAllowance": "Remove permission"
   }
 }

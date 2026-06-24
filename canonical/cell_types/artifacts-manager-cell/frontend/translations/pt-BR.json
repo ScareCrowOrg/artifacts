@@ -11,6 +11,12 @@
     "allowUnavailable": "Ação de permissão não disponível",
     "description": "Descrição",
     "version": "Versão",
-    "clickToToggle": "clique para alternar"
+    "clickToToggle": "clique para alternar",
+    "allowedUsers": "Usuários com Permissão",
+    "noAllowedUsers": "Nenhum usuário com permissão",
+    "allowanceLoadFailed": "Falha ao carregar permissões",
+    "allowanceRemoved": "Permissão removida",
+    "allowanceRemoveFailed": "Falha ao remover permissão",
+    "removeAllowance": "Remover permissão"
   }
 }

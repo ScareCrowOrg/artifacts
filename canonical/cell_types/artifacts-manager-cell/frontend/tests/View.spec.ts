@@ -18,6 +18,11 @@
  * - allowArtifact() opens UserSelectionCell, POSTs allowance, returns user
  * - allowArtifact() returns null on cancel
  * - allowArtifact() throws on backend error
+ * - listAllowances() returns allowance entries on success
+ * - listAllowances() throws on backend error
+ * - removeAllowance() returns true on success
+ * - removeAllowance() returns false when not found
+ * - removeAllowance() throws on backend error
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -39,6 +44,14 @@ interface SelectableUser {
   id: string
   name: string
   avatar_url?: string | null
+}
+
+interface AllowanceEntry {
+  user_id: string
+  name?: string
+  avatar_url?: string | null
+  artifact_id: string
+  granted_at: string
 }
 
 // ── Inline stubs ──────────────────────────────────────────────────────────
@@ -157,11 +170,58 @@ class ArtifactsManagerCellStub {
     return user
   }
 
+  /** Stub listAllowances() — GET /api/local/allowance. */
+  async listAllowances(artifactId: string, _mockApiFetch?: ReturnType<typeof vi.fn>): Promise<AllowanceEntry[]> {
+    if (!_mockApiFetch) {
+      return []
+    }
+
+    const response = await _mockApiFetch(
+      `/api/local/allowance?artifact_id=${encodeURIComponent(artifactId)}`,
+      { method: 'GET' },
+    )
+
+    if (!response.ok) {
+      const detail = await response.text()
+      throw new Error(`Failed to load allowances (${response.status}): ${detail}`)
+    }
+
+    const data = await response.json()
+    return data.allowances || []
+  }
+
+  /** Stub removeAllowance() — DELETE /api/local/allowance. */
+  async removeAllowance(artifactId: string, userId: string, _mockApiFetch?: ReturnType<typeof vi.fn>): Promise<boolean> {
+    if (!_mockApiFetch) {
+      return false
+    }
+
+    const response = await _mockApiFetch(
+      `/api/local/allowance?artifact_id=${encodeURIComponent(artifactId)}&user_id=${encodeURIComponent(userId)}`,
+      { method: 'DELETE' },
+    )
+
+    if (!response.ok) {
+      const detail = await response.text()
+      throw new Error(`Failed to remove allowance (${response.status}): ${detail}`)
+    }
+
+    const data = await response.json()
+    return data.removed === true
+  }
+
   /** Helper to configure user-selection outcome. */
   _setUserSelectionResult(value: SelectableUser | null): void {
     this._userSelectionCell.show = vi.fn().mockResolvedValue(value)
   }
 }
+
+// ── Test Data ─────────────────────────────────────────────────────────────
+
+const mockAllowances: AllowanceEntry[] = [
+  { user_id: 'user-1', artifact_id: 'cell:test', granted_at: '2026-06-24T10:00:00Z', name: 'Alice' },
+  { user_id: 'user-2', artifact_id: 'cell:test', granted_at: '2026-06-24T11:00:00Z', name: 'Bob' },
+]
 
 // ── Tests ─────────────────────────────────────────────────────────────────
 
@@ -312,6 +372,108 @@ describe('ArtifactsManagerCell', () => {
       await expect(cell.allowArtifact('cell:test', mockApiFetch)).rejects.toThrow(
         'Failed to grant permission',
       )
+    })
+  })
+
+  // ── listAllowances() ────────────────────────────────────────────────────
+
+  describe('listAllowances()', () => {
+    it('returns allowance entries on success', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ allowances: mockAllowances }),
+      })
+
+      const entries = await cell.listAllowances('cell:test', mockApiFetch)
+
+      expect(entries).toHaveLength(2)
+      expect(entries[0].user_id).toBe('user-1')
+      expect(entries[0].name).toBe('Alice')
+      expect(entries[1].user_id).toBe('user-2')
+      expect(mockApiFetch).toHaveBeenCalledWith(
+        '/api/local/allowance?artifact_id=cell%3Atest',
+        { method: 'GET' },
+      )
+    })
+
+    it('returns empty array when backend returns empty list', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ allowances: [] }),
+      })
+
+      const entries = await cell.listAllowances('cell:test', mockApiFetch)
+
+      expect(entries).toHaveLength(0)
+    })
+
+    it('throws on backend error', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        text: () => Promise.resolve('Bad Gateway'),
+      })
+
+      await expect(cell.listAllowances('cell:test', mockApiFetch)).rejects.toThrow(
+        'Failed to load allowances',
+      )
+    })
+
+    it('handles missing allowances field in response', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+
+      const entries = await cell.listAllowances('cell:test', mockApiFetch)
+      expect(entries).toEqual([])
+    })
+  })
+
+  // ── removeAllowance() ───────────────────────────────────────────────────
+
+  describe('removeAllowance()', () => {
+    it('returns true on successful removal', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true, removed: true }),
+      })
+
+      const removed = await cell.removeAllowance('cell:test', 'user-1', mockApiFetch)
+
+      expect(removed).toBe(true)
+      expect(mockApiFetch).toHaveBeenCalledWith(
+        '/api/local/allowance?artifact_id=cell%3Atest&user_id=user-1',
+        { method: 'DELETE' },
+      )
+    })
+
+    it('returns false when entry did not exist (idempotent)', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true, removed: false }),
+      })
+
+      const removed = await cell.removeAllowance('cell:test', 'nonexistent', mockApiFetch)
+
+      expect(removed).toBe(false)
+    })
+
+    it('throws on backend error', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: () => Promise.resolve('Forbidden'),
+      })
+
+      await expect(cell.removeAllowance('cell:test', 'user-1', mockApiFetch)).rejects.toThrow(
+        'Failed to remove allowance',
+      )
+    })
+
+    it('returns false without mock (no-op path)', async () => {
+      const removed = await cell.removeAllowance('cell:test', 'user-1')
+      expect(removed).toBe(false)
     })
   })
 })

@@ -20,6 +20,15 @@ import type { SelectableUser } from '#canonical/cell_types/user-selection-cell/f
 
 const log = createLogger('cell:artifacts-manager')
 
+/** A single allowance entry returned by the list endpoint. */
+export interface AllowanceEntry {
+  user_id: string
+  name?: string
+  avatar_url?: string | null
+  artifact_id: string
+  granted_at: string
+}
+
 export class ArtifactsManagerCell extends BaseCell {
   /** UserSelectionCell instance — created once and reused for all allowArtifact() calls. */
   private readonly _userSelectionCell = new UserSelectionCell()
@@ -179,6 +188,80 @@ export class ArtifactsManagerCell extends BaseCell {
       userId: user.id,
     })
     return user
+  }
+
+  /**
+   * List all users with allowance for a specific artifact.
+   *
+   * Calls GET /api/local/allowance?artifact_id=xxx through the backend proxy.
+   *
+   * @param artifactId - The ID of the artifact to list allowances for
+   * @returns Array of AllowanceEntry objects
+   */
+  async listAllowances(artifactId: string): Promise<AllowanceEntry[]> {
+    log.info('[ArtifactsManagerCell] listAllowances() called', { artifactId })
+
+    const response = await apiFetch(
+      `/api/local/allowance?artifact_id=${encodeURIComponent(artifactId)}`,
+      { method: 'GET' },
+    )
+
+    if (!response.ok) {
+      const detail = await response.text()
+      log.error('[ArtifactsManagerCell] listAllowances() backend error', {
+        status: response.status,
+        detail,
+      })
+      throw new Error(`Failed to load allowances (${response.status}): ${detail}`)
+    }
+
+    const data = await response.json()
+    const entries: AllowanceEntry[] = data.allowances || []
+    log.info('[ArtifactsManagerCell] listAllowances() loaded', {
+      artifactId,
+      count: entries.length,
+    })
+    return entries
+  }
+
+  /**
+   * Remove an artifact allowance for a specific user.
+   *
+   * Calls DELETE /api/local/allowance?artifact_id=xxx&user_id=xxx through the
+   * backend proxy.
+   *
+   * @param artifactId - The ID of the artifact to revoke
+   * @param userId - The ID of the user whose allowance to revoke
+   * @returns true if the allowance was removed, false if it didn't exist
+   */
+  async removeAllowance(artifactId: string, userId: string): Promise<boolean> {
+    log.info('[ArtifactsManagerCell] removeAllowance() called', {
+      artifactId,
+      userId,
+    })
+
+    const response = await apiFetch(
+      `/api/local/allowance?artifact_id=${encodeURIComponent(artifactId)}&user_id=${encodeURIComponent(userId)}`,
+      { method: 'DELETE' },
+    )
+
+    if (!response.ok) {
+      const detail = await response.text()
+      log.error('[ArtifactsManagerCell] removeAllowance() backend error', {
+        status: response.status,
+        detail,
+      })
+      throw new Error(`Failed to remove allowance (${response.status}): ${detail}`)
+    }
+
+    const data = await response.json()
+    const removed = data.removed === true
+    log.info('[ArtifactsManagerCell] removeAllowance() result', {
+      artifactId,
+      userId,
+      removed,
+    })
+    return removed
   }
 }
 
