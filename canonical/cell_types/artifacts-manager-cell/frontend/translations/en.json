@@ -17,6 +17,10 @@
     "allowanceLoadFailed": "Failed to load allowances",
     "allowanceRemoved": "Permission removed",
     "allowanceRemoveFailed": "Failed to remove permission",
-    "removeAllowance": "Remove permission"
+    "removeAllowance": "Remove permission",
+    "cancel": "Cancel",
+    "confirmRemoveTitle": "Remove Permission",
+    "confirmRemoveMessage": "Remove permission for {name}?",
+    "confirmRemoveConfirm": "Remove"
   }
 }

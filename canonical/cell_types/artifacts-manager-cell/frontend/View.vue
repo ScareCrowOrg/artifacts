@@ -121,6 +121,44 @@
 
   <!-- UserSelectionCell overlay (Teleport to body for modal) -->
   <UserSelectionView />
+
+  <!-- Confirmation dialog for removing allowance -->
+  <Teleport to="body">
+    <div
+      v-if="showRemoveConfirm"
+      class="fixed inset-0 z-50 flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+    >
+      <!-- Backdrop -->
+      <div class="absolute inset-0 bg-black/60" @click="cancelRemoveAllowance" />
+      <!-- Modal -->
+      <div class="relative z-10 w-full max-w-sm mx-4 bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          {{ $t('artifactsManager.confirmRemoveTitle') }}
+        </h3>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+          {{ $t('artifactsManager.confirmRemoveMessage', { name: pendingRemoveUserName }) }}
+        </p>
+        <div class="flex justify-end gap-3">
+          <button
+            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            @click="cancelRemoveAllowance"
+          >
+            {{ $t('artifactsManager.cancel') }}
+          </button>
+          <button
+            class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            :disabled="removingUsers.has(pendingRemoveUserId)"
+            @click="confirmRemoveAllowance"
+          >
+            <span v-if="removingUsers.has(pendingRemoveUserId)">⏳ {{ $t('artifactsManager.saving') }}</span>
+            <span v-else>{{ $t('artifactsManager.confirmRemoveConfirm') }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -216,6 +254,11 @@ const allowanceUsers = ref<AllowanceEntry[]>([])
 const isLoadingAllowances = ref(false)
 const allowanceError = ref<string | null>(null)
 const removingUsers = ref<Set<string>>(new Set())
+
+// ── Confirmation Dialog State ────────────────────────────────────────────────
+const showRemoveConfirm = ref(false)
+const pendingRemoveUserId = ref<string>('')
+const pendingRemoveUserName = ref<string>('')
 
 let feedbackTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -329,10 +372,9 @@ async function loadAllowances(): Promise<void> {
 
 /**
  * Handle remove (minus) button click.
- * Calls cellInstance.removeAllowance() if available.
- * Removes from local list on success, shows feedback on error.
+ * Opens confirmation dialog before executing the removal.
  */
-async function handleRemoveAllowance(userId: string): Promise<void> {
+function handleRemoveAllowance(userId: string): void {
   if (!localArtifactId.value) return
 
   const cell = props.cellInstance
@@ -340,6 +382,37 @@ async function handleRemoveAllowance(userId: string): Promise<void> {
     log.warn('[ArtifactsManagerView] cellInstance does not support removeAllowance()')
     return
   }
+
+  // Find the user name for display in the confirmation dialog
+  const entry = allowanceUsers.value.find(u => u.user_id === userId)
+  pendingRemoveUserName.value = entry?.name || userId
+  pendingRemoveUserId.value = userId
+  showRemoveConfirm.value = true
+}
+
+/**
+ * Cancel the remove operation — closes the confirmation dialog.
+ */
+function cancelRemoveAllowance(): void {
+  showRemoveConfirm.value = false
+  pendingRemoveUserId.value = ''
+  pendingRemoveUserName.value = ''
+}
+
+/**
+ * Confirmed remove — executes the allowance removal.
+ */
+async function confirmRemoveAllowance(): Promise<void> {
+  if (!localArtifactId.value || !pendingRemoveUserId.value) return
+
+  const cell = props.cellInstance
+  if (!cell || typeof cell.removeAllowance !== 'function') {
+    log.warn('[ArtifactsManagerView] cellInstance does not support removeAllowance()')
+    return
+  }
+
+  const userId = pendingRemoveUserId.value
+  showRemoveConfirm.value = false
 
   removingUsers.value = new Set([...removingUsers.value, userId])
   try {

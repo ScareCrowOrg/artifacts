@@ -17,6 +17,10 @@
     "allowanceLoadFailed": "Falha ao carregar permissões",
     "allowanceRemoved": "Permissão removida",
     "allowanceRemoveFailed": "Falha ao remover permissão",
-    "removeAllowance": "Remover permissão"
+    "removeAllowance": "Remover permissão",
+    "cancel": "Cancelar",
+    "confirmRemoveTitle": "Remover Permissão",
+    "confirmRemoveMessage": "Remover permissão de {name}?",
+    "confirmRemoveConfirm": "Remover"
   }
 }
