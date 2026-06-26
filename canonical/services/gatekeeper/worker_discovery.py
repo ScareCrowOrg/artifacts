@@ -7,8 +7,19 @@ a queryable registry for the job dispatcher.
 """
 
 import logging
+import sys
 from pathlib import Path
 from typing import Dict, Optional, Union
+
+# Support importing shared module both in Docker (PYTHONPATH=/app/artifacts)
+# and in local development / tests (path resolved relative to this file).
+try:
+    from canonical.shared.utils import resolve_venv_path
+except ImportError:
+    _canonical_parent = Path(__file__).resolve().parents[2].parent
+    if str(_canonical_parent) not in sys.path:
+        sys.path.insert(0, str(_canonical_parent))
+    from canonical.shared.utils import resolve_venv_path
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +96,7 @@ class WorkerDiscovery:
                 "name": worker_name,
                 "path": str(worker_dir),
                 "has_requirements": requirements.exists(),
-                "has_venv": (worker_dir / ".venv").exists(),
+                "has_venv": resolve_venv_path(self.workers_path, worker_name).exists(),
                 "entry_point": "main.py",
             }
             workers[worker_name] = metadata

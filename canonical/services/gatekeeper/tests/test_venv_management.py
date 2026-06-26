@@ -223,3 +223,43 @@ class TestVenvIsolation:
         assert exe_x != exe_y
         assert "worker-x" in str(exe_x)
         assert "worker-y" in str(exe_y)
+
+
+# ---------------------------------------------------------------------------
+# Shared venv profiles (WorkerExecutor)
+# ---------------------------------------------------------------------------
+
+
+class TestWorkerExecutorSharedVenv:
+
+    @pytest.mark.asyncio
+    async def test_shared_venv_in_worker_executor(self, tmp_path):
+        """_ensure_venv with .venv-profile resolves to shared_venvs/{profile}/.venv."""
+        workers_path = tmp_path / "workers"
+        _make_worker(workers_path, "exec-worker")
+        (workers_path / "exec-worker" / ".venv-profile").write_text("exec-profile")
+
+        executor = WorkerExecutor(workers_path=str(workers_path))
+        python_exe = await executor._ensure_venv("exec-worker")
+
+        assert python_exe.exists()
+        assert "shared_venvs" in str(python_exe)
+        assert "exec-profile" in str(python_exe)
+
+    @pytest.mark.asyncio
+    async def test_shared_venv_cache_by_profile(self, tmp_path):
+        """_venv_ready cache is per-worker, not per-profile."""
+        workers_path = tmp_path / "workers"
+        _make_worker(workers_path, "worker-a")
+        _make_worker(workers_path, "worker-b")
+        (workers_path / "worker-a" / ".venv-profile").write_text("shared-profile")
+        (workers_path / "worker-b" / ".venv-profile").write_text("shared-profile")
+
+        executor = WorkerExecutor(workers_path=str(workers_path))
+        exe_a = await executor._ensure_venv("worker-a")
+        exe_b = await executor._ensure_venv("worker-b")
+
+        assert "worker-a" in executor._venv_ready
+        assert "worker-b" in executor._venv_ready
+        assert exe_a == exe_b  # Same venv despite different cache keys
+        assert "shared_venvs" in str(exe_a)

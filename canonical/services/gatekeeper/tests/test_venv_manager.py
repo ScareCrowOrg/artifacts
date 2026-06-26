@@ -36,6 +36,14 @@ except ImportError:
         sys.path.insert(0, str(_gk_dir))
     from venv_manager import VenvManager
 
+try:
+    from canonical.shared.utils import resolve_venv_path
+except ImportError:
+    _canonical_parent = Path(__file__).resolve().parents[4]
+    if str(_canonical_parent) not in sys.path:
+        sys.path.insert(0, str(_canonical_parent))
+    from canonical.shared.utils import resolve_venv_path
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -528,3 +536,49 @@ class TestLogSummary:
             manager.log_summary()
 
         assert any("No venvs" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Shared venv profiles
+# ---------------------------------------------------------------------------
+
+
+class TestSharedVenvProfiles:
+
+    def test_resolve_venv_path_returns_shared_when_profile_exists(self, tmp_path):
+        """_resolve_venv_path returns shared_venvs/{profile}/.venv when .venv-profile exists."""
+        workers_path = tmp_path / "workers"
+        _make_worker(workers_path, "profile-worker")
+        (workers_path / "profile-worker" / ".venv-profile").write_text("my-profile")
+
+        result = resolve_venv_path(workers_path, "profile-worker")
+        assert result == workers_path / "shared_venvs" / "my-profile" / ".venv"
+
+    def test_resolve_venv_path_returns_own_when_no_profile(self, tmp_path):
+        """_resolve_venv_path returns worker_dir/.venv when no .venv-profile."""
+        workers_path = tmp_path / "workers"
+        _make_worker(workers_path, "no-profile")
+
+        result = resolve_venv_path(workers_path, "no-profile")
+        assert result == workers_path / "no-profile" / ".venv"
+
+    @pytest.mark.asyncio
+    async def test_two_workers_same_profile_share_venv(self, tmp_path):
+        """setup_all_venvs with two workers of the same profile shares the venv."""
+        workers_path = tmp_path / "workers"
+        _make_worker(workers_path, "comfyui-a")
+        _make_worker(workers_path, "comfyui-b")
+        (workers_path / "comfyui-a" / ".venv-profile").write_text("comfyui")
+        (workers_path / "comfyui-b" / ".venv-profile").write_text("comfyui")
+
+        discovered = _make_discovered(workers_path, "comfyui-a", "comfyui-b")
+        manager = VenvManager(workers_path)
+        results = await manager.setup_all_venvs(discovered)
+
+        assert results["comfyui-a"] is True
+        assert results["comfyui-b"] is True
+
+        exe_a = manager.ready_venvs["comfyui-a"]
+        exe_b = manager.ready_venvs["comfyui-b"]
+        assert exe_a == exe_b
+        assert "shared_venvs" in str(exe_a)

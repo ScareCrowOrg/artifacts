@@ -4,11 +4,56 @@ Shared utilities for artifacts/canonical.
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# Pattern for safe profile names: alphanumeric start, then alnum/dot/dash/underscore
+_SAFE_PROFILE_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+
+
+def resolve_venv_path(workers_path: Path, worker_name: str) -> Path:
+    """Return the venv path for *worker_name*, respecting ``.venv-profile``.
+
+    If the worker directory contains a ``.venv-profile`` file with a
+    non-empty, safe profile name, the venv is placed under
+    ``shared_venvs/{profile_name}/`` so multiple workers in the same profile
+    share a single environment.
+
+    Validation performed:
+      - Empty or whitespace-only profile -> fallback to 1:1 venv (with warning).
+      - ``..``, ``/``, ``\\`` or other unsafe characters -> fallback to 1:1
+        (with error log) as a defence-in-depth measure against path traversal.
+    """
+    worker_dir = workers_path / worker_name
+    profile_file = worker_dir / ".venv-profile"
+
+    if not profile_file.exists():
+        return worker_dir / ".venv"
+
+    profile_name = profile_file.read_text().strip()
+
+    # Finding 1: Empty or whitespace-only profile
+    if not profile_name:
+        logger.warning(
+            "Empty .venv-profile for %s -- falling back to 1:1 venv",
+            worker_name,
+        )
+        return worker_dir / ".venv"
+
+    # Finding 3: Path traversal / unsafe profile name
+    if not _SAFE_PROFILE_RE.match(profile_name):
+        logger.error(
+            "Invalid profile name %r for worker %s -- falling back to 1:1 venv",
+            profile_name,
+            worker_name,
+        )
+        return worker_dir / ".venv"
+
+    return workers_path / "shared_venvs" / profile_name / ".venv"
 
 
 def utcnow_iso() -> str:

@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from .utils import resolve_venv_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -189,7 +191,7 @@ class WorkerExecutor:
             return self._venv_ready[worker_name]
 
         worker_dir = self.workers_path / worker_name
-        venv_dir = worker_dir / ".venv"
+        venv_dir = resolve_venv_path(self.workers_path, worker_name)
         python_exe = venv_dir / "bin" / "python"
 
         if python_exe.exists():

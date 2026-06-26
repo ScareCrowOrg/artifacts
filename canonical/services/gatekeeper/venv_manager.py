@@ -20,6 +20,16 @@ from typing import TYPE_CHECKING, Callable, Dict, Optional
 if TYPE_CHECKING:
     from metrics import GateKeeperMetrics
 
+# Support importing shared module both in Docker (PYTHONPATH=/app/artifacts)
+# and in local development / tests (path resolved relative to this file).
+try:
+    from canonical.shared.utils import resolve_venv_path
+except ImportError:
+    _canonical_parent = Path(__file__).resolve().parents[2].parent
+    if str(_canonical_parent) not in sys.path:
+        sys.path.insert(0, str(_canonical_parent))
+    from canonical.shared.utils import resolve_venv_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -141,7 +151,7 @@ class VenvManager:
                 requirements = worker_dir / "requirements.txt"
                 if requirements.exists():
                     req_mtime = requirements.stat().st_mtime
-                    venv_mtime = (worker_dir / ".venv").stat().st_mtime
+                    venv_mtime = resolve_venv_path(self.workers_path, worker_name).stat().st_mtime
                     if req_mtime > venv_mtime:
                         logger.info(
                             "[%s] requirements.txt changed – rebuilding venv...",
@@ -165,7 +175,7 @@ class VenvManager:
             Path to the venv Python executable.
         """
         worker_dir = self.workers_path / worker_name
-        venv_path = worker_dir / ".venv"
+        venv_path = resolve_venv_path(self.workers_path, worker_name)
         python_exe = venv_path / "bin" / "python"
 
         if python_exe.exists():
@@ -260,7 +270,7 @@ class VenvManager:
         health checks stop attempting (and to prevent silently serving a broken
         venv to the job dispatcher).
         """
-        venv_path = self.workers_path / worker_name / ".venv"
+        venv_path = resolve_venv_path(self.workers_path, worker_name)
         try:
             if venv_path.exists():
                 shutil.rmtree(venv_path)
