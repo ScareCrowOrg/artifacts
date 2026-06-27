@@ -160,6 +160,20 @@
         </div>
       </div>
     </div>
+
+    <!-- Delete Confirm Modal -->
+    <ConfirmModal
+      :visible="showDeleteConfirmModal"
+      title="Delete Asset"
+      message="Are you sure you want to delete this asset? This action cannot be undone."
+      confirm-text="Delete"
+      cancel-text="Cancel"
+      :danger="true"
+      :loading="deleteLoading"
+      :error="deleteError"
+      @confirm="onConfirmDelete"
+      @cancel="onCancelDelete"
+    />
   </div>
 </template>
 
@@ -171,10 +185,14 @@
  * Composes TypeSelector, AssetGrid, and asset management functionality.
  */
 
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, inject } from 'vue'
 import { useContentExplorer } from './composables'
 import TypeSelector from './components/TypeSelector.vue'
 import AssetGrid from './components/AssetGrid.vue'
+import type { AssetItem } from './ContentExplorerCell'
+import ConfirmModal from '#shared/components/ConfirmModal.vue'
+import { CELL_FACTORY_KEY } from '#canonical/shared/cellFactory'
+import type { CellFactory } from '#canonical/shared/cellFactory'
 
 // Props
 interface Props {
@@ -212,6 +230,24 @@ const {
 // Local state
 const viewMode = ref<'grid' | 'list'>('grid')
 
+// Delete confirm modal state
+const showDeleteConfirmModal = ref(false)
+const pendingDeleteAssetId = ref<string | null>(null)
+const deleteLoading = ref(false)
+const deleteError = ref<string | null>(null)
+
+// CellFactory injection for opening viewer cells
+const cellFactory = inject<CellFactory>(CELL_FACTORY_KEY)
+
+// Content type → viewer cell type mapping
+const viewerTypeMap: Record<string, string> = {
+  'image-png': 'image-content-cell',
+  'image-jpg': 'image-content-cell',
+  'vector-svg': 'image-content-cell',
+  '3d-glb': 'glb-content-viewer',
+  '3d-obj': 'glb-content-viewer',
+}
+
 // Handlers
 async function handleRefresh() {
   clearMessages()
@@ -244,16 +280,37 @@ async function handleNextPage() {
 }
 
 async function handleDeleteAsset(assetId: string) {
-  // TODO: Replace with custom modal dialog for better accessibility
-  // See: RULESET.md Rule 4.8 - Accessibility Requirements
-  if (confirm('Are you sure you want to delete this asset? This action cannot be undone.')) {
-    await deleteAsset(assetId)
+  pendingDeleteAssetId.value = assetId
+  showDeleteConfirmModal.value = true
+}
+
+async function onConfirmDelete() {
+  deleteLoading.value = true
+  deleteError.value = null
+  try {
+    await deleteAsset(pendingDeleteAssetId.value!)
+    showDeleteConfirmModal.value = false
+    pendingDeleteAssetId.value = null
+  } catch (error) {
+    deleteError.value = error instanceof Error ? error.message : 'Failed to delete asset'
+  } finally {
+    deleteLoading.value = false
   }
 }
 
-function handleViewAsset(assetId: string) {
-  // TODO: Integrate with ContentViewerCell when available
-  console.log('View asset:', assetId)
+function onCancelDelete() {
+  showDeleteConfirmModal.value = false
+  pendingDeleteAssetId.value = null
+  deleteError.value = null
+}
+
+function handleViewAsset(asset: AssetItem) {
+  const viewerType = viewerTypeMap[asset.content_type_id]
+  if (!viewerType) return  // No viewer available for this type
+
+  if (cellFactory) {
+    cellFactory.addChildCell(viewerType, { content_id: asset.id })
+  }
 }
 
 // Initialize

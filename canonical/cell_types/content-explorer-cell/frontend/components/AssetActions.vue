@@ -46,7 +46,7 @@ interface Props {
 
 withDefaults(defineProps<Props>(), {
   showDelete: true,
-  showView: false,
+  showView: true,
   disabled: false
 })
 

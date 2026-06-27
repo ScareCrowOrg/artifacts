@@ -42,12 +42,12 @@
           <AssetActions
             :disabled="disabled"
             @delete="$emit('delete-asset', asset.id)"
-            @view="$emit('view-asset', asset.id)"
+            @view="$emit('view-asset', asset)"
           />
         </div>
       </div>
     </div>
-    
+
     <!-- List view -->
     <div v-else class="flex flex-col gap-2">
       <div
@@ -58,7 +58,7 @@
         <div class="text-2xl">
           {{ getTypeIcon(asset.content_type_id) }}
         </div>
-        
+
         <div class="flex-1 min-w-0">
           <div class="text-sm font-medium text-text-primary dark:text-text-primary-dark truncate">
             {{ asset.filename }}
@@ -68,11 +68,11 @@
             <span v-if="asset.created_at"> • {{ formatDate(asset.created_at) }}</span>
           </div>
         </div>
-        
+
         <AssetActions
           :disabled="disabled"
           @delete="$emit('delete-asset', asset.id)"
-          @view="$emit('view-asset', asset.id)"
+          @view="$emit('view-asset', asset)"
         />
       </div>
     </div>
@@ -113,7 +113,7 @@ withDefaults(defineProps<Props>(), {
 
 defineEmits<{
   'delete-asset': [assetId: string]
-  'view-asset': [assetId: string]
+  'view-asset': [asset: AssetItem]
 }>()
 
 /**
