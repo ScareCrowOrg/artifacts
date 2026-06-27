@@ -13,10 +13,13 @@ Requires pytest-asyncio.
 """
 
 import asyncio
+import logging
 import sys
 from pathlib import Path
 
 import pytest
+
+logger = logging.getLogger(__name__)
 
 # Import WorkerExecutor – works both in Docker (PYTHONPATH=/app/artifacts)
 # and locally (path resolved relative to this file).
@@ -42,6 +45,8 @@ def _make_worker(workers_path: Path, name: str, has_requirements: bool = True) -
     if has_requirements:
         # Empty requirements – pip install will be a no-op (fast)
         (worker_dir / "requirements.txt").write_text("")
+        logger.debug("DIAG[_make_worker]: created requirements.txt for %s, size=%d bytes (empty => pip will be no-op)",
+                     name, 0)
     return worker_dir
 
 
@@ -237,6 +242,8 @@ class TestWorkerExecutorSharedVenv:
         """_ensure_venv with .venv-profile resolves to shared_venvs/{profile}/.venv."""
         workers_path = tmp_path / "workers"
         _make_worker(workers_path, "exec-worker")
+        # Override empty requirements.txt with httpx so _ensure_venv() verification passes
+        (workers_path / "exec-worker" / "requirements.txt").write_text("httpx\n")
         (workers_path / "exec-worker" / ".venv-profile").write_text("exec-profile")
 
         executor = WorkerExecutor(workers_path=str(workers_path))
@@ -252,6 +259,9 @@ class TestWorkerExecutorSharedVenv:
         workers_path = tmp_path / "workers"
         _make_worker(workers_path, "worker-a")
         _make_worker(workers_path, "worker-b")
+        # Override empty requirements.txt with httpx so _ensure_venv() verification passes
+        (workers_path / "worker-a" / "requirements.txt").write_text("httpx\n")
+        (workers_path / "worker-b" / "requirements.txt").write_text("httpx\n")
         (workers_path / "worker-a" / ".venv-profile").write_text("shared-profile")
         (workers_path / "worker-b" / ".venv-profile").write_text("shared-profile")
 

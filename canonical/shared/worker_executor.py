@@ -209,6 +209,9 @@ class WorkerExecutor:
 
         requirements = worker_dir / "requirements.txt"
         if requirements.exists():
+            req_size = requirements.stat().st_size
+            logger.debug("DIAG[_ensure_venv]: requirements.txt found for %s, size=%d bytes (0=empty => pip will be no-op, httpx NOT installed)",
+                         worker_name, req_size)
             logger.info("Installing requirements for worker: %s (file=%s)", worker_name, requirements)
             try:
                 await self._run_command(
@@ -234,6 +237,13 @@ class WorkerExecutor:
                         break
                     else:
                         _v_err_text = _v_err.decode()[:500] if _v_err else "(no stderr)"
+                        # DIAG: explicit failure classification
+                        if "ModuleNotFoundError" in _v_err_text:
+                            logger.debug("DIAG[_ensure_venv]: httpx verification failure classified as ModuleNotFoundError "
+                                         "(httpx NOT installed in venv — likely empty requirements.txt)")
+                        elif "ConnectionError" in _v_err_text or "Timeout" in _v_err_text:
+                            logger.debug("DIAG[_ensure_venv]: httpx verification failure classified as network error "
+                                         "(pip install may have failed or network unreachable)")
                         logger.warning(
                             "[%s] Pip install verification FAILED (attempt %d): httpx import error. stderr: %s",
                             worker_name, _retry_attempt + 1, _v_err_text,

@@ -49,7 +49,7 @@ except ImportError as e:
     # Fallback: add relative path to shared + setup sys.modules for relative imports
     # From /app/gatekeeper/ → ../artifacts/shared/
     try:
-        shared_path = os.path.join(os.path.dirname(__file__), '..', 'artifacts', 'shared')
+        shared_path = os.path.join(os.path.dirname(__file__), '..', '..', 'shared')
         crypto_path = os.path.join(shared_path, 'crypto')
 
         # Resolve to absolute paths and verify they exist
