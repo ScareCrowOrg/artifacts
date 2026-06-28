@@ -125,8 +125,15 @@ class LocalStorage(StorageBackend):
         # This ensures MongoDB stores portable refs: file://artifacts/runtime/...
         # Frontend converts file:// → / → /artifacts/runtime/... (auth-proxy URL)
         ref_str = str(resolved)
+        # DIAG: Log raw ref_str before /app/ stripping to debug prefix issues
+        logger.info(f"[DIAG] storage.upload ref_str before strip: {ref_str}, starts_with_app={ref_str.startswith('/app/')}")
         if ref_str.startswith('/app/'):
-            ref_str = ref_str[len('/app/'):]  # strip /app/ prefix
+            ref_str = ref_str[len('/app/'):]
+            logger.info(f"[DIAG] storage.upload ref_str after /app/ strip: {ref_str}")
+        else:
+            logger.info(f"[DIAG] storage.upload ref_str does NOT start with /app/ — no strip applied")
+        # PERMANENTE: Log final data_ref — critical for debugging file:// prefix in handleLoad
+        logger.warning(f"[PERMANENTE] storage.upload returning data_ref for content_id={content_id}, filename={filename}: file://{ref_str}")
         return f"file://{ref_str}"
     
     def get_presigned_url(self, content_id: str, filename: str, expires_in: int = 3600) -> Optional[str]:

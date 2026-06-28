@@ -175,7 +175,9 @@ export function useContentExplorer() {
       }
     } catch (error) {
       console.debug("DIAG [deleteAsset] error:", error)
-      errorMessage.value = error instanceof Error ? error.message : 'Failed to delete asset'
+      // Re-throw so caller (onConfirmDelete) sets deleteError inside the modal,
+      // instead of errorMessage (general bar). errorMessage stays null (set above).
+      throw error
     } finally {
       isLoading.value = false
     }

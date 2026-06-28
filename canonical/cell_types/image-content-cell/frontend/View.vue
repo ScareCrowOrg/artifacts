@@ -333,9 +333,20 @@ const loadContent = async () => {
         output.content?.fragments ? 'present' : 'MISSING',
         output.content?.metadata ? 'present' : 'MISSING')
 
+      // DIAG: Log output.imageUrl to detect file:// prefix bug
+      logger.warn('DIAG [loadContent] output.imageUrl="%s", output.content.data_ref="%s", contentId=%s',
+        output.imageUrl || '(empty/falsy)',
+        output.content?.data_ref || '(none)',
+        contentId)
+
       // Store image URL
       if (output.imageUrl) {
         localImageUrl.value = output.imageUrl
+      } else {
+        // DIAG: output.imageUrl is empty/falsy — "Imagem indisponivel" will be shown
+        logger.warn('DIAG [loadContent] output.imageUrl is falsy — image NOT available. data_ref=%s, contentId=%s',
+          output.content?.data_ref || '(none)',
+          contentId)
       }
 
       // Store content data

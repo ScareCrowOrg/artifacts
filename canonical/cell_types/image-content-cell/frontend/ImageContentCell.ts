@@ -228,16 +228,41 @@ export class ImageContentCell extends BaseCell {
       // Priority: data_ref (if HTTP URL) > build from relative_url
       let imageUrl = ''
 
+      // DIAG: Log raw data_ref before branch decision — critical for detecting file:// prefix bug
+      log.debug('[DIAG] handleLoad: data_ref raw value before branch', {
+        dataRef: content.data_ref,
+        dataRefLength: content.data_ref?.length,
+        startsWithHttp: content.data_ref?.startsWith('http'),
+        startsWithSlash: content.data_ref?.startsWith('/'),
+        startsWithFile: content.data_ref?.startsWith('file://'),
+        startsWithR2: content.data_ref?.startsWith('r2://'),
+        contentImageUrl: content.imageUrl,
+        contentId,
+      })
+
       if (content.data_ref && content.data_ref.startsWith('http')) {
         imageUrl = content.data_ref
+        log.debug('[DIAG] handleLoad: branch=http, imageUrl=%s', imageUrl)
       } else if (content.data_ref && content.data_ref.startsWith('/')) {
         // If data_ref is a relative path, prefix with /artifacts
         const origin = window.location.origin.replace(/\/+$/, '')
         imageUrl = `${origin}/artifacts${content.data_ref}`
+        log.debug('[DIAG] handleLoad: branch=relative-path, imageUrl=%s, origin=%s', imageUrl, origin)
+      } else if (content.data_ref && content.data_ref.startsWith('file://')) {
+        // file://artifacts/runtime/... → /artifacts/runtime/... (auth-proxy URL)
+        imageUrl = content.data_ref.replace(/^file:\/\//, '/')
+        log.debug('[DIAG] handleLoad: branch=file-prefix, imageUrl=%s, stripped=%s', imageUrl, content.data_ref.replace(/^file:\/\//, '/'))
       } else {
         // Fallback: try to construct from content metadata
         imageUrl = content.imageUrl || ''
+        log.debug('[DIAG] handleLoad: branch=else (no match!), data_ref=%s, content.imageUrl=%s, finalImageUrl=%s',
+          content.data_ref || '(none)', content.imageUrl || '(none)', imageUrl || '(empty)')
       }
+
+      // DIAG: Log final output.imageUrl value
+      log.debug('[DIAG] handleLoad: output.imageUrl="%s", data_ref="%s"',
+        imageUrl || '(empty)',
+        content.data_ref || '(none)')
 
       output.imageUrl = imageUrl
       output.content = content
