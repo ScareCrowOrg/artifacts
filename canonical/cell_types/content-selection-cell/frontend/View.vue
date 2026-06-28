@@ -85,7 +85,7 @@
         <table class="w-full text-sm">
           <thead>
             <tr class="bg-surface-alt text-text-secondary text-left">
-              <th class="px-3 py-2 font-medium">Filename</th>
+              <th class="px-3 py-2 font-medium">Name</th>
               <th class="px-3 py-2 font-medium">Type</th>
               <th class="px-3 py-2 font-medium text-right">Size</th>
               <th class="px-3 py-2 font-medium text-right hidden sm:table-cell">Created</th>
@@ -109,9 +109,17 @@
                   <svg v-else class="w-4 h-4 text-text-secondary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  <span class="font-medium text-text-primary truncate max-w-[200px]" :title="content.filename">
-                    {{ content.filename }}
-                  </span>
+                  <div class="flex flex-col min-w-0">
+                    <span
+                      class="font-medium text-text-primary truncate"
+                      :title="content.fragments?.name || content.filename"
+                    >
+                      {{ content.fragments?.name || content.filename }}
+                    </span>
+                    <span class="text-xs text-text-secondary truncate">
+                      {{ content.filename }}
+                    </span>
+                  </div>
                 </div>
               </td>
               <td class="px-3 py-2.5">
@@ -173,7 +181,7 @@
         <svg v-if="localSelectedContent" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
         </svg>
-        {{ localSelectedContent ? `Select: ${localSelectedContent.filename}` : 'Select Content' }}
+        {{ localSelectedContent ? `Select: ${localSelectedContent.fragments?.name || localSelectedContent.filename}` : 'Select Content' }}
       </button>
     </div>
 
@@ -191,7 +199,11 @@
           <code class="bg-surface-alt px-1.5 py-0.5 rounded truncate">{{ selectionResult.selected_content_id }}</code>
         </div>
         <div class="flex items-center gap-2">
-          <span class="font-medium text-text-secondary min-w-[80px]">Filename:</span>
+          <span class="font-medium text-text-secondary min-w-[80px]">Name:</span>
+          <span>{{ selectionResult.selected_name }}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-medium text-text-secondary min-w-[80px]">File:</span>
           <span>{{ selectionResult.selected_filename }}</span>
         </div>
       </div>
@@ -216,6 +228,7 @@ interface ContentItem {
   tags?: string[]
   version?: number
   is_latest?: boolean
+  fragments?: Record<string, any>
 }
 
 interface Props {
@@ -377,6 +390,7 @@ function confirmSelection(): void {
   const result = {
     selected_content_id: selected.id,
     selected_filename: selected.filename,
+    selected_name: selected.fragments?.name || selected.filename,
     selected_content_type_id: selected.content_type_id || selected.content_type || '',
     selected_size_bytes: selected.size_bytes || 0,
     selected_data_ref: selected.data_ref || ''
