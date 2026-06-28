@@ -97,7 +97,8 @@ defineExpose({ open })
              @click="handleSelect(item)"
              class="p-3 rounded border border-border hover:border-primary cursor-pointer transition flex justify-between items-center">
           <div>
-            <p class="font-medium">{{ item.filename }}</p>
+            <p class="font-medium" :title="item.filename">{{ item.fragments?.name || item.filename }}</p>
+            <p class="text-xs text-text-secondary">{{ item.filename }}</p>
             <p class="text-xs text-text-secondary">{{ item.size_bytes ? Math.round(item.size_bytes / 1024) + ' KB' : '' }} — {{ item.created_at || '' }}</p>
           </div>
           <span class="text-primary text-sm">Select →</span>
