@@ -47,8 +47,10 @@ export class ContentSelectionCell extends BaseCell {
           cell_type: 'content-manager-cell',
           input_data: {
             action,
-            filters: input.filters || {},
-            content_type_id: input.content_type_id,
+            filters: {
+              ...(input.filters || {}),
+              ...(input.content_type_id ? { content_type_id: input.content_type_id } : {})
+            },
             limit: input.limit || 20,
             offset: input.offset || 0,
             ...(action === 'load'
