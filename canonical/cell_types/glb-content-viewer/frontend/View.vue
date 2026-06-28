@@ -314,6 +314,12 @@ const handleDownload = async () => {
   if (!localModelUrl.value) return
 
   try {
+    // DIAG: Log the modelUrl before delegating to cellInstance.execute
+    logger.debug('[View.vue-DIAG] handleDownload: initiating download', {
+      modelUrl: localModelUrl.value,
+      windowOrigin: window.location.origin,
+    })
+
     await cellInstance.execute({
       action: 'download',
       modelUrl: localModelUrl.value,

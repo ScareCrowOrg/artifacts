@@ -167,6 +167,14 @@ export class GlbContentCell extends BaseCell {
       output.content = { relative_url: relativeUrl }
 
       log.info('Model URL built from relative_url', { modelUrl: output.modelUrl })
+      // PERMANENTE: Log the complete origin, relative_url, and final modelUrl
+      // for debugging cross-origin download issues (F3: glb-content-viewer-download-forbidden)
+      log.info('[GlbContentCell-PERMANENTE] modelUrl construction', {
+        windowOrigin: origin,
+        relativeUrl,
+        modelUrl: output.modelUrl,
+        note: 'modelUrl origin MUST match the runner origin for same-origin cookie delivery',
+      })
 
       return {
         success: true,
@@ -256,6 +264,14 @@ export class GlbContentCell extends BaseCell {
     if (!window.top) {
       throw new Error('Cannot download: no host shell context available')
     }
+
+    // DIAG: Log URL being sent via postMessage before delegation
+    log.info('[GlbContentCell-DIAG] Sending FILE_DOWNLOAD via postMessage', {
+      url: modelUrl,
+      targetOrigin: '*',
+      windowOrigin: window.location.origin,
+      topOrigin: window.top.location.origin,
+    })
 
     window.top.postMessage(
       {

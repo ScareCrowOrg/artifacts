@@ -126,7 +126,7 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                 .get(header::COOKIE)
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_owned);
-            if let Err(status) = check_session(&state, &cookie_header, &path).await {
+            if let Err(status) = check_session(&state, &cookie_header, &None, &path).await {
                 warn!(
                     "[WS] Session denied ({}) for WSS path={}, rejecting WebSocket upgrade",
                     status, path
@@ -160,7 +160,7 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                 path, has_cookie
             );
 
-            let session_result = check_session(&state, &cookie_header, &path).await;
+            let session_result = check_session(&state, &cookie_header, &None, &path).await;
             if let Err(status) = session_result {
                 warn!(
                     "[FastApiProxy] Session denied ({}) for {}, rejecting HMR WebSocket upgrade",
@@ -216,7 +216,7 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
             path, has_cookie
         );
 
-        return match check_session(&state, &cookie_header, &path).await {
+        return match check_session(&state, &cookie_header, &None, &path).await {
             Ok(()) => {
                 info!(
                     "[WS] Session valid, proceeding with WebSocket upgrade for {} to {}",
@@ -245,7 +245,7 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
             .and_then(|v| v.to_str().ok())
             .map(str::to_owned);
         // Session check before alias resolution (security: prevents alias enumeration).
-        if let Err(status) = check_session(&state, &cookie_header, &path).await {
+        if let Err(status) = check_session(&state, &cookie_header, &None, &path).await {
             return build_error_response(status);
         }
         // Session valid — now extract alias and resolve upstream.
@@ -274,6 +274,16 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
 
+    // Step 1b – extract Authorization header (Bearer token) for cross-origin downloads.
+    // The session cookie has SameSite=Strict, so the browser does NOT send it on
+    // cross-origin fetch requests.  The frontend sends a planet-scoped JWT as Bearer
+    // token to authenticate the download without relying on a cookie.
+    let auth_header = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+
     // Public paths bypass all auth — proxy directly to Vite.
     if is_public_path(&path) {
         debug!("[AuthProxy] Public path '{}' — proxying to Vite without auth", path);
@@ -284,10 +294,16 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
     let has_cookie = cookie_header.is_some();
     if let Some(ref cookie) = cookie_header {
         debug!("[AuthProxy] Extracted cookie: {}", cookie);
+    } else if let Some(ref auth) = auth_header {
+        if auth.starts_with("Bearer ") {
+            info!("[AuthProxy] No cookie, using Bearer token auth (token_prefix: {}...)", &auth[7..].chars().take(16).collect::<String>());
+        } else {
+            warn!("[AuthProxy] Authorization header present but not Bearer format");
+        }
     } else {
-        warn!("[AuthProxy] NO Cookie header received from Traefik!");
+        warn!("[AuthProxy] NO Cookie header AND no Authorization header received from Traefik!");
     }
-    let auth_result = check_session(&state, &cookie_header, &path).await;
+    let auth_result = check_session(&state, &cookie_header, &auth_header, &path).await;
 
     match auth_result {
         Ok(()) => match decision {
@@ -487,16 +503,77 @@ fn extract_session_id(cookie_header: &str) -> Option<String> {
 async fn check_session(
     state: &AppState,
     cookie_header: &Option<String>,
+    auth_header: &Option<String>,
     path: &str,
 ) -> Result<(), StatusCode> {
     const CACHE_TTL_VALID: u64 = 5;
     const CACHE_TTL_INVALID: u64 = 1;
 
+    // --- BEARER TOKEN AUTH PATH ---
+    // When no session cookie is present but an Authorization: Bearer header is,
+    // forward the token directly to the Backend for JWT validation.  We skip the
+    // in-memory cache here because JWTs are self-validating — the Backend validates
+    // the signature and expiration without needing a Redis lookup.
+    if cookie_header.is_none() {
+        if let Some(auth) = auth_header {
+            if auth.starts_with("Bearer ") {
+                info!(
+                    "[AuthProxy] No cookie, using Bearer token auth for path: {}",
+                    path
+                );
+                let encoded_path = urlencoding::encode(path);
+                let auth_url = format!("{}?uri={}", state.backend_auth_url, encoded_path);
+                debug!("[AuthProxy] Bearer auth: calling Backend at {}", auth_url);
+
+                let response = state
+                    .http_client
+                    .post(&auth_url)
+                    .header(header::AUTHORIZATION, auth.as_str())
+                    .send()
+                    .await;
+
+                return match response {
+                    Ok(resp) => match resp.status() {
+                        reqwest::StatusCode::OK => {
+                            info!("[AuthProxy] Bearer token auth VALID for path: {}", path);
+                            Ok(())
+                        }
+                        reqwest::StatusCode::FORBIDDEN => {
+                            warn!(
+                                "[AuthProxy] Bearer token auth DENIED for path: {}",
+                                path
+                            );
+                            Err(StatusCode::FORBIDDEN)
+                        }
+                        other => {
+                            error!(
+                                "[AuthProxy] Bearer auth unexpected status {} for path: {}",
+                                other, path
+                            );
+                            Err(StatusCode::INTERNAL_SERVER_ERROR)
+                        }
+                    },
+                    Err(e) => {
+                        error!(
+                            "[AuthProxy] Bearer auth network error for path {}: {}",
+                            path, e
+                        );
+                        Err(StatusCode::INTERNAL_SERVER_ERROR)
+                    }
+                };
+            }
+        }
+    }
+
+    // --- COOKIE-BASED AUTH PATH ---
     let session_id = cookie_header.as_deref().and_then(extract_session_id);
     let session_id = match session_id {
         Some(id) => id,
         None => {
-            warn!("[AuthProxy] No sessionId found in Cookie header");
+            warn!(
+                "[AuthProxy] No sessionId found in Cookie header and \
+                 no Authorization Bearer header"
+            );
             return Err(StatusCode::FORBIDDEN);
         }
     };
