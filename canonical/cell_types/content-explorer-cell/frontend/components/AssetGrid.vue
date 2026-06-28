@@ -26,7 +26,13 @@
         
         <!-- Info -->
         <div class="flex flex-col gap-1">
-          <div class="text-sm font-medium text-text-primary dark:text-text-primary-dark truncate" :title="asset.filename">
+          <div
+            class="text-sm font-medium text-text-primary dark:text-text-primary-dark truncate"
+            :title="asset.fragments?.name || asset.filename"
+          >
+            {{ asset.fragments?.name || asset.filename }}
+          </div>
+          <div class="text-xs text-text-secondary dark:text-text-secondary-dark truncate">
             {{ asset.filename }}
           </div>
           <div class="text-xs text-text-secondary dark:text-text-secondary-dark">
@@ -60,7 +66,13 @@
         </div>
 
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium text-text-primary dark:text-text-primary-dark truncate">
+          <div
+            class="text-sm font-medium text-text-primary dark:text-text-primary-dark truncate"
+            :title="asset.fragments?.name || asset.filename"
+          >
+            {{ asset.fragments?.name || asset.filename }}
+          </div>
+          <div class="text-xs text-text-secondary dark:text-text-secondary-dark truncate">
             {{ asset.filename }}
           </div>
           <div class="text-xs text-text-secondary dark:text-text-secondary-dark">
