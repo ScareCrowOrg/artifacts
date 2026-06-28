@@ -422,12 +422,79 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                         }
                     }
                     (None, Some(aid)) => {
-                        warn!(
-                            "[RuntimeFileServer] Missing session_id (no session cookie) for \
-                             runtime path: {} (assignee: {})",
-                            path, aid
-                        );
-                        build_error_response(StatusCode::FORBIDDEN)
+                        // No session cookie — check if Bearer token auth was used.
+                        // check_session() already validated the token, so we only need
+                        // to extract the user_id and compare it with assignee_id for
+                        // self-access (no Redis lookup needed).
+                        if let Some(ref auth_val) = auth_header {
+                            if let Some(token) = auth_val.strip_prefix("Bearer ") {
+                                match extract_sub_from_jwt(token) {
+                                    Some(user_id) if user_id == aid => {
+                                        info!(
+                                            "[RuntimeFileServer] Bearer self-access ALLOWED: \
+                                             user {} == assignee {} for {}",
+                                            user_id, aid, path
+                                        );
+                                        let artifacts_base = "/app/artifacts";
+                                        match resolve_artifact_path(artifacts_base, &path) {
+                                            ArtifactResolution::Found(file_path) => {
+                                                debug!(
+                                                    "[RuntimeFileServer] Serving runtime \
+                                                     artifact (Bearer auth): {} (assignee: {}, \
+                                                     path: {})",
+                                                    path, aid, file_path.display()
+                                                );
+                                                let origin = req.headers()
+                                                    .get(header::ORIGIN)
+                                                    .and_then(|v| v.to_str().ok());
+                                                let host = req.headers()
+                                                    .get(header::HOST)
+                                                    .and_then(|v| v.to_str().ok());
+                                                serve_file(&file_path, origin, host).await
+                                            }
+                                            _ => {
+                                                warn!(
+                                                    "[RuntimeFileServer] Runtime artifact not \
+                                                     found: {} (assignee: {})",
+                                                    path, aid
+                                                );
+                                                build_error_response(StatusCode::NOT_FOUND)
+                                            }
+                                        }
+                                    }
+                                    Some(user_id) => {
+                                        warn!(
+                                            "[RuntimeFileServer] Bearer self-access DENIED: \
+                                             user {} != assignee {} for {}",
+                                            user_id, aid, path
+                                        );
+                                        build_error_response(StatusCode::FORBIDDEN)
+                                    }
+                                    None => {
+                                        warn!(
+                                            "[RuntimeFileServer] Could not extract user_id \
+                                             from Bearer token for {} (assignee: {})",
+                                            path, aid
+                                        );
+                                        build_error_response(StatusCode::FORBIDDEN)
+                                    }
+                                }
+                            } else {
+                                warn!(
+                                    "[RuntimeFileServer] Missing session_id with non-Bearer \
+                                     Authorization header for {} (assignee: {})",
+                                    path, aid
+                                );
+                                build_error_response(StatusCode::FORBIDDEN)
+                            }
+                        } else {
+                            warn!(
+                                "[RuntimeFileServer] Missing session_id (no session cookie) \
+                                 and no Authorization header for runtime path: {} (assignee: {})",
+                                path, aid
+                            );
+                            build_error_response(StatusCode::FORBIDDEN)
+                        }
                     }
                     (Some(sid), None) => {
                         warn!(
@@ -488,6 +555,43 @@ fn extract_session_id(cookie_header: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Extract the `sub` claim from an already-validated JWT token.
+///
+/// # Safety
+/// This function does NOT verify the JWT signature — it only base64-decodes the
+/// payload segment and extracts the `sub` field.  The caller MUST have already
+/// validated the token (e.g. via `check_session()` which calls the Backend)
+/// before trusting the result.
+///
+/// Returns `None` if the token is malformed or the `sub` claim is missing.
+fn extract_sub_from_jwt(token: &str) -> Option<String> {
+    use base64::Engine;
+
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        warn!("[JWT] Malformed JWT: expected 3 parts, got {}", parts.len());
+        return None;
+    }
+
+    let payload_b64 = parts[1];
+
+    // RFC 7515 requires URL-safe base64 WITHOUT padding for JWT.
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload_b64)
+        .or_else(|_| {
+            // Fallback: some JWT libraries include optional padding.
+            base64::engine::general_purpose::URL_SAFE.decode(payload_b64)
+        })
+        .ok()?;
+
+    let payload_str = std::str::from_utf8(&decoded).ok()?;
+    let json: serde_json::Value = serde_json::from_str(payload_str).ok()?;
+
+    json.get("sub")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_owned())
 }
 
 /// Call Backend's `/api/v1/auth/session-check` endpoint.
