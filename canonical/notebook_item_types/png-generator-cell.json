@@ -90,13 +90,21 @@
     "estimated_duration_seconds": 20,
     "required_resources": [
       "gpu",
-      "comfyui-runtime"
+      "comfyui-runtime",
+      "redis",
+      "ollama"
     ],
     "dependencies": {
+      "services": [
+        "redis",
+        "ollama",
+        "comfyui-runtime"
+      ],
       "cell_types": [
         "comfyui",
         "content-manager-cell",
-        "job-manager-cell"
+        "job-manager-cell",
+        "image-content-cell"
       ]
     },
     "tags": [

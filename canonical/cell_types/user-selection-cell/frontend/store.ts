@@ -59,6 +59,13 @@ export const useUserSelectionStore = defineStore('userSelection', () => {
       if (!response.ok) {
         error.value = `Failed to load users (HTTP ${response.status})`
         log.error('[UserSelectionStore] Non-ok response', { status: response.status })
+        // DIAG: log error response body for debugging
+        try {
+          const bodyText = await response.text()
+          log.warn('[UserSelectionStore] loadUsers — error response body', { body: bodyText.slice(0, 500) })
+        } catch {
+          log.warn('[UserSelectionStore] loadUsers — could not read error response body')
+        }
         return
       }
       const data = await response.json()
