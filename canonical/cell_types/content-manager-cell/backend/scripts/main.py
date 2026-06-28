@@ -72,7 +72,7 @@ async def execute_cell(cell_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     if not action:
         return {
             "success": False,
-            "error": "Missing 'action' parameter. Must be one of: list, load, persist"
+            "error": "Missing 'action' parameter. Must be one of: list, load, persist, delete"
         }
     
     # Route to action handlers
@@ -88,10 +88,17 @@ async def execute_cell(cell_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
                      'user_id' in kwargs)
         # FIX Bug #2a: Forward **kwargs (with user_id) to handle_persist()
         return await handle_persist(cell_data, **kwargs)
+    elif action == "delete":
+        # FIX Bug #1: Forward delete action to handle_delete()
+        logger.debug("DIAG [execute_cell] action=delete: content_id=%s",
+                     cell_data.get("content_id", "MISSING"))
+        return await handle_delete(cell_data, **kwargs)
     else:
+        logger.warning("PERMANENTE [execute_cell] Unknown action discarded: action=%s, cell_data keys=%s",
+                       action, list(cell_data.keys()))
         return {
             "success": False,
-            "error": f"Unknown action '{action}'. Must be one of: list, load, persist"
+            "error": f"Unknown action '{action}'. Must be one of: list, load, persist, delete"
         }
 
 
@@ -699,4 +706,100 @@ async def handle_persist(cell_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         return {
             "success": False,
             "error": f"Failed to persist content: {str(e)}"
+        }
+
+
+async def handle_delete(cell_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    """
+    Handle delete action - remove content from MongoDB and storage.
+
+    Args:
+        cell_data: Contains content_id and '_current_user' (injected by cells_router)
+        **kwargs: Additional keyword arguments (e.g. user_id from router)
+
+    Returns:
+        Result dictionary with success flag
+    """
+    try:
+        # --- Entrada ---
+        content_id = cell_data.get("content_id")
+        current_user = cell_data.get('_current_user')
+
+        # DIAG: Log de entrada com parametros
+        logger.debug("DIAG [handle_delete] entry: content_id=%s, current_user=%s",
+                     content_id, current_user.id if current_user else 'MISSING')
+
+        if not content_id:
+            return {
+                "success": False,
+                "error": "Missing 'content_id' parameter"
+            }
+
+        # --- Busca do Content no MongoDB ---
+        content_manager = ContentManager()
+        content = await content_manager.get_content(content_id, current_user=current_user)
+
+        if not content:
+            # PERMANENTE: Content_id valido mas nao encontrado — pode ser ID inexistente
+            # ou problema de permissao (RBAC silencioso)
+            logger.warning("PERMANENTE [handle_delete] Content not found: content_id=%s, user_id=%s",
+                           content_id, current_user.id if current_user else 'N/A')
+            return {
+                "success": False,
+                "error": f"Content not found: {content_id}"
+            }
+
+        # DIAG: Content encontrado com detalhes
+        filename = getattr(content, 'filename', None)
+        assignee = getattr(content, 'assignee_id', None)
+        logger.debug("DIAG [handle_delete] content found: id=%s, filename=%s, assignee_id=%s",
+                     content.id, filename, assignee)
+
+        # --- Delete do Storage ---
+        # Se o filename nao existir, pula storage delete e vai direto para MongoDB delete
+        storage_deleted = True
+        if filename:
+            storage = get_storage_backend(assignee_id=assignee)
+            storage_deleted = storage.delete(content_id, filename)
+            # DIAG: Resultado do storage delete
+            logger.debug("DIAG [handle_delete] storage.delete result: content_id=%s, filename=%s, success=%s",
+                         content_id, filename, storage_deleted)
+
+            if not storage_deleted:
+                # PERMANENTE: Arquivo nao encontrado no storage — pode ser orphan
+                logger.warning("PERMANENTE [handle_delete] storage delete returned False: content_id=%s, filename=%s",
+                               content_id, filename)
+                # Continua mesmo assim para deletar do MongoDB (consistencia)
+        else:
+            # PERMANENTE: filename ausente — pula storage delete
+            logger.warning("PERMANENTE [handle_delete] filename is None for content_id=%s, skipping storage delete",
+                           content_id)
+
+        # --- Delete do MongoDB ---
+        db_deleted = await db.delete("contents", content_id, current_user=current_user)
+
+        # PERMANENTE: Confirma se o registro foi deletado do DB
+        logger.warning("PERMANENTE [handle_delete] db.delete result: content_id=%s, success=%s",
+                       content_id, db_deleted)
+
+        if not db_deleted:
+            logger.error("PERMANENTE [handle_delete] db.delete returned False: content_id=%s", content_id)
+            return {
+                "success": False,
+                "error": f"Failed to delete content record: {content_id}"
+            }
+
+        # --- Sucesso ---
+        logger.debug("DIAG [handle_delete] success: content_id=%s deleted", content_id)
+        return {
+            "success": True,
+            "action": "delete"
+        }
+
+    except Exception as e:
+        logger.error("PERMANENTE [handle_delete] unexpected error: content_id=%s, error=%s",
+                     cell_data.get("content_id", "UNKNOWN"), str(e), exc_info=True)
+        return {
+            "success": False,
+            "error": f"Failed to delete content: {str(e)}"
         }

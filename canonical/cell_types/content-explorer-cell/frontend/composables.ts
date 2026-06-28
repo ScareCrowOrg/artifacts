@@ -141,6 +141,8 @@ export function useContentExplorer() {
     successMessage.value = null
     
     try {
+      console.debug("DIAG [deleteAsset] assetId:", assetId)
+
       // Call ContentManagerCell delete endpoint
       // Using apiFetch ensures Authorization header is included automatically
       const response = await apiFetch('/api/cells/execute-ephemeral', {
@@ -162,7 +164,8 @@ export function useContentExplorer() {
       }
       
       const result = await response.json()
-      
+      console.debug("DIAG [deleteAsset] result:", JSON.stringify(result))
+
       if (result.success !== false) {
         successMessage.value = 'Asset deleted successfully'
         // Reload data to refresh list
@@ -171,6 +174,7 @@ export function useContentExplorer() {
         throw new Error(result.error || 'Failed to delete asset')
       }
     } catch (error) {
+      console.debug("DIAG [deleteAsset] error:", error)
       errorMessage.value = error instanceof Error ? error.message : 'Failed to delete asset'
     } finally {
       isLoading.value = false
