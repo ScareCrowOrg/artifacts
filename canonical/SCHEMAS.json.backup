@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "AUTO-GENERATED from Pydantic models - DO NOT EDIT MANUALLY. Canonical collection schemas - source of truth for ScareVerse canonical data. To update schemas, modify Pydantic models and run: python scripts/generate_canonical_schemas.py",
-  "last_updated": "2026-05-21",
+  "last_updated": "2026-06-29",
   "permissions": {
     "_id": {
       "type": "TEXT",
@@ -564,6 +564,10 @@
     "can_render_dynamically": {
       "type": "INTEGER",
       "description": "If True, this cell type can be rendered in DynamicWorkspace (has compatible Vue component)"
+    },
+    "stage": {
+      "type": "TEXT",
+      "description": "Artifact stage (canonical, sandbox, runtime). Determines the URL prefix for frontend dynamic imports."
     },
     "discovery": {
       "type": "JSON",
