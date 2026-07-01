@@ -491,6 +491,7 @@ const handleContentSelected = (content: any) => {
   cellInstance.contentId = resolvedId
   cellInstance.contentDataRef = content.data_ref
   selectedContentName.value = content.filename
+  logger.info('DIAG [content-selection-mesh-preview-fragments] handleContentSelected: data_ref=%s, filename=%s, fragments=%o', content.data_ref, content.filename, content.fragments)
 
   if (content.data_ref && typeof content.data_ref === 'string') {
     if (content.data_ref.startsWith('file://')) {
@@ -506,6 +507,11 @@ const handleContentSelected = (content: any) => {
     } else if (content.data_ref.startsWith('pending:')) {
       localError.value = 'This content is still being processed. Please try again later.'
       localPreview.value = null
+    } else if (content.data_ref.startsWith('/artifacts/')) {
+      // Async-job auto-persisted items: data_ref = "/artifacts/runtime/user/..."
+      // Auth-proxy RuntimeFileServer serves /artifacts/* directly
+      localPreview.value = content.data_ref
+      localError.value = null
     } else {
       localError.value = 'Selected content has no valid data reference'
       localPreview.value = null
@@ -741,6 +747,7 @@ onMounted(async () => {
   // ── HYDRATION: Read from props ONLY on mount ──
   if (!localPreview.value) {
     if (props.cell?.initial_data?.input_data_ref) {
+      logger.info('DIAG [content-selection-mesh-preview-fragments] onMounted hydration: input_data_ref=%s', props.cell.initial_data.input_data_ref)
       const ref = props.cell.initial_data.input_data_ref
       if (ref.startsWith('file://')) {
         localPreview.value = ref.replace(/^file:\/\//, '/')
