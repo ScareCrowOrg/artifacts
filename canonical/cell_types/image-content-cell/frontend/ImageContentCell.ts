@@ -172,10 +172,12 @@ export class ImageContentCell extends BaseCell {
         relativeUrl.startsWith('/artifacts'))
 
       const origin = window.location.origin.replace(/\/+$/, '')
-      // Idempotent prefix: only prepend /artifacts if relativeUrl does not already start with it
-      output.imageUrl = relativeUrl.startsWith('/artifacts')
-        ? `${origin}${relativeUrl}`
-        : `${origin}/artifacts${relativeUrl}`
+      // Normalize relative_url: strip file:// prefix if present (originates from storage.py)
+      const cleanUrl = relativeUrl.replace(/^file:\/\//, '/')
+      // Idempotent prefix: only prepend /artifacts if cleanUrl does not already start with it
+      output.imageUrl = cleanUrl.startsWith('/artifacts')
+        ? `${origin}${cleanUrl}`
+        : `${origin}/artifacts${cleanUrl}`
       output.success = true
       // Start with relative_url as fallback content
       output.content = { relative_url: relativeUrl }

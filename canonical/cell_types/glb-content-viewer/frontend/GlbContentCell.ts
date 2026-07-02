@@ -168,16 +168,18 @@ export class GlbContentCell extends BaseCell {
         relativeUrl.startsWith('/artifacts'))
 
       const origin = window.location.origin.replace(/\/+$/, '')
-      // Idempotent prefix: only prepend /artifacts if relativeUrl does not already start with it
-      output.modelUrl = relativeUrl.startsWith('/artifacts')
-        ? `${origin}${relativeUrl}`
-        : `${origin}/artifacts${relativeUrl}`
+      // Normalize relative_url: strip file:// prefix if present (originates from storage.py)
+      const cleanUrl = relativeUrl.replace(/^file:\/\//, '/')
+      // Idempotent prefix: only prepend /artifacts if cleanUrl does not already start with it
+      output.modelUrl = cleanUrl.startsWith('/artifacts')
+        ? `${origin}${cleanUrl}`
+        : `${origin}/artifacts${cleanUrl}`
       output.success = true
       output.content = { relative_url: relativeUrl }
 
       // DIAG [content-explorer-viewer-data-ref-prefix]: Log resulting modelUrl after concatenation (Path 1)
-      log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path1 AFTER: origin="%s", relativeUrl="%s", output.modelUrl="%s"',
-        origin, relativeUrl, output.modelUrl)
+      log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path1 AFTER: origin="%s", relativeUrl="%s", cleanUrl="%s", output.modelUrl="%s"',
+        origin, relativeUrl, cleanUrl, output.modelUrl)
       log.info('Model URL built from relative_url', { modelUrl: output.modelUrl })
       // PERMANENTE: Log the complete origin, relative_url, and final modelUrl
       // for debugging cross-origin download issues (F3: glb-content-viewer-download-forbidden)
