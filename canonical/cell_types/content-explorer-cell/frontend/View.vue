@@ -193,6 +193,9 @@ import type { AssetItem } from './ContentExplorerCell'
 import ConfirmModal from '#shared/components/ConfirmModal.vue'
 import { CELL_FACTORY_KEY } from '#canonical/shared/cellFactory'
 import type { CellFactory } from '#canonical/shared/cellFactory'
+import { createLogger } from '@/utils/logger'
+
+const logger = createLogger('component:content-explorer-cell')
 
 // Props
 interface Props {
@@ -304,12 +307,24 @@ function onCancelDelete() {
   deleteError.value = null
 }
 
-function handleViewAsset(asset: AssetItem) {
+async function handleViewAsset(asset: AssetItem) {
   const viewerType = viewerTypeMap[asset.content_type_id]
-  if (!viewerType) return  // No viewer available for this type
+  if (!viewerType || !cellFactory) {
+    logger.warn('No viewer available for type=%s or cellFactory not injected', asset.content_type_id)
+    return
+  }
 
-  if (cellFactory) {
-    cellFactory.addChildCell(viewerType, { content_id: asset.id })
+  logger.info('Opening asset in viewer: viewerType=%s, contentId=%s, data_ref=%s',
+    viewerType, asset.id, asset.data_ref)
+
+  try {
+    await cellFactory.addChildCell(viewerType, {
+      content_id: asset.id,
+      relative_url: asset.data_ref || undefined,
+    })
+    logger.info('Viewer cell created: %s for asset %s', viewerType, asset.id)
+  } catch (err: any) {
+    logger.error('Failed to open viewer cell %s for asset %s: %s', viewerType, asset.id, err)
   }
 }
 
