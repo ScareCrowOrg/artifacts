@@ -161,11 +161,23 @@ export class GlbContentCell extends BaseCell {
       // REDIS MAGRO (Content Reference): Build full URL for auth-proxy serving
       log.info('Loading 3D model from relative_url', { relativeUrl })
 
+      // DIAG [content-explorer-viewer-data-ref-prefix]: Log raw relativeUrl before concatenation (Path 1)
+      log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path1 BEFORE: relativeUrl="%s", startsWithSlash=%s, startsWithArtifacts=%s',
+        relativeUrl,
+        relativeUrl.startsWith('/'),
+        relativeUrl.startsWith('/artifacts'))
+
       const origin = window.location.origin.replace(/\/+$/, '')
-      output.modelUrl = `${origin}/artifacts${relativeUrl}`
+      // Idempotent prefix: only prepend /artifacts if relativeUrl does not already start with it
+      output.modelUrl = relativeUrl.startsWith('/artifacts')
+        ? `${origin}${relativeUrl}`
+        : `${origin}/artifacts${relativeUrl}`
       output.success = true
       output.content = { relative_url: relativeUrl }
 
+      // DIAG [content-explorer-viewer-data-ref-prefix]: Log resulting modelUrl after concatenation (Path 1)
+      log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path1 AFTER: origin="%s", relativeUrl="%s", output.modelUrl="%s"',
+        origin, relativeUrl, output.modelUrl)
       log.info('Model URL built from relative_url', { modelUrl: output.modelUrl })
       // PERMANENTE: Log the complete origin, relative_url, and final modelUrl
       // for debugging cross-origin download issues (F3: glb-content-viewer-download-forbidden)
@@ -205,15 +217,33 @@ export class GlbContentCell extends BaseCell {
       // Determine model URL from content data
       let modelUrl = ''
 
+      // DIAG [content-explorer-viewer-data-ref-prefix]: Log raw data_ref before branch decision (Path 2)
+      log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path2 BEFORE: data_ref="%s", startsWithHttp=%s, startsWithSlash=%s, startsWithArtifacts=%s',
+        content.data_ref || '(none)',
+        content.data_ref?.startsWith('http'),
+        content.data_ref?.startsWith('/'),
+        content.data_ref?.startsWith('/artifacts'))
+
       if (content.data_ref && content.data_ref.startsWith('http')) {
         modelUrl = content.data_ref
+        log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path2: branch=http, modelUrl="%s"', modelUrl)
       } else if (content.data_ref && content.data_ref.startsWith('/')) {
         // If data_ref is a relative path, prefix with /artifacts
+        // DIAG [content-explorer-viewer-data-ref-prefix]: Log raw data_ref before concatenation (Path 2 slash branch)
+        log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path2 slash-branch BEFORE: data_ref="%s"', content.data_ref)
         const origin = window.location.origin.replace(/\/+$/, '')
-        modelUrl = `${origin}/artifacts${content.data_ref}`
+        // Idempotent prefix: only prepend /artifacts if data_ref does not already start with it
+        modelUrl = content.data_ref.startsWith('/artifacts')
+          ? `${origin}${content.data_ref}`
+          : `${origin}/artifacts${content.data_ref}`
+        // DIAG [content-explorer-viewer-data-ref-prefix]: Log resulting modelUrl after concatenation (Path 2 slash branch)
+        log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path2 slash-branch AFTER: origin="%s", data_ref="%s", modelUrl="%s"',
+          origin, content.data_ref, modelUrl)
       } else {
         // Fallback: try to construct from content metadata
         modelUrl = content.modelUrl || ''
+        log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path2: branch=else (no data_ref match), data_ref="%s", contentModelUrl="%s", finalModelUrl="%s"',
+          content.data_ref || '(none)', content.modelUrl || '(none)', modelUrl || '(empty)')
       }
 
       output.modelUrl = modelUrl

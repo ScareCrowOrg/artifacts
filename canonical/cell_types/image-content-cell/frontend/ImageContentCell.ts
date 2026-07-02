@@ -165,8 +165,17 @@ export class ImageContentCell extends BaseCell {
       // ======================================================================
       log.info('Loading image from relative_url', { relativeUrl })
 
+      // DIAG [content-explorer-viewer-data-ref-prefix]: Log raw relativeUrl before concatenation (Path 1)
+      log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path1 BEFORE: relativeUrl="%s", startsWithSlash=%s, startsWithArtifacts=%s',
+        relativeUrl,
+        relativeUrl.startsWith('/'),
+        relativeUrl.startsWith('/artifacts'))
+
       const origin = window.location.origin.replace(/\/+$/, '')
-      output.imageUrl = `${origin}/artifacts${relativeUrl}`
+      // Idempotent prefix: only prepend /artifacts if relativeUrl does not already start with it
+      output.imageUrl = relativeUrl.startsWith('/artifacts')
+        ? `${origin}${relativeUrl}`
+        : `${origin}/artifacts${relativeUrl}`
       output.success = true
       // Start with relative_url as fallback content
       output.content = { relative_url: relativeUrl }
@@ -194,6 +203,9 @@ export class ImageContentCell extends BaseCell {
         }
       }
 
+      // DIAG [content-explorer-viewer-data-ref-prefix]: Log the resulting URL after concatenation (Path 1)
+      log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path1 AFTER: origin="%s", relativeUrl="%s", output.imageUrl="%s"',
+        origin, relativeUrl, output.imageUrl)
       log.info('Image URL built from relative_url', { imageUrl: output.imageUrl })
       // PERMANENTE: Log the final image URL for debugging 403/auth-proxy issues
       log.warn('[ImageContentCell] PERMANENTE: loading image from URL=' + output.imageUrl)
@@ -245,9 +257,17 @@ export class ImageContentCell extends BaseCell {
         log.debug('[DIAG] handleLoad: branch=http, imageUrl=%s', imageUrl)
       } else if (content.data_ref && content.data_ref.startsWith('/')) {
         // If data_ref is a relative path, prefix with /artifacts
+        // DIAG [content-explorer-viewer-data-ref-prefix]: Log raw data_ref before concatenation (Path 2)
+        log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path2 BEFORE: data_ref="%s", startsWithArtifacts=%s',
+          content.data_ref, content.data_ref.startsWith('/artifacts'))
         const origin = window.location.origin.replace(/\/+$/, '')
-        imageUrl = `${origin}/artifacts${content.data_ref}`
-        log.debug('[DIAG] handleLoad: branch=relative-path, imageUrl=%s, origin=%s', imageUrl, origin)
+        // Idempotent prefix: only prepend /artifacts if data_ref does not already start with it
+        imageUrl = content.data_ref.startsWith('/artifacts')
+          ? `${origin}${content.data_ref}`
+          : `${origin}/artifacts${content.data_ref}`
+        // DIAG [content-explorer-viewer-data-ref-prefix]: Log resulting URL after concatenation (Path 2)
+        log.debug('DIAG [content-explorer-viewer-data-ref-prefix] handleLoad Path2 AFTER: origin="%s", data_ref="%s", imageUrl="%s"',
+          origin, content.data_ref, imageUrl)
       } else if (content.data_ref && content.data_ref.startsWith('file://')) {
         // file://artifacts/runtime/... → /artifacts/runtime/... (auth-proxy URL)
         imageUrl = content.data_ref.replace(/^file:\/\//, '/')
