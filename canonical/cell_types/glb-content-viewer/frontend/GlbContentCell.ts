@@ -288,12 +288,14 @@ export class GlbContentCell extends BaseCell {
   ): Promise<CellResult> {
     const modelUrl = input.modelUrl
     if (!modelUrl) {
+      log.warn('[DIAG-DOWNLOAD] handleDownload: modelUrl is null/undefined, throwing')
       throw new Error('modelUrl is required for download action')
     }
 
     log.info('Requesting 3D model download via host shell')
 
     if (!window.top) {
+      log.error('[DIAG-DOWNLOAD] handleDownload: window.top is null, cannot send postMessage')
       throw new Error('Cannot download: no host shell context available')
     }
 

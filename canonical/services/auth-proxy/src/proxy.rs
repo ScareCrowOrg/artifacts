@@ -426,8 +426,10 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                         // check_session() already validated the token, so we only need
                         // to extract the user_id and compare it with assignee_id for
                         // self-access (no Redis lookup needed).
+                        debug!("[DIAG-DOWNLOAD] RuntimeFileServer Bearer path: path={}, assignee={}, auth_present={}", path, aid, auth_header.is_some());
                         if let Some(ref auth_val) = auth_header {
                             if let Some(token) = auth_val.strip_prefix("Bearer ") {
+                                debug!("[DIAG-DOWNLOAD] RuntimeFileServer Bearer: token extracted, checking self-access");
                                 match extract_sub_from_jwt(token) {
                                     Some(user_id) if user_id == aid => {
                                         info!(

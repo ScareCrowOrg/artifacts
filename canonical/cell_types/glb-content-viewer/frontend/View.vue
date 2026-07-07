@@ -311,7 +311,12 @@ const loadContent = async () => {
 
 /** Download 3D model via postMessage FILE_DOWNLOAD */
 const handleDownload = async () => {
-  if (!localModelUrl.value) return
+  if (!localModelUrl.value) {
+    logger.warn('[DIAG-DOWNLOAD] handleDownload: localModelUrl is null, aborting download')
+    localError.value = 'Model not loaded yet. Please wait for the 3D model to finish loading.'
+    localRetryAvailable.value = true
+    return
+  }
 
   try {
     // DIAG: Log the modelUrl before delegating to cellInstance.execute
@@ -320,10 +325,21 @@ const handleDownload = async () => {
       windowOrigin: window.location.origin,
     })
 
-    await cellInstance.execute({
+    const result = await cellInstance.execute({
       action: 'download',
       modelUrl: localModelUrl.value,
     })
+    logger.debug('[DIAG-DOWNLOAD] handleDownload: cellInstance.execute result', {
+      success: result?.success,
+      message: result?.output?.message,
+    })
+
+    // CHECK result.success — was previously silently ignored
+    if (!result?.success) {
+      const errorMsg = result?.output?.error || result?.output?.message || 'Download failed to initialize'
+      logger.error('[DIAG-DOWNLOAD] handleDownload: execute returned failure', { error: errorMsg })
+      localError.value = errorMsg
+    }
   } catch (error: any) {
     logger.error('Download failed', { error: error.message })
     localError.value = error.message || 'Failed to download 3D model'

@@ -4,7 +4,7 @@ Shared Ed25519 JWT verification utilities.
 Provides verify helpers that use asymmetric Ed25519 cryptography.
 Public keys are loaded once at startup from
 ``artifacts/canonical/public_keys/*.pub`` (one file per key rotation period,
-named ``YYYY-MM.pub``).  The ``kid`` JWT header claim selects the correct key.
+named ``{tenant}-YYYY-MM.pub``).  The ``kid`` JWT header claim selects the correct key.
 
 Used by:
 - CentralHub (verifying tokens in HTTP endpoints)

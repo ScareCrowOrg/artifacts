@@ -346,6 +346,12 @@ pub async fn check_viewer_access(
 pub async fn serve_file(file_path: &Path, origin: Option<&str>, host: Option<&str>) -> Response {
     match fs::File::open(file_path).await {
         Ok(file) => {
+            // DIAG: Log file metadata when serving
+            match file.metadata().await {
+                Ok(meta) => debug!("[DIAG-DOWNLOAD] serve_file: path={}, exists=true, size={}", file_path.display(), meta.len()),
+                Err(_) => debug!("[DIAG-DOWNLOAD] serve_file: path={}, exists=true, metadata_unavailable", file_path.display()),
+            }
+
             let content_type = match file_path.extension().and_then(|e| e.to_str()) {
                 Some("glb") => "model/gltf-binary",
                 Some("gltf") => "model/gltf+json",
