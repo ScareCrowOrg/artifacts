@@ -4,7 +4,7 @@ services:
     build:
       context: ../../../..
       dockerfile: artifacts/canonical/services/cloudflared/Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-cloudflared:staging20260613T144057
+    image: ${CENTRALHUB_URL:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-cloudflared}:${IMAGE_TAG:-staging}
     container_name: scareverse-cloudflared
     environment:
       INGRESS_RULES: ${INGRESS_RULES:-}

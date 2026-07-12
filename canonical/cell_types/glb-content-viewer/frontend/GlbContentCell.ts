@@ -300,11 +300,15 @@ export class GlbContentCell extends BaseCell {
     }
 
     // DIAG: Log URL being sent via postMessage before delegation
+    // NOTE: window.top.location.origin is intentionally NOT logged here because
+    // `window.top` can be cross-origin when running inside a workspace iframe
+    // (e.g., scare.scareverse.net → hub-staging.scareverse.net). Accessing
+    // window.top.location throws SecurityError. postMessage with '*' works fine
+    // cross-origin — only the *read* of window.top.location causes the error.
     log.info('[GlbContentCell-DIAG] Sending FILE_DOWNLOAD via postMessage', {
       url: modelUrl,
       targetOrigin: '*',
       windowOrigin: window.location.origin,
-      topOrigin: window.top.location.origin,
     })
 
     window.top.postMessage(

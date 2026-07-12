@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub-staging.scareverse.net/registry/staging/scareverse-scare-registry-gate:staging20260613T144057
+    image: ${CENTRALHUB_URL:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-scare-registry-gate}:${IMAGE_TAG:-staging}
     container_name: scareverse-registry-gate
     restart: unless-stopped
     volumes:
