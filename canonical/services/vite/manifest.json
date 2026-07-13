@@ -27,6 +27,6 @@
       "description": "ScareRunner base URL for frontend (translations, cell types, API). Resolved from settings.vite.scarerunner.url"
     }
   ],
-  "lastBuilt": "2026-07-12T09:49:24.104Z",
+  "lastBuilt": "2026-07-13T01:09:37.693Z",
   "planet": "staging"
 }
