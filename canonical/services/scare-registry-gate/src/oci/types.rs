@@ -64,6 +64,73 @@ impl UploadSession {
     }
 }
 
+/// Split a repository path into (registry, planet, image) for the CentralHub payload
+/// and tenant-session lookup.
+///
+/// For 3-segment paths (`registry/planet/name`) the split is natural.
+/// For 2-segment paths (`ns/name`) the first segment serves double duty — it is
+/// used as both registry AND planet — so that tenant-session lookups still work
+/// when the Builder pushes with a 2-segment tag (e.g. `staging/scareverse-backend`).
+/// For 1-segment paths all three fields are empty.
+pub(crate) fn split_repo_for_hub(repo: &str) -> (String, String, String) {
+    let parts: Vec<&str> = repo.splitn(3, '/').collect();
+    match parts.as_slice() {
+        [registry, planet, image] => {
+            (registry.to_string(), planet.to_string(), image.to_string())
+        }
+        [ns, name] => (ns.to_string(), ns.to_string(), name.to_string()),
+        [single] => (String::new(), String::new(), single.to_string()),
+        _ => (String::new(), String::new(), repo.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_repo_for_hub;
+
+    #[test]
+    fn test_split_3seg() {
+        let (r, p, i) = split_repo_for_hub("scareverse/earth/backend");
+        assert_eq!(r, "scareverse");
+        assert_eq!(p, "earth");
+        assert_eq!(i, "backend");
+    }
+
+    #[test]
+    fn test_split_3seg_with_slashes_in_name() {
+        let (r, p, i) = split_repo_for_hub("scareverse/earth/backend/extra");
+        assert_eq!(r, "scareverse");
+        assert_eq!(p, "earth");
+        assert_eq!(i, "backend/extra");
+    }
+
+    #[test]
+    fn test_split_2seg() {
+        // 2-segment paths use the first segment as both registry AND planet
+        // so that tenant-session lookups work for Builder-style tags.
+        let (r, p, i) = split_repo_for_hub("staging/scareverse-backend");
+        assert_eq!(r, "staging");
+        assert_eq!(p, "staging");
+        assert_eq!(i, "scareverse-backend");
+    }
+
+    #[test]
+    fn test_split_1seg() {
+        let (r, p, i) = split_repo_for_hub("backend");
+        assert_eq!(r, "");
+        assert_eq!(p, "");
+        assert_eq!(i, "backend");
+    }
+
+    #[test]
+    fn test_split_empty() {
+        let (r, p, i) = split_repo_for_hub("");
+        assert_eq!(r, "");
+        assert_eq!(p, "");
+        assert_eq!(i, "");
+    }
+}
+
 /// Build a minimal OCI error JSON value.
 pub fn oci_error_json(code: &str, message: &str) -> serde_json::Value {
     serde_json::json!({

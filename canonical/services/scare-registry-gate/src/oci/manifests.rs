@@ -17,8 +17,9 @@ use axum::{
 use sha2::{Digest as _, Sha256};
 use tracing::{error, info, warn};
 
+use crate::control::lookup_tenant_session;
 use crate::oci::auth::require_auth;
-use crate::oci::types::make_error_response;
+use crate::oci::types::{make_error_response, split_repo_for_hub};
 use crate::AppState;
 
 // ── Inner: manifest head ──────────────────────────────────────────────────────
@@ -48,10 +49,18 @@ async fn manifest_head_inner(
         return resp;
     }
 
+    // Tenant-aware R2 lookup
+    let (_hub_registry, hub_planet, _hub_image) = split_repo_for_hub(&repo);
+    let tenant_config = lookup_tenant_session(&state, &hub_planet);
+    let effective_r2 = tenant_config.as_ref().map_or_else(
+        || (*state.r2).clone(),
+        |t| state.r2.with_overrides(t.r2_bucket.as_deref(), t.r2_public_url.as_deref()),
+    );
+
     let r2_key = format!("manifests/{repo}/{reference}");
     info!("[manifest-head] Checking R2: key={}", r2_key);
 
-    match state.r2.head_object(&r2_key).await {
+    match effective_r2.head_object(&r2_key).await {
         Ok(Some(size)) => {
             info!("[manifest-head] Manifest found: key={} size={}", r2_key, size);
             Response::builder()
@@ -99,15 +108,23 @@ async fn manifest_get_inner(
         return resp;
     }
 
+    // Tenant-aware R2 lookup for redirect URL
+    let (_hub_registry, hub_planet, _hub_image) = split_repo_for_hub(&repo);
+    let tenant_config = lookup_tenant_session(&state, &hub_planet);
+    let effective_r2 = tenant_config.as_ref().map_or_else(
+        || (*state.r2).clone(),
+        |t| state.r2.with_overrides(t.r2_bucket.as_deref(), t.r2_public_url.as_deref()),
+    );
+
     let r2_key = format!("manifests/{repo}/{reference}");
-    let url = state.r2.public_url_for(&r2_key);
+    let url = effective_r2.public_url_for(&r2_key);
 
     // [it9:redirect-source] Log the exact URL the Gate uses for this redirect so it can
     // be compared with r2_public_url_base stored in CentralHub (notified during PUT).
     // Both must share the same base URL for docker pull via CentralHub to be consistent.
     info!(
         "[manifest-get] [it9:redirect-source] r2client_public_url='{}' | redirect_url='{}'",
-        state.r2.public_url, url
+        effective_r2.public_url, url
     );
 
     // Warn if the redirect URL points to the R2 S3 API endpoint rather than a
@@ -192,13 +209,47 @@ async fn manifest_put_inner(
     let ref_key = format!("manifests/{repo}/{reference}");
     let digest_key = format!("manifests/{repo}/sha256:{digest_hex}");
 
+    // ── Tenant-aware routing ──────────────────────────────────────────────
+    //
+    // Extract the planet from the OCI path and look up a tenant-session
+    // override.  If one exists, create effective R2 and Hub clients that
+    // point to the production infrastructure.  Without a session the
+    // default env-var-based clients are used (staging fallback).
+    let (hub_registry, hub_planet, hub_image) = split_repo_for_hub(&repo);
+
+    info!(
+        "[manifest-put] Hub split: registry={} planet={} image={}",
+        hub_registry, hub_planet, hub_image
+    );
+
+    let tenant_config = lookup_tenant_session(&state, &hub_planet);
+    if let Some(ref t) = tenant_config {
+        info!(
+            "[manifest-put] Tenant session active for planet '{}': centralhub_url={:?} r2_bucket={:?}",
+            hub_planet, t.centralhub_url, t.r2_bucket
+        );
+    } else {
+        info!(
+            "[manifest-put] No tenant session for planet '{}' – using env-var defaults (staging)",
+            hub_planet
+        );
+    }
+
+    let effective_r2 = tenant_config.as_ref().map_or_else(
+        || (*state.r2).clone(),
+        |t| state.r2.with_overrides(t.r2_bucket.as_deref(), t.r2_public_url.as_deref()),
+    );
+    let effective_hub = tenant_config.as_ref().map_or_else(
+        || (*state.hub).clone(),
+        |t| state.hub.with_overrides(t.centralhub_url.as_deref(), t.centralhub_token.as_deref()),
+    );
+
     info!(
         "[manifest-put] R2 keys: ref_key={} digest_key={}",
         ref_key, digest_key
     );
 
-    match state
-        .r2
+    match effective_r2
         .put_object(&ref_key, body_bytes.clone(), &content_type)
         .await
     {
@@ -215,8 +266,7 @@ async fn manifest_put_inner(
         }
     }
 
-    match state
-        .r2
+    match effective_r2
         .put_object(&digest_key, body_bytes.clone(), &content_type)
         .await
     {
@@ -260,13 +310,6 @@ async fn manifest_put_inner(
         repo, reference, schema_version, media_type, layers.len()
     );
 
-    let (hub_registry, hub_planet, hub_image) = split_repo_for_hub(&repo);
-
-    info!(
-        "[manifest-put] Hub split: registry={} planet={} image={}",
-        hub_registry, hub_planet, hub_image
-    );
-
     // [it9:dry-check] Both fields carry the same R2_PUBLIC_URL env var value; logging
     // them together makes any future divergence immediately visible in gate logs.
     info!(
@@ -284,7 +327,7 @@ async fn manifest_put_inner(
     // Include the public R2 URL that was used for this push so CentralHub can
     // redirect pulls to the exact same bucket/CDN without relying on a global env var.
     //
-    // Use state.r2.public_url — the canonical source used by all GET redirect handlers
+    // Use effective_r2.public_url — the canonical source used by all GET redirect handlers
     // (manifest_get_inner, blob_get_inner) via public_url_for().  This is the single
     // source of truth: whatever URL the Gate itself would serve as a redirect is exactly
     // what CentralHub must store and serve back on docker pull.
@@ -299,7 +342,7 @@ async fn manifest_put_inner(
         "digest": content_digest,
         "manifest_json": String::from_utf8_lossy(&body_bytes),
         "layers": layers,
-        "r2_public_url_base": state.r2.public_url,
+        "r2_public_url_base": effective_r2.public_url,
         "build_session_id": reference,
     });
 
@@ -334,7 +377,7 @@ async fn manifest_put_inner(
         notified_r2_url, repo, reference
     );
 
-    if let Err(e) = state.hub.notify_manifest(&payload).await {
+    if let Err(e) = effective_hub.notify_manifest(&payload).await {
         warn!("[manifest-put] CentralHub notification failed (non-fatal): {e}");
     }
 
@@ -350,70 +393,6 @@ async fn manifest_put_inner(
         .header("Docker-Distribution-API-Version", "registry/2.0")
         .body(Body::empty())
         .unwrap_or_else(|_| Response::new(Body::empty()))
-}
-
-/// Split a repo path into (registry, planet, image) for the CentralHub payload.
-///
-/// For 3-segment paths (`registry/planet/name`) the split is natural.
-/// For 2-segment paths (`ns/name`) the first segment is used as registry,
-/// an empty string for planet, and the second as image — so CentralHub can
-/// still index the push even if the planet field is absent.
-fn split_repo_for_hub(repo: &str) -> (String, String, String) {
-    let parts: Vec<&str> = repo.splitn(3, '/').collect();
-    match parts.as_slice() {
-        [registry, planet, image] => {
-            (registry.to_string(), planet.to_string(), image.to_string())
-        }
-        [ns, name] => (ns.to_string(), String::new(), name.to_string()),
-        [single] => (String::new(), String::new(), single.to_string()),
-        _ => (String::new(), String::new(), repo.to_string()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::split_repo_for_hub;
-
-    #[test]
-    fn test_split_3seg() {
-        let (r, p, i) = split_repo_for_hub("scareverse/earth/backend");
-        assert_eq!(r, "scareverse");
-        assert_eq!(p, "earth");
-        assert_eq!(i, "backend");
-    }
-
-    #[test]
-    fn test_split_3seg_with_slashes_in_name() {
-        // splitn(3) ensures the third segment absorbs any extra slashes.
-        let (r, p, i) = split_repo_for_hub("scareverse/earth/backend/extra");
-        assert_eq!(r, "scareverse");
-        assert_eq!(p, "earth");
-        assert_eq!(i, "backend/extra");
-    }
-
-    #[test]
-    fn test_split_2seg() {
-        let (r, p, i) = split_repo_for_hub("staging/scareverse-backend");
-        assert_eq!(r, "staging");
-        assert_eq!(p, "");
-        assert_eq!(i, "scareverse-backend");
-    }
-
-    #[test]
-    fn test_split_1seg() {
-        let (r, p, i) = split_repo_for_hub("backend");
-        assert_eq!(r, "");
-        assert_eq!(p, "");
-        assert_eq!(i, "backend");
-    }
-
-    #[test]
-    fn test_split_empty() {
-        let (r, p, i) = split_repo_for_hub("");
-        assert_eq!(r, "");
-        assert_eq!(p, "");
-        assert_eq!(i, "");
-    }
 }
 
 // ── 3-segment public handlers ─────────────────────────────────────────────────

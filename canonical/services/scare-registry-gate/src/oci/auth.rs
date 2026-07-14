@@ -69,6 +69,7 @@ mod tests {
             log_level: "INFO".into(),
             registry_username: username.into(),
             registry_password: password.into(),
+            control_api_key: String::new(),
             max_blob_size: 2048 * 1024 * 1024,
         }
     }

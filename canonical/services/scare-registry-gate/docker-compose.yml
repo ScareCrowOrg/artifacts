@@ -31,6 +31,7 @@ services:
       - WORKER_PORT=5678
       - REGISTRY_USERNAME=${REGISTRY_USERNAME:-scareverse}
       - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-scareverse}
+      - CONTROL_API_KEY=${CONTROL_API_KEY}
       - SCARE_LOG_DESTINATION=/app/logs/service.log
     ports:
       - 5678:5678

@@ -4,6 +4,9 @@
   "build": false,
   "image": "hub-staging.scareverse.net/registry/staging/scareverse-auth-proxy:staging",
   "imageTag": "staging",
-  "lastBuilt": "2026-07-12T09:49:24.048Z",
+  "lastBuilt": {
+    "staging": "2026-07-14T18:54:19.806Z",
+    "production": "2026-07-13T15:49:51.817Z"
+  },
   "planet": "staging"
 }

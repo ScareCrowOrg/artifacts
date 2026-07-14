@@ -6,6 +6,7 @@
 use tracing::{info, warn};
 
 /// Thin HTTP client for CentralHub registry notifications.
+#[derive(Clone)]
 pub struct HubClient {
     http: reqwest::Client,
     base_url: String,
@@ -26,6 +27,20 @@ impl HubClient {
             http,
             base_url: base_url.trim_end_matches('/').to_owned(),
             api_key: api_key.to_owned(),
+        }
+    }
+
+    /// Create a copy with overridden base_url and/or api_key.
+    ///
+    /// The underlying reqwest client (connection pool, timeout) is shared,
+    /// so this is cheap.  Only the base URL and API key are replaced.
+    pub fn with_overrides(&self, base_url: Option<&str>, api_key: Option<&str>) -> Self {
+        Self {
+            http: self.http.clone(),
+            base_url: base_url
+                .map(|s| s.trim_end_matches('/').to_owned())
+                .unwrap_or_else(|| self.base_url.clone()),
+            api_key: api_key.map(|s| s.to_owned()).unwrap_or_else(|| self.api_key.clone()),
         }
     }
 

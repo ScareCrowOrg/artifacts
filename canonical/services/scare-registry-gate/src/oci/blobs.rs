@@ -22,8 +22,9 @@ use redis::AsyncCommands;
 use sha2::{Digest as _, Sha256};
 use tracing::{error, info, warn};
 
+use crate::control::lookup_tenant_session;
 use crate::oci::auth::require_auth;
-use crate::oci::types::{make_error_response, UploadSession};
+use crate::oci::types::{make_error_response, split_repo_for_hub, UploadSession};
 use crate::AppState;
 
 // ── Inner: blob upload init ───────────────────────────────────────────────────
@@ -252,9 +253,16 @@ async fn blob_put_inner(
         uuid, provided_digest, size
     );
 
+    // Tenant-aware R2 override
+    let (_hub_registry, hub_planet, _hub_image) = split_repo_for_hub(&repo);
+    let tenant_config = lookup_tenant_session(&state, &hub_planet);
+    let effective_r2 = tenant_config.as_ref().map_or_else(
+        || (*state.r2).clone(),
+        |t| state.r2.with_overrides(t.r2_bucket.as_deref(), t.r2_public_url.as_deref()),
+    );
+
     let r2_key = format!("blobs/{repo}/{provided_digest}");
-    if let Err(e) = state
-        .r2
+    if let Err(e) = effective_r2
         .put_object(&r2_key, Bytes::from(buffer), "application/octet-stream")
         .await
     {
@@ -300,8 +308,16 @@ async fn blob_head_inner(
         return resp;
     }
 
+    // Tenant-aware R2 override
+    let (_hub_registry, hub_planet, _hub_image) = split_repo_for_hub(&repo);
+    let tenant_config = lookup_tenant_session(&state, &hub_planet);
+    let effective_r2 = tenant_config.as_ref().map_or_else(
+        || (*state.r2).clone(),
+        |t| state.r2.with_overrides(t.r2_bucket.as_deref(), t.r2_public_url.as_deref()),
+    );
+
     let r2_key = format!("blobs/{repo}/{digest}");
-    match state.r2.head_object(&r2_key).await {
+    match effective_r2.head_object(&r2_key).await {
         Ok(Some(size)) => {
             info!("[blob-head] Blob found: key={} size={}", r2_key, size);
             Response::builder()
@@ -342,8 +358,16 @@ async fn blob_get_inner(
         return resp;
     }
 
+    // Tenant-aware R2 override for redirect URL
+    let (_hub_registry, hub_planet, _hub_image) = split_repo_for_hub(&repo);
+    let tenant_config = lookup_tenant_session(&state, &hub_planet);
+    let effective_r2 = tenant_config.as_ref().map_or_else(
+        || (*state.r2).clone(),
+        |t| state.r2.with_overrides(t.r2_bucket.as_deref(), t.r2_public_url.as_deref()),
+    );
+
     let r2_key = format!("blobs/{repo}/{digest}");
-    let url = state.r2.public_url_for(&r2_key);
+    let url = effective_r2.public_url_for(&r2_key);
     info!("[blob-get] Redirecting: key={} → {}", r2_key, url);
     Response::builder()
         .status(StatusCode::TEMPORARY_REDIRECT)

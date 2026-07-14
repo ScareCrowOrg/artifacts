@@ -15,6 +15,9 @@
       "description": "JSON array of Cloudflare tunnel ingress rules, generated from planet_name (e.g. [{\"hostname\":\"planet.scareverse.net\",\"service\":\"http://traefik:80\"},{\"service\":\"http_status:404\"}])"
     }
   ],
-  "lastBuilt": "2026-07-12T09:49:24.071Z",
+  "lastBuilt": {
+    "staging": "2026-07-14T18:54:19.822Z",
+    "production": "2026-07-13T15:49:51.835Z"
+  },
   "planet": "staging"
 }

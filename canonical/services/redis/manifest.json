@@ -23,6 +23,9 @@
       "description": "Admin user password for Redis ACL (from redis:admin:password in vault)"
     }
   ],
-  "lastBuilt": "2026-07-12T09:49:24.092Z",
+  "lastBuilt": {
+    "staging": "2026-07-14T18:54:19.839Z",
+    "production": "2026-07-13T15:49:51.851Z"
+  },
   "planet": "staging"
 }
