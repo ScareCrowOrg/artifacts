@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${CENTRALHUB_URL:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-scare-registry-gate}:${IMAGE_TAG:-staging}
+    image: ${REGISTRY_HOST:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-scare-registry-gate}:${IMAGE_TAG:-staging}
     container_name: scareverse-registry-gate
     restart: unless-stopped
     volumes:
@@ -31,6 +31,7 @@ services:
       - WORKER_PORT=5678
       - REGISTRY_USERNAME=${REGISTRY_USERNAME:-scareverse}
       - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-scareverse}
+      - CONTROL_API_KEY=${CONTROL_API_KEY}
       - SCARE_LOG_DESTINATION=/app/logs/service.log
     ports:
       - 5678:5678

@@ -9,16 +9,20 @@
 //!   - SIGTERM/SIGINT handled for graceful shutdown.
 
 mod config;
+mod control;
 mod hub;
 mod oci;
 mod r2;
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
+
+use control::TenantConfig;
 
 use axum::{
     body::Body,
     http::{Response, StatusCode},
-    routing::any,
+    routing::{any, put},
 };
 use dashmap::DashMap;
 use tokio::net::TcpListener;
@@ -39,6 +43,15 @@ pub struct AppState {
     pub redis: redis::aio::ConnectionManager,
     /// In-memory byte buffers for in-progress blob uploads, keyed by UUID.
     pub session_buffers: Arc<DashMap<String, Vec<u8>>>,
+    /// Per-planet tenant session overrides (set via control endpoint).
+    ///
+    /// When the Builder pushes with `--target production`, it calls
+    /// `PUT /api/control/tenant-session` first, inserting a `TenantConfig` keyed
+    /// by planet name (e.g. "production").  The OCI handlers then consult this
+    /// map to decide which R2 bucket and CentralHub URL to use.
+    ///
+    /// Entries evaporate on `DELETE` or container restart.
+    pub tenant_sessions: Arc<RwLock<HashMap<String, TenantConfig>>>,
 }
 
 #[tokio::main]
@@ -107,11 +120,16 @@ async fn main() {
         redis: redis_cm,
         session_buffers: Arc::new(DashMap::new()),
         config: cfg.clone(),
+        tenant_sessions: Arc::new(RwLock::new(HashMap::new())),
     });
 
     // Assemble router.
     let app = oci::oci_router()
         .route("/health", any(health_handler))
+        .route(
+            "/api/control/tenant-session",
+            put(control::handle_upsert_tenant).delete(control::handle_delete_tenant),
+        )
         .with_state(state);
 
     // Bind listener.

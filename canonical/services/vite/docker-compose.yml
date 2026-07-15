@@ -5,7 +5,7 @@ services:
     build:
       context: ../../../..
       dockerfile: artifacts/canonical/services/vite/Dockerfile
-    image: ${CENTRALHUB_URL:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-vite}:${IMAGE_TAG:-staging}
+    image: ${REGISTRY_HOST:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-vite}:${IMAGE_TAG:-staging}
     ports:
       - 5052:5052
     volumes:

@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${CENTRALHUB_URL:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-stable-diffusion}:${IMAGE_TAG:-staging}
+    image: ${REGISTRY_HOST:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-stable-diffusion}:${IMAGE_TAG:-staging}
     pull_policy: missing
     runtime: nvidia
     environment:

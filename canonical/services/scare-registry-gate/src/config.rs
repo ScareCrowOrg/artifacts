@@ -57,6 +57,12 @@ pub struct Config {
     /// Override with a strong password in production to prevent unauthorised pushes.
     pub registry_password: String,
 
+    /// API key for the control endpoint (env: `CONTROL_API_KEY`, default: `""`).
+    ///
+    /// When empty the control endpoint returns 401 on every request (fail-closed).
+    /// Set this in production to a strong random token.
+    pub control_api_key: String,
+
     /// Maximum blob size in bytes for a single push (env: `MAX_BLOB_SIZE_MB`, default: `10240`).
     ///
     /// Requests exceeding this limit are rejected with `413 Payload Too Large` before
@@ -84,6 +90,7 @@ impl Config {
             log_level: env_str("LOG_LEVEL", "INFO"),
             registry_username: env_str("REGISTRY_USERNAME", "scareverse"),
             registry_password: env_str("REGISTRY_PASSWORD", "scareverse"),
+            control_api_key: env_str("CONTROL_API_KEY", ""),
             max_blob_size: env_usize("MAX_BLOB_SIZE_MB", 10240) * 1024 * 1024,
         }
     }
@@ -156,6 +163,20 @@ impl Config {
                      (e.g. https://pub-XXXX.r2.dev) or configure a custom domain."
                 );
             }
+        }
+
+        // Log CONTROL_API_KEY status (never the value, first/last char, or
+        // partial content — OWASP A09).  Only log PRESENT/ABSENT + length.
+        if self.control_api_key.is_empty() {
+            tracing::warn!(
+                "[Config] CONTROL_API_KEY: <EMPTY> – control endpoint will return 401 on every request; \
+                 set CONTROL_API_KEY to enable tenant-session management"
+            );
+        } else {
+            tracing::info!(
+                "[Config] CONTROL_API_KEY: present, len={}",
+                self.control_api_key.len()
+            );
         }
 
         // Log CentralHub URL (not a credential) to confirm correct configuration.
@@ -305,6 +326,7 @@ mod tests {
             log_level: "INFO".into(),
             registry_username: "u".into(),
             registry_password: "p".into(),
+            control_api_key: String::new(),
             max_blob_size: 2048 * 1024 * 1024,
         };
         assert_eq!(cfg.redis_url(), "redis://:secret@redis-local:6380/1");

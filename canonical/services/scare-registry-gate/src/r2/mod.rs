@@ -69,6 +69,7 @@ fn describe_sdk_error<E: std::fmt::Debug, R: std::fmt::Debug>(
 }
 
 /// Thin wrapper around the AWS S3 client configured for Cloudflare R2.
+#[derive(Clone)]
 pub struct R2Client {
     client: Client,
     /// Bucket name used for every operation.
@@ -363,6 +364,18 @@ impl R2Client {
             return Err(detail);
         }
         Ok(())
+    }
+
+    /// Create a copy with overridden bucket and/or public_url.
+    ///
+    /// The underlying S3 client (credentials, endpoint, connection pool) is shared,
+    /// so this is cheap.  Only the bucket and public URL are replaced.
+    pub fn with_overrides(&self, bucket: Option<&str>, public_url: Option<&str>) -> Self {
+        Self {
+            client: self.client.clone(),
+            bucket: bucket.map(|s| s.to_owned()).unwrap_or_else(|| self.bucket.clone()),
+            public_url: public_url.map(|s| s.to_owned()).unwrap_or_else(|| self.public_url.clone()),
+        }
     }
 
     /// Build the public URL for a stored object key.

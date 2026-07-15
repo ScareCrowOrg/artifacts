@@ -5,8 +5,8 @@
   "image": "hub.scareverse.net/registry/production/scareverse-auth-proxy:prod",
   "imageTag": "prod",
   "lastBuilt": {
-    "staging": "2026-07-12T09:49:24.048Z",
-    "production": "2026-07-13T15:49:51.817Z"
+    "staging": "2026-07-15T02:40:05.306Z",
+    "production": "2026-07-15T03:45:21.352Z"
   },
   "planet": "production"
 }

@@ -7,7 +7,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${CENTRALHUB_URL:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-ollama}:${IMAGE_TAG:-staging}
+    image: ${REGISTRY_HOST:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-ollama}:${IMAGE_TAG:-staging}
     container_name: scareverse-ollama-raw
     runtime: nvidia
     environment:

@@ -37,6 +37,12 @@
       "description": "Service token for CentralHub API"
     },
     {
+      "name": "CONTROL_API_KEY",
+      "source": "vault",
+      "required": false,
+      "description": "API key for the control-plane endpoint (PUT/DELETE tenant-session)"
+    },
+    {
       "name": "R2_BUCKET",
       "source": "config",
       "required": true,
@@ -52,8 +58,8 @@
   "dependencies": [],
   "imageTag": "prod",
   "lastBuilt": {
-    "staging": "2026-07-12T09:49:24.096Z",
-    "production": "2026-07-13T15:49:51.854Z"
+    "staging": "2026-07-15T02:40:05.341Z",
+    "production": "2026-07-15T03:45:21.379Z"
   },
   "planet": "production"
 }
