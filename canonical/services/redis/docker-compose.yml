@@ -2,7 +2,7 @@ version: "3.8"
 services:
   redis:
     build: .
-    image: ${REGISTRY_HOST:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-redis}:${IMAGE_TAG:-staging}
+    image: ${REGISTRY_HOST:-hub-staging.scareverse.net}/registry/${TENANT_NAME:-staging}/scareverse-${SERVICE_NAME:-redis}:${IMAGE_TAG:-staging}
     container_name: scareverse-redis-local
     ports:
       - 6380:6380

@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${REGISTRY_HOST:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-comfyui}:${IMAGE_TAG:-staging}
+    image: ${REGISTRY_HOST:-hub-staging.scareverse.net}/registry/${TENANT_NAME:-staging}/scareverse-${SERVICE_NAME:-comfyui}:${IMAGE_TAG:-staging}
     runtime: nvidia
     environment:
       NVIDIA_VISIBLE_DEVICES: all

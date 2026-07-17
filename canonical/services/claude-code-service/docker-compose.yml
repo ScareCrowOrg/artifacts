@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${REGISTRY_HOST:-hub-staging.scareverse.net}/registry/${PLANET_NAME:-staging}/scareverse-${SERVICE_NAME:-claude-code-service}:${IMAGE_TAG:-staging}
+    image: ${REGISTRY_HOST:-hub-staging.scareverse.net}/registry/${TENANT_NAME:-staging}/scareverse-${SERVICE_NAME:-claude-code-service}:${IMAGE_TAG:-staging}
     container_name: scareverse-claude-code-service
     environment:
       PORT: ${PORT:-8000}
