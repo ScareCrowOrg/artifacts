@@ -32,6 +32,15 @@ class CentralHubClient:
         self._api_key: Optional[str] = None
         self._client: Optional[AsyncClient] = None
         logger.info("CentralHub client configured for: %s", self.base_url)
+        logger.info(
+            "PERMANENTE [PNG-JOB] CENTRALHUB_BASE_CLIENT_INIT: "
+            "base_url=%s from_env=%s default_used=%s "
+            "CENTRALHUB_URL_env_set=%s",
+            self.base_url,
+            base_url is not None,
+            base_url is None and os.getenv("CENTRALHUB_URL") is None,
+            os.getenv("CENTRALHUB_URL") is not None,
+        )
 
     def set_api_key(self, api_key: str) -> None:
         """Define API key for service-level authentication. Optional."""
@@ -77,7 +86,20 @@ class CentralHubClient:
             httpx.Response object
         """
         client = await self._get_client()
-        return await client.request(method, path, json=json, params=params, headers=headers)
+        logger.debug(
+            "DIAG [PNG-JOB] CENTRALHUB_REQUEST: method=%s path=%s "
+            "body_preview=%s has_auth_header=%s",
+            method, path,
+            str(json)[:200] if json else "None",
+            "Authorization" in (dict(headers or {}) or {}) or self._api_key is not None,
+        )
+        response = await client.request(method, path, json=json, params=params, headers=headers)
+        logger.debug(
+            "DIAG [PNG-JOB] CENTRALHUB_RESPONSE: method=%s path=%s "
+            "status=%s body_preview=%.200s",
+            method, path, response.status_code, response.text or "",
+        )
+        return response
 
     async def health_check(self) -> Dict[str, Any]:
         """Check CentralHub health status."""

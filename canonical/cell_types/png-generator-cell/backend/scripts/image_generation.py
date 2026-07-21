@@ -128,6 +128,13 @@ async def queue_image_generation_job(
                 jdoc_result,
                 type(jdoc_result).__name__,
             )
+            logger.debug(
+                "DIAG [PNG-JOB] IMAGE_GEN_JOB_DOC: "
+                "jdoc_result_type=%s jdoc_result_val=%s job_id=%s",
+                type(jdoc_result).__name__,
+                jdoc_result,
+                job_id,
+            )
             if jdoc_result is None:
                 logger.critical(
                     "PERMANENTE [queue_image_generation_job] MongoDB insert FAILED for job=%s. "
@@ -144,9 +151,21 @@ async def queue_image_generation_job(
                 "create_job_document not available (app.models.job not imported) — "
                 "continuing without MongoDB persistence"
             )
+            logger.warning(
+                "PERMANENTE [PNG-JOB] KNOWN_GAP: ImportError on create_job_document — "
+                "job=%s will be enqueued via LPUSH without MongoDB document. "
+                "Ghost job risk: if job completes, result has no SSOT document.",
+                job_id,
+            )
         except Exception as jdoc_err:
             logger.warning(
                 "Failed to create JobDocument (non-blocking): %s", jdoc_err
+            )
+            logger.warning(
+                "PERMANENTE [PNG-JOB] KNOWN_GAP: Exception on create_job_document — "
+                "job=%s error=%s. Job will be enqueued via LPUSH without MongoDB document. "
+                "Ghost job risk: if job completes, result has no SSOT document.",
+                job_id, jdoc_err,
             )
 
         # ── Step 2: LPUSH to Redis queue (existing) ──
