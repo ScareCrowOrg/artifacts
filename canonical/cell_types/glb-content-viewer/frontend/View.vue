@@ -132,6 +132,20 @@
           </svg>
           <span>{{ $t('glbContentCell.download') }}</span>
         </button>
+
+        <!-- Transmitir 3D (Party Cell integration) -->
+        <button
+          v-if="displayContentLoaded"
+          class="px-3 py-1.5 text-sm bg-primary text-white rounded hover:bg-primary-hover transition flex items-center gap-1.5"
+          :title="$t('glbContentCell.share3D')"
+          @click="handleShare3D"
+        >
+          <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+          </svg>
+          <span>{{ partyConnected ? $t('glbContentCell.sharing3D') : $t('glbContentCell.share3D') }}</span>
+        </button>
       </div>
 
       <!-- Metadata Section (when loaded) -->
@@ -170,11 +184,15 @@ import { GlbContentCell } from './GlbContentCell'
 import BabylonModelViewer from '@/components/viewers/BabylonModelViewer.vue'
 import { CELL_STATE_BRIDGE_KEY } from '#canonical/shared/cellFactory'
 import type { CellStateBridge } from '#canonical/shared/cellFactory'
+import { usePartyCalls } from '@artifacts/shared/composables/usePartyCalls'
 
 const logger = createLogger('component:glb-content-viewer')
 
 // ── Initialize GlbContentCell instance ──
 const cellInstance = new GlbContentCell()
+
+// ── Party Calls (optional — for sharing 3D viewport) ──
+const { isConnected: partyConnected, shareStream } = usePartyCalls()
 
 // ── Props ──
 interface CellObject {
@@ -306,6 +324,24 @@ const loadContent = async () => {
     localRetryAvailable.value = true
   } finally {
     localIsLoading.value = false
+  }
+}
+
+/** Share 3D viewport via Cloudflare Calls (Party Cell integration) */
+async function handleShare3D(): Promise<void> {
+  // Attempt to find the Babylon.js canvas element within the viewer container
+  const viewerContainer = document.querySelector('.model-viewer-container')
+  const canvas = viewerContainer?.querySelector('canvas')
+  if (!canvas) {
+    logger.warn('[handleShare3D] No canvas found — Babylon engine may not be ready')
+    return
+  }
+  try {
+    const stream = (canvas as HTMLCanvasElement).captureStream(30)
+    await shareStream(stream)
+    logger.info('[handleShare3D] 3D viewport sharing started')
+  } catch (err: any) {
+    logger.error('[handleShare3D] Failed to share 3D viewport', err?.message)
   }
 }
 

@@ -20,6 +20,8 @@
     "gridOff": "Grade: Desligada",
     "vertices": "Vertices",
     "fileSize": "Tamanho",
-    "format": "Formato"
+    "format": "Formato",
+    "share3D": "Compartilhar Visão 3D",
+    "sharing3D": "Compartilhando 3D..."
   }
 }

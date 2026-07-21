@@ -1,0 +1,20 @@
+{
+  "partyCell": {
+    "title": "Festa",
+    "startCall": "Iniciar Festa",
+    "joinCall": "Entrar na Chamada",
+    "hangUp": "Desligar",
+    "mute": "Mutar",
+    "unmute": "Ativar Som",
+    "shareScreen": "Compartilhar Tela",
+    "share3D": "Compartilhar Visão 3D",
+    "live": "Ao Vivo",
+    "offline": "Offline",
+    "error": "Erro",
+    "notConnected": "Você não está em uma chamada. Inicie uma festa para conversar com outros!",
+    "waitingForOthers": "Aguardando outros entrarem…",
+    "remoteUser": "Usuário Remoto",
+    "retry": "Tentar Novamente",
+    "connectionLost": "Conexão perdida"
+  }
+}

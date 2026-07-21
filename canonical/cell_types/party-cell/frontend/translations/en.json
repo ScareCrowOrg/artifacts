@@ -1,0 +1,20 @@
+{
+  "partyCell": {
+    "title": "Party",
+    "startCall": "Start Party",
+    "joinCall": "Join Call",
+    "hangUp": "Hang Up",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "shareScreen": "Share Screen",
+    "share3D": "Share 3D View",
+    "live": "Live",
+    "offline": "Offline",
+    "error": "Error",
+    "notConnected": "You are not in a call. Start a party to talk with others!",
+    "waitingForOthers": "Waiting for others to join…",
+    "remoteUser": "Remote User",
+    "retry": "Retry",
+    "connectionLost": "Connection lost"
+  }
+}

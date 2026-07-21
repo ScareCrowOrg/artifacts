@@ -24,6 +24,9 @@
     "viewerGranted": "Already Granted",
     "loginPrompt": "Authenticate to transmit messages and request planet access.",
     "loginButton": "Authenticate",
-    "notAuthenticated": "You are exploring Planet Hall as a visitor. Authenticate to interact with the guardian."
+    "notAuthenticated": "You are exploring Planet Hall as a visitor. Authenticate to interact with the guardian.",
+    "live": "Live",
+    "startCall": "Start Party",
+    "leaveCall": "Leave"
   }
 }
