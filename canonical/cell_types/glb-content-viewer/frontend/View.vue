@@ -184,7 +184,7 @@ import { GlbContentCell } from './GlbContentCell'
 import BabylonModelViewer from '@/components/viewers/BabylonModelViewer.vue'
 import { CELL_STATE_BRIDGE_KEY } from '#canonical/shared/cellFactory'
 import type { CellStateBridge } from '#canonical/shared/cellFactory'
-import { usePartyCalls } from '@artifacts/shared/composables/usePartyCalls'
+import { usePartyCalls } from '#artifacts/shared/composables/usePartyCalls'
 
 const logger = createLogger('component:glb-content-viewer')
 

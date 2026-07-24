@@ -91,6 +91,7 @@ pub fn classify_route(path: &str) -> RouteDecision {
         RouteDecision::FastApiProxy
     } else {
         // Everything else → FastAPI proxy (Vite through Python async buffer).
+        debug!("CLASSIFY-CATCHALL: path={} → FastApiProxy", path);
         RouteDecision::FastApiProxy
     }
 }

@@ -108,6 +108,11 @@ interface Props {
   readOnly?: boolean
   /** External requests array for state sync (e.g. from planet-hall) */
   requests?: any[]
+  /**
+   * BaseCell instance passed by useCellViewProvider.resolveViewSpec().
+   * Provides waitForReady() to coordinate data loading with MFE handshake.
+   */
+  cellInstance?: { waitForReady?: () => Promise<void> }
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -115,6 +120,7 @@ const props = withDefaults(defineProps<Props>(), {
   cellId: undefined,
   readOnly: true,
   requests: undefined,
+  cellInstance: undefined,
 })
 
 const emit = defineEmits<{
@@ -188,7 +194,15 @@ onMounted(() => {
   loadCellI18n('requests-cell')
   // Only self-load if no external requests provided
   if (!props.requests) {
-    loadData()
+    // Wait for MFE handshake before making authenticated requests.
+    // If handshake already completed, waitForReady() resolves immediately.
+    // cellInstance is passed as a prop by useCellViewProvider.resolveViewSpec()
+    ;(async () => {
+      if (props.cellInstance?.waitForReady) {
+        await props.cellInstance.waitForReady()
+      }
+      loadData()
+    })()
   }
 })
 </script>

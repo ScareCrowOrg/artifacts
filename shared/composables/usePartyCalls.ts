@@ -32,9 +32,9 @@
  */
 
 import { ref, computed, onUnmounted, type Ref } from 'vue'
-import { usePartyStore, type Participant, type TrackType } from '@artifacts/shared/stores/partyStore'
-import { useDistributedState } from '@artifacts/shared/composables/useDistributedState'
-import { apiFetch } from '@artifacts/shared/services/apiService'
+import { usePartyStore, type Participant, type TrackType } from '#artifacts/shared/stores/partyStore'
+import { useDistributedState } from '#artifacts/shared/composables/useDistributedState'
+import { apiFetch } from '#artifacts/shared/services/apiService'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('composable:usePartyCalls')
@@ -162,11 +162,19 @@ export function usePartyCalls(): UsePartyCallsReturn {
    * Throws if permission is denied.
    */
   async function _requestUserMedia(): Promise<MediaStream> {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: true,
-    })
-    return stream
+    log.debug('[DIAG] _requestUserMedia constraints={audio:true, video:true}')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true,
+      })
+      log.debug('[DIAG] _requestUserMedia success tracks=%d', stream.getTracks().length)
+      return stream
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log.error('[DIAG] _requestUserMedia blocked error="%s"', msg)
+      throw err
+    }
   }
 
   /**

@@ -159,7 +159,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { usePartyCalls } from '@artifacts/shared/composables/usePartyCalls'
+import { usePartyCalls } from '#artifacts/shared/composables/usePartyCalls'
 import { createLogger } from '@/utils/logger'
 
 const logger = createLogger('component:party-cell')

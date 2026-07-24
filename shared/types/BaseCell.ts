@@ -369,8 +369,68 @@ export abstract class BaseCell {
     [key: string]: any
   }
   
+  // ===== MFE READY LIFECYCLE HOOKS =====
+
+  /**
+   * Internal promise that resolves when the MFE handshake (INIT_WORKSPACE) completes.
+   * Used by waitForReady() to block authenticated requests until the session token is available.
+   */
+  private _readyPromise: Promise<void>
+  private _resolveReady!: () => void
+  private _isReady = false
+
+  constructor() {
+    // Initialize the ready promise for MFE handshake lifecycle.
+    // The promise resolves when the MFE runtime calls _signalReady().
+    this._readyPromise = new Promise((resolve) => {
+      this._resolveReady = resolve
+    })
+  }
+
+  /**
+   * Called by the MFE Runtime when the handshake (INIT_WORKSPACE) is complete.
+   *
+   * Signals to the cell that it can safely make authenticated requests.
+   * Triggers the onReady() hook once, idempotently.
+   * Safe to call multiple times — second and subsequent calls are no-ops.
+   */
+  public _signalReady(): void {
+    if (!this._isReady) {
+      this._isReady = true
+      this._resolveReady()
+      this.onReady()
+    }
+  }
+
+  /**
+   * Wait for the MFE handshake to complete before executing authenticated requests.
+   *
+   * If the handshake has already completed (store.status === 'ready'), resolves immediately.
+   * Cells that need the session token should await this before calling apiFetch().
+   *
+   * Backward compatible: cells that never call this method continue working exactly as before.
+   */
+  public async waitForReady(): Promise<void> {
+    if (this._isReady) return
+    return this._readyPromise
+  }
+
+  /**
+   * Optional hook that subclasses can override to react when the MFE handshake completes.
+   *
+   * Called automatically when _signalReady() is invoked by the runtime.
+   * Use this to trigger data loading, refresh state, or perform other actions
+   * that depend on a valid session token.
+   *
+   * Default implementation is a no-op for backward compatibility.
+   * Cells that don't need auth can ignore this hook entirely.
+   */
+  public onReady(): void | Promise<void> {
+    // Default: no-op — backward compatible with existing cells
+  }
+
   // ===== REQUIRED ABSTRACT METHODS =====
-  
+
   /**
    * Execute the cell's main logic (REQUIRED)
    * 
