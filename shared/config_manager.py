@@ -42,7 +42,7 @@ import os
 import time
 from typing import Any, Optional
 
-__all__ = ["get_config", "clear_cache"]
+__all__ = ["get_config", "clear_cache", "cache_secret"]
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,22 @@ def clear_cache() -> None:
     """Flush the in-memory settings cache (useful in tests)."""
     _cache.clear()
     _secrets_cache.clear()
+
+
+def cache_secret(key: str, value: str) -> None:
+    """Inject a value into the lazy secrets cache.
+
+    Useful for auto-provisioned secrets that the backend just created
+    and wants available immediately via ``get_config('vault.{key}')``.
+
+    Once cached, subsequent ``get_config("vault.{key}")`` calls return the
+    value instantly without hitting the Launcher / SecretClient.
+
+    Args:
+        key:   Secret name (without the ``vault.`` prefix).
+        value: Plaintext value to cache.
+    """
+    _secrets_cache_set(key, value)
 
 
 # ---------------------------------------------------------------------------

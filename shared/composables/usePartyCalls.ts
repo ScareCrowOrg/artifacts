@@ -102,8 +102,6 @@ async function _apiFetchJson(path: string, options: RequestInit = {}): Promise<a
 
 let _pc: RTCPeerConnection | null = null
 let _localStream: MediaStream | null = null
-let _currentRoomId: string | null = null
-let _disconnectPresence: (() => void) | null = null
 
 export function usePartyCalls(): UsePartyCallsReturn {
   const store = usePartyStore()
@@ -113,12 +111,30 @@ export function usePartyCalls(): UsePartyCallsReturn {
   const localStream = ref<MediaStream | null>(null)
   const remoteStreams = ref<Map<string, MediaStream>>(new Map())
   const connectionError = ref<string | null>(null)
+  const _currentRoomRef = ref<string | null>(null)
 
   /**
    * Expose participants from the store as a convenience ref so consumers
    * don't need to know about the store internals.
    */
   const participants = computed<Participant[]>(() => store.participants)
+
+  // ── Distributed state (room presence) ──────────────────────────────────
+  // useDistributedState is called ONCE at composable level (not inside
+  // startCall).  A computed contextId reactively switches between the active
+  // room and an empty channel when idle.  useDistributedState auto-reconnects
+  // whenever the contextId changes.
+  const _roomCtx = computed(() => {
+    const roomId = _currentRoomRef.value
+    return roomId ? `calls:room:${roomId}` : ''
+  })
+
+  useDistributedState({
+    contextId: _roomCtx,
+    store: store as any,
+    branch: 'participants',
+    conflictStrategy: 'lww',
+  })
 
   // ── Internal helpers ─────────────────────────────────────────────────────
 
@@ -261,8 +277,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
       // 5. Attach local tracks to the peer
       _attachLocalTracks(pc, stream)
 
-      // 6. Room presence via useDistributedState
-      _currentRoomId = roomId
+      // 6. Room presence via computed contextId (useDistributedState declared
+      //    at composable level — the _currentRoomRef change triggers an
+      //    automatic WebSocket reconnect).
+      _currentRoomRef.value = roomId
       store.currentRoom = roomId
       store.addParticipant({
         participantId: 'self', // will be replaced with actual user id
@@ -271,14 +289,6 @@ export function usePartyCalls(): UsePartyCallsReturn {
         isMuted: false,
         joinedAt: Date.now(),
       })
-
-      const presence = useDistributedState({
-        contextId: `calls:room:${roomId}`,
-        store: store as any,
-        branch: 'participants',
-        conflictStrategy: 'lww',
-      })
-      _disconnectPresence = presence.disconnect.bind(presence)
 
       log.info('[startCall] Call established for room:', roomId)
     } catch (err: unknown) {
@@ -351,18 +361,16 @@ export function usePartyCalls(): UsePartyCallsReturn {
     _stopStream(_localStream)
     _localStream = null
 
-    // Disconnect room presence
-    if (_disconnectPresence) {
-      _disconnectPresence()
-      _disconnectPresence = null
-    }
+    // Disconnect room presence: setting _currentRoomRef to null makes the
+    // useDistributedState computed resolve to '' (idle channel), which
+    // automatically closes the WebSocket via the watcher.
+    _currentRoomRef.value = null
 
     // Reset state
     isConnected.value = false
     localStream.value = null
     remoteStreams.value = new Map()
     store.reset()
-    _currentRoomId = null
 
     log.info('[hangUp] Call ended')
   }

@@ -27,6 +27,7 @@
     "notAuthenticated": "Você está explorando o Salão Planetário como visitante. Autentique-se para interagir com o guardião.",
     "live": "Ao Vivo",
     "startCall": "Iniciar Party",
-    "leaveCall": "Sair"
+    "leaveCall": "Sair",
+    "connecting": "Conectando…"
   }
 }
