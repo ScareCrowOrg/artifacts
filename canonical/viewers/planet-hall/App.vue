@@ -32,10 +32,11 @@
           <!-- Party button -->
           <button
             class="ph-btn text-sm px-3 py-1.5"
-            :disabled="partyStarting"
+            :disabled="partyStarting || isProvisioning"
             @click="togglePartyCall"
           >
             <span v-if="partyConnected">{{ $t('planetHall.leaveCall') }}</span>
+            <span v-else-if="isProvisioning">{{ $t('planetHall.provisioning') }}</span>
             <span v-else-if="partyStarting">{{ $t('planetHall.connecting') }}</span>
             <span v-else>{{ $t('planetHall.startCall') }}</span>
           </button>
@@ -278,7 +279,7 @@ const log = createLogger('planet:hall')
 const { t } = useI18n()
 
 // ── Party Calls Integration ──
-const { isConnected: partyConnected, startCall, hangUp: partyHangUp, connectionError: partyConnectionError } = usePartyCalls()
+const { isConnected: partyConnected, isProvisioning, startCall, hangUp: partyHangUp, connectionError: partyConnectionError } = usePartyCalls()
 
 const partyStarting = ref(false)
 

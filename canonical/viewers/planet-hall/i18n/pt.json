@@ -28,6 +28,7 @@
     "live": "Ao Vivo",
     "startCall": "Iniciar Party",
     "leaveCall": "Sair",
-    "connecting": "Conectando…"
+    "connecting": "Conectando…",
+    "provisioning": "Ativando…"
   }
 }

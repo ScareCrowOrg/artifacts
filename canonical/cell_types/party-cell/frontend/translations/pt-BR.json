@@ -15,6 +15,7 @@
     "waitingForOthers": "Aguardando outros entrarem…",
     "remoteUser": "Usuário Remoto",
     "retry": "Tentar Novamente",
-    "connectionLost": "Conexão perdida"
+    "connectionLost": "Conexão perdida",
+    "provisioningMessage": "Ativando serviço de voz…"
   }
 }

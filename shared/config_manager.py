@@ -200,19 +200,32 @@ def get_config(key: str) -> Optional[str]:
     """
 
     # ------------------------------------------------------------------
-    # Path 1: vault.* → Lazy secrets cache or SecretClient
+    # Path 1: vault.* → Lazy secrets cache → env var → SecretClient
     # ------------------------------------------------------------------
     if key.startswith("vault."):
         secret_name = key[len("vault."):]
 
-        # Check lazy secrets cache first (per-process, no TTL)
+        # Step 1: Check lazy secrets cache first (per-process, no TTL)
         hit, cached_value = _secrets_cache_get(secret_name)
         if hit:
             logger.info("[Config] ✅ Secrets cache HIT for 'vault.%s' — returning cached value (preview: %s...)",
                         secret_name, cached_value[:15] if len(cached_value) >= 15 else cached_value)
             return cached_value
-        logger.info("[Config] Secrets cache MISS for 'vault.%s' — will request from SecretClient", secret_name)
+        logger.info("[Config] Secrets cache MISS for 'vault.%s' — checking env vars (fast path before SecretClient)", secret_name)
 
+        # Step 2: Check env var BEFORE SecretClient (avoids 60s blocking timeout)
+        env_key = secret_name.upper().replace(":", "_").replace(".", "_").replace("-", "_")
+        env_value = os.getenv(env_key)
+        if env_value is not None:
+            env_preview = env_value[:15] if len(env_value) >= 15 else env_value
+            logger.info("[Config] ✅ Env var '%s' found: '%s...' (len=%d) — caching and returning (fast path)",
+                        env_key, env_preview, len(env_value))
+            # Cache env fallback too (for consistency)
+            _secrets_cache_set(secret_name, env_value)
+            return env_value
+        logger.info("[Config] Env var '%s' not set for '%s' — falling back to SecretClient", env_key, secret_name)
+
+        # Step 3: Fall back to SecretClient (TOTP-authenticated, may block for 60s)
         client = _get_secret_client()
         if client is not None:
             logger.info("[Config] ▶️ Calling SecretClient.request_secret('%s') (timeout: 60s)", secret_name)
@@ -229,18 +242,9 @@ def get_config(key: str) -> Optional[str]:
                     secret_name,
                     exc,
                 )
-        # Fallback: env var with VAULT_ prefix stripped
-        env_key = secret_name.upper().replace(":", "_").replace(".", "_").replace("-", "_")
-        logger.info("[Config] SecretClient returned None for '%s' — falling back to env var '%s'", secret_name, env_key)
-        env_value = os.getenv(env_key)
-        if env_value is not None:
-            env_preview = env_value[:15] if len(env_value) >= 15 else env_value
-            logger.info("[Config] ✅ Env var '%s' found: '%s...' (len=%d) — caching and returning",
-                        env_key, env_preview, len(env_value))
-            # Cache env fallback too (for consistency)
-            _secrets_cache_set(secret_name, env_value)
-            return env_value
-        logger.warning("[Config] ❌ Env var '%s' also NOT SET for secret '%s' — returning None", env_key, secret_name)
+
+        # All sources exhausted
+        logger.warning("[Config] ❌ All sources exhausted for secret '%s' — returning None", secret_name)
         return None
 
     # ------------------------------------------------------------------

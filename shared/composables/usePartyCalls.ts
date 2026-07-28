@@ -47,6 +47,9 @@ export interface UsePartyCallsReturn {
   /** Whether the RTCPeerConnection is established */
   isConnected: Ref<boolean>
 
+  /** Whether Cloudflare Calls App provisioning is in progress */
+  isProvisioning: Ref<boolean>
+
   /** Local media stream (mic/camera) */
   localStream: Ref<MediaStream | null>
 
@@ -108,6 +111,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
   // ── Reactive state ───────────────────────────────────────────────────────
   const isConnected = ref(false)
+  const isProvisioning = ref(false)
   const localStream = ref<MediaStream | null>(null)
   const remoteStreams = ref<Map<string, MediaStream>>(new Map())
   const connectionError = ref<string | null>(null)
@@ -178,17 +182,16 @@ export function usePartyCalls(): UsePartyCallsReturn {
    * Throws if permission is denied.
    */
   async function _requestUserMedia(): Promise<MediaStream> {
-    log.debug('[DIAG] _requestUserMedia constraints={audio:true, video:true}')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: true,
       })
-      log.debug('[DIAG] _requestUserMedia success tracks=%d', stream.getTracks().length)
+      log.debug('_requestUserMedia success tracks=%d', stream.getTracks().length)
       return stream
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      log.error('[DIAG] _requestUserMedia blocked error="%s"', msg)
+      log.error('_requestUserMedia blocked error="%s"', msg)
       throw err
     }
   }
@@ -227,6 +230,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
   /**
    * Create or join a room call.
    *
+   * 0. Provisions the Cloudflare Calls App if needed (POST /api/calls/provision)
    * 1. Requests mic/camera permission
    * 2. Creates an SDP offer
    * 3. Sends it to the signaling proxy (POST /api/calls/session)
@@ -237,6 +241,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
    */
   async function startCall(roomId: string): Promise<void> {
     connectionError.value = null
+    isProvisioning.value = false
 
     // Guard: avoid re-entering a call
     if (_pc) {
@@ -245,6 +250,15 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
 
     try {
+      // Step 0: Provision Cloudflare Calls App (idempotent)
+      log.info('[startCall] Provisioning Cloudflare Calls...')
+      isProvisioning.value = true
+      const provisionResult = await _apiFetchJson('/calls/provision', {
+        method: 'POST',
+      })
+      log.info('[startCall] Provision status:', provisionResult.status)
+      isProvisioning.value = false
+
       // 1. Request local media
       log.info('[startCall] Requesting mic/camera...')
       const stream = await _requestUserMedia()
@@ -292,6 +306,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
       log.info('[startCall] Call established for room:', roomId)
     } catch (err: unknown) {
+      isProvisioning.value = false
       const msg = err instanceof Error ? err.message : 'Failed to start call'
       connectionError.value = msg
       log.error('[startCall] Error:', msg)
@@ -397,6 +412,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
   return {
     isConnected,
+    isProvisioning,
     localStream,
     remoteStreams,
     participants,

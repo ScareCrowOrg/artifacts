@@ -28,6 +28,7 @@
     "live": "Live",
     "startCall": "Start Party",
     "leaveCall": "Leave",
-    "connecting": "Connecting…"
+    "connecting": "Connecting…",
+    "provisioning": "Activating…"
   }
 }

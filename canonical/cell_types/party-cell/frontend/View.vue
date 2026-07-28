@@ -49,20 +49,32 @@
         v-if="!localIsConnected && !localConnectionError"
         class="flex flex-col items-center justify-center py-8 text-text-secondary dark:text-text-secondary-dark"
       >
-        <svg class="h-12 w-12 mb-3 opacity-40" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-        </svg>
-        <p class="text-sm mb-4">{{ $t('partyCell.notConnected') }}</p>
-        <button
-          class="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover transition flex items-center gap-2"
-          @click="handleStartCall"
+        <!-- Provisioning banner -->
+        <div
+          v-if="isProvisioning"
+          class="provisioning-banner flex items-center gap-2 mb-4 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800 text-sm"
         >
-          <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+          <span class="spinner inline-block h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          {{ $t('partyCell.provisioningMessage') }}
+        </div>
+
+        <template v-if="!isProvisioning">
+          <svg class="h-12 w-12 mb-3 opacity-40" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
           </svg>
-          {{ $t('partyCell.startCall') }}
-        </button>
+          <p class="text-sm mb-4">{{ $t('partyCell.notConnected') }}</p>
+          <button
+            class="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="isProvisioning"
+            @click="handleStartCall"
+          >
+            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+            </svg>
+            {{ $t('partyCell.startCall') }}
+          </button>
+        </template>
       </div>
 
       <!-- CONNECTED STATE -->
@@ -178,6 +190,7 @@ const props = withDefaults(defineProps<Props>(), {
 // ── PartyCalls Composable ──
 const {
   isConnected,
+  isProvisioning,
   localStream,
   remoteStreams,
   participants,
