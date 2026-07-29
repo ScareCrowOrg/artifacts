@@ -99,6 +99,43 @@ async function _apiFetchJson(path: string, options: RequestInit = {}): Promise<a
   return resp.json()
 }
 
+/**
+ * Poll the async provision task until it completes or fails.
+ *
+ * Polls ``GET /calls/provision/{taskId}`` every ``intervalMs`` for up to
+ * ``maxRetries`` attempts.  Returns the provision result when the task
+ * reaches status ``"completed"``.
+ *
+ * @throws Error with the server's error detail when the task reaches
+ *         status ``"failed"`` or all retries are exhausted.
+ */
+async function _pollProvisionTask(
+  taskId: string,
+  maxRetries = 100,
+  intervalMs = 2000,
+): Promise<{ app_id: string }> {
+  for (let i = 0; i < maxRetries; i++) {
+    const resp = await _apiFetchJson(`/calls/provision/${taskId}`)
+
+    if (resp.status === 'completed') {
+      log.debug('[pollProvision] task completed, app_id=%s', resp.app_id)
+      return { app_id: resp.app_id }
+    }
+
+    if (resp.status === 'failed') {
+      const errMsg = resp.error || 'Unknown provision error'
+      log.error('[pollProvision] task failed: %s', errMsg)
+      throw new Error(`Provision failed: ${errMsg}`)
+    }
+
+    // Still pending — wait before next poll
+    log.debug('[pollProvision] task pending (attempt %d/%d)', i + 1, maxRetries)
+    await new Promise(resolve => setTimeout(resolve, intervalMs))
+  }
+
+  throw new Error('Provision timeout — task did not complete within the retry limit')
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Composable
 // ─────────────────────────────────────────────────────────────────────────────
@@ -250,13 +287,25 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
 
     try {
-      // Step 0: Provision Cloudflare Calls App (idempotent)
+      // Step 0: Provision Cloudflare Calls App (idempotent, async)
       log.info('[startCall] Provisioning Cloudflare Calls...')
       isProvisioning.value = true
       const provisionResult = await _apiFetchJson('/calls/provision', {
         method: 'POST',
       })
-      log.info('[startCall] Provision status:', provisionResult.status)
+      log.info('[startCall] Provision response: status=%s', provisionResult.status)
+
+      // If provision is in progress (202 Accepted), poll until complete
+      if (provisionResult.status === 'provisioning') {
+        log.info(
+          '[startCall] Provision dispatched as task=%s — polling...',
+          provisionResult.task_id,
+        )
+        await _pollProvisionTask(provisionResult.task_id, 100, 2000)
+        log.info('[startCall] Provision completed via polling')
+      } else if (provisionResult.status === 'already_exists') {
+        log.info('[startCall] Provision already exists (fast path)')
+      }
       isProvisioning.value = false
 
       // 1. Request local media
