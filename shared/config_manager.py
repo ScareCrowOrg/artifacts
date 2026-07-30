@@ -268,7 +268,7 @@ def get_config(key: str) -> Optional[str]:
         # Step 2: Check env var BEFORE SecretClient (avoids 60s blocking timeout)
         env_key = secret_name.upper().replace(":", "_").replace(".", "_").replace("-", "_")
         env_value = os.getenv(env_key)
-        if env_value is not None:
+        if env_value:   # not None and not empty
             env_preview = env_value[:15] if len(env_value) >= 15 else env_value
             logger.info("[DIAG] config_manager.get_config: env var %s=found (value: %s...)", env_key, env_preview)
             logger.info("[Config] ✅ Env var '%s' found: '%s...' (len=%d) — caching and returning (fast path)",

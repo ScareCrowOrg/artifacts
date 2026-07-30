@@ -47,6 +47,18 @@
       "source": "config",
       "required": false,
       "description": "Expected JWT audience claim value for planet tokens (e.g., 'scare.scareverse.net'). Resolved from settings.planet.audience"
+    },
+    {
+      "name": "CLOUDFLARE_API_TOKEN",
+      "source": "vault",
+      "required": false,
+      "description": "Cloudflare API token for Calls TURN server provisioning"
+    },
+    {
+      "name": "CLOUDFLARE_ACCOUNT_ID",
+      "source": "vault",
+      "required": false,
+      "description": "Cloudflare Account ID for Calls TURN server provisioning"
     }
   ],
   "routing": {
@@ -62,7 +74,7 @@
     }
   },
   "lastBuilt": {
-    "staging": "2026-07-29T16:32:39.299Z",
+    "staging": "2026-07-30T06:09:18.586Z",
     "production": "2026-07-20T17:55:58.029Z"
   },
   "planet": "staging"
