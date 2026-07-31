@@ -59,6 +59,18 @@
       "source": "vault",
       "required": false,
       "description": "Cloudflare Account ID for Calls TURN server provisioning"
+    },
+    {
+      "name": "CLOUDFLARE_APP_ID",
+      "source": "vault",
+      "required": false,
+      "description": "Cloudflare Calls App ID for WebRTC sessions"
+    },
+    {
+      "name": "CLOUDFLARE_APP_SECRET",
+      "source": "vault",
+      "required": false,
+      "description": "Cloudflare Calls App Secret (Bearer token) for WebRTC sessions"
     }
   ],
   "routing": {
@@ -74,7 +86,7 @@
     }
   },
   "lastBuilt": {
-    "staging": "2026-07-30T06:09:18.586Z",
+    "staging": "2026-07-31T01:43:07.311Z",
     "production": "2026-07-20T17:55:58.029Z"
   },
   "planet": "staging"
