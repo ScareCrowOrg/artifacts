@@ -236,10 +236,28 @@ export function usePartyCalls(): UsePartyCallsReturn {
   /**
    * Attach local tracks to the peer connection so they are sent
    * to the SFU / remote peers.
+   *
+   * Must be called BEFORE createOffer() — RTCPeerConnection.createOffer()
+   * only emits m= sections for transceivers that already exist, so tracks
+   * added after the offer would be missing from the SDP (Cloudflare then
+   * rejects the media-less offer with 400 → the backend propagates 502).
+   *
+   * Non-throwing by design: a stream with zero tracks (no device/permission)
+   * or a failed addTrack must not crash the call flow — the offer is still
+   * sent (even if media-less) so any media error surfaces at the SFU/backend
+   * instead of breaking the frontend.
    */
   function _attachLocalTracks(pc: RTCPeerConnection, stream: MediaStream): void {
-    for (const track of stream.getTracks()) {
-      pc.addTrack(track, stream)
+    try {
+      for (const track of stream.getTracks()) {
+        pc.addTrack(track, stream)
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log.warn(
+        '[startCall] _attachLocalTracks failed — continuing without media: %s',
+        msg,
+      )
     }
   }
 
@@ -269,10 +287,12 @@ export function usePartyCalls(): UsePartyCallsReturn {
    *
    * 0. Provisions the Cloudflare Calls App if needed (POST /api/calls/provision)
    * 1. Requests mic/camera permission
-   * 2. Creates an SDP offer
-   * 3. Sends it to the signaling proxy (POST /api/calls/session)
-   * 4. Applies the Cloudflare SDP answer
-   * 5. Connects room presence via useDistributedState
+   * 2. Creates the RTCPeerConnection and attaches local tracks (addTrack
+   *    BEFORE createOffer so the offer carries m= audio/video sections)
+   * 3. Creates an SDP offer
+   * 4. Sends it to the signaling proxy (POST /api/calls/session)
+   * 5. Applies the Cloudflare SDP answer
+   * 6. Connects room presence via useDistributedState
    *
    * @param roomId - Room identifier (e.g. 'planet-lobby')
    */
@@ -313,13 +333,40 @@ export function usePartyCalls(): UsePartyCallsReturn {
       const stream = await _requestUserMedia()
       _localStream = stream
       localStream.value = stream
+      log.warn(
+        '[DIAG][usePartyCalls] STEP1 getUserMedia: streamId=%s tracks=%d (0 = sem mídia)',
+        stream.id,
+        stream.getTracks().length,
+      )
 
-      // 2. Create SDP offer
+      // 2. Create peer connection, then attach local tracks BEFORE building
+      //    the offer — createOffer() only emits m= sections for transceivers
+      //    that already exist, so addTrack must run first or the offer has
+      //    no media (Cloudflare /sessions/new → 400 → backend 502).
       const pc = _createPeerConnection()
       _pc = pc
+      _attachLocalTracks(pc, stream)
+
+      // 3. Create SDP offer
       const offer = await _createAndSetOffer(pc)
 
-      // 3. Send offer to signaling proxy
+      // DIAG: inspect the offer before it leaves the browser
+      const offerSdp = offer.sdp || ''
+      const firstM = offerSdp.match(/^m=\w+/gm)
+      log.warn(
+        '[DIAG][usePartyCalls] STEP3 createOffer: hasAudio=%s hasVideo=%s firstM=%s',
+        /^m=audio/m.test(offerSdp),
+        /^m=video/m.test(offerSdp),
+        firstM ? firstM[0] : '(sem mídia)',
+      )
+      log.warn(
+        '[DIAG][usePartyCalls] STEP4 POST /calls/session: type=%s hasMedia=%s sdpLen=%d',
+        offer.type,
+        /^m=/m.test(offerSdp),
+        offerSdp.length,
+      )
+
+      // 4. Send offer to signaling proxy
       log.info('[startCall] Sending session request...')
       const sessionData = await _apiFetchJson('/calls/session', {
         method: 'POST',
@@ -332,13 +379,18 @@ export function usePartyCalls(): UsePartyCallsReturn {
         }),
       })
 
-      // 4. Apply Cloudflare SDP answer
+      // 5. Apply Cloudflare SDP answer
       const answer = new RTCSessionDescription(sessionData.sessionDescription)
       await pc.setRemoteDescription(answer)
       isConnected.value = true
 
-      // 5. Attach local tracks to the peer
-      _attachLocalTracks(pc, stream)
+      // DIAG: local tracks were attached BEFORE the offer was built — the
+      // transceivers now include them (≥ 1 per track; confirms the offer
+      // carried m= audio/video sections).
+      log.warn(
+        '[DIAG][usePartyCalls] STEP6 addTrack: transceivers=%d',
+        pc.getTransceivers().length,
+      )
 
       // 6. Room presence via computed contextId (useDistributedState declared
       //    at composable level — the _currentRoomRef change triggers an
@@ -359,6 +411,13 @@ export function usePartyCalls(): UsePartyCallsReturn {
       const msg = err instanceof Error ? err.message : 'Failed to start call'
       connectionError.value = msg
       log.error('[startCall] Error:', msg)
+      // DIAG: how far did the call get before failing? (log BEFORE hangUp clears _pc)
+      log.warn(
+        '[DIAG][usePartyCalls] catch: pc=%s transceivers=%d room=%s',
+        _pc ? 'created' : 'null',
+        _pc ? _pc.getTransceivers().length : -1,
+        _currentRoomRef.value,
+      )
       // Clean up partially-created state
       hangUp()
     }
