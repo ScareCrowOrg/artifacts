@@ -87,7 +87,7 @@
         >
           <div
             v-for="(remote, idx) in remoteStreamList"
-            :key="idx"
+            :key="remote.participant?.sessionId || idx"
             class="remote-video relative bg-black rounded overflow-hidden aspect-video"
           >
             <video
@@ -97,7 +97,7 @@
               class="w-full h-full object-cover"
             />
             <span class="absolute bottom-1 left-1 text-xs text-white bg-black/50 px-1.5 py-0.5 rounded">
-              {{ localParticipants[idx]?.displayName || $t('partyCell.remoteUser') }}
+              {{ remote.participant?.displayName || $t('partyCell.remoteUser') }}
             </span>
           </div>
         </div>
@@ -172,6 +172,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePartyCalls } from '#artifacts/shared/composables/usePartyCalls'
+import type { Participant } from '#artifacts/shared/stores/partyStore'
 import { createLogger } from '@/utils/logger'
 
 const logger = createLogger('component:party-cell')
@@ -217,9 +218,22 @@ watch(connectionError, (val) => {
 
 // ── Computed ──
 
-/** Convert remoteStreams Map to a flat array for v-for rendering */
-const remoteStreamList = computed(() => {
-  return Array.from(remoteStreams.value.entries())
+/**
+ * Convert remoteStreams Map to a flat array for v-for rendering, matching each
+ * stream to its participant by sessionId so the video-grid label shows the
+ * correct display name (partyStore.Participant.sessionId).
+ */
+interface RemoteGridEntry {
+  stream: MediaStream
+  participant?: Participant
+}
+
+const remoteStreamList = computed<RemoteGridEntry[]>(() => {
+  const parts = participants.value || []
+  return Array.from(remoteStreams.value.entries()).map(([key, stream]) => ({
+    stream,
+    participant: parts.find((p) => p.sessionId === key),
+  }))
 })
 
 /** Local participants list from the distributed store */
@@ -235,7 +249,7 @@ const remoteVideoElements = new Map<number, HTMLVideoElement>()
 function attachRemoteVideo(idx: number, el: HTMLVideoElement | null): void {
   if (el) {
     remoteVideoElements.set(idx, el)
-    const stream = remoteStreamList.value[idx]?.[1]
+    const stream = remoteStreamList.value[idx]?.stream
     if (stream && el.srcObject !== stream) {
       el.srcObject = stream
     }

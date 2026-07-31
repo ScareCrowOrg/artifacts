@@ -1,34 +1,16 @@
 /**
  * @file usePartyCalls.ts
  * @description Vue 3 composable for Cloudflare Calls (WebRTC) — voice, video,
- * and screen-sharing in a room.
+ * and screen-sharing in a room.  Multi-user: sessions are registered in a room
+ * registry (Redis), remote sessions discovered, and their tracks subscribed via
+ * the Cloudflare tracks/new proxy.
  *
- * ## Architecture
- * ```
- * usePartyCalls()
- *   ├── startCall(roomId)
- *   │   ├── apiFetch('POST /api/calls/session')   → signaling proxy
- *   │   ├── new RTCPeerConnection(iceServers)       → WebRTC peer
- *   │   ├── getUserMedia()                          → local mic/camera
- *   │   └── useDistributedState({contextId})        → room presence
- *   │
- *   ├── shareStream(mediaStream)
- *   │   ├── pc.addTrack()                           → add to peer
- *   │   └── updateParticipant()                     → notify room
- *   │
- *   ├── muteAudio()    → track.enabled = false
- *   ├── hangUp()       → close peer + stop tracks + leave room
- *   └── requestSnapshot() → force participant refresh
- * ```
+ * Presence is **server-authoritative**: the party-cell backend script publishes
+ * snapshot envelopes to ``calls:room:{roomId}``; ``useDistributedState``
+ * replaces the ``participants`` branch with the authoritative list.
  *
- * ## Usage
- * ```typescript
- * const { isConnected, startCall, hangUp, muteAudio } = usePartyCalls()
- * await startCall('planet-lobby')
- * ```
- *
- * Must be called inside a Vue component's `setup()` (or `<script setup>`).
- * Works with or without useBaseViewer — has no dependency on it.
+ * A heartbeat every 20 s renews the 60 s registry TTL; a closed tab without
+ * ``hangUp`` expires the registration (ghost cleanup).
  */
 
 import { ref, computed, onUnmounted, type Ref } from 'vue'
@@ -44,48 +26,45 @@ const log = createLogger('composable:usePartyCalls')
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface UsePartyCallsReturn {
-  /** Whether the RTCPeerConnection is established */
   isConnected: Ref<boolean>
-
-  /** Whether Cloudflare Calls App provisioning is in progress */
   isProvisioning: Ref<boolean>
-
-  /** Local media stream (mic/camera) */
   localStream: Ref<MediaStream | null>
-
-  /** Remote streams keyed by participantId */
+  /** Remote streams keyed by remote sessionId */
   remoteStreams: Ref<Map<string, MediaStream>>
-
-  /** Room participants from the distributed store */
   participants: Ref<Participant[]>
-
-  /** Last connection or permission error, or null */
   connectionError: Ref<string | null>
-
-  /** Create or join a room call */
   startCall: (roomId: string) => Promise<void>
-
-  /** Share a media stream (screen, canvas) with the room */
   shareStream: (stream: MediaStream) => Promise<void>
-
-  /** Toggle local microphone mute */
   muteAudio: () => void
-
-  /** Leave the call and clean up all resources */
   hangUp: () => void
-
-  /** Request a participant snapshot refresh */
   requestSnapshot: () => Promise<void>
 }
 
+/** A session discovered in the room registry. */
+interface RemoteSession {
+  sessionId: string
+  userId?: string
+  displayName?: string
+  tracks?: TrackType[]
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers
+// Module-level state (shared across composable instances)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Thin wrapper around the shared apiFetch that throws on non-ok responses
- * with the server's error detail message.
- */
+let _pc: RTCPeerConnection | null = null
+let _localStream: MediaStream | null = null
+let _currentSessionId: string | null = null
+let _heartbeatTimer: number | null = null
+const _subscribedSessions = new Set<string>()
+
+const HEARTBEAT_INTERVAL_MS = 20_000 // must be < the 60 s registry TTL
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTTP helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Thin wrapper around apiFetch that throws with the server's error detail. */
 async function _apiFetchJson(path: string, options: RequestInit = {}): Promise<any> {
   const resp = await apiFetch(path, options)
   if (!resp.ok) {
@@ -99,16 +78,7 @@ async function _apiFetchJson(path: string, options: RequestInit = {}): Promise<a
   return resp.json()
 }
 
-/**
- * Poll the async provision task until it completes or fails.
- *
- * Polls ``GET /calls/provision/{taskId}`` every ``intervalMs`` for up to
- * ``maxRetries`` attempts.  Returns the provision result when the task
- * reaches status ``"completed"``.
- *
- * @throws Error with the server's error detail when the task reaches
- *         status ``"failed"`` or all retries are exhausted.
- */
+/** Poll the async provision task until it completes or fails. */
 async function _pollProvisionTask(
   taskId: string,
   maxRetries = 100,
@@ -116,32 +86,162 @@ async function _pollProvisionTask(
 ): Promise<{ app_id: string }> {
   for (let i = 0; i < maxRetries; i++) {
     const resp = await _apiFetchJson(`/calls/provision/${taskId}`)
-
     if (resp.status === 'completed') {
       log.debug('[pollProvision] task completed, app_id=%s', resp.app_id)
       return { app_id: resp.app_id }
     }
-
     if (resp.status === 'failed') {
-      const errMsg = resp.error || 'Unknown provision error'
-      log.error('[pollProvision] task failed: %s', errMsg)
-      throw new Error(`Provision failed: ${errMsg}`)
+      throw new Error(`Provision failed: ${resp.error || 'Unknown provision error'}`)
     }
-
-    // Still pending — wait before next poll
-    log.debug('[pollProvision] task pending (attempt %d/%d)', i + 1, maxRetries)
     await new Promise(resolve => setTimeout(resolve, intervalMs))
   }
-
   throw new Error('Provision timeout — task did not complete within the retry limit')
 }
+
+/** Execute a party-cell backend action via execute-ephemeral (best-effort). */
+async function _executePartyAction(input: Record<string, unknown>): Promise<void> {
+  try {
+    const resp = await apiFetch('/api/cells/execute-ephemeral', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cell_type: 'party-cell', input_data: input }),
+    })
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '')
+      log.warn('[partyAction] action=%s failed (%s): %s', input.action, resp.status, text)
+    }
+  } catch (err) {
+    log.warn('[partyAction] action=%s error: %s', input.action,
+      err instanceof Error ? err.message : String(err))
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-user SFU helpers (subscribe / discover / heartbeat)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Subscribe to a remote session's media tracks via Cloudflare tracks/new:
+ * add recvonly transceivers, offer, and route the remote tracks into this session.
+ */
+async function _subscribeToRemoteTracks(
+  remote: RemoteSession,
+  remoteStreams: Ref<Map<string, MediaStream>>,
+): Promise<void> {
+  if (!_pc || !_currentSessionId) return
+  if (_subscribedSessions.has(remote.sessionId)) return
+
+  try {
+    _pc.addTransceiver('audio', { direction: 'recvonly' })
+    _pc.addTransceiver('video', { direction: 'recvonly' })
+
+    const offer = await _pc.createOffer()
+    await _pc.setLocalDescription(offer)
+
+    const answer = await _apiFetchJson(
+      `/calls/sessions/${_currentSessionId}/tracks/new`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionDescription: { type: offer.type, sdp: offer.sdp },
+          tracks: [
+            { sessionId: remote.sessionId, trackName: 'audio' },
+            { sessionId: remote.sessionId, trackName: 'video' },
+          ],
+        }),
+      },
+    )
+    await _pc.setRemoteDescription(new RTCSessionDescription(answer.sessionDescription))
+
+    _subscribedSessions.add(remote.sessionId)
+    log.info('[subscribe] subscribed to remote session=%s', remote.sessionId)
+  } catch (err) {
+    log.warn('[subscribe] failed for remote session=%s: %s', remote.sessionId,
+      err instanceof Error ? err.message : String(err))
+  }
+}
+
+/** Re-discover active room sessions: subscribe to new ones, prune expired. */
+async function _refreshDiscovery(
+  roomId: string,
+  remoteStreams: Ref<Map<string, MediaStream>>,
+): Promise<void> {
+  if (!_currentSessionId) return
+  try {
+    const resp = await _apiFetchJson(`/calls/rooms/${roomId}/sessions`)
+    const sessions = (resp.sessions || []) as RemoteSession[]
+    const activeIds = new Set(sessions.map((s) => s.sessionId))
+
+    for (const s of sessions) {
+      if (s.sessionId !== _currentSessionId) {
+        await _subscribeToRemoteTracks(s, remoteStreams)
+      }
+    }
+
+    // Prune streams whose session is no longer active (ghost participants)
+    const next = new Map(remoteStreams.value)
+    let changed = false
+    for (const key of next.keys()) {
+      if (!activeIds.has(key) && _subscribedSessions.has(key)) {
+        next.delete(key)
+        _subscribedSessions.delete(key)
+        changed = true
+      }
+    }
+    if (changed) remoteStreams.value = next
+  } catch (err) {
+    log.warn('[discovery] refresh failed: %s',
+      err instanceof Error ? err.message : String(err))
+  }
+}
+
+/** Register the caller's session in the room and subscribe to remote sessions. */
+async function _registerAndDiscoverSessions(
+  roomId: string,
+  remoteStreams: Ref<Map<string, MediaStream>>,
+): Promise<void> {
+  if (!_currentSessionId) return
+  await _apiFetchJson(`/calls/rooms/${roomId}/sessions`, {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: _currentSessionId }),
+  })
+  await _refreshDiscovery(roomId, remoteStreams)
+}
+
+/** Start the periodic heartbeat + discovery refresh. */
+function _startHeartbeat(
+  roomId: string,
+  sessionId: string,
+  remoteStreams: Ref<Map<string, MediaStream>>,
+): void {
+  _stopHeartbeat()
+  _heartbeatTimer = window.setInterval(() => {
+    void (async () => {
+      try {
+        await _apiFetchJson(
+          `/calls/rooms/${roomId}/sessions/${sessionId}/heartbeat`,
+          { method: 'PUT' },
+        )
+      } catch (err) {
+        log.warn('[heartbeat] renewal failed: %s',
+          err instanceof Error ? err.message : String(err))
+      }
+      await _refreshDiscovery(roomId, remoteStreams)
+    })()
+  }, HEARTBEAT_INTERVAL_MS)
+}
+
+function _stopHeartbeat(): void {
+  if (_heartbeatTimer !== null) {
+    window.clearInterval(_heartbeatTimer)
+    _heartbeatTimer = null
+  }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Composable
 // ─────────────────────────────────────────────────────────────────────────────
-
-let _pc: RTCPeerConnection | null = null
-let _localStream: MediaStream | null = null
 
 export function usePartyCalls(): UsePartyCallsReturn {
   const store = usePartyStore()
@@ -154,17 +254,17 @@ export function usePartyCalls(): UsePartyCallsReturn {
   const connectionError = ref<string | null>(null)
   const _currentRoomRef = ref<string | null>(null)
 
-  /**
-   * Expose participants from the store as a convenience ref so consumers
-   * don't need to know about the store internals.
-   */
+  /** Expose participants from the store as a convenience ref. */
   const participants = computed<Participant[]>(() => store.participants)
 
   // ── Distributed state (room presence) ──────────────────────────────────
-  // useDistributedState is called ONCE at composable level (not inside
-  // startCall).  A computed contextId reactively switches between the active
-  // room and an empty channel when idle.  useDistributedState auto-reconnects
-  // whenever the contextId changes.
+  // useDistributedState is called ONCE at composable level.  A computed
+  // contextId reactively switches between the active room and an empty channel
+  // when idle; the composable auto-reconnects whenever the contextId changes.
+  //
+  // conflictStrategy 'append': presence is server-authoritative (the script
+  // publishes snapshot envelopes).  The client never emits replace patches, so
+  // one participant's local reset can't wipe another's participant list.
   const _roomCtx = computed(() => {
     const roomId = _currentRoomRef.value
     return roomId ? `calls:room:${roomId}` : ''
@@ -174,14 +274,12 @@ export function usePartyCalls(): UsePartyCallsReturn {
     contextId: _roomCtx,
     store: store as any,
     branch: 'participants',
-    conflictStrategy: 'lww',
+    conflictStrategy: 'append',
   })
 
   // ── Internal helpers ─────────────────────────────────────────────────────
 
-  /**
-   * Create an RTCPeerConnection configured with the given ICE servers.
-   */
+  /** Create an RTCPeerConnection configured with the given ICE servers. */
   function _createPeerConnection(iceServers: RTCIceServer[] = []): RTCPeerConnection {
     const pc = new RTCPeerConnection({ iceServers })
 
@@ -197,27 +295,40 @@ export function usePartyCalls(): UsePartyCallsReturn {
       }
     }
 
-    pc.ontrack = (event: RTCTrackEvent) => {
-      const [stream] = event.streams
-      if (stream) {
-        log.debug('[PC] remote track received, stream id:', stream.id)
-        // Track remote streams by a synthetic id — in a full
-        // SFU scenario Cloudflare would tag each track with the
-        // sender's participantId.
-        const trackKey = stream.id
-        const next = new Map(remoteStreams.value)
-        next.set(trackKey, stream)
-        remoteStreams.value = next
-      }
-    }
+    pc.ontrack = _handleRemoteTrack
 
     return pc
   }
 
   /**
-   * Request mic/camera permission and return the local stream.
-   * Throws if permission is denied.
+   * Incoming remote track.  Cloudflare tags the track id with the publisher's
+   * session (``{sessionId}/{trackName}``); tracks merge per sessionId.
    */
+  function _handleRemoteTrack(event: RTCTrackEvent): void {
+    const [stream] = event.streams
+    if (!stream) return
+
+    const trackIdMatch = /^([^/]+)\/(.+)$/.exec(event.track.id || '')
+    const sessionKey = trackIdMatch ? trackIdMatch[1] : stream.id
+
+    const next = new Map(remoteStreams.value)
+    const existing = next.get(sessionKey)
+    if (existing && existing !== stream) {
+      // Merge additional tracks (e.g. audio + video) into one per participant
+      for (const track of stream.getTracks()) {
+        if (!existing.getTracks().includes(track)) {
+          existing.addTrack(track)
+        }
+      }
+      next.set(sessionKey, existing)
+    } else {
+      next.set(sessionKey, stream)
+    }
+    remoteStreams.value = next
+    log.debug('[PC] remote track received, key=%s', sessionKey)
+  }
+
+  /** Request mic/camera permission and return the local stream. */
   async function _requestUserMedia(): Promise<MediaStream> {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -234,18 +345,11 @@ export function usePartyCalls(): UsePartyCallsReturn {
   }
 
   /**
-   * Attach local tracks to the peer connection so they are sent
-   * to the SFU / remote peers.
+   * Attach local tracks to the peer connection so they are sent to the SFU.
    *
-   * Must be called BEFORE createOffer() — RTCPeerConnection.createOffer()
-   * only emits m= sections for transceivers that already exist, so tracks
-   * added after the offer would be missing from the SDP (Cloudflare then
-   * rejects the media-less offer with 400 → the backend propagates 502).
-   *
-   * Non-throwing by design: a stream with zero tracks (no device/permission)
-   * or a failed addTrack must not crash the call flow — the offer is still
-   * sent (even if media-less) so any media error surfaces at the SFU/backend
-   * instead of breaking the frontend.
+   * Must run BEFORE createOffer() — createOffer() only emits m= sections for
+   * existing transceivers, so tracks added after would be missing from the SDP
+   * (Cloudflare rejects media-less offers with 400 → backend 502).  Non-throwing.
    */
   function _attachLocalTracks(pc: RTCPeerConnection, stream: MediaStream): void {
     try {
@@ -254,16 +358,11 @@ export function usePartyCalls(): UsePartyCallsReturn {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      log.warn(
-        '[startCall] _attachLocalTracks failed — continuing without media: %s',
-        msg,
-      )
+      log.warn('[startCall] _attachLocalTracks failed — continuing without media: %s', msg)
     }
   }
 
-  /**
-   * Stop all tracks in a stream and clean up.
-   */
+  /** Stop all tracks in a stream and clean up. */
   function _stopStream(stream: MediaStream | null): void {
     if (!stream) return
     for (const track of stream.getTracks()) {
@@ -271,9 +370,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
   }
 
-  /**
-   * Build the SDP offer and return it.
-   */
+  /** Build the SDP offer and set it as the local description. */
   async function _createAndSetOffer(pc: RTCPeerConnection): Promise<RTCSessionDescriptionInit> {
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
@@ -285,22 +382,21 @@ export function usePartyCalls(): UsePartyCallsReturn {
   /**
    * Create or join a room call.
    *
-   * 0. Provisions the Cloudflare Calls App if needed (POST /api/calls/provision)
+   * 0. Provisions the Cloudflare Calls App (POST /api/calls/provision, async)
    * 1. Requests mic/camera permission
    * 2. Creates the RTCPeerConnection and attaches local tracks (addTrack
    *    BEFORE createOffer so the offer carries m= audio/video sections)
    * 3. Creates an SDP offer
    * 4. Sends it to the signaling proxy (POST /api/calls/session)
    * 5. Applies the Cloudflare SDP answer
-   * 6. Connects room presence via useDistributedState
-   *
-   * @param roomId - Room identifier (e.g. 'planet-lobby')
+   * 6. Registers the session in the room + discovers & subscribes to others
+   * 7. Broadcasts join_room presence via the party-cell backend script
+   * 8. Starts the periodic heartbeat + discovery refresh (ghost cleanup)
    */
   async function startCall(roomId: string): Promise<void> {
     connectionError.value = null
     isProvisioning.value = false
 
-    // Guard: avoid re-entering a call
     if (_pc) {
       log.warn('[startCall] Already in a call — hanging up first')
       hangUp()
@@ -310,17 +406,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
       // Step 0: Provision Cloudflare Calls App (idempotent, async)
       log.info('[startCall] Provisioning Cloudflare Calls...')
       isProvisioning.value = true
-      const provisionResult = await _apiFetchJson('/calls/provision', {
-        method: 'POST',
-      })
+      const provisionResult = await _apiFetchJson('/calls/provision', { method: 'POST' })
       log.info('[startCall] Provision response: status=%s', provisionResult.status)
-
-      // If provision is in progress (202 Accepted), poll until complete
       if (provisionResult.status === 'provisioning') {
-        log.info(
-          '[startCall] Provision dispatched as task=%s — polling...',
-          provisionResult.task_id,
-        )
+        log.info('[startCall] Provision dispatched as task=%s — polling...', provisionResult.task_id)
         await _pollProvisionTask(provisionResult.task_id, 100, 2000)
         log.info('[startCall] Provision completed via polling')
       } else if (provisionResult.status === 'already_exists') {
@@ -335,14 +424,12 @@ export function usePartyCalls(): UsePartyCallsReturn {
       localStream.value = stream
       log.warn(
         '[DIAG][usePartyCalls] STEP1 getUserMedia: streamId=%s tracks=%d (0 = sem mídia)',
-        stream.id,
-        stream.getTracks().length,
+        stream.id, stream.getTracks().length,
       )
 
-      // 2. Create peer connection, then attach local tracks BEFORE building
-      //    the offer — createOffer() only emits m= sections for transceivers
-      //    that already exist, so addTrack must run first or the offer has
-      //    no media (Cloudflare /sessions/new → 400 → backend 502).
+      // 2. Create pc, then attach local tracks BEFORE building the offer —
+      //    createOffer() only emits m= sections for transceivers that already
+      //    exist (Cloudflare rejects media-less offers with 400 → backend 502).
       const pc = _createPeerConnection()
       _pc = pc
       _attachLocalTracks(pc, stream)
@@ -355,15 +442,12 @@ export function usePartyCalls(): UsePartyCallsReturn {
       const firstM = offerSdp.match(/^m=\w+/gm)
       log.warn(
         '[DIAG][usePartyCalls] STEP3 createOffer: hasAudio=%s hasVideo=%s firstM=%s',
-        /^m=audio/m.test(offerSdp),
-        /^m=video/m.test(offerSdp),
+        /^m=audio/m.test(offerSdp), /^m=video/m.test(offerSdp),
         firstM ? firstM[0] : '(sem mídia)',
       )
       log.warn(
         '[DIAG][usePartyCalls] STEP4 POST /calls/session: type=%s hasMedia=%s sdpLen=%d',
-        offer.type,
-        /^m=/m.test(offerSdp),
-        offerSdp.length,
+        offer.type, /^m=/m.test(offerSdp), offerSdp.length,
       )
 
       // 4. Send offer to signaling proxy
@@ -372,10 +456,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
         method: 'POST',
         body: JSON.stringify({
           roomId,
-          sessionDescription: {
-            type: offer.type,
-            sdp: offer.sdp,
-          },
+          sessionDescription: { type: offer.type, sdp: offer.sdp },
         }),
       })
 
@@ -383,27 +464,28 @@ export function usePartyCalls(): UsePartyCallsReturn {
       const answer = new RTCSessionDescription(sessionData.sessionDescription)
       await pc.setRemoteDescription(answer)
       isConnected.value = true
+      const mySessionId: string = sessionData.sessionId
+      _currentSessionId = mySessionId
 
-      // DIAG: local tracks were attached BEFORE the offer was built — the
-      // transceivers now include them (≥ 1 per track; confirms the offer
-      // carried m= audio/video sections).
-      log.warn(
-        '[DIAG][usePartyCalls] STEP6 addTrack: transceivers=%d',
-        pc.getTransceivers().length,
-      )
+      // DIAG: local tracks were attached BEFORE the offer was built
+      log.warn('[DIAG][usePartyCalls] STEP6 addTrack: transceivers=%d',
+        pc.getTransceivers().length)
 
-      // 6. Room presence via computed contextId (useDistributedState declared
-      //    at composable level — the _currentRoomRef change triggers an
-      //    automatic WebSocket reconnect).
+      // 6. Room presence via computed contextId (auto WS reconnect)
       _currentRoomRef.value = roomId
       store.currentRoom = roomId
-      store.addParticipant({
-        participantId: 'self', // will be replaced with actual user id
-        displayName: 'Me',
-        tracks: ['mic', 'camera'],
-        isMuted: false,
-        joinedAt: Date.now(),
-      })
+
+      // 7. Register session in the room + discover & subscribe to others
+      await _registerAndDiscoverSessions(roomId, remoteStreams)
+
+      // 8. Broadcast join_room presence (script publishes authoritative snapshot)
+      await _executePartyAction({ action: 'join_room', roomId, sessionId: mySessionId })
+
+      // 9. Force a presence snapshot so all clients converge immediately
+      await _executePartyAction({ action: 'snapshot_request', roomId })
+
+      // 10. Periodic heartbeat + discovery refresh (ghost cleanup)
+      _startHeartbeat(roomId, mySessionId, remoteStreams)
 
       log.info('[startCall] Call established for room:', roomId)
     } catch (err: unknown) {
@@ -411,23 +493,20 @@ export function usePartyCalls(): UsePartyCallsReturn {
       const msg = err instanceof Error ? err.message : 'Failed to start call'
       connectionError.value = msg
       log.error('[startCall] Error:', msg)
-      // DIAG: how far did the call get before failing? (log BEFORE hangUp clears _pc)
       log.warn(
         '[DIAG][usePartyCalls] catch: pc=%s transceivers=%d room=%s',
         _pc ? 'created' : 'null',
         _pc ? _pc.getTransceivers().length : -1,
         _currentRoomRef.value,
       )
-      // Clean up partially-created state
       hangUp()
     }
   }
 
   /**
-   * Share an additional media stream (e.g. screen share or 3D canvas)
-   * with the current room.
-   *
-   * @param stream - The MediaStream to share (from getDisplayMedia or canvas.captureStream)
+   * Share an additional media stream (screen/3D canvas) with the room.  After
+   * ``addTrack`` the session is renegotiated via tracks/update so the SFU
+   * announces the new track to every subscriber.
    */
   async function shareStream(stream: MediaStream): Promise<void> {
     if (!_pc) {
@@ -441,11 +520,31 @@ export function usePartyCalls(): UsePartyCallsReturn {
         _pc.addTrack(track, stream)
       }
 
-      // Keep a reference so the stream isn't garbage-collected
-      // Update the room presence to reflect screen-sharing
-      store.updateParticipant('self', {
-        tracks: ['mic', 'camera', 'screen'],
-      })
+      // Renegotiate so the SFU learns about the new track
+      if (_currentSessionId) {
+        const offer = await _pc.createOffer()
+        await _pc.setLocalDescription(offer)
+        const answer = await _apiFetchJson(
+          `/calls/sessions/${_currentSessionId}/tracks/update`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              sessionDescription: { type: offer.type, sdp: offer.sdp },
+            }),
+          },
+        )
+        await _pc.setRemoteDescription(new RTCSessionDescription(answer.sessionDescription))
+
+        // Notify room presence that we now publish 'screen'
+        const roomId = _currentRoomRef.value
+        if (roomId) {
+          await _executePartyAction({
+            action: 'tracks_update',
+            roomId,
+            tracks: ['mic', 'camera', 'screen'],
+          })
+        }
+      }
 
       log.info('[shareStream] Stream shared successfully')
     } catch (err: unknown) {
@@ -455,39 +554,59 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
   }
 
-  /**
-   * Mute or unmute the local microphone.
-   */
+  /** Mute or unmute the local microphone and reflect the state to the room. */
   function muteAudio(): void {
     if (!_localStream) return
     const audioTracks = _localStream.getAudioTracks()
     for (const track of audioTracks) {
       track.enabled = !track.enabled
     }
-    store.updateParticipant('self', {
-      isMuted: !audioTracks.some((t) => t.enabled),
-    })
+    const muted = !audioTracks.some((t) => t.enabled)
+
+    const roomId = _currentRoomRef.value
+    if (roomId) {
+      void _executePartyAction({ action: 'mute_toggle', roomId, isMuted: muted })
+    }
   }
 
   /**
-   * Leave the call — close the peer connection, stop all local tracks,
-   * disconnect room presence, and reset state.
+   * Leave the call — broadcast leave_room, stop the heartbeat, close the peer
+   * connection, stop local tracks, disconnect room presence, and reset state.
    */
   function hangUp(): void {
+    const roomId = _currentRoomRef.value
+    const sessionId = _currentSessionId
+
+    _stopHeartbeat()
+
+    // Broadcast leave so other clients drop us from presence (best-effort)
+    if (roomId) {
+      void _executePartyAction({ action: 'leave_room', roomId })
+    }
+
+    // Remove the room registry entry (best-effort — TTL is the safety net)
+    if (roomId && sessionId) {
+      void apiFetch(`/calls/rooms/${roomId}/sessions/${sessionId}`, { method: 'DELETE' })
+        .catch(() => {})
+    }
+
+    _subscribedSessions.clear()
+
     // Close peer connection
     if (_pc) {
       _pc.close()
       _pc = null
     }
+    _currentSessionId = null
 
     // Stop local media
     _stopStream(_localStream)
     _localStream = null
 
-    // Disconnect room presence: setting _currentRoomRef to null makes the
-    // useDistributedState computed resolve to '' (idle channel), which
-    // automatically closes the WebSocket via the watcher.
+    // Disconnect room presence: nulling _currentRoomRef makes the computed
+    // resolve to '' (idle channel), closing the WebSocket via the watcher.
     _currentRoomRef.value = null
+    store.currentRoom = null
 
     // Reset state
     isConnected.value = false
@@ -498,15 +617,11 @@ export function usePartyCalls(): UsePartyCallsReturn {
     log.info('[hangUp] Call ended')
   }
 
-  /**
-   * Request a snapshot of the current room participants.
-   * Useful after reconnect or to force-sync state.
-   */
+  /** Request a snapshot of the current room participants. */
   async function requestSnapshot(): Promise<void> {
-    log.debug('[requestSnapshot] Not implemented — useDistributedState handles snapshots')
-    // In the current architecture, useDistributedState sends a snapshot_request
-    // automatically on WebSocket connect.  This method is a placeholder for
-    // future manual refresh if needed.
+    const roomId = _currentRoomRef.value
+    if (!roomId) return
+    await _executePartyAction({ action: 'snapshot_request', roomId })
   }
 
   // ── Cleanup on component unmount ─────────────────────────────────────────

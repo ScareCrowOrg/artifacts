@@ -26,6 +26,9 @@ export interface Participant {
   /** Unique participant identifier (typically the user's id) */
   participantId: string
 
+  /** Cloudflare Calls session id — used to associate remote media streams */
+  sessionId?: string
+
   /** Human-readable display name */
   displayName: string
 
