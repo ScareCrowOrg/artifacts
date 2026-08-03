@@ -174,6 +174,8 @@ async def _handle_join_room(
         participantId (str, optional) — defaults to user_id
         displayName  (str, optional) — defaults to user name / user_id
         tracks       (list, optional) — defaults to ["mic", "camera"]
+        trackNames   (list, optional) — the publisher's NATIVE MediaStreamTrack
+          ids (sender.track.id) as registered on the Cloudflare SFU
         isMuted      (bool, optional) — defaults to False
     """
     room_id: str = cell_data.get("roomId", "").strip()
@@ -198,6 +200,7 @@ async def _handle_join_room(
         display_name = participant_id
 
     tracks: List[str] = cell_data.get("tracks") or ["mic", "camera"]
+    track_names: Optional[List[str]] = cell_data.get("trackNames")
     joined_at: int = int(cell_data.get("joinedAt") or int(time.time() * 1000))
 
     participant = {
@@ -208,6 +211,8 @@ async def _handle_join_room(
         "isMuted": bool(cell_data.get("isMuted", False)),
         "joinedAt": joined_at,
     }
+    if track_names:
+        participant["trackNames"] = track_names
 
     participants = await _load_participants(room_id)
     replaced = False
@@ -336,6 +341,8 @@ async def _handle_tracks_update(
         roomId       (str)
         participantId (str, optional) — defaults to user_id
         tracks       (list) — new list of TrackType values
+        trackNames   (list, optional) — the publisher's NATIVE MediaStreamTrack
+          ids (sender.track.id) as registered on the Cloudflare SFU
     """
     room_id: str = cell_data.get("roomId", "").strip()
     if not room_id:
@@ -345,12 +352,15 @@ async def _handle_tracks_update(
 
     participant_id: str = cell_data.get("participantId") or (user_id or "unknown")
     tracks: List[str] = cell_data.get("tracks") or []
+    track_names: Optional[List[str]] = cell_data.get("trackNames")
 
     participants = await _load_participants(room_id)
     updated = False
     for p in participants:
         if p.get("participantId") == participant_id:
             p["tracks"] = tracks
+            if track_names:
+                p["trackNames"] = track_names
             updated = True
             break
 

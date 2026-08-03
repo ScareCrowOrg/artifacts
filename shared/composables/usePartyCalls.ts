@@ -45,7 +45,13 @@ interface RemoteSession {
   sessionId: string
   userId?: string
   displayName?: string
+  /** Display-friendly TrackType labels ('mic'/'camera') — for the UI grid. */
   tracks?: TrackType[]
+  /** The publisher's NATIVE MediaStreamTrack ids (sender.track.id) as
+   *  registered on the Cloudflare SFU.  When present, subscriptions MUST
+   *  reference these exact names — the SFU resolves native track ids, not the
+   *  display labels ('mic'/'camera' → not_found_track_error, H1 F7 ciclo 2). */
+  trackNames?: string[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -139,13 +145,17 @@ async function _subscribeToRemoteTracks(
   if (!_pc || !_currentSessionId) return
   if (_subscribedSessions.has(remote.sessionId)) return
 
-  // The remote session's published trackNames come from the room registry
-  // metadata (GET /calls/rooms/{room}/sessions → metadata.tracks).  The
-  // publisher names its Cloudflare tracks with the same TrackType values
-  // ('mic'/'camera'), so these are the exact trackNames the SFU knows.
-  const trackNames: string[] = (remote.tracks && remote.tracks.length)
-    ? [...remote.tracks]
-    : ['mic', 'camera']
+  // The remote session's NATIVE trackNames come from the room registry
+  // metadata (GET /calls/rooms/{room}/sessions → metadata.trackNames).  The
+  // publisher registers each track on the SFU under sender.track.id — the
+  // display labels ('mic'/'camera') resolve to not_found_track_error (H1
+  // proven in F7 ciclo 2).  Fall back to the display labels only for sessions
+  // registered before trackNames existed (backward compatibility).
+  const trackNames: string[] = (remote.trackNames && remote.trackNames.length)
+    ? [...remote.trackNames]
+    : (remote.tracks && remote.tracks.length)
+      ? [...remote.tracks]
+      : ['mic', 'camera']
 
   // DIAG (F1 P2): transceiver count BEFORE the request — in the tracks-only
   // flow no recvonly transceivers are added client-side, so this stays flat
@@ -276,18 +286,33 @@ async function _refreshDiscovery(
   }
 }
 
-/** Register the caller's session in the room and subscribe to remote sessions. */
+/**
+ * Register the caller's session in the room and subscribe to remote sessions.
+ *
+ * ``tracks`` are the display-friendly TrackType labels ('mic'/'camera') kept
+ * for the UI; ``trackNames`` are the publisher's NATIVE MediaStreamTrack ids
+ * (sender.track.id) that the Cloudflare SFU registered — the names remote
+ * subscribers must reference to resolve the media tracks.
+ */
 async function _registerAndDiscoverSessions(
   roomId: string,
   remoteStreams: Ref<Map<string, MediaStream>>,
+  tracks: TrackType[],
+  trackNames: string[],
 ): Promise<void> {
   if (!_currentSessionId) return
+  const body: Record<string, unknown> = {
+    sessionId: _currentSessionId,
+    tracks,
+  }
+  if (trackNames.length) body.trackNames = trackNames
+  log.warn(
+    '[DIAG][register] room=%s session=%s tracks=%j trackNames=%j',
+    roomId, _currentSessionId, tracks, trackNames,
+  )
   await _apiFetchJson(`/calls/rooms/${roomId}/sessions`, {
     method: 'POST',
-    body: JSON.stringify({
-      sessionId: _currentSessionId,
-      tracks: ['mic', 'camera'],
-    }),
+    body: JSON.stringify(body),
   })
   await _refreshDiscovery(roomId, remoteStreams)
 }
@@ -534,18 +559,30 @@ export function usePartyCalls(): UsePartyCallsReturn {
         offer.type, /^m=/m.test(offerSdp), offerSdp.length,
       )
 
-      // 4. Send offer to signaling proxy.  The publisher names its local tracks
-      //    at session creation (Cloudflare TrackObject: location:'local' + mid +
-      //    trackName) so remote subscribers can reference the exact trackNames
-      //    via the room registry metadata ('mic'/'camera' TrackType values).
-      const localTrackObjs = pc.getTransceivers()
+      // 4. Send offer to signaling proxy.  The publisher registers each local
+      //    track under its NATIVE MediaStreamTrack id (sender.track.id) — the
+      //    name the Cloudflare SFU actually records (the display labels
+      //    'mic'/'camera' resolve to not_found_track_error — H1 proven in F7
+      //    ciclo 2).  The display-friendly TrackType labels are derived and
+      //    kept separately (tracks) for the UI grid.
+      const trackPairs = pc.getTransceivers()
         .filter((t) => t.sender && t.sender.track && t.mid)
         .map((t) => ({
-          location: 'local' as const,
-          mid: t.mid,
-          trackName: t.sender!.track!.kind === 'audio' ? 'mic' : 'camera',
+          mid: t.mid as string,
+          nativeId: t.sender!.track!.id,
+          display: (t.sender!.track!.kind === 'audio' ? 'mic' : 'camera') as TrackType,
         }))
-      log.info('[startCall] Publishing named local tracks=%j', localTrackObjs)
+      const localTrackObjs = trackPairs.map((p) => ({
+        location: 'local' as const,
+        mid: p.mid,
+        trackName: p.nativeId,
+      }))
+      const localTracks: TrackType[] = trackPairs.map((p) => p.display)
+      const localTrackNames: string[] = trackPairs.map((p) => p.nativeId)
+      log.warn(
+        '[DIAG][startCall] publishing to Cloudflare native trackNames=%j (display tracks=%j)',
+        localTrackNames, localTracks,
+      )
 
       const sessionData = await _apiFetchJson('/calls/session', {
         method: 'POST',
@@ -572,10 +609,16 @@ export function usePartyCalls(): UsePartyCallsReturn {
       store.currentRoom = roomId
 
       // 7. Register session in the room + discover & subscribe to others
-      await _registerAndDiscoverSessions(roomId, remoteStreams)
+      await _registerAndDiscoverSessions(roomId, remoteStreams, localTracks, localTrackNames)
 
       // 8. Broadcast join_room presence (script publishes authoritative snapshot)
-      await _executePartyAction({ action: 'join_room', roomId, sessionId: mySessionId })
+      await _executePartyAction({
+        action: 'join_room',
+        roomId,
+        sessionId: mySessionId,
+        tracks: localTracks,
+        trackNames: localTrackNames,
+      })
 
       // 9. Force a presence snapshot so all clients converge immediately
       await _executePartyAction({ action: 'snapshot_request', roomId })
