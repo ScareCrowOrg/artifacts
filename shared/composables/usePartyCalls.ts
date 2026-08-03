@@ -174,18 +174,20 @@ async function _subscribeToRemoteTracks(
     )
 
     const respSd = result?.sessionDescription
-    if (result?.requiresImmediateRenegotiation && respSd?.type === 'offer') {
+    const respSdp = respSd?.sdp ? String(respSd.sdp) : ''
+    let subscribed = false
+
+    if (result?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
       // SFU generated the offer — apply it, answer, and send the answer back
       // via the renegotiate proxy so the SFU completes the m-line setup.
       await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
 
       // DIAG (F1 P2): the SFU offer's m-sections / mids — confirms the media
       // lines are bounded (recvonly only; no growth across retries).
-      const sdp = respSd.sdp || ''
       log.warn(
         '[DIAG][subscribe] %s: offer type=%s sdp_len=%d m_sections=%d mids=%j',
-        remote.sessionId, respSd.type, sdp.length,
-        (sdp.match(/^m=\w+/gm) || []).length,
+        remote.sessionId, respSd.type, respSdp.length,
+        (respSdp.match(/^m=\w+/gm) || []).length,
         _pc.getTransceivers().map((t) => t.mid),
       )
 
@@ -200,16 +202,39 @@ async function _subscribeToRemoteTracks(
           }),
         },
       )
-    } else if (respSd) {
-      // Direct answer (no SFU offer) — apply as-is.
+      subscribed = true
+    } else if (respSd?.type === 'answer' && respSdp.length > 0) {
+      // Direct answer (no SFU offer) — apply as-is.  Only applied when the SDP
+      // is non-empty: applying an empty SDP crashes setRemoteDescription with
+      // "Failed to parse SessionDescription. Expect line: v=".
       await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
+      subscribed = true
+    } else {
+      // Canonical no-op (react-native-webrtc #1536 / realtime-examples echo):
+      // when requiresImmediateRenegotiation is false there is nothing to
+      // negotiate — never apply an absent/empty SDP.  If the backend propagated
+      // per-track errors (e.g. errorCode='empty_track_error'), the tracks did
+      // NOT resolve on the SFU: surface them and leave the session unsubscribed
+      // so the heartbeat retries once the publisher's trackNames resolve.
+      const trackErrors = (Array.isArray(result?.tracks) ? result.tracks : [])
+        .filter((t) => t && typeof t === 'object' && (t.errorCode || t.errorDescription))
+      if (trackErrors.length === 0) {
+        subscribed = true // resolved without needing a renegotiation
+      } else {
+        log.warn(
+          '[subscribe] %s: no-op — remote tracks not resolved on SFU (will retry) errors=%j',
+          remote.sessionId, trackErrors,
+        )
+      }
     }
 
-    _subscribedSessions.add(remote.sessionId)
-    log.info(
-      '[subscribe] subscribed to remote session=%s answer_type=%s',
-      remote.sessionId, respSd?.type,
-    )
+    if (subscribed) {
+      _subscribedSessions.add(remote.sessionId)
+      log.info(
+        '[subscribe] subscribed to remote session=%s answer_type=%s',
+        remote.sessionId, respSd?.type,
+      )
+    }
   } catch (err) {
     log.warn('[subscribe] failed for remote session=%s current_session=%s: %s',
       remote.sessionId, _currentSessionId,
@@ -604,7 +629,11 @@ export function usePartyCalls(): UsePartyCallsReturn {
             }),
           },
         )
-        await _pc.setRemoteDescription(new RTCSessionDescription(answer.sessionDescription))
+        // Apply the returned SDP only when usable — the backend now omits
+        // sessionDescription when the SFU returns none (never apply empty SDP).
+        if (answer?.sessionDescription?.sdp) {
+          await _pc.setRemoteDescription(new RTCSessionDescription(answer.sessionDescription))
+        }
 
         // Notify room presence that we now publish 'screen'
         const roomId = _currentRoomRef.value
