@@ -87,8 +87,9 @@
         >
           <div
             v-for="(remote, idx) in remoteStreamList"
-            :key="remote.participant?.sessionId || idx"
+            :key="remote.key"
             class="remote-video relative bg-black rounded overflow-hidden aspect-video"
+            :class="remote.isScreen ? 'screen-tile border-2 border-primary' : ''"
           >
             <video
               :ref="(el) => attachRemoteVideo(idx, el as HTMLVideoElement | null)"
@@ -96,8 +97,18 @@
               playsinline
               class="w-full h-full object-cover"
             />
+            <svg
+              v-if="remote.isScreen"
+              class="absolute top-1 left-1 h-4 w-4 text-white bg-black/50 rounded p-0.5"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+            </svg>
             <span class="absolute bottom-1 left-1 text-xs text-white bg-black/50 px-1.5 py-0.5 rounded">
-              {{ remote.participant?.displayName || $t('partyCell.remoteUser') }}
+              {{ remoteLabel(remote) }}
             </span>
           </div>
         </div>
@@ -222,19 +233,42 @@ watch(connectionError, (val) => {
  * Convert remoteStreams Map to a flat array for v-for rendering, matching each
  * stream to its participant by sessionId so the video-grid label shows the
  * correct display name (partyStore.Participant.sessionId).
+ *
+ * Screen-share tiles are keyed ``{sessionId}/screen`` (see _handleRemoteTrack):
+ * they resolve the owning participant by stripping the suffix and are flagged
+ * ``isScreen`` so the grid renders a dedicated highlighted tile.
  */
 interface RemoteGridEntry {
+  /** The remoteStreams Map key (sessionId or `${sessionId}/screen`). */
+  key: string
   stream: MediaStream
   participant?: Participant
+  /** Whether this tile is a screen share (separate from the camera tile). */
+  isScreen: boolean
 }
 
 const remoteStreamList = computed<RemoteGridEntry[]>(() => {
   const parts = participants.value || []
-  return Array.from(remoteStreams.value.entries()).map(([key, stream]) => ({
-    stream,
-    participant: parts.find((p) => p.sessionId === key),
-  }))
+  return Array.from(remoteStreams.value.entries()).map(([key, stream]) => {
+    const isScreen = key.endsWith('/screen')
+    const ownerId = isScreen ? key.slice(0, -'/screen'.length) : key
+    return {
+      key,
+      stream,
+      isScreen,
+      participant: parts.find((p) => p.sessionId === ownerId),
+    }
+  })
 })
+
+/** Tile label: owner name for camera tiles, owner + "screen share" for screen. */
+function remoteLabel(remote: RemoteGridEntry): string {
+  const name = remote.participant?.displayName
+  if (remote.isScreen) {
+    return name ? `${name} · ${t('partyCell.screenShare')}` : t('partyCell.screenShare')
+  }
+  return name || t('partyCell.remoteUser')
+}
 
 /** Local participants list from the distributed store */
 const localParticipants = computed(() => {
@@ -316,6 +350,12 @@ onUnmounted(() => {
 
 .video-grid {
   width: 100%;
+}
+
+/* Shared screen tiles span two grid columns so the screen is the focus of the
+   grid (GAP 4 — a distinct highlighted tile, not the camera "winning"). */
+.screen-tile {
+  grid-column: span 2;
 }
 
 .control-btn {

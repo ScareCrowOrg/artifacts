@@ -54,6 +54,16 @@ interface RemoteSession {
   trackNames?: string[]
 }
 
+/** Per-track result echoed by the Cloudflare tracks/new proxy.  A track that
+ *  failed to resolve on the SFU carries ``errorCode``/``errorDescription``
+ *  (e.g. ``not_found_track_error``, ``empty_track_error``). */
+interface SfuTrackResult {
+  trackName?: string
+  mid?: string
+  errorCode?: string
+  errorDescription?: string
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Module-level state (shared across composable instances)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -63,6 +73,20 @@ let _localStream: MediaStream | null = null
 let _currentSessionId: string | null = null
 let _heartbeatTimer: number | null = null
 const _subscribedSessions = new Set<string>()
+/** The display stream being shared (screen/3D canvas) — stopped on hangUp. */
+let _screenStream: MediaStream | null = null
+/** Display-friendly TrackTypes this caller has published to the room (startCall
+ *  base + 'screen' after shareStream) — kept so registry/presence updates carry
+ *  the REAL track set (GAP 2). */
+let _publishedTracks: TrackType[] = []
+/** NATIVE track names (sender.track.id) this caller has published. */
+let _publishedTrackNames: string[] = []
+/** Native trackNames already subscribed per remote sessionId (GAP 3 — the
+ *  heartbeat re-subscribes only the delta when a session adds a new track). */
+const _subscribedTrackNames = new Map<string, string[]>()
+/** sessionId → { nativeTrackId → 'mic'|'camera'|'screen' } — lets
+ *  _handleRemoteTrack tell a screen track apart from the camera (GAP 4). */
+const _remoteTrackTypes = new Map<string, Map<string, string>>()
 
 const HEARTBEAT_INTERVAL_MS = 20_000 // must be < the 60 s registry TTL
 
@@ -143,7 +167,6 @@ async function _subscribeToRemoteTracks(
   remoteStreams: Ref<Map<string, MediaStream>>,
 ): Promise<void> {
   if (!_pc || !_currentSessionId) return
-  if (_subscribedSessions.has(remote.sessionId)) return
 
   // The remote session's NATIVE trackNames come from the room registry
   // metadata (GET /calls/rooms/{room}/sessions → metadata.trackNames).  The
@@ -151,20 +174,28 @@ async function _subscribeToRemoteTracks(
   // display labels ('mic'/'camera') resolve to not_found_track_error (H1
   // proven in F7 ciclo 2).  Fall back to the display labels only for sessions
   // registered before trackNames existed (backward compatibility).
-  const trackNames: string[] = (remote.trackNames && remote.trackNames.length)
+  const allTrackNames: string[] = (remote.trackNames && remote.trackNames.length)
     ? [...remote.trackNames]
     : (remote.tracks && remote.tracks.length)
       ? [...remote.tracks]
       : ['mic', 'camera']
+
+  // GAP 3: subscribe only to tracks NOT yet subscribed.  When a session adds a
+  // new track (e.g. the shared screen) its trackNames grow and the next
+  // heartbeat subscribes just the delta — no page reload needed.
+  const already = _subscribedTrackNames.get(remote.sessionId) ?? []
+  const trackNames = allTrackNames.filter((n) => !already.includes(n))
+  if (trackNames.length === 0) return
 
   // DIAG (F1 P2): transceiver count BEFORE the request — in the tracks-only
   // flow no recvonly transceivers are added client-side, so this stays flat
   // across heartbeat retries (no accumulation → no 413).
   const txsBeforeOffer = _pc.getTransceivers()
   log.warn(
-    '[DIAG][subscribe] %s: transceivers_before_offer=%d recvonly_mids=%j',
+    '[DIAG][subscribe] %s: transceivers_before_offer=%d recvonly_mids=%j new_trackNames=%j',
     remote.sessionId, txsBeforeOffer.length,
     txsBeforeOffer.filter((t) => t.direction === 'recvonly').map((t) => t.mid),
+    trackNames,
   )
 
   const tracksToSend = trackNames.map((trackName) => ({
@@ -227,7 +258,7 @@ async function _subscribeToRemoteTracks(
       // NOT resolve on the SFU: surface them and leave the session unsubscribed
       // so the heartbeat retries once the publisher's trackNames resolve.
       const trackErrors = (Array.isArray(result?.tracks) ? result.tracks : [])
-        .filter((t) => t && typeof t === 'object' && (t.errorCode || t.errorDescription))
+        .filter((t: SfuTrackResult) => t && typeof t === 'object' && (t.errorCode || t.errorDescription))
       if (trackErrors.length === 0) {
         subscribed = true // resolved without needing a renegotiation
       } else {
@@ -240,9 +271,10 @@ async function _subscribeToRemoteTracks(
 
     if (subscribed) {
       _subscribedSessions.add(remote.sessionId)
+      _subscribedTrackNames.set(remote.sessionId, [...already, ...trackNames])
       log.info(
-        '[subscribe] subscribed to remote session=%s answer_type=%s',
-        remote.sessionId, respSd?.type,
+        '[subscribe] subscribed to remote session=%s answer_type=%s trackNames=%j',
+        remote.sessionId, respSd?.type, trackNames,
       )
     }
   } catch (err) {
@@ -264,18 +296,41 @@ async function _refreshDiscovery(
     const activeIds = new Set(sessions.map((s) => s.sessionId))
 
     for (const s of sessions) {
+      // GAP 4: keep the nativeId → display mapping (positional tracks↔trackNames)
+      // so _handleRemoteTrack can tell a screen track from the camera.
+      if (s.trackNames && s.trackNames.length) {
+        const typeMap = _remoteTrackTypes.get(s.sessionId) ?? new Map<string, string>()
+        if (s.tracks && s.tracks.length !== s.trackNames.length) {
+          // Positional fragility guard: display labels ↔ native trackNames must
+          // stay aligned for the 'screen' classification in _handleRemoteTrack.
+          log.warn(
+            '[DIAG][discovery] %s: tracks.length=%d != trackNames.length=%d — screen type may misclassify',
+            s.sessionId, s.tracks.length, s.trackNames.length,
+          )
+        }
+        s.trackNames.forEach((trackName, i) => {
+          const display = s.tracks?.[i]
+          if (display) typeMap.set(trackName, display)
+        })
+        _remoteTrackTypes.set(s.sessionId, typeMap)
+      }
       if (s.sessionId !== _currentSessionId) {
         await _subscribeToRemoteTracks(s, remoteStreams)
       }
     }
 
     // Prune streams whose session is no longer active (ghost participants).
+    // Screen tiles are keyed ``{sessionId}/screen`` — map them back to the
+    // owning session so they are pruned with it.
     const next = new Map(remoteStreams.value)
     let changed = false
     for (const key of next.keys()) {
-      if (!activeIds.has(key) && _subscribedSessions.has(key)) {
+      const ownerId = key.endsWith('/screen') ? key.slice(0, -'/screen'.length) : key
+      if (!activeIds.has(ownerId) && _subscribedSessions.has(ownerId)) {
         next.delete(key)
-        _subscribedSessions.delete(key)
+        _subscribedSessions.delete(ownerId)
+        _subscribedTrackNames.delete(ownerId)
+        _remoteTrackTypes.delete(ownerId)
         changed = true
       }
     }
@@ -308,6 +363,36 @@ async function _registerAndDiscoverSessions(
   if (trackNames.length) body.trackNames = trackNames
   log.warn(
     '[DIAG][register] room=%s session=%s tracks=%j trackNames=%j',
+    roomId, _currentSessionId, tracks, trackNames,
+  )
+  await _apiFetchJson(`/calls/rooms/${roomId}/sessions`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  await _refreshDiscovery(roomId, remoteStreams)
+}
+
+/**
+ * Re-register the caller's session in the room registry with EXTENDED
+ * tracks/trackNames (upsert — calls_rooms.register_session writes via hset) and
+ * refresh discovery so subscribers learn about newly added tracks.  GAP 2: the
+ * shared screen must appear in GET /rooms/{room}/sessions before anyone can
+ * subscribe to it.  Caller: shareStream (when a screen track is added).
+ */
+async function _updateRegistryTracks(
+  roomId: string,
+  tracks: TrackType[],
+  trackNames: string[],
+  remoteStreams: Ref<Map<string, MediaStream>>,
+): Promise<void> {
+  if (!_currentSessionId) return
+  const body: Record<string, unknown> = {
+    sessionId: _currentSessionId,
+    tracks,
+  }
+  if (trackNames.length) body.trackNames = trackNames
+  log.warn(
+    '[DIAG][registry] re-register room=%s session=%s tracks=%j trackNames=%j',
     roomId, _currentSessionId, tracks, trackNames,
   )
   await _apiFetchJson(`/calls/rooms/${roomId}/sessions`, {
@@ -411,7 +496,7 @@ async function _registerLocalTracksOnSfu(
       { method: 'POST', body: JSON.stringify({ tracks: trackObjs }) },
     )
     const perTrack = (Array.isArray(result?.tracks) ? result.tracks : [])
-      .map((t) => (t && typeof t === 'object'
+      .map((t: SfuTrackResult) => (t && typeof t === 'object'
         ? { trackName: t.trackName, mid: t.mid, errorCode: t.errorCode, errorDescription: t.errorDescription }
         : t))
     log.warn(
@@ -490,14 +575,25 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
   /**
    * Incoming remote track.  Cloudflare tags the track id with the publisher's
-   * session (``{sessionId}/{trackName}``); tracks merge per sessionId.
+   * session (``{sessionId}/{trackName}``); tracks merge per sessionId.  Screen
+   * tracks (display type 'screen' resolved via _remoteTrackTypes) get their own
+   * ``{sessionId}/screen`` key so the grid renders a dedicated highlighted tile
+   * instead of letting the camera win or showing a black tile (GAP 4).
    */
   function _handleRemoteTrack(event: RTCTrackEvent): void {
     const [stream] = event.streams
     if (!stream) return
 
     const trackIdMatch = /^([^/]+)\/(.+)$/.exec(event.track.id || '')
-    const sessionKey = trackIdMatch ? trackIdMatch[1] : stream.id
+    let sessionKey: string
+    if (trackIdMatch) {
+      const ownerId = trackIdMatch[1]
+      const trackName = trackIdMatch[2]
+      const display = _remoteTrackTypes.get(ownerId)?.get(trackName)
+      sessionKey = display === 'screen' ? `${ownerId}/screen` : ownerId
+    } else {
+      sessionKey = stream.id
+    }
 
     const next = new Map(remoteStreams.value)
     const existing = next.get(sessionKey)
@@ -691,6 +787,11 @@ export function usePartyCalls(): UsePartyCallsReturn {
       _currentRoomRef.value = roomId
       store.currentRoom = roomId
 
+      // Track the published local track metadata so shareStream can extend it
+      // with the screen track (registry + presence carry the REAL track set).
+      _publishedTracks = [...localTracks]
+      _publishedTrackNames = [...localTrackNames]
+
       // 7. Register session in the room + discover & subscribe to others
       await _registerAndDiscoverSessions(roomId, remoteStreams, localTracks, localTrackNames)
 
@@ -735,9 +836,15 @@ export function usePartyCalls(): UsePartyCallsReturn {
   }
 
   /**
-   * Share an additional media stream (screen/3D canvas) with the room.  After
-   * ``addTrack`` the session is renegotiated via tracks/update so the SFU
-   * announces the new track to every subscriber.
+   * Share an additional media stream (screen/3D canvas) with the room.
+   *
+   * A screen track is added MID-CALL, so unlike startCall the flow must
+   * explicitly register the track on the SFU via tracks/new location:'local'
+   * (GAP 1 — without it the SFU never learns the track and no subscriber
+   * resolves it), extend the room registry trackNames so discovery returns it
+   * (GAP 2), renegotiate via tracks/update, and publish presence with the REAL
+   * tracks/trackNames so subscribers can re-subscribe (GAP 3) and render a
+   * dedicated screen tile (GAP 4).
    */
   async function shareStream(stream: MediaStream): Promise<void> {
     if (!_pc) {
@@ -747,41 +854,84 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
 
     try {
-      for (const track of stream.getTracks()) {
-        _pc.addTrack(track, stream)
+      // Share only the VIDEO track of the screen.  getDisplayMedia({audio:true})
+      // may also carry an audio track that, delivered without registration,
+      // becomes a black tile (audio in <video> = black) and double-audio with
+      // the mic already active since startCall.
+      const videoTrack = stream.getVideoTracks()[0]
+      if (!videoTrack) {
+        log.warn('[shareStream] No video track in display stream — nothing to share')
+        return
+      }
+      _screenStream = stream
+      _pc.addTrack(videoTrack, stream)
+
+      if (!_currentSessionId) {
+        log.warn('[shareStream] No current session — cannot negotiate')
+        return
+      }
+
+      // Build the offer so the new transceiver gets its mid and the renegotiation
+      // SDP carries the new m= video section.
+      const offer = await _pc.createOffer()
+      await _pc.setLocalDescription(offer)
+
+      // GAP 1: register the screen track on the SFU via tracks/new with
+      // location:'local' + mid + NATIVE track id, after ICE (already connected
+      // from startCall — _waitForIceConnected resolves immediately).
+      const screenTrackObjs = _pc.getTransceivers()
+        .filter((t) => t.sender && t.sender.track === videoTrack && t.mid)
+        .map((t) => ({
+          location: 'local' as const,
+          mid: t.mid as string,
+          trackName: t.sender!.track!.id,
+        }))
+      if (screenTrackObjs.length) {
+        await _registerLocalTracksOnSfu(_pc, _currentSessionId, screenTrackObjs)
+      }
+
+      // GAP 2: extend the room registry (upsert) so discovery returns the
+      // screen in trackNames and subscribers learn about the new track.
+      const roomId = _currentRoomRef.value
+      const tracksDisplay: TrackType[] = [..._publishedTracks, 'screen']
+      const trackNames: string[] = [..._publishedTrackNames, videoTrack.id]
+      if (roomId) {
+        await _updateRegistryTracks(roomId, tracksDisplay, trackNames, remoteStreams)
       }
 
       // Renegotiate so the SFU learns about the new track
-      if (_currentSessionId) {
-        const offer = await _pc.createOffer()
-        await _pc.setLocalDescription(offer)
-        const answer = await _apiFetchJson(
-          `/calls/sessions/${_currentSessionId}/tracks/update`,
-          {
-            method: 'PUT',
-            body: JSON.stringify({
-              sessionDescription: { type: offer.type, sdp: offer.sdp },
-            }),
-          },
-        )
-        // Apply the returned SDP only when usable — the backend now omits
-        // sessionDescription when the SFU returns none (never apply empty SDP).
-        if (answer?.sessionDescription?.sdp) {
-          await _pc.setRemoteDescription(new RTCSessionDescription(answer.sessionDescription))
-        }
-
-        // Notify room presence that we now publish 'screen'
-        const roomId = _currentRoomRef.value
-        if (roomId) {
-          await _executePartyAction({
-            action: 'tracks_update',
-            roomId,
-            tracks: ['mic', 'camera', 'screen'],
-          })
-        }
+      const answer = await _apiFetchJson(
+        `/calls/sessions/${_currentSessionId}/tracks/update`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            sessionDescription: { type: offer.type, sdp: offer.sdp },
+          }),
+        },
+      )
+      // Apply the returned SDP only when usable — the backend now omits
+      // sessionDescription when the SFU returns none (never apply empty SDP).
+      if (answer?.sessionDescription?.sdp) {
+        await _pc.setRemoteDescription(new RTCSessionDescription(answer.sessionDescription))
       }
 
-      log.info('[shareStream] Stream shared successfully')
+      // Notify room presence with the REAL tracks/trackNames (not hardcoded) so
+      // the snapshot reflects the shared screen.
+      if (roomId) {
+        await _executePartyAction({
+          action: 'tracks_update',
+          roomId,
+          tracks: tracksDisplay,
+          trackNames,
+        })
+      }
+
+      // Persist the extended publish set for any future share/update.
+      _publishedTracks = tracksDisplay
+      _publishedTrackNames = trackNames
+
+      log.info('[shareStream] Stream shared successfully tracks=%j trackNames=%j',
+        tracksDisplay, trackNames)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to share stream'
       connectionError.value = msg
@@ -826,6 +976,8 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
 
     _subscribedSessions.clear()
+    _subscribedTrackNames.clear()
+    _remoteTrackTypes.clear()
 
     // Close peer connection
     if (_pc) {
@@ -834,9 +986,14 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
     _currentSessionId = null
 
-    // Stop local media
+    // Stop local media (mic/camera + shared screen — leak fix: the screen
+    // stream was never stopped before, so the tab kept capturing after hangUp)
     _stopStream(_localStream)
     _localStream = null
+    _stopStream(_screenStream)
+    _screenStream = null
+    _publishedTracks = []
+    _publishedTrackNames = []
 
     // Disconnect room presence: nulling _currentRoomRef makes the computed
     // resolve to '' (idle channel), closing the WebSocket via the watcher.
