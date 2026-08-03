@@ -347,6 +347,85 @@ function _stopHeartbeat(): void {
   }
 }
 
+/** Resolve true once the peer connection reaches 'connected'/'completed'. */
+function _waitForIceConnected(
+  pc: RTCPeerConnection,
+  timeoutMs: number,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const done = (ok: boolean) => {
+      pc.removeEventListener('iceconnectionstatechange', onChange)
+      window.clearTimeout(timer)
+      resolve(ok)
+    }
+    const onChange = () => {
+      const s = pc.iceConnectionState
+      log.warn(
+        '[DIAG][PC] iceConnectionState=%s connectionState=%s',
+        s, pc.connectionState,
+      )
+      if (s === 'connected' || s === 'completed') done(true)
+      else if (s === 'failed' || s === 'disconnected' || s === 'closed') done(false)
+    }
+    const timer = window.setTimeout(
+      () => done(pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed'),
+      timeoutMs,
+    )
+    pc.addEventListener('iceconnectionstatechange', onChange)
+    onChange() // reflect the current state immediately
+  })
+}
+
+/**
+ * Register the caller's OWN local tracks on the Cloudflare SFU via
+ * ``/tracks/new`` with ``location:'local'`` AFTER the peer connection connects.
+ *
+ * ROOT CAUSE FIX (F3 ciclo 4): the SFU IGNORES the ``tracks`` array sent to
+ * ``/sessions/new`` — the Cloudflare OpenAPI ``NewSessionRequest`` has no
+ * ``tracks`` field — so a publisher session created that way has zero tracks
+ * on the SFU (verified live: ``GET /sessions/{sid}`` → ``tracks: []`` even
+ * while connected).  Tracks are only registered via ``/tracks/new`` with
+ * ``location:'local'``, and that call is rejected with HTTP 425
+ * ("Session is not ready yet. Please ensure the PeerConnection is connected")
+ * until ICE/DTLS is established.  Without this step every remote subscription
+ * returns ``not_found_track_error`` (F7 ciclo 2/3 — friendly AND native IDs).
+ */
+async function _registerLocalTracksOnSfu(
+  pc: RTCPeerConnection,
+  sessionId: string,
+  trackObjs: Array<{ location: 'local'; mid: string; trackName: string }>,
+): Promise<void> {
+  if (!_currentSessionId || !trackObjs.length) return
+
+  const connected = await _waitForIceConnected(pc, 10_000)
+  if (!connected) {
+    log.warn(
+      '[DIAG][publish] ICE not connected within timeout — local tracks NOT registered on SFU',
+    )
+    return
+  }
+
+  try {
+    const result = await _apiFetchJson(
+      `/calls/sessions/${sessionId}/tracks/new`,
+      { method: 'POST', body: JSON.stringify({ tracks: trackObjs }) },
+    )
+    const perTrack = (Array.isArray(result?.tracks) ? result.tracks : [])
+      .map((t) => (t && typeof t === 'object'
+        ? { trackName: t.trackName, mid: t.mid, errorCode: t.errorCode, errorDescription: t.errorDescription }
+        : t))
+    log.warn(
+      '[DIAG][publish] local tracks registered on SFU session=%s per_track=%j',
+      sessionId, perTrack,
+    )
+  } catch (err) {
+    log.warn(
+      '[DIAG][publish] local track registration failed session=%s: %s',
+      sessionId, err instanceof Error ? err.message : String(err),
+    )
+  }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Composable
@@ -559,11 +638,15 @@ export function usePartyCalls(): UsePartyCallsReturn {
         offer.type, /^m=/m.test(offerSdp), offerSdp.length,
       )
 
-      // 4. Send offer to signaling proxy.  The publisher registers each local
-      //    track under its NATIVE MediaStreamTrack id (sender.track.id) — the
-      //    name the Cloudflare SFU actually records (the display labels
-      //    'mic'/'camera' resolve to not_found_track_error — H1 proven in F7
-      //    ciclo 2).  The display-friendly TrackType labels are derived and
+      // 4. Send offer to signaling proxy.  Each local track is named by its
+      //    NATIVE MediaStreamTrack id (sender.track.id) — the name the Cloudflare
+      //    SFU actually records (display labels 'mic'/'camera' resolve to
+      //    not_found_track_error — H1 proven in F7 ciclo 2).  NOTE (F3 ciclo 4):
+      //    the tracks array sent here in /sessions/new is IGNORED by the SFU
+      //    (NewSessionRequest has no tracks field) — the tracks are actually
+      //    registered in step 7b via /tracks/new with location:'local' after ICE
+      //    connects.  The array is kept for the room registry (trackNames) and
+      //    diagnostics; the display-friendly TrackType labels are derived and
       //    kept separately (tracks) for the UI grid.
       const trackPairs = pc.getTransceivers()
         .filter((t) => t.sender && t.sender.track && t.mid)
@@ -610,6 +693,15 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
       // 7. Register session in the room + discover & subscribe to others
       await _registerAndDiscoverSessions(roomId, remoteStreams, localTracks, localTrackNames)
+
+      // 7b. ROOT CAUSE FIX (F3 ciclo 4): register the publisher's OWN local
+      // tracks on the SFU via /tracks/new with location:'local', AFTER ICE
+      // connects.  The SFU IGNORES the tracks array in /sessions/new
+      // (NewSessionRequest has no tracks field) and rejects /tracks/new with
+      // 425 until the PC is connected — without this step the publisher
+      // session has zero tracks on the SFU and every remote subscription fails
+      // with not_found_track_error (friendly AND native IDs, F7 ciclo 2/3).
+      await _registerLocalTracksOnSfu(pc, mySessionId, localTrackObjs)
 
       // 8. Broadcast join_room presence (script publishes authoritative snapshot)
       await _executePartyAction({
