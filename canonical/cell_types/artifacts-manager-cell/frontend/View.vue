@@ -313,11 +313,16 @@ async function handleAllow(): Promise<void> {
       })
     }
   } catch (error) {
-    feedback.value = t('artifactsManager.allowFailed')
+    const errMsg = error instanceof Error ? error.message : String(error)
+    // F3: surface the real backend error (e.g. "Planet not found") instead of a
+    // generic i18n string, so a failed grant is never presented as success.
+    feedback.value = errMsg
+      ? `${t('artifactsManager.allowFailed')} — ${errMsg}`
+      : t('artifactsManager.allowFailed')
     feedbackType.value = 'error'
     log.error('[ArtifactsManagerView] Allowance error', {
       artifactId: localArtifactId.value,
-      error: error instanceof Error ? error.message : String(error),
+      error: errMsg,
     })
   } finally {
     isAllowing.value = false
