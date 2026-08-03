@@ -121,8 +121,16 @@ async function _executePartyAction(input: Record<string, unknown>): Promise<void
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Subscribe to a remote session's media tracks via Cloudflare tracks/new:
- * add recvonly transceivers, offer, and route the remote tracks into this session.
+ * Subscribe to a remote session's media tracks via Cloudflare tracks/new.
+ *
+ * Contract (realtime-api-2024-05-21.yaml, `remote_tracks` example): a remote
+ * subscription is a TRACKS-ONLY request — each TrackObject carries
+ * ``location:'remote'`` + ``sessionId`` (the track owner) + ``trackName`` (the
+ * exact name the publisher registered).  The client does NOT build its own
+ * offer: the SFU generates it and responds with ``requiresImmediateRenegotiation``
+ * + an offer that we answer and send back via ``PUT /renegotiate``
+ * (react-native-webrtc pattern).  This avoids re-offering ``_pc``'s already
+ * negotiated m= sections (406) and client-side transceiver accumulation (413).
  */
 async function _subscribeToRemoteTracks(
   remote: RemoteSession,
@@ -131,32 +139,80 @@ async function _subscribeToRemoteTracks(
   if (!_pc || !_currentSessionId) return
   if (_subscribedSessions.has(remote.sessionId)) return
 
+  // The remote session's published trackNames come from the room registry
+  // metadata (GET /calls/rooms/{room}/sessions → metadata.tracks).  The
+  // publisher names its Cloudflare tracks with the same TrackType values
+  // ('mic'/'camera'), so these are the exact trackNames the SFU knows.
+  const trackNames: string[] = (remote.tracks && remote.tracks.length)
+    ? [...remote.tracks]
+    : ['mic', 'camera']
+
+  // DIAG (F1 P2): transceiver count BEFORE the request — in the tracks-only
+  // flow no recvonly transceivers are added client-side, so this stays flat
+  // across heartbeat retries (no accumulation → no 413).
+  const txsBeforeOffer = _pc.getTransceivers()
+  log.warn(
+    '[DIAG][subscribe] %s: transceivers_before_offer=%d recvonly_mids=%j',
+    remote.sessionId, txsBeforeOffer.length,
+    txsBeforeOffer.filter((t) => t.direction === 'recvonly').map((t) => t.mid),
+  )
+
+  const tracksToSend = trackNames.map((trackName) => ({
+    location: 'remote' as const,
+    sessionId: remote.sessionId,
+    trackName,
+  }))
+  log.warn('[DIAG][subscribe] %s: tracks_payload=%j', remote.sessionId, tracksToSend)
+
   try {
-    _pc.addTransceiver('audio', { direction: 'recvonly' })
-    _pc.addTransceiver('video', { direction: 'recvonly' })
-
-    const offer = await _pc.createOffer()
-    await _pc.setLocalDescription(offer)
-
-    const answer = await _apiFetchJson(
+    const result = await _apiFetchJson(
       `/calls/sessions/${_currentSessionId}/tracks/new`,
       {
         method: 'POST',
-        body: JSON.stringify({
-          sessionDescription: { type: offer.type, sdp: offer.sdp },
-          tracks: [
-            { sessionId: remote.sessionId, trackName: 'audio' },
-            { sessionId: remote.sessionId, trackName: 'video' },
-          ],
-        }),
+        body: JSON.stringify({ tracks: tracksToSend }),
       },
     )
-    await _pc.setRemoteDescription(new RTCSessionDescription(answer.sessionDescription))
+
+    const respSd = result?.sessionDescription
+    if (result?.requiresImmediateRenegotiation && respSd?.type === 'offer') {
+      // SFU generated the offer — apply it, answer, and send the answer back
+      // via the renegotiate proxy so the SFU completes the m-line setup.
+      await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
+
+      // DIAG (F1 P2): the SFU offer's m-sections / mids — confirms the media
+      // lines are bounded (recvonly only; no growth across retries).
+      const sdp = respSd.sdp || ''
+      log.warn(
+        '[DIAG][subscribe] %s: offer type=%s sdp_len=%d m_sections=%d mids=%j',
+        remote.sessionId, respSd.type, sdp.length,
+        (sdp.match(/^m=\w+/gm) || []).length,
+        _pc.getTransceivers().map((t) => t.mid),
+      )
+
+      const localAnswer = await _pc.createAnswer()
+      await _pc.setLocalDescription(localAnswer)
+      await _apiFetchJson(
+        `/calls/sessions/${_currentSessionId}/renegotiate`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            sessionDescription: { type: localAnswer.type, sdp: localAnswer.sdp },
+          }),
+        },
+      )
+    } else if (respSd) {
+      // Direct answer (no SFU offer) — apply as-is.
+      await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
+    }
 
     _subscribedSessions.add(remote.sessionId)
-    log.info('[subscribe] subscribed to remote session=%s', remote.sessionId)
+    log.info(
+      '[subscribe] subscribed to remote session=%s answer_type=%s',
+      remote.sessionId, respSd?.type,
+    )
   } catch (err) {
-    log.warn('[subscribe] failed for remote session=%s: %s', remote.sessionId,
+    log.warn('[subscribe] failed for remote session=%s current_session=%s: %s',
+      remote.sessionId, _currentSessionId,
       err instanceof Error ? err.message : String(err))
   }
 }
@@ -178,7 +234,7 @@ async function _refreshDiscovery(
       }
     }
 
-    // Prune streams whose session is no longer active (ghost participants)
+    // Prune streams whose session is no longer active (ghost participants).
     const next = new Map(remoteStreams.value)
     let changed = false
     for (const key of next.keys()) {
@@ -203,7 +259,10 @@ async function _registerAndDiscoverSessions(
   if (!_currentSessionId) return
   await _apiFetchJson(`/calls/rooms/${roomId}/sessions`, {
     method: 'POST',
-    body: JSON.stringify({ sessionId: _currentSessionId }),
+    body: JSON.stringify({
+      sessionId: _currentSessionId,
+      tracks: ['mic', 'camera'],
+    }),
   })
   await _refreshDiscovery(roomId, remoteStreams)
 }
@@ -450,13 +509,25 @@ export function usePartyCalls(): UsePartyCallsReturn {
         offer.type, /^m=/m.test(offerSdp), offerSdp.length,
       )
 
-      // 4. Send offer to signaling proxy
-      log.info('[startCall] Sending session request...')
+      // 4. Send offer to signaling proxy.  The publisher names its local tracks
+      //    at session creation (Cloudflare TrackObject: location:'local' + mid +
+      //    trackName) so remote subscribers can reference the exact trackNames
+      //    via the room registry metadata ('mic'/'camera' TrackType values).
+      const localTrackObjs = pc.getTransceivers()
+        .filter((t) => t.sender && t.sender.track && t.mid)
+        .map((t) => ({
+          location: 'local' as const,
+          mid: t.mid,
+          trackName: t.sender!.track!.kind === 'audio' ? 'mic' : 'camera',
+        }))
+      log.info('[startCall] Publishing named local tracks=%j', localTrackObjs)
+
       const sessionData = await _apiFetchJson('/calls/session', {
         method: 'POST',
         body: JSON.stringify({
           roomId,
           sessionDescription: { type: offer.type, sdp: offer.sdp },
+          tracks: localTrackObjs,
         }),
       })
 
