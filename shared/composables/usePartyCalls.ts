@@ -224,6 +224,34 @@ async function _subscribeToRemoteTracks(
     const respSdp = respSd?.sdp ? String(respSd.sdp) : ''
     let subscribed = false
 
+    // F3 FIX (CICLO 5): populate _remoteMidToTrackName IMMEDIATELY after the
+    // tracks/new (remote) fetch, BEFORE any setRemoteDescription.  In the
+    // requiresImmediateRenegotiation branch the ontrack fires AS SOON AS the
+    // SFU's offer is applied at setRemoteDescription (below) — populating the
+    // map later (inside `if (subscribed)`, after createAnswer +
+    // setLocalDescription + the PUT /renegotiate round-trip) was a RACE:
+    // _handleRemoteTrack consumed the map while it was still empty and fell
+    // back to stream.id → generic tile, no '/screen', mic+camera split into 2
+    // tiles (TEST_RESULTS_4).  Only resolved tracks (no errorCode) are mapped —
+    // errored tracks never fire ontrack, so no stale mapping.  mid →
+    // {sessionId, trackName} is the ONLY bridge between the OPAQUE track.id (no
+    // {sessionId}/{trackName} slash) on the ontrack and the publisher's native
+    // trackName (which then resolves to 'screen' via _remoteTrackTypes).
+    const midEntries = (Array.isArray(result?.tracks) ? result.tracks : [])
+      .filter((t: SfuTrackResult) => t && typeof t === 'object' && t.mid && t.trackName && !t.errorCode)
+      .map((t: SfuTrackResult) => ({ mid: t.mid, trackName: t.trackName }))
+    for (const entry of midEntries) {
+      if (entry.mid && entry.trackName) {
+        _remoteMidToTrackName.set(entry.mid, { sessionId: remote.sessionId, trackName: entry.trackName })
+      }
+    }
+    if (midEntries.length > 0) {
+      log.warn(
+        '[DIAG][subscribe] mid_map populated session=%s entries=%j',
+        remote.sessionId, midEntries,
+      )
+    }
+
     if (result?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
       // SFU generated the offer — apply it, answer, and send the answer back
       // via the renegotiate proxy so the SFU completes the m-line setup.
@@ -278,33 +306,10 @@ async function _subscribeToRemoteTracks(
     if (subscribed) {
       _subscribedSessions.add(remote.sessionId)
       _subscribedTrackNames.set(remote.sessionId, [...already, ...trackNames])
-      // DIAG (F2 CICLO 4): the tracks/new (remote) response echoes each resolved
-      // track's mid — the ONLY link between an opaque track.id on the ontrack
-      // (via event.transceiver.mid) and the publisher's native trackName. F3
-      // derives _remoteMidToTrackName (mid → {sessionId, trackName}) from exactly
-      // these entries; this log lets F7 confirm the mapping carries the expected
-      // mids (e.g. screen → mid '4') before _handleRemoteTrack consumes it.
-      const midEntries = (Array.isArray(result?.tracks) ? result.tracks : [])
-        .filter((t: SfuTrackResult) => t && typeof t === 'object' && t.mid && t.trackName && !t.errorCode)
-        .map((t: SfuTrackResult) => ({ mid: t.mid, trackName: t.trackName }))
-      // F3 FIX (CICLO 4): persist mid → {sessionId, trackName} from the tracks/new
-      // (remote) response so _handleRemoteTrack can classify an opaque track.id via
-      // event.transceiver.mid — Cloudflare delivers the received track.id WITHOUT
-      // the {sessionId}/{trackName} slash format; the mid is the ONLY bridge to the
-      // publisher's native trackName (which then resolves to 'screen' via
-      // _remoteTrackTypes).  Only tracks that resolved (no errorCode) are mapped —
-      // errored tracks never fire ontrack, so no stale mapping.
-      for (const entry of midEntries) {
-        if (entry.mid && entry.trackName) {
-          _remoteMidToTrackName.set(entry.mid, { sessionId: remote.sessionId, trackName: entry.trackName })
-        }
-      }
-      if (midEntries.length > 0) {
-        log.warn(
-          '[DIAG][subscribe] mid_map populated session=%s entries=%j',
-          remote.sessionId, midEntries,
-        )
-      }
+      // F3 FIX (CICLO 5): the _remoteMidToTrackName population was MOVED up to
+      // right after the tracks/new (remote) fetch, BEFORE the branch below — so
+      // the map is populated before setRemoteDescription fires the ontrack.  L7
+      // (mid_map populated) is emitted at that earlier point; nothing left here.
       log.info(
         '[subscribe] subscribed to remote session=%s answer_type=%s trackNames=%j',
         remote.sessionId, respSd?.type, trackNames,
