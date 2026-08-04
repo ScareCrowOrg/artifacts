@@ -591,6 +591,12 @@ export function usePartyCalls(): UsePartyCallsReturn {
       const trackName = trackIdMatch[2]
       const display = _remoteTrackTypes.get(ownerId)?.get(trackName)
       sessionKey = display === 'screen' ? `${ownerId}/screen` : ownerId
+      if (display === 'screen') {
+        log.warn(
+          '[DIAG][remote-track] screen track received sessionId=%s trackName=%s sessionKey=%s stream_id=%s',
+          ownerId, trackName, sessionKey, stream.id,
+        )
+      }
     } else {
       sessionKey = stream.id
     }
@@ -899,15 +905,36 @@ export function usePartyCalls(): UsePartyCallsReturn {
         await _updateRegistryTracks(roomId, tracksDisplay, trackNames, remoteStreams)
       }
 
-      // Renegotiate so the SFU learns about the new track
+      // Renegotiate so the SFU learns about the new track.
+      // FIX (F3): the Cloudflare tracks/update contract requires the 'tracks'
+      // TrackObject[] array (same TracksRequest schema as tracks/new — the
+      // backend 400 decoding_error 'tracks' proved it). Reuse the screen
+      // TrackObjects built above and already sent to tracks/new.
+      const tracksUpdateBody = {
+        sessionDescription: { type: offer.type, sdp: offer.sdp },
+        tracks: screenTrackObjs,
+      }
+      log.warn(
+        '[DIAG][shareStream] PUT tracks/update session=%s body_keys=%j sdp_type=%s sdp_len=%d',
+        _currentSessionId, Object.keys(tracksUpdateBody), offer.type, (offer.sdp || '').length,
+      )
       const answer = await _apiFetchJson(
         `/calls/sessions/${_currentSessionId}/tracks/update`,
         {
           method: 'PUT',
-          body: JSON.stringify({
-            sessionDescription: { type: offer.type, sdp: offer.sdp },
-          }),
+          body: JSON.stringify(tracksUpdateBody),
         },
+      )
+      // DIAG (F1): success evidence — the backend proxy returns 200 with an
+      // answer SDP (or omits sessionDescription when none). A non-empty
+      // answer_sdp_len here, with no 502 in the catch below, proves the SFU
+      // accepted the renegotiation.
+      log.warn(
+        '[DIAG][shareStream] PUT tracks/update OK session=%s answer_type=%s answer_sdp_len=%d answer_tracks=%s',
+        _currentSessionId,
+        answer?.sessionDescription?.type,
+        String(answer?.sessionDescription?.sdp || '').length,
+        Array.isArray(answer?.tracks) ? `present(${answer.tracks.length})` : 'absent',
       )
       // Apply the returned SDP only when usable — the backend now omits
       // sessionDescription when the SFU returns none (never apply empty SDP).
