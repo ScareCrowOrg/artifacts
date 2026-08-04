@@ -905,7 +905,21 @@ export function usePartyCalls(): UsePartyCallsReturn {
         return
       }
       _screenStream = stream
-      _pc.addTrack(videoTrack, stream)
+      // DIAG (CICLO 3): dedicated sendonly transceiver for the screen track.
+      // transceivers_before must GROW by 1 after addTransceiver, and the screen
+      // mid in the offer must be a NEW mid (not a subscribe mid like 2/3) — the
+      // F7 confirms no transceiver reuse happened.
+      log.warn(
+        '[DIAG][shareStream] addTransceiver sendonly session=%s track=%s transceivers_before=%d',
+        _currentSessionId, videoTrack.id, _pc.getTransceivers().length,
+      )
+      // CICLO 3: use a DEDICATED sendonly transceiver for the screen track.
+      // addTrack would REUSE an existing recvonly video transceiver (e.g. the one
+      // subscribed to B's camera) making it sendrecv on the same m-section — the
+      // SFU accepts that offer but never resolves the track for subscribers
+      // (not_found_track_error). A fresh transceiver gets its own mid (no
+      // collision with receive mids).
+      _pc.addTransceiver(videoTrack, { direction: 'sendonly' })
 
       if (!_currentSessionId) {
         log.warn('[shareStream] No current session — cannot negotiate')
