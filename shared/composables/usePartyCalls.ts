@@ -87,6 +87,12 @@ const _subscribedTrackNames = new Map<string, string[]>()
 /** sessionId → { nativeTrackId → 'mic'|'camera'|'screen' } — lets
  *  _handleRemoteTrack tell a screen track apart from the camera (GAP 4). */
 const _remoteTrackTypes = new Map<string, Map<string, string>>()
+/** mid (receiving transceiver) → {sessionId, trackName} for remote tracks,
+ *  populated from the tracks/new remote response.  The mid is the ONLY reliable
+ *  bridge to the publisher's native trackName — Cloudflare delivers the received
+ *  track.id OPAQUE (no {sessionId}/{trackName} slash format), so the ontrack can
+ *  classify via event.transceiver.mid against this map (F3 CICLO 4). */
+const _remoteMidToTrackName = new Map<string, { sessionId: string; trackName: string }>()
 
 const HEARTBEAT_INTERVAL_MS = 20_000 // must be < the 60 s registry TTL
 
@@ -272,6 +278,33 @@ async function _subscribeToRemoteTracks(
     if (subscribed) {
       _subscribedSessions.add(remote.sessionId)
       _subscribedTrackNames.set(remote.sessionId, [...already, ...trackNames])
+      // DIAG (F2 CICLO 4): the tracks/new (remote) response echoes each resolved
+      // track's mid — the ONLY link between an opaque track.id on the ontrack
+      // (via event.transceiver.mid) and the publisher's native trackName. F3
+      // derives _remoteMidToTrackName (mid → {sessionId, trackName}) from exactly
+      // these entries; this log lets F7 confirm the mapping carries the expected
+      // mids (e.g. screen → mid '4') before _handleRemoteTrack consumes it.
+      const midEntries = (Array.isArray(result?.tracks) ? result.tracks : [])
+        .filter((t: SfuTrackResult) => t && typeof t === 'object' && t.mid && t.trackName && !t.errorCode)
+        .map((t: SfuTrackResult) => ({ mid: t.mid, trackName: t.trackName }))
+      // F3 FIX (CICLO 4): persist mid → {sessionId, trackName} from the tracks/new
+      // (remote) response so _handleRemoteTrack can classify an opaque track.id via
+      // event.transceiver.mid — Cloudflare delivers the received track.id WITHOUT
+      // the {sessionId}/{trackName} slash format; the mid is the ONLY bridge to the
+      // publisher's native trackName (which then resolves to 'screen' via
+      // _remoteTrackTypes).  Only tracks that resolved (no errorCode) are mapped —
+      // errored tracks never fire ontrack, so no stale mapping.
+      for (const entry of midEntries) {
+        if (entry.mid && entry.trackName) {
+          _remoteMidToTrackName.set(entry.mid, { sessionId: remote.sessionId, trackName: entry.trackName })
+        }
+      }
+      if (midEntries.length > 0) {
+        log.warn(
+          '[DIAG][subscribe] mid_map populated session=%s entries=%j',
+          remote.sessionId, midEntries,
+        )
+      }
       log.info(
         '[subscribe] subscribed to remote session=%s answer_type=%s trackNames=%j',
         remote.sessionId, respSd?.type, trackNames,
@@ -331,6 +364,11 @@ async function _refreshDiscovery(
         _subscribedSessions.delete(ownerId)
         _subscribedTrackNames.delete(ownerId)
         _remoteTrackTypes.delete(ownerId)
+        // F3 FIX (CICLO 4): drop the pruned session's mid → trackName mappings so
+        // a dead session's mids can't misclassify a re-subscribed track later.
+        for (const [mid, info] of _remoteMidToTrackName) {
+          if (info.sessionId === ownerId) _remoteMidToTrackName.delete(mid)
+        }
         changed = true
       }
     }
@@ -615,9 +653,25 @@ export function usePartyCalls(): UsePartyCallsReturn {
     const [stream] = event.streams
     if (!stream) return
 
+    // DIAG (F2 CICLO 4): capture the raw ontrack fields BEFORE classification.
+    // Cloudflare delivers an OPAQUE track.id (no '/'), so the regex branch below
+    // never matches and classification must resolve the owner via
+    // event.transceiver.mid → _remoteMidToTrackName (F3). This log lets F7
+    // confirm the mid present on the ontrack (e.g. '4' for the screen) matches
+    // the mid echoed in the tracks/new response (see the [DIAG][subscribe]
+    // mid_map log) — the bridge that makes an opaque track.id classifiable.
+    log.warn(
+      '[DIAG][remote-track] ontrack session=%s track_id=%s track_id_has_slash=%s transceiver_mid=%s stream_id=%s',
+      _currentSessionId, event.track.id, /\//.test(event.track.id || ''),
+      event.transceiver?.mid ?? 'none', stream.id,
+    )
+
     const trackIdMatch = /^([^/]+)\/(.+)$/.exec(event.track.id || '')
     let sessionKey: string
     if (trackIdMatch) {
+      // Backward compat: track.id in the historical {sessionId}/{trackName}
+      // slash format.  Cloudflare does NOT deliver this on the receiving side
+      // (the id is opaque), but keep the branch for any SFU that does.
       const ownerId = trackIdMatch[1]
       const trackName = trackIdMatch[2]
       const display = _remoteTrackTypes.get(ownerId)?.get(trackName)
@@ -629,7 +683,29 @@ export function usePartyCalls(): UsePartyCallsReturn {
         )
       }
     } else {
-      sessionKey = stream.id
+      // F3 FIX (CICLO 4): the real Cloudflare receiver delivers an OPAQUE
+      // track.id (no '/'), so classify via event.transceiver.mid → the
+      // mid → {sessionId, trackName} map built from the tracks/new (remote)
+      // response in _subscribeToRemoteTracks.  Non-screen tracks key by the
+      // OWNER sessionId so mic+camera merge into ONE tile per participant
+      // (no more stream.id duplicates) and ghost pruning works on the key.
+      const transceiverMid = event.transceiver?.mid ?? null
+      const info = transceiverMid ? _remoteMidToTrackName.get(transceiverMid) : undefined
+      if (info) {
+        const ownerId = info.sessionId
+        const display = _remoteTrackTypes.get(ownerId)?.get(info.trackName)
+        sessionKey = display === 'screen' ? `${ownerId}/screen` : ownerId
+        if (display === 'screen') {
+          log.warn(
+            '[DIAG][remote-track] screen track received sessionId=%s trackName=%s sessionKey=%s stream_id=%s',
+            ownerId, info.trackName, sessionKey, stream.id,
+          )
+        }
+      } else {
+        // Last resort: mid absent (very old browser without transceiver) or the
+        // track was never mapped — keep the historical stream.id behavior.
+        sessionKey = stream.id
+      }
     }
 
     const next = new Map(remoteStreams.value)
@@ -1085,6 +1161,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
     _subscribedSessions.clear()
     _subscribedTrackNames.clear()
     _remoteTrackTypes.clear()
+    _remoteMidToTrackName.clear()
 
     // Close peer connection
     if (_pc) {
