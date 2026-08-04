@@ -479,35 +479,66 @@ async function _registerLocalTracksOnSfu(
   pc: RTCPeerConnection,
   sessionId: string,
   trackObjs: Array<{ location: 'local'; mid: string; trackName: string }>,
-): Promise<void> {
-  if (!_currentSessionId || !trackObjs.length) return
+  sessionDescription?: { type: string; sdp: string },
+): Promise<any> {
+  if (!_currentSessionId || !trackObjs.length) return null
 
   const connected = await _waitForIceConnected(pc, 10_000)
   if (!connected) {
     log.warn(
       '[DIAG][publish] ICE not connected within timeout — local tracks NOT registered on SFU',
     )
-    return
+    return null
   }
 
   try {
+    // CICLO 2: the publisher's renegotiation offer (with the new m= video for
+    // the screen) is sent ALONG with the track registration.  The Cloudflare
+    // tracks/new lifecycle accepts ``{tracks, sessionDescription}`` — the
+    // offering side sends its offer here and receives the SFU's answer/offer
+    // back (``sessionDescription`` + ``requiresImmediateRenegotiation``) to
+    // close the renegotiation.  Only include the offer when it carries a
+    // non-empty SDP — never send an empty/absent SDP (the SFU would reject it
+    // and the caller cannot answer).  When omitted the body stays exactly
+    // ``{ tracks }`` — startCall keeps the legacy behavior (its tracks were
+    // already negotiated via /calls/session).
+    const body: Record<string, unknown> = { tracks: trackObjs }
+    if (sessionDescription && sessionDescription.sdp) {
+      body.sessionDescription = sessionDescription
+    }
+    log.warn(
+      '[DIAG][publish] tracks/new session=%s has_sdp=%s sdp_type=%s sdp_len=%d',
+      sessionId,
+      Object.prototype.hasOwnProperty.call(body, 'sessionDescription') ? 'yes' : 'no',
+      sessionDescription?.type,
+      String(sessionDescription?.sdp || '').length,
+    )
     const result = await _apiFetchJson(
       `/calls/sessions/${sessionId}/tracks/new`,
-      { method: 'POST', body: JSON.stringify({ tracks: trackObjs }) },
+      { method: 'POST', body: JSON.stringify(body) },
     )
     const perTrack = (Array.isArray(result?.tracks) ? result.tracks : [])
       .map((t: SfuTrackResult) => (t && typeof t === 'object'
         ? { trackName: t.trackName, mid: t.mid, errorCode: t.errorCode, errorDescription: t.errorDescription }
         : t))
     log.warn(
-      '[DIAG][publish] local tracks registered on SFU session=%s per_track=%j',
-      sessionId, perTrack,
+      '[DIAG][publish] local tracks registered on SFU session=%s answer_type=%s answer_sdp_len=%d requires_renog=%s per_track=%j',
+      sessionId,
+      result?.sessionDescription?.type,
+      String(result?.sessionDescription?.sdp || '').length,
+      String(result?.requiresImmediateRenegotiation),
+      perTrack,
     )
+    // Return the parsed response so the caller (shareStream) can inspect the
+    // SFU's sessionDescription (a direct answer OR a renegotiation offer) and
+    // close the publisher renegotiation.  Null on any failure path above.
+    return result
   } catch (err) {
     log.warn(
       '[DIAG][publish] local track registration failed session=%s: %s',
       sessionId, err instanceof Error ? err.message : String(err),
     )
+    return null
   }
 }
 
@@ -846,9 +877,13 @@ export function usePartyCalls(): UsePartyCallsReturn {
    *
    * A screen track is added MID-CALL, so unlike startCall the flow must
    * explicitly register the track on the SFU via tracks/new location:'local'
-   * (GAP 1 — without it the SFU never learns the track and no subscriber
-   * resolves it), extend the room registry trackNames so discovery returns it
-   * (GAP 2), renegotiate via tracks/update, and publish presence with the REAL
+   * sending the publisher's renegotiation offer ALONG with the registration
+   * (GAP 1 — the Cloudflare tracks/new lifecycle accepts ``{tracks,
+   * sessionDescription}`` and returns the SFU's answer/offer to close the
+   * renegotiation; without it the SFU never learns the track and no subscriber
+   * resolves it), apply the SFU's answer/offer (direct answer, or answer a
+   * fresh SFU offer via PUT /renegotiate), extend the room registry trackNames
+   * so discovery returns it (GAP 2), and publish presence with the REAL
    * tracks/trackNames so subscribers can re-subscribe (GAP 3) and render a
    * dedicated screen tile (GAP 4).
    */
@@ -884,7 +919,15 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
       // GAP 1: register the screen track on the SFU via tracks/new with
       // location:'local' + mid + NATIVE track id, after ICE (already connected
-      // from startCall — _waitForIceConnected resolves immediately).
+      // from startCall — _waitForIceConnected resolves immediately).  The
+      // publisher's offer (with the new m= video for the screen) is sent ALONG
+      // with the registration: the Cloudflare tracks/new lifecycle accepts
+      // ``{tracks, sessionDescription}`` — the offering side sends its offer
+      // here and receives the SFU's answer/offer back to close the
+      // renegotiation.  (CICLO 2: the previous PUT /tracks/update only
+      // reconfigures EXISTING simulcast tracks — the SFU rejected the new
+      // track with update_track_error, leaving subscribers stuck on
+      // not_found_track_error.)
       const screenTrackObjs = _pc.getTransceivers()
         .filter((t) => t.sender && t.sender.track === videoTrack && t.mid)
         .map((t) => ({
@@ -892,8 +935,68 @@ export function usePartyCalls(): UsePartyCallsReturn {
           mid: t.mid as string,
           trackName: t.sender!.track!.id,
         }))
+      let regResult: any = null
       if (screenTrackObjs.length) {
-        await _registerLocalTracksOnSfu(_pc, _currentSessionId, screenTrackObjs)
+        // DIAG (CICLO 2 L3): tracks/new now carries the publisher's offer.
+        log.warn(
+          '[DIAG][shareStream] tracks/new with offer session=%s track_objs=%d sdp_type=%s sdp_len=%d',
+          _currentSessionId, screenTrackObjs.length, offer.type, (offer.sdp || '').length,
+        )
+        regResult = await _registerLocalTracksOnSfu(
+          _pc,
+          _currentSessionId,
+          screenTrackObjs,
+          { type: offer.type, sdp: offer.sdp || '' },
+        )
+        // DIAG (CICLO 2 L4): what the SFU answered to tracks/new+offer — a
+        // direct answer SDP, a renegotiation offer (requiresImmediateRenegotiation),
+        // or nothing (per-track errorCode).
+        log.warn(
+          '[DIAG][shareStream] tracks/new response session=%s answer_type=%s answer_sdp_len=%d requires_renog=%s answer_tracks=%s',
+          _currentSessionId,
+          regResult?.sessionDescription?.type,
+          String(regResult?.sessionDescription?.sdp || '').length,
+          String(regResult?.requiresImmediateRenegotiation),
+          Array.isArray(regResult?.tracks) ? `present(${regResult.tracks.length})` : 'absent',
+        )
+      }
+
+      // Close the publisher renegotiation with the SFU's response (CICLO 2).
+      // tracks/new+offer returns either a DIRECT answer (apply as-is) or, when
+      // requiresImmediateRenegotiation, a fresh SFU offer that we answer and
+      // send back via PUT /renegotiate (mirroring the subscriber flow in
+      // _subscribeToRemoteTracks).  Never apply an empty/absent SDP — it
+      // crashes setRemoteDescription with "Expect line: v=".
+      const respSd = regResult?.sessionDescription
+      const respSdp = respSd?.sdp ? String(respSd.sdp) : ''
+      if (regResult?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
+        // SFU generated a fresh offer for the new track — answer it and send
+        // the answer back so the SFU completes the m-line setup.
+        await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
+        const localAnswer = await _pc.createAnswer()
+        await _pc.setLocalDescription(localAnswer)
+        await _apiFetchJson(
+          `/calls/sessions/${_currentSessionId}/renegotiate`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              sessionDescription: { type: localAnswer.type, sdp: localAnswer.sdp },
+            }),
+          },
+        )
+      } else if (respSd?.type === 'answer' && respSdp.length > 0) {
+        // Direct answer — apply as-is.
+        await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
+      } else if (regResult) {
+        // The SFU answered without an offer/answer SDP (e.g. a per-track
+        // errorCode on the new track).  Surface it for the F7 to observe —
+        // do NOT apply an empty SDP.
+        const trackErrors = (Array.isArray(regResult?.tracks) ? regResult.tracks : [])
+          .filter((t: SfuTrackResult) => t && typeof t === 'object' && (t.errorCode || t.errorDescription))
+        log.warn(
+          '[DIAG][shareStream] tracks/new no offer/answer from SFU session=%s track_errors=%j',
+          _currentSessionId, trackErrors,
+        )
       }
 
       // GAP 2: extend the room registry (upsert) so discovery returns the
@@ -903,43 +1006,6 @@ export function usePartyCalls(): UsePartyCallsReturn {
       const trackNames: string[] = [..._publishedTrackNames, videoTrack.id]
       if (roomId) {
         await _updateRegistryTracks(roomId, tracksDisplay, trackNames, remoteStreams)
-      }
-
-      // Renegotiate so the SFU learns about the new track.
-      // FIX (F3): the Cloudflare tracks/update contract requires the 'tracks'
-      // TrackObject[] array (same TracksRequest schema as tracks/new — the
-      // backend 400 decoding_error 'tracks' proved it). Reuse the screen
-      // TrackObjects built above and already sent to tracks/new.
-      const tracksUpdateBody = {
-        sessionDescription: { type: offer.type, sdp: offer.sdp },
-        tracks: screenTrackObjs,
-      }
-      log.warn(
-        '[DIAG][shareStream] PUT tracks/update session=%s body_keys=%j sdp_type=%s sdp_len=%d',
-        _currentSessionId, Object.keys(tracksUpdateBody), offer.type, (offer.sdp || '').length,
-      )
-      const answer = await _apiFetchJson(
-        `/calls/sessions/${_currentSessionId}/tracks/update`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(tracksUpdateBody),
-        },
-      )
-      // DIAG (F1): success evidence — the backend proxy returns 200 with an
-      // answer SDP (or omits sessionDescription when none). A non-empty
-      // answer_sdp_len here, with no 502 in the catch below, proves the SFU
-      // accepted the renegotiation.
-      log.warn(
-        '[DIAG][shareStream] PUT tracks/update OK session=%s answer_type=%s answer_sdp_len=%d answer_tracks=%s',
-        _currentSessionId,
-        answer?.sessionDescription?.type,
-        String(answer?.sessionDescription?.sdp || '').length,
-        Array.isArray(answer?.tracks) ? `present(${answer.tracks.length})` : 'absent',
-      )
-      // Apply the returned SDP only when usable — the backend now omits
-      // sessionDescription when the SFU returns none (never apply empty SDP).
-      if (answer?.sessionDescription?.sdp) {
-        await _pc.setRemoteDescription(new RTCSessionDescription(answer.sessionDescription))
       }
 
       // Notify room presence with the REAL tracks/trackNames (not hardcoded) so
