@@ -241,6 +241,14 @@ async function _subscribeToRemoteTracks(
   // heartbeat subscribes just the delta — no page reload needed.
   const already = _subscribedTrackNames.get(remote.sessionId) ?? []
   const trackNames = allTrackNames.filter((n) => !already.includes(n))
+  // DIAG-F2-party-cell-sharing-ux: delta filter comparison (B2) — when the publisher
+  // dropped 'screen' but the session stays active, `already` still contains the screen
+  // nativeId → delta is empty → nothing to unsubscribe → tile {sid}/screen is never
+  // removed by discovery. REMOVE after F3 confirms the fix.
+  log.warn(
+    '[party-cell][subscribe] %s: allTrackNames=%j already=%j delta=%j',
+    remote.sessionId, allTrackNames, already, trackNames,
+  )
   if (trackNames.length === 0) return
 
   // DIAG (F1 P2): transceiver count BEFORE the request — in the tracks-only
@@ -407,26 +415,92 @@ async function _refreshDiscovery(
       }
     }
 
-    // Prune streams whose session is no longer active (ghost participants).
+    // Prune streams whose session is no longer active (ghost participants) OR
+    // whose screen track was removed while the session stayed active (B2).
     // Screen tiles are keyed ``{sessionId}/screen`` — map them back to the
     // owning session so they are pruned with it.
+    //
+    // B3 (two-pass): determine the owners to prune WITHOUT deleting
+    // _subscribedSessions mid-iteration — the old code deleted inside the key
+    // loop, so a 2nd key of the same owner ({sid}/screen) failed has() and its
+    // tile leaked.
     const next = new Map(remoteStreams.value)
+    // B2: display-friendly track set per ACTIVE owner from the discovery
+    // response (s.tracks = ['mic'] | ['mic','screen']).  When a publisher stops
+    // sharing, the registry drops 'screen' but the session stays active.
+    const activeTracksByOwner = new Map<string, string[]>()
+    for (const s of sessions) activeTracksByOwner.set(s.sessionId, s.tracks ?? [])
+
+    // B3 pass 1: owners whose session left/ghosted (no mutation here).
+    const ownersToPrune = new Set<string>()
+    for (const ownerId of _subscribedSessions) {
+      if (!activeIds.has(ownerId)) ownersToPrune.add(ownerId)
+    }
+
+    /** Drop all per-owner mappings for a session that left/ghosted. */
+    const removeOwnerMappings = (ownerId: string): void => {
+      _subscribedSessions.delete(ownerId)
+      _subscribedTrackNames.delete(ownerId)
+      _remoteTrackTypes.delete(ownerId)
+      // F3 FIX (CICLO 4): drop the pruned session's mid → trackName mappings so
+      // a dead session's mids can't misclassify a re-subscribed track later.
+      for (const [mid, info] of _remoteMidToTrackName) {
+        if (info.sessionId === ownerId) _remoteMidToTrackName.delete(mid)
+      }
+    }
+
+    /** B2: for an ACTIVE owner, drop only the stale screen track mapping. */
+    const removeScreenMapping = (ownerId: string): void => {
+      const typeMap = _remoteTrackTypes.get(ownerId)
+      if (!typeMap) return
+      const screenNativeIds = [...typeMap.entries()]
+        .filter(([, display]) => display === 'screen')
+        .map(([nativeId]) => nativeId)
+      if (screenNativeIds.length === 0) return
+      for (const nativeId of screenNativeIds) typeMap.delete(nativeId)
+      const already = _subscribedTrackNames.get(ownerId)
+      if (already) {
+        _subscribedTrackNames.set(ownerId, already.filter((n) => !screenNativeIds.includes(n)))
+      }
+      for (const [mid, info] of _remoteMidToTrackName) {
+        if (info.sessionId === ownerId && screenNativeIds.includes(info.trackName)) {
+          _remoteMidToTrackName.delete(mid)
+        }
+      }
+    }
+
     let changed = false
+    // B3 pass 2: decide per key using the pre-computed owner set (never mutated
+    // during the iteration) plus the B2 screen-removed condition.
     for (const key of next.keys()) {
       const ownerId = key.endsWith('/screen') ? key.slice(0, -'/screen'.length) : key
-      if (!activeIds.has(ownerId) && _subscribedSessions.has(ownerId)) {
+      const sessionLeft = ownersToPrune.has(ownerId)
+      const screenRemoved = key.endsWith('/screen') && activeIds.has(ownerId)
+        && !(activeTracksByOwner.get(ownerId) ?? []).includes('screen')
+      // DIAG-F2-party-cell-sharing-ux: full PRUNE_CHK per tile key (B2/B3). REMOVE after F3.
+      const decision = (sessionLeft || screenRemoved) ? 'REMOVE' : 'KEEP'
+      const reason = sessionLeft
+        ? 'session left/ghost'
+        : screenRemoved
+          ? 'screen track removed from registry (B2)'
+          : activeIds.has(ownerId)
+            ? 'session active'
+            : 'owner NOT subscribed anymore (subscribed=false)'
+      log.warn(
+        '[party-cell][prune] key=%s ownerId=%s active=%s subscribed=%s decision=%s reason=%s',
+        key, ownerId, activeIds.has(ownerId), _subscribedSessions.has(ownerId), decision, reason,
+      )
+      if (sessionLeft || screenRemoved) {
         next.delete(key)
-        _subscribedSessions.delete(ownerId)
-        _subscribedTrackNames.delete(ownerId)
-        _remoteTrackTypes.delete(ownerId)
-        // F3 FIX (CICLO 4): drop the pruned session's mid → trackName mappings so
-        // a dead session's mids can't misclassify a re-subscribed track later.
-        for (const [mid, info] of _remoteMidToTrackName) {
-          if (info.sessionId === ownerId) _remoteMidToTrackName.delete(mid)
-        }
+        if (sessionLeft) removeOwnerMappings(ownerId)
+        else removeScreenMapping(ownerId)
         changed = true
       }
     }
+
+    // B3: clean up owner-level maps for pruned sessions, outside the key loop.
+    for (const ownerId of ownersToPrune) removeOwnerMappings(ownerId)
+
     if (changed) remoteStreams.value = next
   } catch (err) {
     log.warn('[discovery] refresh failed: %s',
@@ -1259,6 +1333,13 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
     _publishedTracks = [...tracks]
     _publishedTrackNames = [...trackNames]
+    // PERMANENTE: the real published track set — the registry source state subscribers
+    // reconcile against. Confirms B2's origin: after stopSharing, `tracks` is ['mic'] and
+    // the screen nativeId is gone from trackNames BEFORE _refreshDiscovery runs on peers.
+    log.info(
+      '[party-cell][tracks] room=%s published tracks=%j trackNames=%j',
+      roomId, _publishedTracks, _publishedTrackNames,
+    )
     try {
       await _updateRegistryTracks(roomId, tracks, trackNames, remoteStreams)
       await _executePartyAction({ action: 'tracks_update', roomId, tracks, trackNames })

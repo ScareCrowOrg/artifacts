@@ -152,7 +152,7 @@
             :class="remote.isScreen ? 'screen-tile border-2 border-primary' : ''"
           >
             <video
-              :ref="(el) => attachRemoteVideo(idx, el as HTMLVideoElement | null)"
+              :ref="(el) => attachRemoteVideo(remote.key, el as HTMLVideoElement | null)"
               autoplay
               playsinline
               class="w-full h-full object-cover"
@@ -174,7 +174,7 @@
             <button
               class="absolute top-1 right-1 h-6 w-6 flex items-center justify-center text-white bg-black/50 rounded hover:bg-black/70 transition"
               :title="$t('partyCell.maximize')"
-              @click="toggleFullscreen(idx)"
+              @click="toggleFullscreen(remote.key)"
             >
               <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
@@ -430,16 +430,22 @@ const localParticipants = computed(() => {
 
 // ── Video element attachment ──
 
-/** Map to hold references to remote video elements by index */
-const remoteVideoElements = new Map<number, HTMLVideoElement>()
+/** Map to hold references to remote video elements by remote key (sessionId or
+ *  ``{sessionId}/screen`` — the stable v-for ``:key``), so a removed tile can
+ *  drop its own entry (Finding C: the old idx-keyed map never cleaned up, so
+ *  toggleFullscreen could target a detached element after a reorder). */
+const remoteVideoElements = new Map<string, HTMLVideoElement>()
 
-function attachRemoteVideo(idx: number, el: HTMLVideoElement | null): void {
+function attachRemoteVideo(key: string, el: HTMLVideoElement | null): void {
   if (el) {
-    remoteVideoElements.set(idx, el)
-    const stream = remoteStreamList.value[idx]?.stream
+    remoteVideoElements.set(key, el)
+    const stream = remoteStreamList.value.find((r) => r.key === key)?.stream
     if (stream && el.srcObject !== stream) {
       el.srcObject = stream
     }
+  } else {
+    // Vue calls the ref with null on tile unmount/removal — clean the stale entry.
+    remoteVideoElements.delete(key)
   }
 }
 
@@ -512,19 +518,40 @@ function handleRetry(): void {
 }
 
 /** F6: maximize a video tile — Fullscreen API, falling back to expanding the
- *  tile across the grid in browsers without Fullscreen support. */
-function toggleFullscreen(idx: number): void {
-  const el = remoteVideoElements.get(idx)
+ *  tile across the grid when the API is absent OR the browser's permissions
+ *  policy rejects ``requestFullscreen`` (e.g. the planet iframe's ``allow``
+ *  list).  B1 factor 2: the old ``return`` after ``void container
+ *  .requestFullscreen()`` swallowed the rejection and never reached the
+ *  ``maximized-tile`` fallback. */
+async function toggleFullscreen(key: string): Promise<void> {
+  const el = remoteVideoElements.get(key)
   const container = el?.parentElement
   if (!container) return
   if (typeof container.requestFullscreen === 'function') {
+    // DIAG-F2-party-cell-sharing-ux: distinguish the 3 fullscreen branches (B1).
+    // REMOVE after F3 confirms which branch executes at runtime.
+    logger.warn('[party-cell][fullscreen] requestFullscreen() IS a function — entering fullscreen branch key=%s', key)
     if (document.fullscreenElement) {
+      logger.warn('[party-cell][fullscreen] fullscreenElement active — exiting fullscreen')
       void document.exitFullscreen()
-    } else {
-      void container.requestFullscreen()
+      return
+    }
+    logger.warn('[party-cell][fullscreen] calling container.requestFullscreen() key=%s', key)
+    try {
+      await container.requestFullscreen()
+      logger.warn('[party-cell][fullscreen] requestFullscreen() RESOLVED — fullscreen active')
+    } catch (err) {
+      // Permissions policy / missing user gesture → the promise rejects.  Fall
+      // back to expanding the tile across the grid (B1 fixed).
+      logger.warn(
+        '[party-cell][fullscreen] requestFullscreen() REJECTED — fallback maximized-tile reached (B1 fixed), err=%s',
+        err instanceof Error ? err.message : String(err),
+      )
+      container.classList.toggle('maximized-tile')
     }
     return
   }
+  logger.warn('[party-cell][fullscreen] requestFullscreen() NOT a function — direct fallback maximized-tile')
   // Fallback (no Fullscreen API): expand within the grid
   container.classList.toggle('maximized-tile')
 }
