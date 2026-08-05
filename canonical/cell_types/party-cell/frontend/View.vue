@@ -1,9 +1,18 @@
 <template>
   <div class="party-cell bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-lg p-4 shadow-sm">
     <div class="cell-header mb-3 flex items-center justify-between">
-      <h3 class="text-lg font-semibold text-primary dark:text-primary-light">
-        {{ $t('partyCell.title') }}
-      </h3>
+      <div>
+        <h3 class="text-lg font-semibold text-primary dark:text-primary-light">
+          {{ $t('partyCell.title') }}
+        </h3>
+        <!-- F3 / INC-6: show the named session once connected -->
+        <p
+          v-if="localIsConnected && localSessionName"
+          class="text-xs text-text-secondary dark:text-text-secondary-dark leading-tight"
+        >
+          {{ localSessionName }}
+        </p>
+      </div>
       <!-- Connection indicator -->
       <span
         v-if="localIsConnected"
@@ -49,23 +58,45 @@
         v-if="!localIsConnected && !localConnectionError"
         class="flex flex-col items-center justify-center py-8 text-text-secondary dark:text-text-secondary-dark"
       >
-        <!-- Provisioning banner -->
+        <!-- Connecting spinner (F1): visible from provisioning through registering,
+             with a phase-specific message — no more silent gap between provision
+             and ICE connect, and the "live" badge only lights up when ready. -->
         <div
-          v-if="isProvisioning"
-          class="provisioning-banner flex items-center gap-2 mb-4 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800 text-sm"
+          v-if="isConnecting"
+          class="connecting-banner flex items-center gap-2 mb-4 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800 text-sm"
         >
           <span class="spinner inline-block h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          {{ $t('partyCell.provisioningMessage') }}
+          {{ phaseStatusMessage }}
         </div>
 
-        <template v-if="!isProvisioning">
+        <template v-if="!isConnecting">
           <svg class="h-12 w-12 mb-3 opacity-40" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
           </svg>
           <p class="text-sm mb-4">{{ $t('partyCell.notConnected') }}</p>
+
+          <!-- F3 / INC-6: session name input → roomId (fallback 'default-room') -->
+          <div class="flex flex-col items-center gap-2 mb-4 w-full max-w-xs">
+            <label
+              class="text-xs font-medium text-text-secondary dark:text-text-secondary-dark w-full text-left"
+              for="party-session-name"
+            >
+              {{ $t('partyCell.startWithName') }}
+            </label>
+            <input
+              id="party-session-name"
+              v-model="sessionName"
+              type="text"
+              class="w-full px-3 py-2 text-sm rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/40"
+              :placeholder="$t('partyCell.sessionNamePlaceholder')"
+              :maxlength="256"
+              @keyup.enter="handleStartCall"
+            />
+          </div>
+
           <button
             class="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="isProvisioning"
+            :disabled="isConnecting"
             @click="handleStartCall"
           >
             <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -74,6 +105,35 @@
             </svg>
             {{ $t('partyCell.startCall') }}
           </button>
+
+          <!-- F4: available sessions (only when no roomId is pinned) -->
+          <div v-if="!props.roomId" class="sessions-section mt-6 w-full max-w-sm">
+            <p class="text-xs font-medium mb-2 text-text-primary dark:text-text-primary-dark">
+              {{ $t('partyCell.availableSessions') }}
+            </p>
+            <div
+              v-if="localAvailableRooms.length === 0"
+              class="text-xs opacity-70 px-3 py-2 border border-dashed border-border dark:border-border-dark rounded"
+            >
+              {{ $t('partyCell.noSessions') }}
+            </div>
+            <ul v-else class="space-y-2">
+              <li
+                v-for="room in localAvailableRooms"
+                :key="room.roomId"
+                class="flex items-center justify-between gap-2 px-3 py-2 bg-surface-light dark:bg-surface-dark-light rounded border border-border dark:border-border-dark"
+              >
+                <span class="text-sm truncate">{{ roomNameLabel(room) }}</span>
+                <span class="text-xs opacity-70 shrink-0">{{ room.sessionCount }}</span>
+                <button
+                  class="px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary-hover transition shrink-0"
+                  @click="handleJoinRoom(room.roomId)"
+                >
+                  {{ $t('partyCell.joinSession') }}
+                </button>
+              </li>
+            </ul>
+          </div>
         </template>
       </div>
 
@@ -110,6 +170,16 @@
             <span class="absolute bottom-1 left-1 text-xs text-white bg-black/50 px-1.5 py-0.5 rounded">
               {{ remoteLabel(remote) }}
             </span>
+            <!-- F6: maximize this tile (Fullscreen API, falls back to grid expand) -->
+            <button
+              class="absolute top-1 right-1 h-6 w-6 flex items-center justify-center text-white bg-black/50 rounded hover:bg-black/70 transition"
+              :title="$t('partyCell.maximize')"
+              @click="toggleFullscreen(idx)"
+            >
+              <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -119,6 +189,15 @@
           class="flex items-center justify-center py-6 text-text-secondary dark:text-text-secondary-dark text-sm border border-dashed border-border dark:border-border-dark rounded"
         >
           {{ $t('partyCell.waitingForOthers') }}
+        </div>
+
+        <!-- F2: active screen-share indicator -->
+        <div
+          v-if="localIsSharingScreen"
+          class="flex items-center justify-center gap-1.5 text-xs text-primary dark:text-primary-light font-medium"
+        >
+          <span class="w-2 h-2 rounded-full bg-primary animate-pulse" />
+          {{ $t('partyCell.youAreSharing') }}
         </div>
 
         <!-- Controls -->
@@ -141,16 +220,51 @@
             <span class="text-xs">{{ localIsMuted ? $t('partyCell.unmute') : $t('partyCell.mute') }}</span>
           </button>
 
-          <!-- Share screen -->
+          <!-- Camera toggle (F2 — independent of mic/screen) -->
           <button
-            class="control-btn px-3 py-2 text-sm bg-surface-light dark:bg-surface-dark-light text-text-secondary dark:text-text-secondary-dark rounded-lg hover:bg-surface-hover dark:hover:bg-surface-dark-hover transition flex items-center gap-1.5"
-            :title="$t('partyCell.shareScreen')"
-            @click="handleShareScreen"
+            class="control-btn px-3 py-2 text-sm rounded-lg transition flex items-center gap-1.5"
+            :class="localCameraEnabled
+              ? 'bg-surface-light dark:bg-surface-dark-light text-text-secondary dark:text-text-secondary-dark hover:bg-surface-hover dark:hover:bg-surface-dark-hover'
+              : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'"
+            :title="$t('partyCell.camera')"
+            @click="handleCameraToggle"
+          >
+            <svg v-if="localCameraEnabled" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+            </svg>
+            <svg v-else class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 9.75L3.75 3.75M20.25 20.25l-6-6M14.25 5.25a4.5 4.5 0 015.625 5.625M9.75 14.25a4.5 4.5 0 015.625 5.625" />
+            </svg>
+            <span class="text-xs">{{ localCameraEnabled ? $t('partyCell.camera') : $t('partyCell.cameraOff') }}</span>
+          </button>
+
+          <!-- Screen share toggle (F2 — start / stop) -->
+          <button
+            class="control-btn px-3 py-2 text-sm rounded-lg transition flex items-center gap-1.5"
+            :class="localIsSharingScreen
+              ? 'bg-primary text-white'
+              : 'bg-surface-light dark:bg-surface-dark-light text-text-secondary dark:text-text-secondary-dark hover:bg-surface-hover dark:hover:bg-surface-dark-hover'"
+            :title="localIsSharingScreen ? $t('partyCell.stopSharing') : $t('partyCell.shareScreen')"
+            @click="handleScreenShare"
           >
             <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
             </svg>
-            <span class="text-xs">{{ $t('partyCell.shareScreen') }}</span>
+            <span class="text-xs">{{ localIsSharingScreen ? $t('partyCell.stopSharing') : $t('partyCell.shareScreen') }}</span>
+          </button>
+
+          <!-- Refresh presence + discovery (F5) -->
+          <button
+            class="control-btn px-3 py-2 text-sm bg-surface-light dark:bg-surface-dark-light text-text-secondary dark:text-text-secondary-dark rounded-lg hover:bg-surface-hover dark:hover:bg-surface-dark-hover transition flex items-center gap-1.5"
+            :title="$t('partyCell.refresh')"
+            @click="handleRefresh"
+          >
+            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+            <span class="text-xs">{{ $t('partyCell.refresh') }}</span>
           </button>
 
           <!-- Hang up -->
@@ -182,7 +296,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { usePartyCalls } from '#artifacts/shared/composables/usePartyCalls'
+import { usePartyCalls, type AvailableRoom } from '#artifacts/shared/composables/usePartyCalls'
 import type { Participant } from '#artifacts/shared/stores/partyStore'
 import { createLogger } from '@/utils/logger'
 
@@ -202,14 +316,21 @@ const props = withDefaults(defineProps<Props>(), {
 // ── PartyCalls Composable ──
 const {
   isConnected,
-  isProvisioning,
+  connectionPhase,
+  isConnecting,
+  cameraEnabled,
+  isSharingScreen,
   localStream,
   remoteStreams,
   participants,
   connectionError,
   startCall,
-  shareStream,
   muteAudio,
+  toggleCamera,
+  toggleScreenShare,
+  refreshRoom,
+  listAvailableRooms,
+  joinRoom,
   hangUp,
 } = usePartyCalls()
 
@@ -217,6 +338,14 @@ const {
 const localIsConnected = ref(false)
 const localConnectionError = ref<string | null>(null)
 const localIsMuted = ref(false)
+const localCameraEnabled = ref(false)
+const localIsSharingScreen = ref(false)
+/** F3: session name the user typed (fallback 'default-room'). */
+const sessionName = ref(props.roomId ?? '')
+/** The roomId actually in use (shown in the header when connected). */
+const localSessionName = ref('')
+/** F4: active sessions discovered on mount (only when no roomId). */
+const localAvailableRooms = ref<AvailableRoom[]>([])
 
 // Sync buffer locals with composable state
 watch(isConnected, (val) => {
@@ -225,6 +354,30 @@ watch(isConnected, (val) => {
 
 watch(connectionError, (val) => {
   localConnectionError.value = val
+})
+
+watch(cameraEnabled, (val) => {
+  localCameraEnabled.value = val
+})
+
+watch(isSharingScreen, (val) => {
+  localIsSharingScreen.value = val
+})
+
+/** F1: phase-specific connecting message (spinner + text). */
+const phaseStatusMessage = computed(() => {
+  switch (connectionPhase.value) {
+    case 'provisioning':
+      return t('partyCell.provisioningMessage')
+    case 'requesting-media':
+      return t('partyCell.requestingMedia')
+    case 'signaling':
+      return t('partyCell.signaling')
+    case 'registering':
+      return t('partyCell.registering')
+    default:
+      return t('partyCell.connecting')
+  }
 })
 
 // ── Computed ──
@@ -292,8 +445,16 @@ function attachRemoteVideo(idx: number, el: HTMLVideoElement | null): void {
 
 // ── Actions ──
 
+/** Sanitize a session name into a valid roomId (main.py regex
+ *  ``^[\w:._-]{1,256}$``) — empty input falls back to 'default-room' (INC-6). */
+function sanitizeRoomId(name: string): string {
+  const cleaned = name.trim().replace(/[^\w:._-]/g, '-').slice(0, 256)
+  return cleaned || 'default-room'
+}
+
 async function handleStartCall(): Promise<void> {
-  const roomId = props.roomId || 'default-room'
+  const roomId = sanitizeRoomId(sessionName.value || props.roomId || '')
+  localSessionName.value = roomId
   logger.info('[handleStartCall] Starting call in room:', roomId)
   await startCall(roomId)
 }
@@ -303,15 +464,38 @@ function handleMuteToggle(): void {
   localIsMuted.value = !localIsMuted.value
 }
 
-async function handleShareScreen(): Promise<void> {
+function handleCameraToggle(): void {
+  toggleCamera()
+}
+
+function handleScreenShare(): void {
+  void toggleScreenShare()
+}
+
+async function handleRefresh(): Promise<void> {
+  await refreshRoom()
+  // When not pinned to a room, also refresh the available-sessions list
+  if (!props.roomId) await loadAvailableRooms()
+}
+
+async function handleJoinRoom(roomId: string): Promise<void> {
+  localSessionName.value = roomId
+  await joinRoom(roomId)
+}
+
+/** Label for a discovered room: prefer the first participant's display name,
+ *  fall back to the roomId (edge case: active room without a displayName). */
+function roomNameLabel(room: AvailableRoom): string {
+  const first = room.sessions?.[0]
+  return first?.displayName || room.roomId
+}
+
+async function loadAvailableRooms(): Promise<void> {
   try {
-    const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
-      audio: true,
-    })
-    await shareStream(stream)
-  } catch (err: any) {
-    logger.warn('[handleShareScreen] Failed or cancelled:', err?.message)
+    localAvailableRooms.value = await listAvailableRooms()
+  } catch (err) {
+    logger.warn('[loadAvailableRooms] failed:', err instanceof Error ? err.message : err)
+    localAvailableRooms.value = []
   }
 }
 
@@ -319,20 +503,42 @@ function handleHangUp(): void {
   hangUp()
   localIsConnected.value = false
   localConnectionError.value = null
+  localSessionName.value = ''
 }
 
 function handleRetry(): void {
   localConnectionError.value = null
-  handleStartCall()
+  void handleStartCall()
+}
+
+/** F6: maximize a video tile — Fullscreen API, falling back to expanding the
+ *  tile across the grid in browsers without Fullscreen support. */
+function toggleFullscreen(idx: number): void {
+  const el = remoteVideoElements.get(idx)
+  const container = el?.parentElement
+  if (!container) return
+  if (typeof container.requestFullscreen === 'function') {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen()
+    } else {
+      void container.requestFullscreen()
+    }
+    return
+  }
+  // Fallback (no Fullscreen API): expand within the grid
+  container.classList.toggle('maximized-tile')
 }
 
 // ── Lifecycle ──
 onMounted(() => {
   logger.info('Party Cell mounted', { roomId: props.roomId })
 
-  // Auto-start call if roomId is provided
+  // Auto-start call if roomId is provided; otherwise discover active sessions
   if (props.roomId) {
-    handleStartCall()
+    localSessionName.value = props.roomId
+    void handleStartCall()
+  } else {
+    void loadAvailableRooms()
   }
 })
 
@@ -356,6 +562,11 @@ onUnmounted(() => {
    grid (GAP 4 — a distinct highlighted tile, not the camera "winning"). */
 .screen-tile {
   grid-column: span 2;
+}
+
+/* F6 fallback (no Fullscreen API): expanding a tile across the whole grid. */
+.maximized-tile {
+  grid-column: 1 / -1;
 }
 
 .control-btn {

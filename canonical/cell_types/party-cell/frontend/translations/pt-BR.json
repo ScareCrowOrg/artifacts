@@ -17,6 +17,21 @@
     "remoteUser": "Usuário Remoto",
     "retry": "Tentar Novamente",
     "connectionLost": "Conexão perdida",
-    "provisioningMessage": "Ativando serviço de voz…"
+    "provisioningMessage": "Ativando serviço de voz…",
+    "connecting": "Conectando…",
+    "requestingMedia": "Solicitando microfone e câmera…",
+    "signaling": "Negociando conexão segura…",
+    "registering": "Registrando sua sessão…",
+    "sessionNamePlaceholder": "Nomeie esta sessão (opcional)",
+    "startWithName": "Dê um nome à sua festa para que outros a encontrem:",
+    "availableSessions": "Sessões ativas",
+    "joinSession": "Entrar",
+    "noSessions": "Nenhuma sessão ativa no momento",
+    "camera": "Câmera",
+    "cameraOff": "Câmera Desligada",
+    "stopSharing": "Parar Compartilhamento",
+    "refresh": "Atualizar",
+    "maximize": "Maximizar",
+    "youAreSharing": "Você está compartilhando sua tela"
   }
 }

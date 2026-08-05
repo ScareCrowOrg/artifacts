@@ -17,6 +17,21 @@
     "remoteUser": "Remote User",
     "retry": "Retry",
     "connectionLost": "Connection lost",
-    "provisioningMessage": "Activating voice service…"
+    "provisioningMessage": "Activating voice service…",
+    "connecting": "Connecting…",
+    "requestingMedia": "Requesting mic & camera…",
+    "signaling": "Negotiating secure connection…",
+    "registering": "Registering your session…",
+    "sessionNamePlaceholder": "Name this session (optional)",
+    "startWithName": "Give your party a name so others can find it:",
+    "availableSessions": "Active sessions",
+    "joinSession": "Join",
+    "noSessions": "No active sessions right now",
+    "camera": "Camera",
+    "cameraOff": "Camera Off",
+    "stopSharing": "Stop Sharing",
+    "refresh": "Refresh",
+    "maximize": "Maximize",
+    "youAreSharing": "You are sharing your screen"
   }
 }

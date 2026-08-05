@@ -25,9 +25,38 @@ const log = createLogger('composable:usePartyCalls')
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Lifecycle phase of a party call, driving the connecting UX (F1).  The UI
+ * shows a spinner + phase message while ``isConnecting`` is true and only
+ * flips the "live" indicator when the phase reaches ``'connected'``.
+ */
+export type ConnectionPhase =
+  | 'idle'
+  | 'provisioning'
+  | 'requesting-media'
+  | 'signaling'
+  | 'registering'
+  | 'connected'
+  | 'error'
+
+/** A room discovered via ``listAvailableRooms`` (F4 — GET /calls/rooms). */
+export interface AvailableRoom {
+  roomId: string
+  sessionCount: number
+  sessions: RemoteSession[]
+}
+
 export interface UsePartyCallsReturn {
   isConnected: Ref<boolean>
   isProvisioning: Ref<boolean>
+  /** Phase of the current (or last attempted) call — see ConnectionPhase. */
+  connectionPhase: Ref<ConnectionPhase>
+  /** True while the call is being set up (spinner + phase message). */
+  isConnecting: Ref<boolean>
+  /** Whether the local camera video is enabled (F2). */
+  cameraEnabled: Ref<boolean>
+  /** Whether the caller is currently sharing their screen (F2). */
+  isSharingScreen: Ref<boolean>
   localStream: Ref<MediaStream | null>
   /** Remote streams keyed by remote sessionId */
   remoteStreams: Ref<Map<string, MediaStream>>
@@ -36,6 +65,18 @@ export interface UsePartyCallsReturn {
   startCall: (roomId: string) => Promise<void>
   shareStream: (stream: MediaStream) => Promise<void>
   muteAudio: () => void
+  /** Toggle the local camera on/off independently of mic/screen (F2). */
+  toggleCamera: () => void
+  /** Start (or stop, when already sharing) screen sharing (F2). */
+  toggleScreenShare: () => Promise<void>
+  /** Stop an active screen share (F2). */
+  stopSharing: () => void
+  /** Refresh presence + remote discovery on demand (F5). */
+  refreshRoom: () => Promise<void>
+  /** List rooms with ≥1 active session (F4). */
+  listAvailableRooms: () => Promise<AvailableRoom[]>
+  /** Join an existing room by id (F4). */
+  joinRoom: (roomId: string) => Promise<void>
   hangUp: () => void
   requestSnapshot: () => Promise<void>
 }
@@ -93,6 +134,15 @@ const _remoteTrackTypes = new Map<string, Map<string, string>>()
  *  track.id OPAQUE (no {sessionId}/{trackName} slash format), so the ontrack can
  *  classify via event.transceiver.mid against this map (F3 CICLO 4). */
 const _remoteMidToTrackName = new Map<string, { sessionId: string; trackName: string }>()
+/** The native MediaStreamTrack id of the currently shared screen (if any) —
+ *  used by stopSharing to detach the correct sender from the peer connection. */
+let _screenTrackId: string | null = null
+/** Display-friendly TrackType → the publisher's NATIVE track names currently
+ *  known for the local streams.  Populated by startCall (mic/camera) and
+ *  shareStream (screen); consumed by ``_updatePublishedTracks`` so the room
+ *  registry + presence carry the REAL active track set when the camera is
+ *  toggled off/on or the screen is stopped (F2). */
+const _localTrackNamesByDisplay = new Map<TrackType, string[]>()
 
 const HEARTBEAT_INTERVAL_MS = 20_000 // must be < the 60 s registry TTL
 
@@ -596,6 +646,16 @@ export function usePartyCalls(): UsePartyCallsReturn {
   // ── Reactive state ───────────────────────────────────────────────────────
   const isConnected = ref(false)
   const isProvisioning = ref(false)
+  /** Call lifecycle phase — drives the connecting spinner/status (F1). */
+  const connectionPhase = ref<ConnectionPhase>('idle')
+  /** True while the call is being set up (provisioning → registering). */
+  const isConnecting = computed(() =>
+    ['provisioning', 'requesting-media', 'signaling', 'registering'].includes(connectionPhase.value),
+  )
+  /** Whether the local camera video is enabled (F2). */
+  const cameraEnabled = ref(false)
+  /** Whether the caller is currently sharing their screen (F2). */
+  const isSharingScreen = ref(false)
   const localStream = ref<MediaStream | null>(null)
   const remoteStreams = ref<Map<string, MediaStream>>(new Map())
   const connectionError = ref<string | null>(null)
@@ -638,6 +698,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
         pc.iceConnectionState === 'closed'
       ) {
         isConnected.value = false
+        connectionPhase.value = 'error'
         connectionError.value = `Connection lost: ${pc.iceConnectionState}`
       }
     }
@@ -798,6 +859,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
   async function startCall(roomId: string): Promise<void> {
     connectionError.value = null
     isProvisioning.value = false
+    connectionPhase.value = 'provisioning'
 
     if (_pc) {
       log.warn('[startCall] Already in a call — hanging up first')
@@ -820,10 +882,12 @@ export function usePartyCalls(): UsePartyCallsReturn {
       isProvisioning.value = false
 
       // 1. Request local media
+      connectionPhase.value = 'requesting-media'
       log.info('[startCall] Requesting mic/camera...')
       const stream = await _requestUserMedia()
       _localStream = stream
       localStream.value = stream
+      cameraEnabled.value = stream.getVideoTracks().some((t) => t.enabled)
       log.warn(
         '[DIAG][usePartyCalls] STEP1 getUserMedia: streamId=%s tracks=%d (0 = sem mídia)',
         stream.id, stream.getTracks().length,
@@ -837,6 +901,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
       _attachLocalTracks(pc, stream)
 
       // 3. Create SDP offer
+      connectionPhase.value = 'signaling'
       const offer = await _createAndSetOffer(pc)
 
       // DIAG: inspect the offer before it leaves the browser
@@ -890,10 +955,12 @@ export function usePartyCalls(): UsePartyCallsReturn {
         }),
       })
 
-      // 5. Apply Cloudflare SDP answer
+      // 5. Apply Cloudflare SDP answer.  isConnected stays FALSE here — it only
+      //    flips at the very END of startCall (after register + SFU tracks +
+      //    presence), so the "live" indicator never lights up before the call is
+      //    actually ready (F1 — fixes the screen "blink").
       const answer = new RTCSessionDescription(sessionData.sessionDescription)
       await pc.setRemoteDescription(answer)
-      isConnected.value = true
       const mySessionId: string = sessionData.sessionId
       _currentSessionId = mySessionId
 
@@ -910,7 +977,17 @@ export function usePartyCalls(): UsePartyCallsReturn {
       _publishedTracks = [...localTracks]
       _publishedTrackNames = [...localTrackNames]
 
+      // Index the NATIVE track names by display type (mic/camera) — the source
+      // of truth for _updatePublishedTracks when the camera is toggled (F2).
+      _localTrackNamesByDisplay.clear()
+      localTracks.forEach((display, i) => {
+        const names = _localTrackNamesByDisplay.get(display) ?? []
+        if (localTrackNames[i]) names.push(localTrackNames[i])
+        _localTrackNamesByDisplay.set(display, names)
+      })
+
       // 7. Register session in the room + discover & subscribe to others
+      connectionPhase.value = 'registering'
       await _registerAndDiscoverSessions(roomId, remoteStreams, localTracks, localTrackNames)
 
       // 7b. ROOT CAUSE FIX (F3 ciclo 4): register the publisher's OWN local
@@ -937,9 +1014,15 @@ export function usePartyCalls(): UsePartyCallsReturn {
       // 10. Periodic heartbeat + discovery refresh (ghost cleanup)
       _startHeartbeat(roomId, mySessionId, remoteStreams)
 
+      // Only NOW is the call fully established (registry + SFU tracks +
+      // presence + heartbeat all in place) — flip the "live" indicator and the
+      // connecting phase (F1 — no more premature isConnected → no screen blink).
+      isConnected.value = true
+      connectionPhase.value = 'connected'
       log.info('[startCall] Call established for room:', roomId)
     } catch (err: unknown) {
       isProvisioning.value = false
+      connectionPhase.value = 'error'
       const msg = err instanceof Error ? err.message : 'Failed to start call'
       connectionError.value = msg
       log.error('[startCall] Error:', msg)
@@ -1099,6 +1182,13 @@ export function usePartyCalls(): UsePartyCallsReturn {
       const roomId = _currentRoomRef.value
       const tracksDisplay: TrackType[] = [..._publishedTracks, 'screen']
       const trackNames: string[] = [..._publishedTrackNames, videoTrack.id]
+
+      // Index the screen's native track so _updatePublishedTracks keeps it in
+      // the published set while sharing (F2).
+      const screenNames = _localTrackNamesByDisplay.get('screen') ?? []
+      if (!screenNames.includes(videoTrack.id)) screenNames.push(videoTrack.id)
+      _localTrackNamesByDisplay.set('screen', screenNames)
+
       if (roomId) {
         await _updateRegistryTracks(roomId, tracksDisplay, trackNames, remoteStreams)
       }
@@ -1143,6 +1233,124 @@ export function usePartyCalls(): UsePartyCallsReturn {
   }
 
   /**
+   * Recompute the caller's REAL published track set from the current local
+   * media state and publish it to the room registry + presence (tracks_update).
+   *
+   * Toggles are INDEPENDENT decisions (F2): the camera is dropped from the
+   * published set when disabled, re-added when enabled; the screen is dropped
+   * when sharing stops.  The mic always stays (muting is a separate presence
+   * signal).  This keeps the registry/presence honest so subscribers only see
+   * the tracks that are actually active.
+   *
+   * Failures here are non-fatal: the registry upsert / presence publish are
+   * best-effort (a network blip would otherwise surface as an UNHANDLED promise
+   * rejection from ``void _updatePublishedTracks`` in toggleCamera/stopSharing).
+   * The 20s heartbeat re-reconciles registry + presence within a TTL.
+   */
+  async function _updatePublishedTracks(roomId: string): Promise<void> {
+    const tracks: TrackType[] = []
+    const trackNames: string[] = []
+    for (const [display, names] of _localTrackNamesByDisplay) {
+      if (!names.length) continue
+      if (display === 'camera' && !cameraEnabled.value) continue
+      if (display === 'screen' && !isSharingScreen.value) continue
+      tracks.push(display)
+      trackNames.push(...names)
+    }
+    _publishedTracks = [...tracks]
+    _publishedTrackNames = [...trackNames]
+    try {
+      await _updateRegistryTracks(roomId, tracks, trackNames, remoteStreams)
+      await _executePartyAction({ action: 'tracks_update', roomId, tracks, trackNames })
+    } catch (err) {
+      log.warn(
+        '[updatePublishedTracks] republish failed room=%s tracks=%j — heartbeat will reconcile: %s',
+        roomId, tracks,
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+
+  /** Toggle the local camera on/off independently of mic/screen (F2). */
+  function toggleCamera(): void {
+    if (!_localStream) return
+    const videoTracks = _localStream.getVideoTracks()
+    const nowEnabled = !videoTracks.some((t) => t.enabled)
+    for (const track of videoTracks) track.enabled = nowEnabled
+    cameraEnabled.value = nowEnabled
+    const roomId = _currentRoomRef.value
+    if (roomId) void _updatePublishedTracks(roomId)
+  }
+
+  /** Start screen sharing, or stop it when already sharing (F2). */
+  async function toggleScreenShare(): Promise<void> {
+    if (isSharingScreen.value) {
+      stopSharing()
+      return
+    }
+    if (!_pc) {
+      connectionError.value = 'Not connected — start a call first'
+      log.warn('[toggleScreenShare] No peer connection')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      })
+      await shareStream(stream)
+      // Only reflect the "sharing" state if the share actually started
+      // (shareStream bails on a stream without a video track).  A cancelled
+      // getDisplayMedia throws before this point → state unchanged.
+      if (_screenStream) {
+        _screenTrackId = stream.getVideoTracks()[0]?.id ?? null
+        isSharingScreen.value = true
+      }
+    } catch (err) {
+      log.warn(
+        '[toggleScreenShare] cancelled or failed: %s',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+
+  /** Stop an active screen share: detach the sender and republish tracks. */
+  function stopSharing(): void {
+    if (!_screenStream) return
+    _stopStream(_screenStream)
+    _screenStream = null
+    if (_pc) {
+      for (const sender of _pc.getSenders()) {
+        if (sender.track?.id === _screenTrackId) _pc.removeTrack(sender)
+      }
+    }
+    _screenTrackId = null
+    isSharingScreen.value = false
+    _localTrackNamesByDisplay.delete('screen')
+    const roomId = _currentRoomRef.value
+    if (roomId) void _updatePublishedTracks(roomId)
+    log.info('[stopSharing] Screen share stopped')
+  }
+
+  /** Force-refresh presence + remote discovery on demand (F5). */
+  async function refreshRoom(): Promise<void> {
+    await requestSnapshot()
+    const roomId = _currentRoomRef.value
+    if (roomId) await _refreshDiscovery(roomId, remoteStreams)
+  }
+
+  /** List rooms that currently have ≥1 active session (F4). */
+  async function listAvailableRooms(): Promise<AvailableRoom[]> {
+    const data = await _apiFetchJson('/calls/rooms')
+    return (data.rooms || []) as AvailableRoom[]
+  }
+
+  /** Join an existing room by id (F4) — reuses the full startCall flow. */
+  async function joinRoom(roomId: string): Promise<void> {
+    await startCall(roomId)
+  }
+
+  /**
    * Leave the call — broadcast leave_room, stop the heartbeat, close the peer
    * connection, stop local tracks, disconnect room presence, and reset state.
    */
@@ -1167,6 +1375,8 @@ export function usePartyCalls(): UsePartyCallsReturn {
     _subscribedTrackNames.clear()
     _remoteTrackTypes.clear()
     _remoteMidToTrackName.clear()
+    _localTrackNamesByDisplay.clear()
+    _screenTrackId = null
 
     // Close peer connection
     if (_pc) {
@@ -1191,6 +1401,9 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
     // Reset state
     isConnected.value = false
+    connectionPhase.value = 'idle'
+    cameraEnabled.value = false
+    isSharingScreen.value = false
     localStream.value = null
     remoteStreams.value = new Map()
     store.reset()
@@ -1217,6 +1430,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
   return {
     isConnected,
     isProvisioning,
+    connectionPhase,
+    isConnecting,
+    cameraEnabled,
+    isSharingScreen,
     localStream,
     remoteStreams,
     participants,
@@ -1224,6 +1441,12 @@ export function usePartyCalls(): UsePartyCallsReturn {
     startCall,
     shareStream,
     muteAudio,
+    toggleCamera,
+    toggleScreenShare,
+    stopSharing,
+    refreshRoom,
+    listAvailableRooms,
+    joinRoom,
     hangUp,
     requestSnapshot,
   }

@@ -17,6 +17,7 @@
  *   join_room     — Join a party call room.
  *   leave_room    — Leave the current room.
  *   mute_toggle   — Toggle microphone mute state.
+ *   tracks_update — Publish the caller's current published media tracks.
  *   snapshot_request — Request the current participants list.
  */
 
@@ -35,7 +36,7 @@ import { ENDPOINTS } from '@/config/endpoints.js'
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type PartyCellAction = 'join_room' | 'leave_room' | 'mute_toggle' | 'snapshot_request'
+export type PartyCellAction = 'join_room' | 'leave_room' | 'mute_toggle' | 'tracks_update' | 'snapshot_request'
 
 export interface PartyCellInput {
   /** Discriminant action */
@@ -125,7 +126,7 @@ export class PartyCell extends BaseCell {
           type: 'string',
           description: 'Action to perform',
           required: true,
-          enum: ['join_room', 'leave_room', 'mute_toggle', 'snapshot_request'],
+          enum: ['join_room', 'leave_room', 'mute_toggle', 'tracks_update', 'snapshot_request'],
         },
         roomId: {
           type: 'string',
@@ -138,7 +139,12 @@ export class PartyCell extends BaseCell {
       outputs: {
         participants: {
           type: 'array',
-          description: 'List of room participants (snapshot_request action)',
+          description:
+            'List of room participants (snapshot_request / tracks_update actions)',
+        },
+        count: {
+          type: 'number',
+          description: 'Number of participants in the room (tracks_update action)',
         },
         status: {
           type: 'string',
@@ -176,10 +182,10 @@ export class PartyCell extends BaseCell {
         field: 'action',
         message: 'action is required and must be a string',
       })
-    } else if (!['join_room', 'leave_room', 'mute_toggle', 'snapshot_request'].includes(input.action)) {
+    } else if (!['join_room', 'leave_room', 'mute_toggle', 'tracks_update', 'snapshot_request'].includes(input.action)) {
       errors.push({
         field: 'action',
-        message: `Invalid action '${input.action}'. Must be one of: join_room, leave_room, mute_toggle, snapshot_request`,
+        message: `Invalid action '${input.action}'. Must be one of: join_room, leave_room, mute_toggle, tracks_update, snapshot_request`,
       })
     }
 
