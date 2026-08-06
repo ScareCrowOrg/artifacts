@@ -241,14 +241,6 @@ async function _subscribeToRemoteTracks(
   // heartbeat subscribes just the delta — no page reload needed.
   const already = _subscribedTrackNames.get(remote.sessionId) ?? []
   const trackNames = allTrackNames.filter((n) => !already.includes(n))
-  // DIAG-F2-party-cell-sharing-ux: delta filter comparison (B2) — when the publisher
-  // dropped 'screen' but the session stays active, `already` still contains the screen
-  // nativeId → delta is empty → nothing to unsubscribe → tile {sid}/screen is never
-  // removed by discovery. REMOVE after F3 confirms the fix.
-  log.warn(
-    '[party-cell][subscribe] %s: allTrackNames=%j already=%j delta=%j',
-    remote.sessionId, allTrackNames, already, trackNames,
-  )
   if (trackNames.length === 0) return
 
   // DIAG (F1 P2): transceiver count BEFORE the request — in the tracks-only
@@ -477,19 +469,6 @@ async function _refreshDiscovery(
       const sessionLeft = ownersToPrune.has(ownerId)
       const screenRemoved = key.endsWith('/screen') && activeIds.has(ownerId)
         && !(activeTracksByOwner.get(ownerId) ?? []).includes('screen')
-      // DIAG-F2-party-cell-sharing-ux: full PRUNE_CHK per tile key (B2/B3). REMOVE after F3.
-      const decision = (sessionLeft || screenRemoved) ? 'REMOVE' : 'KEEP'
-      const reason = sessionLeft
-        ? 'session left/ghost'
-        : screenRemoved
-          ? 'screen track removed from registry (B2)'
-          : activeIds.has(ownerId)
-            ? 'session active'
-            : 'owner NOT subscribed anymore (subscribed=false)'
-      log.warn(
-        '[party-cell][prune] key=%s ownerId=%s active=%s subscribed=%s decision=%s reason=%s',
-        key, ownerId, activeIds.has(ownerId), _subscribedSessions.has(ownerId), decision, reason,
-      )
       if (sessionLeft || screenRemoved) {
         next.delete(key)
         if (sessionLeft) removeOwnerMappings(ownerId)

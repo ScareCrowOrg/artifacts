@@ -528,30 +528,19 @@ async function toggleFullscreen(key: string): Promise<void> {
   const container = el?.parentElement
   if (!container) return
   if (typeof container.requestFullscreen === 'function') {
-    // DIAG-F2-party-cell-sharing-ux: distinguish the 3 fullscreen branches (B1).
-    // REMOVE after F3 confirms which branch executes at runtime.
-    logger.warn('[party-cell][fullscreen] requestFullscreen() IS a function — entering fullscreen branch key=%s', key)
     if (document.fullscreenElement) {
-      logger.warn('[party-cell][fullscreen] fullscreenElement active — exiting fullscreen')
       void document.exitFullscreen()
       return
     }
-    logger.warn('[party-cell][fullscreen] calling container.requestFullscreen() key=%s', key)
     try {
       await container.requestFullscreen()
-      logger.warn('[party-cell][fullscreen] requestFullscreen() RESOLVED — fullscreen active')
     } catch (err) {
       // Permissions policy / missing user gesture → the promise rejects.  Fall
       // back to expanding the tile across the grid (B1 fixed).
-      logger.warn(
-        '[party-cell][fullscreen] requestFullscreen() REJECTED — fallback maximized-tile reached (B1 fixed), err=%s',
-        err instanceof Error ? err.message : String(err),
-      )
       container.classList.toggle('maximized-tile')
     }
     return
   }
-  logger.warn('[party-cell][fullscreen] requestFullscreen() NOT a function — direct fallback maximized-tile')
   // Fallback (no Fullscreen API): expand within the grid
   container.classList.toggle('maximized-tile')
 }
