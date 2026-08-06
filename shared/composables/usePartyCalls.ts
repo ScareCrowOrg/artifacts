@@ -142,6 +142,13 @@ const _remoteMidToTrackName = new Map<string, { sessionId: string; trackName: st
 /** The native MediaStreamTrack id of the currently shared screen (if any) —
  *  used by stopSharing to detach the correct sender from the peer connection. */
 let _screenTrackId: string | null = null
+/** The sendonly screen transceiver orphaned by the last stopSharing
+ *  (``sender.track`` nulled by ``removeTrack`` but the transceiver kept) —
+ *  reused by the next shareStream via ``replaceTrack`` so each share/stop cycle
+ *  does NOT stack a new transceiver (A1; avoids the SFU's 413 accumulation
+ *  error).  Captured explicitly because the old direction-only orphan search
+ *  missed the transceiver once the last offer had re-negotiated its direction. */
+let _orphanScreenTx: RTCRtpTransceiver | null = null
 /** Display-friendly TrackType → the publisher's NATIVE track names currently
  *  known for the local streams.  Populated by startCall (mic/camera) and
  *  shareStream (screen); consumed by ``_updatePublishedTracks`` so the room
@@ -496,23 +503,6 @@ async function _refreshDiscovery(
           // S2 (F3): stop the receiver transceivers for the removed screen
           // track locally (no tracks/remove endpoint to un-subscribe via SFU).
           _teardownRemoteMedia(screenMids)
-          // DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
-          // S2 fator 2/3: B2 prune removes the VISUAL tile only — confirm the
-          // media path (recvonly receiver + SFU subscription) SURVIVES.  If the
-          // SFU had signaled track end, these counts would drop here; the F7
-          // compares against the [party-cell][trackend] baseline counts.
-          // NOTE (F3): _teardownRemoteMedia above NOW stops the receiver, so the
-          // receivers_after/transceivers_after counts below DROP versus the
-          // [party-cell][trackend] baseline — that drop IS the fix.
-          log.warn(
-            '[party-cell][prune2] screen tile removed key=%s owner=%s receivers_after=%d transceivers_after=%d recvonly_mids=%j',
-            key, ownerId,
-            _pc?.getReceivers().length ?? -1,
-            _pc?.getTransceivers().length ?? -1,
-            _pc?.getTransceivers()
-              .filter((t) => t.direction === 'recvonly')
-              .map((t) => t.mid) ?? [],
-          )
         }
         changed = true
       }
@@ -757,64 +747,34 @@ function _teardownRemoteMedia(mids: string[]): void {
 }
 
 /**
- * Renegotiate the peer connection with the SFU after a local track was removed
- * (S2 publisher side).  ``RTCRtpSender.removeTrack()`` only nulls
- * ``sender.track`` — without a following offer the transceiver/m-section and the
- * track registered on the SFU survive, so already-subscribed peers keep
- * receiving it.  A fresh offer reflects ``sender.track === null`` as an
- * inactive m-section; sending it via ``PUT /renegotiate`` (the same proxy used
- * to answer SFU offers) is the only frontend-only way to tell the Cloudflare SFU
- * the track is gone (there is no tracks/remove endpoint in the proxy;
- * tracks/update only reconfigures existing tracks).
+ * Remove a published track from the Cloudflare SFU session (backend
+ * ``DELETE /calls/sessions/{sid}/tracks/{track_name}`` → Cloudflare
+ * ``POST /sessions/{sid}/tracks/close``).  Called by stopSharing after
+ * ``RTCRtpSender.removeTrack()`` — this is what actually tells the SFU the
+ * track is gone.  Replaces the previous ``PUT /renegotiate``-with-offer path,
+ * which the Cloudflare contract rejects (``406 sessionDescription.type=answer
+ * is expected`` → 502 on every stop).
  *
- * Non-fatal: on failure the sendonly transceiver stays with a null track and
- * subscribers still drop the tile via the B2 heartbeat prune.
+ * Non-fatal: on failure the SFU reaper still signals ``event=ended`` to
+ * already-subscribed peers (safety net) and the registry/presence already drop
+ * the screen, so new subscribers stop seeing it.
  */
-async function _renegotiateAfterRemoveTrack(): Promise<void> {
-  if (!_pc || !_currentSessionId) return
+async function _removeTrackFromSfu(trackName: string): Promise<void> {
+  if (!_currentSessionId) return
   try {
-    const offer = await _pc.createOffer()
-    await _pc.setLocalDescription(offer)
-    const resp = await _apiFetchJson(
-      `/calls/sessions/${_currentSessionId}/renegotiate`,
-      {
-        method: 'PUT',
-        body: JSON.stringify({
-          sessionDescription: { type: offer.type, sdp: offer.sdp || '' },
-        }),
-      },
+    await _apiFetchJson(
+      `/calls/sessions/${_currentSessionId}/tracks/${encodeURIComponent(trackName)}`,
+      { method: 'DELETE' },
     )
-    // Close the renegotiation with the SFU's response (mirrors shareStream's 3
-    // branches): a direct answer is applied as-is; a requiresImmediateRenegotiation
-    // offer is answered and sent back.  Never apply an empty SDP.
-    const respSd = resp?.sessionDescription
-    const respSdp = respSd?.sdp ? String(respSd.sdp) : ''
-    if (resp?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
-      await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
-      const localAnswer = await _pc.createAnswer()
-      await _pc.setLocalDescription(localAnswer)
-      await _apiFetchJson(
-        `/calls/sessions/${_currentSessionId}/renegotiate`,
-        {
-          method: 'PUT',
-          body: JSON.stringify({
-            sessionDescription: { type: localAnswer.type, sdp: localAnswer.sdp },
-          }),
-        },
-      )
-    } else if (respSd?.type === 'answer' && respSdp.length > 0) {
-      await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
-    }
-    log.warn(
-      '[party-cell][stopshare] renegotiated after removeTrack session=%s sdp_type=%s sdp_len=%d m_sections=%d resp_type=%s',
-      _currentSessionId, offer.type, (offer.sdp || '').length,
-      (offer.sdp || '').match(/^m=\w+/gm)?.length ?? 0,
-      respSd?.type ?? 'none',
+    log.info(
+      '[stopSharing] track removed from SFU session=%s track=%s',
+      _currentSessionId, trackName,
     )
   } catch (err) {
     log.warn(
-      '[party-cell][stopshare] renegotiate after removeTrack failed session=%s: %s',
-      _currentSessionId, err instanceof Error ? err.message : String(err),
+      '[stopSharing] tracks/remove failed session=%s track=%s: %s',
+      _currentSessionId, trackName,
+      err instanceof Error ? err.message : String(err),
     )
   }
 }
@@ -996,45 +956,31 @@ export function usePartyCalls(): UsePartyCallsReturn {
       }
     }
 
-    // DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
-    // S2 fator 3: observe end/change-of-track signals on the received track so
-    // F7 can confirm whether the Cloudflare SFU tells the subscriber when the
-    // publisher stops the share.  F3 FIX: the handlers were LOG-ONLY — on a REAL
-    // end signal they now ALSO tear down the local media path via
-    // _cleanupEndedRemoteTrack (tile + recvonly transceiver + mappings).  A real
-    // end is: ended, stream.onremovetrack, or a SCREEN track going mute (screen
+    // S2 subscriber side: bind end/change-of-track handlers that tear down the
+    // local media path when the publisher stops the share.  A real end is:
+    // track ended, stream.onremovetrack, or a SCREEN track going mute (screen
     // shares have no mute button — mute on the screen track means the publisher
     // stopped or the SFU dropped it).  Camera/mic mute stays reversible
-    // (onmute/onunmute log-only, no cleanup).
+    // (onmute/onunmute no-op, no cleanup).
     const _txMid = event.transceiver?.mid ?? null
     const _infoAtReceive = _txMid ? _remoteMidToTrackName.get(_txMid) : undefined
     const _trackNameAtReceive = _infoAtReceive?.trackName ?? null
     const _displayAtReceive = _infoAtReceive
       ? _remoteTrackTypes.get(_infoAtReceive.sessionId)?.get(_infoAtReceive.trackName)
       : undefined
-    const _bindTrackEndLog = (trk: MediaStreamTrack) => {
-      const logEnd = (ev: string) => log.warn(
-        '[party-cell][trackend] session=%s key=%s mid=%s trackName=%s track_id=%s event=%s',
-        _currentSessionId, sessionKey, _txMid, _trackNameAtReceive, trk.id, ev,
-      )
+    const _bindTrackEndHandlers = (trk: MediaStreamTrack) => {
       trk.onended = () => {
-        logEnd('ended')
         _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive)
       }
       trk.onmute = () => {
-        logEnd('mute')
         if (_displayAtReceive === 'screen') {
           _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive)
         }
       }
-      trk.onunmute = () => logEnd('unmute')
+      trk.onunmute = () => { /* camera/mic mute stays reversible — no cleanup */ }
     }
-    for (const trk of stream.getTracks()) _bindTrackEndLog(trk)
-    stream.onremovetrack = (e: MediaStreamTrackEvent) => {
-      log.warn(
-        '[party-cell][trackend] session=%s key=%s mid=%s trackName=%s stream_onremovetrack track_id=%s',
-        _currentSessionId, sessionKey, _txMid, _trackNameAtReceive, e.track?.id ?? 'none',
-      )
+    for (const trk of stream.getTracks()) _bindTrackEndHandlers(trk)
+    stream.onremovetrack = () => {
       _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive)
     }
 
@@ -1053,16 +999,6 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
     remoteStreams.value = next
     log.debug('[PC] remote track received, key=%s', sessionKey)
-    // DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
-    // S2 fator 2: baseline of LIVE receivers/transceivers after this remote
-    // track was added to remoteStreams.  The B2 prune log ([party-cell][prune2])
-    // must show these counts UNCHANGED when the share stops — confirming the
-    // prune removes only the visual tile, never the media path.
-    log.warn(
-      '[party-cell][trackend] remote track final session=%s key=%s stream_id=%s receivers=%d transceivers=%d',
-      _currentSessionId, sessionKey, stream.id,
-      _pc?.getReceivers().length ?? -1, _pc?.getTransceivers().length ?? -1,
-    )
   }
 
   /** Request mic/camera permission and return the local stream. */
@@ -1349,22 +1285,6 @@ export function usePartyCalls(): UsePartyCallsReturn {
       // S1 (F3): expose the shared screen as the self-view source so the
       // publisher's own grid tile shows what is being shared (local preview).
       selfViewStream.value = stream
-      // DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
-      // S1 fator 1: _screenStream is set here as module-level NON-reactive state
-      // — never exposed as a ref, so the publisher's template can never render
-      // its own screen tile (self-view absent).
-      log.warn(
-        '[party-cell][sharestate] _screenStream SET session=%s track=%s isReactiveRef=false (module-level let, not exposed to template)',
-        _currentSessionId, videoTrack.id,
-      )
-      // DIAG (CICLO 3): dedicated sendonly transceiver for the screen track.
-      // transceivers_before must GROW by 1 after addTransceiver, and the screen
-      // mid in the offer must be a NEW mid (not a subscribe mid like 2/3) — the
-      // F7 confirms no transceiver reuse happened.
-      log.warn(
-        '[DIAG][shareStream] addTransceiver sendonly session=%s track=%s transceivers_before=%d',
-        _currentSessionId, videoTrack.id, _pc.getTransceivers().length,
-      )
       // CICLO 3: use a DEDICATED sendonly transceiver for the screen track.
       // addTrack would REUSE an existing recvonly video transceiver (e.g. the one
       // subscribed to B's camera) making it sendrecv on the same m-section — the
@@ -1372,17 +1292,35 @@ export function usePartyCalls(): UsePartyCallsReturn {
       // (not_found_track_error). A fresh transceiver gets its own mid (no
       // collision with receive mids).
       //
-      // S2 (F3, A1): a previous stopSharing left its sendonly screen transceiver
-      // on the pc with sender.track === null (removeTrack never removes the
-      // transceiver).  Reuse that orphan via replaceTrack instead of stacking a
-      // brand-new transceiver per share/stop cycle — avoids m-section growth and
-      // the SFU's 413 accumulation error.  Only sendonly transceivers match, and
-      // the only sendonly ones on the publisher pc are screen transceivers.
-      const orphanScreenTx = _pc.getTransceivers().find(
-        (t) => t.direction === 'sendonly' && t.sender && t.sender.track === null,
+      // A1 (F8): reuse the screen transceiver from the previous stop instead of
+      // stacking a new one per share/stop cycle (avoids m-section growth and the
+      // SFU's 413 accumulation error).  Two candidates in order:
+      //   1. _orphanScreenTx — explicitly captured by stopSharing (sender.track
+      //      nulled by removeTrack but the transceiver kept).
+      //   2. any sendonly transceiver with sender.track === null (pre-issue
+      //      fallback for peers that stopped sharing before this fix).
+      // Force direction back to 'sendonly' before replaceTrack — the direction
+      // was re-negotiated away from 'sendonly' by the previous offer, so the old
+      // direction-only search silently missed and stacked a new transceiver
+      // (transceivers 5→6 in F7 → 413 risk).
+      log.warn(
+        '[DIAG][shareStream] addTransceiver sendonly session=%s track=%s transceivers_before=%d',
+        _currentSessionId, videoTrack.id, _pc.getTransceivers().length,
       )
-      if (orphanScreenTx?.sender) {
-        await orphanScreenTx.sender.replaceTrack(videoTrack)
+      let screenTx: RTCRtpTransceiver | null = null
+      if (_orphanScreenTx?.sender) {
+        screenTx = _orphanScreenTx
+        _orphanScreenTx = null
+      } else {
+        screenTx = _pc.getTransceivers().find(
+          (t) => t.direction === 'sendonly' && t.sender && t.sender.track === null,
+        ) ?? null
+      }
+      if (screenTx?.sender) {
+        try {
+          screenTx.direction = 'sendonly'
+        } catch { /* ignore — non-mutating on some browsers */ }
+        await screenTx.sender.replaceTrack(videoTrack)
       } else {
         _pc.addTransceiver(videoTrack, { direction: 'sendonly' })
       }
@@ -1614,16 +1552,6 @@ export function usePartyCalls(): UsePartyCallsReturn {
       if (_screenStream) {
         _screenTrackId = stream.getVideoTracks()[0]?.id ?? null
         isSharingScreen.value = true
-        // DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
-        // S1 end state of the publisher: the share IS active and _screenStream
-        // is set, but localStream ref still holds only mic/camera from startCall
-        // (never swapped to the screen) — so the grid has no local tile source.
-        log.warn(
-          '[party-cell][sharestate] publisher state after start session=%s isSharingScreen=%s screenTrackId=%s screenStreamSet=%s localStreamRefTracks=%d',
-          _currentSessionId, isSharingScreen.value, _screenTrackId,
-          String(_screenStream !== null),
-          localStream.value?.getTracks().length ?? 0,
-        )
       }
     } catch (err) {
       log.warn(
@@ -1633,53 +1561,35 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
   }
 
-  /** Stop an active screen share: detach the sender, republish tracks, and
-   *  renegotiate so the SFU drops the published track (S2). */
+  /** Stop an active screen share: detach the sender, remove the track from the
+   *  SFU session (tracks/close), republish the published set, and keep the
+   *  sendonly transceiver orphaned for reuse on the next share (A1 — no
+   *  transceiver accumulation). */
   async function stopSharing(): Promise<void> {
     if (!_screenStream) return
-    // DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
-    // S2 fator 1: state BEFORE removeTrack — how many senders/transceivers are
-    // on the pc and which track id we intend to detach.  Confirms the sendonly
-    // screen transceiver exists and is reachable by _screenTrackId.
-    log.warn(
-      '[party-cell][stopshare] BEFORE removeTrack session=%s isSharingScreen=%s screenTrackId=%s senders=%d transceivers=%d published=%j',
-      _currentSessionId, isSharingScreen.value, _screenTrackId,
-      _pc?.getSenders().length ?? -1, _pc?.getTransceivers().length ?? -1,
-      _publishedTracks,
-    )
-    // DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
-    // S1: confirm the publisher's own share stream is being torn down here
-    // (module-level non-reactive state — never exposed as a ref for the grid).
-    log.warn(
-      '[party-cell][sharestate] _screenStream STOPPED session=%s isReactiveRef=false (module-level let, never rendered)',
-      _currentSessionId,
-    )
     _stopStream(_screenStream)
     _screenStream = null
     if (_pc) {
       let removedSender = false
       for (const sender of _pc.getSenders()) {
         if (sender.track?.id === _screenTrackId) {
+          // Keep the sendonly transceiver for the next shareStream — removeTrack
+          // only nulls sender.track; the transceiver/m-section survives.  A1:
+          // reuse it via replaceTrack instead of stacking a new transceiver per
+          // share/stop cycle (avoids the SFU's 413 accumulation error).
+          const orphanTx = _pc.getTransceivers().find((t) => t.sender === sender)
+          if (orphanTx) _orphanScreenTx = orphanTx
           _pc.removeTrack(sender)
           removedSender = true
-          // DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
-          // S2 fator 1: right after removeTrack — the sender.track is nulled but
-          // the transceiver (and its SDP m-section) stays on the pc because NO
-          // createOffer/renegotiate follows.  F7 confirms the mid is still live.
-          log.warn(
-            '[party-cell][stopshare] AFTER removeTrack sender_track_id=%s sender_track_null=%s sender_transceiver_mid=%s',
-            _screenTrackId, String(sender.track === null), sender.transceiver?.mid ?? 'none',
-          )
         }
       }
-      // S2 (F3): after removeTrack, renegotiate so the SFU drops the published
-      // screen track — removeTrack only nulls sender.track; without a following
-      // offer the transceiver/m-section and the track registered on the SFU
-      // survive and already-subscribed peers keep receiving it (S2 fator 1).
-      // The new offer reflects sender.track === null as an inactive m-section.
-      // Non-fatal: a failure keeps the sendonly transceiver with a null track,
-      // and subscribers still drop the tile via the B2 heartbeat prune.
-      if (removedSender) await _renegotiateAfterRemoveTrack()
+      // Tell the SFU the track is gone — replaces the renegotiate-with-offer
+      // path, which the Cloudflare contract rejects (406 "answer is expected" →
+      // 502 on every stop).  Non-fatal: on failure the SFU reaper still signals
+      // event=ended to already-subscribed peers.
+      if (removedSender && _screenTrackId) {
+        await _removeTrackFromSfu(_screenTrackId)
+      }
     }
     _screenTrackId = null
     isSharingScreen.value = false
@@ -1688,23 +1598,6 @@ export function usePartyCalls(): UsePartyCallsReturn {
     _localTrackNamesByDisplay.delete('screen')
     const roomId = _currentRoomRef.value
     if (roomId) void _updatePublishedTracks(roomId)
-    // DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
-    // S2 fator 1 end state: removeTrack was NOT followed by createOffer/PUT
-    // renegotiate (no_renegotiate=true) — the SFU is never notified, so the
-    // screen track stays in the SFU session and already-subscribed peers keep
-    // receiving it.  Also surfaces the transceivers-with-null-track (orphans
-    // that would accumulate on a re-share — A1).
-    // NOTE (F3): the string below is a pre-fix DIAG snapshot — the F3 fix DOES
-    // renegotiate (see the [party-cell][stopshare] renegotiated/…failed log
-    // emitted by _renegotiateAfterRemoveTrack).  Treat the no_renegotiate flag
-    // as "no renegotiation issued up to this point", not as the final state.
-    log.warn(
-      '[party-cell][stopshare] END no_renegotiate=true (removeTrack WITHOUT createOffer/PUT renegotiate — SFU NOT notified) senders=%d transceivers=%d transceivers_with_null_track=%d published_after=%j',
-      _pc?.getSenders().length ?? -1,
-      _pc?.getTransceivers().length ?? -1,
-      _pc?.getTransceivers().filter((t) => t.sender && t.sender.track === null).length ?? -1,
-      _publishedTracks,
-    )
     log.info('[stopSharing] Screen share stopped')
   }
 
@@ -1753,6 +1646,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
     _remoteMidToTrackName.clear()
     _localTrackNamesByDisplay.clear()
     _screenTrackId = null
+    _orphanScreenTx = null
 
     // Close peer connection
     if (_pc) {

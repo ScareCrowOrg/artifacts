@@ -397,23 +397,6 @@ watch(isSharingScreen, (val) => {
   localIsSharingScreen.value = val
 })
 
-// DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
-// S1 self-view check (render side): when the publisher starts sharing, log the
-// grid keys that actually render.  remoteStreamList iterates ONLY remoteStreams
-// (S1 fator 3) and localStream is destructured but never rendered — so the
-// publisher's own screen/camera NEVER appears as a local tile here.  F7 uses
-// this to confirm the self-view absence is a RENDER gap, not a state gap.
-watch(isSharingScreen, (val) => {
-  if (val) {
-    logger.warn(
-      '[party-cell][sharestate] publisher share on — grid_tiles=%j localStream_tracks=%d localTilePresent=%s',
-      remoteStreamList.value.map((r) => r.key),
-      localStream.value?.getTracks().length ?? 0,
-      remoteStreamList.value.some((r) => r.stream === localStream.value),
-    )
-  }
-})
-
 /** F1: phase-specific connecting message (spinner + text). */
 const phaseStatusMessage = computed(() => {
   switch (connectionPhase.value) {
