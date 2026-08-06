@@ -139,12 +139,44 @@
 
       <!-- CONNECTED STATE -->
       <template v-if="localIsConnected">
-        <!-- Remote participants video grid -->
+        <!-- Media grid: the local self-view tile (S1) + remote participants. -->
         <div
-          v-if="remoteStreamList.length > 0"
+          v-if="selfViewStream || remoteStreamList.length > 0"
           class="video-grid grid gap-2"
           :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(180px, 1fr))` }"
         >
+          <!-- SELF-VIEW TILE (S1): the publisher's own media — camera by default,
+               the shared screen while sharing.  Local-only preview: never sent
+               via SFU (the screen transceiver is sendonly).  muted because the
+               local camera stream carries the mic — playing it back would echo. -->
+          <div
+            v-if="selfViewStream"
+            class="remote-video relative bg-black rounded overflow-hidden aspect-video self-tile"
+            :class="localIsSharingScreen ? 'screen-tile border-2 border-primary' : ''"
+          >
+            <video
+              :ref="(el) => attachSelfView(el as HTMLVideoElement | null)"
+              autoplay
+              playsinline
+              muted
+              class="w-full h-full object-cover"
+            />
+            <span
+              class="absolute top-1 left-1 text-xs text-white bg-black/50 px-1.5 py-0.5 rounded"
+            >
+              {{ $t('partyCell.you') }}
+            </span>
+            <span
+              v-if="localIsSharingScreen"
+              class="absolute bottom-1 left-1 inline-flex items-center gap-1 text-xs text-white bg-black/50 px-1.5 py-0.5 rounded"
+            >
+              <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+              </svg>
+              {{ $t('partyCell.screenShare') }}
+            </span>
+          </div>
+
           <div
             v-for="(remote, idx) in remoteStreamList"
             :key="remote.key"
@@ -321,6 +353,7 @@ const {
   cameraEnabled,
   isSharingScreen,
   localStream,
+  selfViewStream,
   remoteStreams,
   participants,
   connectionError,
@@ -362,6 +395,23 @@ watch(cameraEnabled, (val) => {
 
 watch(isSharingScreen, (val) => {
   localIsSharingScreen.value = val
+})
+
+// DIAG-F2-party-cell-sharing-ux-iter2 ... REMOVE after F3
+// S1 self-view check (render side): when the publisher starts sharing, log the
+// grid keys that actually render.  remoteStreamList iterates ONLY remoteStreams
+// (S1 fator 3) and localStream is destructured but never rendered — so the
+// publisher's own screen/camera NEVER appears as a local tile here.  F7 uses
+// this to confirm the self-view absence is a RENDER gap, not a state gap.
+watch(isSharingScreen, (val) => {
+  if (val) {
+    logger.warn(
+      '[party-cell][sharestate] publisher share on — grid_tiles=%j localStream_tracks=%d localTilePresent=%s',
+      remoteStreamList.value.map((r) => r.key),
+      localStream.value?.getTracks().length ?? 0,
+      remoteStreamList.value.some((r) => r.stream === localStream.value),
+    )
+  }
 })
 
 /** F1: phase-specific connecting message (spinner + text). */
@@ -446,6 +496,17 @@ function attachRemoteVideo(key: string, el: HTMLVideoElement | null): void {
   } else {
     // Vue calls the ref with null on tile unmount/removal — clean the stale entry.
     remoteVideoElements.delete(key)
+  }
+}
+
+/** Bind the local self-view <video> to selfViewStream (S1).  The self-view has
+ *  no remote key and is not fullscreen-able, so it gets its own binding instead
+ *  of the remoteVideoElements map.  Vue re-invokes the inline function ref on
+ *  re-render, so when selfViewStream swaps camera ↔ screen (share start/stop)
+ *  the srcObject is refreshed to the current stream. */
+function attachSelfView(el: HTMLVideoElement | null): void {
+  if (el && selfViewStream.value && el.srcObject !== selfViewStream.value) {
+    el.srcObject = selfViewStream.value
   }
 }
 

@@ -32,6 +32,7 @@
     "stopSharing": "Stop Sharing",
     "refresh": "Refresh",
     "maximize": "Maximize",
-    "youAreSharing": "You are sharing your screen"
+    "youAreSharing": "You are sharing your screen",
+    "you": "You"
   }
 }
