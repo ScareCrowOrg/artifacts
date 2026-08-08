@@ -747,33 +747,102 @@ function _teardownRemoteMedia(mids: string[]): void {
 }
 
 /**
+ * Answer an SFU-generated renegotiation offer via PUT /renegotiate.
+ *
+ * Used by the publisher after a ``tracks/close`` that returns
+ * ``requiresImmediateRenegotiation`` + a ``sessionDescription`` (offer), and by
+ * the subscriber after ``tracks/new`` (remote).  The Cloudflare ``renegotiate``
+ * proxy is ANSWER-only (406 when sent an offer) — the SFU always generates the
+ * offer and the client sends back an answer.
+ */
+async function _answerSfuRenegotiationOffer(respSd: RTCSessionDescriptionInit): Promise<void> {
+  if (!_pc || !_currentSessionId) return
+  await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
+  const localAnswer = await _pc.createAnswer()
+  await _pc.setLocalDescription(localAnswer)
+  await _apiFetchJson(
+    `/calls/sessions/${_currentSessionId}/renegotiate`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        sessionDescription: { type: localAnswer.type, sdp: localAnswer.sdp },
+      }),
+    },
+  )
+  log.warn(
+    '[stopSharing] tracks/close renegotiation answered session=%s answer_type=%s',
+    _currentSessionId, localAnswer.type,
+  )
+}
+
+/**
  * Remove a published track from the Cloudflare SFU session (backend
- * ``DELETE /calls/sessions/{sid}/tracks/{track_name}`` → Cloudflare
- * ``POST /sessions/{sid}/tracks/close``).  Called by stopSharing after
+ * ``DELETE /calls/sessions/{sid}/tracks/{mid}`` → Cloudflare
+ * ``PUT /sessions/{sid}/tracks/close``).  Called by stopSharing after
  * ``RTCRtpSender.removeTrack()`` — this is what actually tells the SFU the
  * track is gone.  Replaces the previous ``PUT /renegotiate``-with-offer path,
  * which the Cloudflare contract rejects (``406 sessionDescription.type=answer
  * is expected`` → 502 on every stop).
  *
- * Non-fatal: on failure the SFU reaper still signals ``event=ended`` to
- * already-subscribed peers (safety net) and the registry/presence already drop
- * the screen, so new subscribers stop seeing it.
+ * The ``mid`` argument is the publisher's sendonly screen-transceiver mid
+ * (``_orphanScreenTx.mid``), which survives ``removeTrack`` — NOT the native
+ * MediaStreamTrack id (``_screenTrackId``).  The Cloudflare ``CloseTrackObject``
+ * identifies tracks by transceiver ``mid``.
+ *
+ * When the SFU answers ``tracks/close`` with ``requiresImmediateRenegotiation``
+ * + a ``sessionDescription`` (offer), the publisher answers it via ``PUT
+ * /renegotiate`` so the m-section is really removed (mirror of the subscriber
+ * flow in _subscribeToRemoteTracks).  Non-fatal: on failure the SFU reaper
+ * still signals ``event=ended`` to already-subscribed peers (safety net) and
+ * the registry/presence already drop the screen, so new subscribers stop
+ * seeing it.
  */
-async function _removeTrackFromSfu(trackName: string): Promise<void> {
+async function _removeTrackFromSfu(mid: string): Promise<void> {
   if (!_currentSessionId) return
+  // DIAG (F2, P3): expose the value actually placed in the URL + the mid
+  // available on the orphaned sendonly screen transceiver (_orphanScreenTx set
+  // by stopSharing).  The tracks/close contract requires the transceiver MID
+  // (CloseTrackObject.mid), NOT the native MediaStreamTrack id (_screenTrackId)
+  // — F7 greps this line to confirm target === orphan_mid (both the same mid)
+  // after the F3 fix.
+  log.warn(
+    '[stopSharing] _removeTrackFromSfu DIAG target=%s session=%s orphan_mid=%s url=%s',
+    mid, _currentSessionId, _orphanScreenTx?.mid ?? 'none',
+    `/calls/sessions/${_currentSessionId}/tracks/${encodeURIComponent(mid)}`,
+  )
   try {
-    await _apiFetchJson(
-      `/calls/sessions/${_currentSessionId}/tracks/${encodeURIComponent(trackName)}`,
+    const result = await _apiFetchJson(
+      `/calls/sessions/${_currentSessionId}/tracks/${encodeURIComponent(mid)}`,
       { method: 'DELETE' },
     )
     log.info(
       '[stopSharing] track removed from SFU session=%s track=%s',
-      _currentSessionId, trackName,
+      _currentSessionId, mid,
     )
+    // DIAG (F2, P6): the tracks/close RESPONSE — lets F7 validate the `force`
+    // blind spot (whether the SFU asks for a renegotiation answer).  Requires
+    // the F3 backend change to propagate requiresImmediateRenegotiation/
+    // sessionDescription.
+    const respSd = result?.sessionDescription
+    const respSdp = respSd?.sdp ? String(respSd.sdp) : ''
+    log.warn(
+      '[stopSharing] _removeTrackFromSfu DIAG response session=%s target=%s requires_renog=%s resp_sd_type=%s resp_sdp_chars=%d',
+      _currentSessionId, mid,
+      String(result?.requiresImmediateRenegotiation),
+      respSd?.type,
+      respSdp.length,
+    )
+    // P6: if the SFU asks for a renegotiation after the close, answer the offer
+    // so the m-section is really removed.  This is the publisher mirror of the
+    // subscriber answer flow (_subscribeToRemoteTracks) — the SFU generates the
+    // offer, the client sends back an ANSWER via PUT /renegotiate.
+    if (result?.requiresImmediateRenegotiation === true && respSd?.type === 'offer' && respSdp.length > 0) {
+      await _answerSfuRenegotiationOffer(respSd)
+    }
   } catch (err) {
     log.warn(
       '[stopSharing] tracks/remove failed session=%s track=%s: %s',
-      _currentSessionId, trackName,
+      _currentSessionId, mid,
       err instanceof Error ? err.message : String(err),
     )
   }
@@ -1579,6 +1648,14 @@ export function usePartyCalls(): UsePartyCallsReturn {
           // share/stop cycle (avoids the SFU's 413 accumulation error).
           const orphanTx = _pc.getTransceivers().find((t) => t.sender === sender)
           if (orphanTx) _orphanScreenTx = orphanTx
+          // DIAG (F2): the screen transceiver's mid survives removeTrack — this
+          // is the value the tracks/close contract needs (CloseTrackObject.mid).
+          // F7 compares it to the target sent by _removeTrackFromSfu (both should
+          // equal the same mid after the F3 fix).
+          log.warn(
+            '[stopSharing] DIAG detached sender screen_track=%s orphan_mid=%s orphan_direction=%s',
+            sender.track?.id, orphanTx?.mid ?? 'none', orphanTx?.direction ?? 'n/a',
+          )
           _pc.removeTrack(sender)
           removedSender = true
         }
@@ -1586,9 +1663,16 @@ export function usePartyCalls(): UsePartyCallsReturn {
       // Tell the SFU the track is gone — replaces the renegotiate-with-offer
       // path, which the Cloudflare contract rejects (406 "answer is expected" →
       // 502 on every stop).  Non-fatal: on failure the SFU reaper still signals
-      // event=ended to already-subscribed peers.
-      if (removedSender && _screenTrackId) {
-        await _removeTrackFromSfu(_screenTrackId)
+      // event=ended to already-subscribed peers.  The tracks/close contract
+      // identifies the track by the transceiver mid (which survives removeTrack)
+      // — NOT the native _screenTrackId (which only locates the local sender
+      // above; the mid is the value the Cloudflare CloseTrackObject requires).
+      if (removedSender && _orphanScreenTx?.mid) {
+        await _removeTrackFromSfu(_orphanScreenTx.mid)
+      } else if (removedSender) {
+        log.warn(
+          '[stopSharing] cannot remove screen track from SFU — no orphan transceiver mid available',
+        )
       }
     }
     _screenTrackId = null
