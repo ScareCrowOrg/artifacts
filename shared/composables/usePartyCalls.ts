@@ -789,6 +789,13 @@ async function _answerSfuRenegotiationOffer(respSd: RTCSessionDescriptionInit): 
  * MediaStreamTrack id (``_screenTrackId``).  The Cloudflare ``CloseTrackObject``
  * identifies tracks by transceiver ``mid``.
  *
+ * The backend proxies this DELETE to Cloudflare ``PUT .../tracks/close`` and
+ * sends ``force: true`` by default (the real API REQUIRES the field — a body
+ * without it returns 400 ``decoding_error: Body JSON validation error: force``
+ * → 502).  ``force:true`` stops just the data flow without WebRTC renegotiation
+ * — simplest, keeps the m-section (compatible with the orphan transceiver
+ * reuse of AC4).  This DELETE sends no body; the backend fills ``force=true``.
+ *
  * When the SFU answers ``tracks/close`` with ``requiresImmediateRenegotiation``
  * + a ``sessionDescription`` (offer), the publisher answers it via ``PUT
  * /renegotiate`` so the m-section is really removed (mirror of the subscriber
