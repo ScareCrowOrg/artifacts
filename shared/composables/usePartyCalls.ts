@@ -13,7 +13,7 @@
  * ``hangUp`` expires the registration (ghost cleanup).
  */
 
-import { ref, computed, onUnmounted, type Ref } from 'vue'
+import { ref, computed, onUnmounted, watch, type Ref } from 'vue'
 import { usePartyStore, type Participant, type TrackType } from '#artifacts/shared/stores/partyStore'
 import { useDistributedState } from '#artifacts/shared/composables/useDistributedState'
 import { apiFetch } from '#artifacts/shared/services/apiService'
@@ -55,6 +55,8 @@ export interface UsePartyCallsReturn {
   isConnecting: Ref<boolean>
   /** Whether the local camera video is enabled (F2). */
   cameraEnabled: Ref<boolean>
+  /** Whether the local mic is published (Caso B — opt-in; muted ≠ absent). */
+  micEnabled: Ref<boolean>
   /** Whether the caller is currently sharing their screen (F2). */
   isSharingScreen: Ref<boolean>
   localStream: Ref<MediaStream | null>
@@ -68,9 +70,12 @@ export interface UsePartyCallsReturn {
   connectionError: Ref<string | null>
   startCall: (roomId: string) => Promise<void>
   shareStream: (stream: MediaStream) => Promise<void>
-  muteAudio: () => void
-  /** Toggle the local camera on/off independently of mic/screen (F2). */
-  toggleCamera: () => void
+  /** Mute/unmute the mic, or ENABLE it on the first click when no track is
+   *  captured yet (Caso B — media opt-in). */
+  muteAudio: () => Promise<void>
+  /** Toggle the local camera on/off, or ENABLE it on the first click when no
+   *  track is captured yet (Caso B — media opt-in).  Independent of mic/screen (F2). */
+  toggleCamera: () => Promise<void>
   /** Start (or stop, when already sharing) screen sharing (F2). */
   toggleScreenShare: () => Promise<void>
   /** Stop an active screen share (F2).  Async since S2 fix renegotiates with
@@ -155,6 +160,13 @@ let _orphanScreenTx: RTCRtpTransceiver | null = null
  *  registry + presence carry the REAL active track set when the camera is
  *  toggled off/on or the screen is stopped (F2). */
 const _localTrackNamesByDisplay = new Map<TrackType, string[]>()
+
+/** The recvonly transceivers created at join (audio/video) — kept so
+ *  _enableLocalTrack can attach a local track and switch the matching one to
+ *  'sendrecv' on the first opt-in click (Caso B: media opt-in, no capture on
+ *  join).  Reset on hangUp. */
+let _localAudioTx: RTCRtpTransceiver | null = null
+let _localVideoTx: RTCRtpTransceiver | null = null
 
 const HEARTBEAT_INTERVAL_MS = 20_000 // must be < the 60 s registry TTL
 
@@ -874,6 +886,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
   )
   /** Whether the local camera video is enabled (F2). */
   const cameraEnabled = ref(false)
+  /** Whether the local mic is published (Caso B — opt-in).  True once the mic
+   *  is acquired via _enableLocalTrack; a muted mic stays published (mute is a
+   *  separate presence signal), so this only flips on acquire and hangUp. */
+  const micEnabled = ref(false)
   /** Whether the caller is currently sharing their screen (F2). */
   const isSharingScreen = ref(false)
   const localStream = ref<MediaStream | null>(null)
@@ -908,6 +924,38 @@ export function usePartyCalls(): UsePartyCallsReturn {
     branch: 'participants',
     conflictStrategy: 'append',
   })
+
+  // ── Caso D (party-cell-usability-ux): event-driven media convergence ──────
+  // Presence is ALREADY broadcast via useDistributedState (WS snapshot →
+  // store.participants).  This watcher closes the media-discovery gap: when a
+  // participant's track set changes (e.g. A shares a screen or joins), B
+  // re-runs _refreshDiscovery immediately instead of waiting for the 20s
+  // heartbeat or the manual refresh button.  Debounced (600ms) so a burst of
+  // snapshots collapses into ONE discovery; _refreshDiscovery is idempotent
+  // (delta via _subscribedTrackNames), so redundant calls are no-ops.
+  //
+  // REVIEW #3069: the source is a STRING SIGNATURE of (sessionId + display
+  // tracks), NOT the whole participants array — the heartbeat PUT renews
+  // `lastHeartbeat`/`isMuted` on every participant every 20s, which mutates the
+  // array and would reset the debounce perpetually (delaying discovery).  The
+  // signature changes only on join/leave or a track add/remove, so the watcher
+  // fires only when media discovery is actually needed.
+  let _discoveryDebounce: number | null = null
+  watch(
+    () => participants.value
+      .map((p) => `${p.sessionId ?? ''}:${(p.tracks ?? []).join(',')}`)
+      .sort()
+      .join('|'),
+    () => {
+      if (!_currentRoomRef.value || !_pc) return
+      if (_discoveryDebounce !== null) return
+      _discoveryDebounce = window.setTimeout(() => {
+        _discoveryDebounce = null
+        const roomId = _currentRoomRef.value
+        if (roomId && _pc) void _refreshDiscovery(roomId, remoteStreams)
+      }, 600)
+    },
+  )
 
   // ── Internal helpers ─────────────────────────────────────────────────────
 
@@ -1077,37 +1125,122 @@ export function usePartyCalls(): UsePartyCallsReturn {
     log.debug('[PC] remote track received, key=%s', sessionKey)
   }
 
-  /** Request mic/camera permission and return the local stream. */
-  async function _requestUserMedia(): Promise<MediaStream> {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
-      })
-      log.debug('_requestUserMedia success tracks=%d', stream.getTracks().length)
-      return stream
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      log.error('_requestUserMedia blocked error="%s"', msg)
-      throw err
-    }
-  }
-
   /**
-   * Attach local tracks to the peer connection so they are sent to the SFU.
+   * Enable a local track (mic/camera) on demand — the media opt-in for Caso B.
    *
-   * Must run BEFORE createOffer() — createOffer() only emits m= sections for
-   * existing transceivers, so tracks added after would be missing from the SDP
-   * (Cloudflare rejects media-less offers with 400 → backend 502).  Non-throwing.
+   * Called by the toggles on their FIRST click (when no track is captured yet).
+   * The permission prompt appears only HERE, never on join.  The flow mirrors
+   * the proven shareStream mid-call pattern:
+   *   getUserMedia(kind) → merge into _localStream → replaceTrack on the
+   *   matching recvonly transceiver + direction='sendrecv' → renegotiate
+   *   (offer → tracks/new location:'local' with sessionDescription → answer)
+   *   → index the native track name → republish registry + presence with the
+   *   REAL track set.
+   *
+   * On permission denied the state is UNCHANGED — only a log + early return,
+   * so the toggle never flips to "on" (edge case of the ISSUE).
    */
-  function _attachLocalTracks(pc: RTCPeerConnection, stream: MediaStream): void {
+  async function _enableLocalTrack(kind: 'mic' | 'camera'): Promise<void> {
+    if (!_pc || !_currentSessionId) return
+
+    const mediaKind = kind === 'mic' ? 'audio' : 'video'
+    const tx = kind === 'mic' ? _localAudioTx : _localVideoTx
+    // Already publishing this kind → the toggle flips track.enabled instead.
+    const alreadySending = _localStream?.getTracks().some((t) => t.kind === mediaKind)
+    if (alreadySending || !tx?.sender) return
+
+    const roomId = _currentRoomRef.value
+    // One media at a time: audio-only or video-only acquisition, so a failure
+    // on one device does not block the other (edge case of the ISSUE).
+    const constraints: MediaStreamConstraints = kind === 'mic'
+      ? { audio: true, video: false }
+      : { audio: false, video: true }
+
+    let stream: MediaStream
     try {
-      for (const track of stream.getTracks()) {
-        pc.addTrack(track, stream)
+      stream = await navigator.mediaDevices.getUserMedia(constraints)
+    } catch (err) {
+      log.error(
+        '[enableLocalTrack] %s permission denied — state unchanged: %s',
+        kind, err instanceof Error ? err.message : String(err),
+      )
+      return
+    }
+
+    // Merge the acquired track into _localStream (create it lazily).
+    if (!_localStream) {
+      _localStream = new MediaStream()
+      localStream.value = _localStream
+    }
+    for (const track of stream.getTracks()) {
+      _localStream.addTrack(track)
+    }
+    if (kind === 'camera') {
+      cameraEnabled.value = true
+      // S1: the self-view shows the camera ONLY when not sharing the screen —
+      // while sharing it must keep showing the shared screen (a later camera
+      // opt-in must not replace the screen preview).
+      if (!isSharingScreen.value) {
+        selfViewStream.value = _localStream
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      log.warn('[startCall] _attachLocalTracks failed — continuing without media: %s', msg)
+    } else {
+      micEnabled.value = true
+    }
+
+    // Switch the recvonly transceiver to sendrecv and attach the track.
+    const track = stream.getTracks()[0]
+    await tx.sender.replaceTrack(track)
+    tx.direction = 'sendrecv'
+
+    // Renegotiate + register the track on the SFU (mirror of shareStream GAP 1:
+    // the publisher's offer is sent ALONG with the registration so the SFU can
+    // answer/renegotiate and resolve the new track for subscribers).
+    const offer = await _createAndSetOffer(_pc)
+    const trackObjs = [{
+      location: 'local' as const,
+      mid: tx.mid as string,
+      trackName: track.id,
+    }]
+    let regResult: any = null
+    if (trackObjs.length) {
+      regResult = await _registerLocalTracksOnSfu(
+        _pc,
+        _currentSessionId,
+        trackObjs,
+        { type: offer.type, sdp: offer.sdp || '' },
+      )
+    }
+
+    // Close the renegotiation (3 branches, mirror of shareStream).
+    const respSd = regResult?.sessionDescription
+    const respSdp = respSd?.sdp ? String(respSd.sdp) : ''
+    if (regResult?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
+      // SFU generated a fresh offer for the new track — answer it back.
+      await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
+      const localAnswer = await _pc.createAnswer()
+      await _pc.setLocalDescription(localAnswer)
+      await _apiFetchJson(
+        `/calls/sessions/${_currentSessionId}/renegotiate`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            sessionDescription: { type: localAnswer.type, sdp: localAnswer.sdp },
+          }),
+        },
+      )
+    } else if (respSd?.type === 'answer' && respSdp.length > 0) {
+      await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
+    }
+
+    // Index the native track name for _updatePublishedTracks (registry/presence
+    // honest: ['mic'] after enabling only the mic).
+    const names = _localTrackNamesByDisplay.get(kind) ?? []
+    if (!names.includes(track.id)) names.push(track.id)
+    _localTrackNamesByDisplay.set(kind, names)
+
+    // Republish registry + presence with the REAL track set.
+    if (roomId) {
+      await _updatePublishedTracks(roomId)
     }
   }
 
@@ -1132,9 +1265,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
    * Create or join a room call.
    *
    * 0. Provisions the Cloudflare Calls App (POST /api/calls/provision, async)
-   * 1. Requests mic/camera permission
-   * 2. Creates the RTCPeerConnection and attaches local tracks (addTrack
-   *    BEFORE createOffer so the offer carries m= audio/video sections)
+   * 1. Caso B: does NOT capture media on join (opt-in — no permission prompt).
+   * 2. Creates the RTCPeerConnection and adds recvonly audio/video transceivers
+   *    BEFORE createOffer so the offer carries m= audio/video sections without
+   *    capturing any media (the SFU rejects media-less offers with 400 → 502).
    * 3. Creates an SDP offer
    * 4. Sends it to the signaling proxy (POST /api/calls/session)
    * 5. Applies the Cloudflare SDP answer
@@ -1167,27 +1301,21 @@ export function usePartyCalls(): UsePartyCallsReturn {
       }
       isProvisioning.value = false
 
-      // 1. Request local media
-      connectionPhase.value = 'requesting-media'
-      log.info('[startCall] Requesting mic/camera...')
-      const stream = await _requestUserMedia()
-      _localStream = stream
-      localStream.value = stream
-      // S1 (F3): the self-view starts as the local camera — the publisher's own
-      // tile shows the camera until a screen share swaps it (shareStream).
-      selfViewStream.value = stream
-      cameraEnabled.value = stream.getVideoTracks().some((t) => t.enabled)
-      log.warn(
-        '[DIAG][usePartyCalls] STEP1 getUserMedia: streamId=%s tracks=%d (0 = sem mídia)',
-        stream.id, stream.getTracks().length,
-      )
+      // 1. Caso B (party-cell-usability-ux): NO media is captured on join —
+      //    getUserMedia is deferred until the user explicitly enables mic or
+      //    camera via a toggle (opt-in; no permission prompt on entry).
+      //    _localStream stays null and the self-view placeholder shows instead.
 
-      // 2. Create pc, then attach local tracks BEFORE building the offer —
+      // 2. Create pc + recvonly transceivers BEFORE building the offer.
       //    createOffer() only emits m= sections for transceivers that already
       //    exist (Cloudflare rejects media-less offers with 400 → backend 502).
+      //    The recvonly transceivers keep the m= audio/video sections present
+      //    WITHOUT capturing any media; _enableLocalTrack later switches the
+      //    matching one to sendrecv via replaceTrack + renegotiation.
       const pc = _createPeerConnection()
       _pc = pc
-      _attachLocalTracks(pc, stream)
+      _localAudioTx = pc.addTransceiver('audio', { direction: 'recvonly' })
+      _localVideoTx = pc.addTransceiver('video', { direction: 'recvonly' })
 
       // 3. Create SDP offer
       connectionPhase.value = 'signaling'
@@ -1206,30 +1334,16 @@ export function usePartyCalls(): UsePartyCallsReturn {
         offer.type, /^m=/m.test(offerSdp), offerSdp.length,
       )
 
-      // 4. Send offer to signaling proxy.  Each local track is named by its
-      //    NATIVE MediaStreamTrack id (sender.track.id) — the name the Cloudflare
-      //    SFU actually records (display labels 'mic'/'camera' resolve to
-      //    not_found_track_error — H1 proven in F7 ciclo 2).  NOTE (F3 ciclo 4):
-      //    the tracks array sent here in /sessions/new is IGNORED by the SFU
-      //    (NewSessionRequest has no tracks field) — the tracks are actually
-      //    registered in step 7b via /tracks/new with location:'local' after ICE
-      //    connects.  The array is kept for the room registry (trackNames) and
-      //    diagnostics; the display-friendly TrackType labels are derived and
-      //    kept separately (tracks) for the UI grid.
-      const trackPairs = pc.getTransceivers()
-        .filter((t) => t.sender && t.sender.track && t.mid)
-        .map((t) => ({
-          mid: t.mid as string,
-          nativeId: t.sender!.track!.id,
-          display: (t.sender!.track!.kind === 'audio' ? 'mic' : 'camera') as TrackType,
-        }))
-      const localTrackObjs = trackPairs.map((p) => ({
-        location: 'local' as const,
-        mid: p.mid,
-        trackName: p.nativeId,
-      }))
-      const localTracks: TrackType[] = trackPairs.map((p) => p.display)
-      const localTrackNames: string[] = trackPairs.map((p) => p.nativeId)
+      // 4. Send offer to signaling proxy.  Caso B: there are NO local tracks at
+      //    join — localTracks/trackNames stay empty (the offer carries only the
+      //    recvonly m-sections) and grow only after _enableLocalTrack publishes
+      //    a track (indexed via _localTrackNamesByDisplay → _updatePublishedTracks).
+      //    NOTE (F3 ciclo 4): the tracks array sent here in /sessions/new is
+      //    IGNORED by the SFU anyway (NewSessionRequest has no tracks field);
+      //    local tracks are registered later via /tracks/new location:'local'.
+      const localTracks: TrackType[] = []
+      const localTrackNames: string[] = []
+      const localTrackObjs: Array<{ location: 'local'; mid: string; trackName: string }> = []
       log.warn(
         '[DIAG][startCall] publishing to Cloudflare native trackNames=%j (display tracks=%j)',
         localTrackNames, localTracks,
@@ -1261,32 +1375,20 @@ export function usePartyCalls(): UsePartyCallsReturn {
       _currentRoomRef.value = roomId
       store.currentRoom = roomId
 
-      // Track the published local track metadata so shareStream can extend it
-      // with the screen track (registry + presence carry the REAL track set).
-      _publishedTracks = [...localTracks]
-      _publishedTrackNames = [...localTrackNames]
-
-      // Index the NATIVE track names by display type (mic/camera) — the source
-      // of truth for _updatePublishedTracks when the camera is toggled (F2).
+      // Caso B: no published tracks at join — the set stays empty and grows
+      // only when _enableLocalTrack/shareStream add a track.
+      _publishedTracks = []
+      _publishedTrackNames = []
       _localTrackNamesByDisplay.clear()
-      localTracks.forEach((display, i) => {
-        const names = _localTrackNamesByDisplay.get(display) ?? []
-        if (localTrackNames[i]) names.push(localTrackNames[i])
-        _localTrackNamesByDisplay.set(display, names)
-      })
 
       // 7. Register session in the room + discover & subscribe to others
       connectionPhase.value = 'registering'
       await _registerAndDiscoverSessions(roomId, remoteStreams, localTracks, localTrackNames)
 
-      // 7b. ROOT CAUSE FIX (F3 ciclo 4): register the publisher's OWN local
-      // tracks on the SFU via /tracks/new with location:'local', AFTER ICE
-      // connects.  The SFU IGNORES the tracks array in /sessions/new
-      // (NewSessionRequest has no tracks field) and rejects /tracks/new with
-      // 425 until the PC is connected — without this step the publisher
-      // session has zero tracks on the SFU and every remote subscription fails
-      // with not_found_track_error (friendly AND native IDs, F7 ciclo 2/3).
-      await _registerLocalTracksOnSfu(pc, mySessionId, localTrackObjs)
+      // 7b. Caso B: SKIP _registerLocalTracksOnSfu on join — there are no local
+      // tracks to publish (localTrackObjs is empty).  Tracks are registered on
+      // the SFU later, inside _enableLocalTrack, on the first opt-in click
+      // (same location:'local' + sessionDescription flow as shareStream).
 
       // 8. Broadcast join_room presence (script publishes authoritative snapshot)
       await _executePartyAction({
@@ -1303,9 +1405,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
       // 10. Periodic heartbeat + discovery refresh (ghost cleanup)
       _startHeartbeat(roomId, mySessionId, remoteStreams)
 
-      // Only NOW is the call fully established (registry + SFU tracks +
-      // presence + heartbeat all in place) — flip the "live" indicator and the
-      // connecting phase (F1 — no more premature isConnected → no screen blink).
+      // Only NOW is the call fully established (registry + presence + heartbeat
+      // all in place; local SFU tracks are added on opt-in) — flip the "live"
+      // indicator and the connecting phase (F1 — no more premature isConnected
+      // → no screen blink).
       isConnected.value = true
       connectionPhase.value = 'connected'
       log.info('[startCall] Call established for room:', roomId)
@@ -1533,10 +1636,15 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
   }
 
-  /** Mute or unmute the local microphone and reflect the state to the room. */
-  function muteAudio(): void {
-    if (!_localStream) return
-    const audioTracks = _localStream.getAudioTracks()
+  /** Mute/unmute the mic, or ENABLE it on the first click (Caso B opt-in —
+   *  no mic track captured yet → acquire + publish). */
+  async function muteAudio(): Promise<void> {
+    const hasAudio = (_localStream?.getAudioTracks().length ?? 0) > 0
+    if (!hasAudio) {
+      await _enableLocalTrack('mic')
+      return
+    }
+    const audioTracks = _localStream!.getAudioTracks()
     for (const track of audioTracks) {
       track.enabled = !track.enabled
     }
@@ -1544,7 +1652,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
     const roomId = _currentRoomRef.value
     if (roomId) {
-      void _executePartyAction({ action: 'mute_toggle', roomId, isMuted: muted })
+      await _executePartyAction({ action: 'mute_toggle', roomId, isMuted: muted })
     }
   }
 
@@ -1554,9 +1662,11 @@ export function usePartyCalls(): UsePartyCallsReturn {
    *
    * Toggles are INDEPENDENT decisions (F2): the camera is dropped from the
    * published set when disabled, re-added when enabled; the screen is dropped
-   * when sharing stops.  The mic always stays (muting is a separate presence
-   * signal).  This keeps the registry/presence honest so subscribers only see
-   * the tracks that are actually active.
+   * when sharing stops.  Caso B (party-cell-usability-ux): the mic is NO
+   * LONGER assumed to always be present — it only appears in
+   * _localTrackNamesByDisplay after the user opts in via _enableLocalTrack
+   * (muting stays a separate presence signal).  This keeps the registry/presence
+   * honest so subscribers only see the tracks that are actually active.
    *
    * Failures here are non-fatal: the registry upsert / presence publish are
    * best-effort (a network blip would otherwise surface as an UNHANDLED promise
@@ -1594,10 +1704,16 @@ export function usePartyCalls(): UsePartyCallsReturn {
     }
   }
 
-  /** Toggle the local camera on/off independently of mic/screen (F2). */
-  function toggleCamera(): void {
-    if (!_localStream) return
-    const videoTracks = _localStream.getVideoTracks()
+  /** Toggle the local camera on/off, or ENABLE it on the first click (Caso B
+   *  opt-in — no camera track captured yet → acquire + publish).  Independent
+   *  of mic/screen (F2). */
+  async function toggleCamera(): Promise<void> {
+    const hasVideo = (_localStream?.getVideoTracks().length ?? 0) > 0
+    if (!hasVideo) {
+      await _enableLocalTrack('camera')
+      return
+    }
+    const videoTracks = _localStream!.getVideoTracks()
     const nowEnabled = !videoTracks.some((t) => t.enabled)
     for (const track of videoTracks) track.enabled = nowEnabled
     cameraEnabled.value = nowEnabled
@@ -1738,6 +1854,13 @@ export function usePartyCalls(): UsePartyCallsReturn {
     _localTrackNamesByDisplay.clear()
     _screenTrackId = null
     _orphanScreenTx = null
+    _localAudioTx = null
+    _localVideoTx = null
+    // Cancel a pending Caso D discovery so it cannot fire after the hang-up.
+    if (_discoveryDebounce !== null) {
+      window.clearTimeout(_discoveryDebounce)
+      _discoveryDebounce = null
+    }
 
     // Close peer connection
     if (_pc) {
@@ -1764,6 +1887,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
     isConnected.value = false
     connectionPhase.value = 'idle'
     cameraEnabled.value = false
+    micEnabled.value = false
     isSharingScreen.value = false
     localStream.value = null
     selfViewStream.value = null
@@ -1783,6 +1907,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
   // ── Cleanup on component unmount ─────────────────────────────────────────
 
   onUnmounted(() => {
+    if (_discoveryDebounce !== null) {
+      window.clearTimeout(_discoveryDebounce)
+      _discoveryDebounce = null
+    }
     if (_pc || _localStream) {
       log.info('[cleanup] Component unmounted — hanging up')
       hangUp()
@@ -1795,6 +1923,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
     connectionPhase,
     isConnecting,
     cameraEnabled,
+    micEnabled,
     isSharingScreen,
     localStream,
     selfViewStream,

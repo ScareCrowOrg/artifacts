@@ -139,9 +139,8 @@
 
       <!-- CONNECTED STATE -->
       <template v-if="localIsConnected">
-        <!-- Media grid: the local self-view tile (S1) + remote participants. -->
+        <!-- Media grid: the local self-view tile/placeholder (S1) + remote participants. -->
         <div
-          v-if="selfViewStream || remoteStreamList.length > 0"
           class="video-grid grid gap-2"
           :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(180px, 1fr))` }"
         >
@@ -175,6 +174,22 @@
               </svg>
               {{ $t('partyCell.screenShare') }}
             </span>
+          </div>
+          <!-- SELF-VIEW PLACEHOLDER (Caso B): camera off and not sharing →
+               show a muted placeholder tile instead of an empty gap, so the
+               user sees they are in the call and can enable the camera. -->
+          <div
+            v-else
+            class="remote-video relative bg-black rounded overflow-hidden aspect-video self-tile flex items-center justify-center gap-2"
+          >
+            <svg class="h-8 w-8 opacity-40" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 9.75L3.75 3.75M20.25 20.25l-6-6M14.25 5.25a4.5 4.5 0 015.625 5.625M9.75 14.25a4.5 4.5 0 015.625 5.625" />
+            </svg>
+            <span class="absolute top-1 left-1 text-xs text-white bg-black/50 px-1.5 py-0.5 rounded">
+              {{ $t('partyCell.you') }}
+            </span>
+            <span class="text-xs text-white/70">{{ $t('partyCell.cameraOffPlaceholder') }}</span>
           </div>
 
           <div
@@ -215,9 +230,10 @@
           </div>
         </div>
 
-        <!-- No remote participants placeholder -->
+        <!-- No remote participants placeholder (shown below the grid when the
+             room is empty — the self-view tile/placeholder still renders above). -->
         <div
-          v-else
+          v-if="remoteStreamList.length === 0"
           class="flex items-center justify-center py-6 text-text-secondary dark:text-text-secondary-dark text-sm border border-dashed border-border dark:border-border-dark rounded"
         >
           {{ $t('partyCell.waitingForOthers') }}
@@ -234,22 +250,22 @@
 
         <!-- Controls -->
         <div class="controls-section flex flex-wrap items-center justify-center gap-2 pt-3 border-t border-border dark:border-border-dark">
-          <!-- Mute toggle -->
+          <!-- Mute toggle (Caso B: first click ENABLES the mic — opt-in) -->
           <button
             class="control-btn px-3 py-2 text-sm rounded-lg transition flex items-center gap-1.5"
-            :class="localIsMuted
+            :class="localMicEnabled && localIsMuted
               ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
               : 'bg-surface-light dark:bg-surface-dark-light text-text-secondary dark:text-text-secondary-dark hover:bg-surface-hover dark:hover:bg-surface-dark-hover'"
-            :title="$t('partyCell.muteAudio')"
+            :title="localMicEnabled ? (localIsMuted ? $t('partyCell.unmute') : $t('partyCell.mute')) : $t('partyCell.enableMic')"
             @click="handleMuteToggle"
           >
-            <svg v-if="!localIsMuted" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg v-if="localMicEnabled && !localIsMuted" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
             </svg>
             <svg v-else class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
             </svg>
-            <span class="text-xs">{{ localIsMuted ? $t('partyCell.unmute') : $t('partyCell.mute') }}</span>
+            <span class="text-xs">{{ localMicEnabled ? (localIsMuted ? $t('partyCell.unmute') : $t('partyCell.mute')) : $t('partyCell.enableMic') }}</span>
           </button>
 
           <!-- Camera toggle (F2 — independent of mic/screen) -->
@@ -258,7 +274,7 @@
             :class="localCameraEnabled
               ? 'bg-surface-light dark:bg-surface-dark-light text-text-secondary dark:text-text-secondary-dark hover:bg-surface-hover dark:hover:bg-surface-dark-hover'
               : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'"
-            :title="$t('partyCell.camera')"
+            :title="localCameraEnabled ? $t('partyCell.camera') : $t('partyCell.enableCamera')"
             @click="handleCameraToggle"
           >
             <svg v-if="localCameraEnabled" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -269,7 +285,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 9.75L3.75 3.75M20.25 20.25l-6-6M14.25 5.25a4.5 4.5 0 015.625 5.625M9.75 14.25a4.5 4.5 0 015.625 5.625" />
             </svg>
-            <span class="text-xs">{{ localCameraEnabled ? $t('partyCell.camera') : $t('partyCell.cameraOff') }}</span>
+            <span class="text-xs">{{ localCameraEnabled ? $t('partyCell.camera') : $t('partyCell.enableCamera') }}</span>
           </button>
 
           <!-- Screen share toggle (F2 — start / stop) -->
@@ -329,6 +345,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePartyCalls, type AvailableRoom } from '#artifacts/shared/composables/usePartyCalls'
+import { partyRoomLabel } from './roomLabel'
+import { resolveMicMutedAfterToggle } from './micState'
 import type { Participant } from '#artifacts/shared/stores/partyStore'
 import { createLogger } from '@/utils/logger'
 
@@ -351,6 +369,7 @@ const {
   connectionPhase,
   isConnecting,
   cameraEnabled,
+  micEnabled,
   isSharingScreen,
   localStream,
   selfViewStream,
@@ -372,6 +391,9 @@ const localIsConnected = ref(false)
 const localConnectionError = ref<string | null>(null)
 const localIsMuted = ref(false)
 const localCameraEnabled = ref(false)
+/** Caso B: whether the local mic is published (drives the "Ativar Microfone"
+ *  ↔ "Mutar"/"Ativar Som" label).  Buffer Local Pattern (Regra 4.5.1). */
+const localMicEnabled = ref(false)
 const localIsSharingScreen = ref(false)
 /** F3: session name the user typed (fallback 'default-room'). */
 const sessionName = ref(props.roomId ?? '')
@@ -391,6 +413,10 @@ watch(connectionError, (val) => {
 
 watch(cameraEnabled, (val) => {
   localCameraEnabled.value = val
+})
+
+watch(micEnabled, (val) => {
+  localMicEnabled.value = val
 })
 
 watch(isSharingScreen, (val) => {
@@ -509,13 +535,17 @@ async function handleStartCall(): Promise<void> {
   await startCall(roomId)
 }
 
-function handleMuteToggle(): void {
-  muteAudio()
-  localIsMuted.value = !localIsMuted.value
+async function handleMuteToggle(): Promise<void> {
+  const wasEnabled = localMicEnabled.value
+  await muteAudio()
+  // Reflect the resulting mute state: the first click ENABLES the mic (unmuted);
+  // later clicks flip the local mute toggle (Caso B opt-in).  Logic lives in
+  // micState.ts so the transition is unit-testable (review #3069 nice-to-have).
+  localIsMuted.value = resolveMicMutedAfterToggle(wasEnabled, localIsMuted.value)
 }
 
-function handleCameraToggle(): void {
-  toggleCamera()
+async function handleCameraToggle(): Promise<void> {
+  await toggleCamera()
 }
 
 function handleScreenShare(): void {
@@ -533,11 +563,12 @@ async function handleJoinRoom(roomId: string): Promise<void> {
   await joinRoom(roomId)
 }
 
-/** Label for a discovered room: prefer the first participant's display name,
- *  fall back to the roomId (edge case: active room without a displayName). */
+/** Label for a discovered room: ALWAYS the room name (roomId) — never the
+ *  displayName of the first participant (Caso A — the displayName resolves to
+ *  the authenticated user's name, not the room name).  Logic lives in the pure
+ *  module roomLabel.ts so it is unit-testable (RULESET Rule 3.1). */
 function roomNameLabel(room: AvailableRoom): string {
-  const first = room.sessions?.[0]
-  return first?.displayName || room.roomId
+  return partyRoomLabel(room)
 }
 
 async function loadAvailableRooms(): Promise<void> {
@@ -622,6 +653,16 @@ onUnmounted(() => {
    grid (GAP 4 — a distinct highlighted tile, not the camera "winning"). */
 .screen-tile {
   grid-column: span 2;
+}
+
+/* Caso C (party-cell-usability-ux): a shared screen must show the WHOLE frame —
+   object-cover would crop the overflow whenever the container aspect ratio
+   differs from the screen's (fullscreen/maximized especially).  contain
+   letterboxes instead; camera tiles keep object-cover (fill is desired there).
+   The selector also covers the maximized/fullscreen container, whose <video> is
+   still a child of the .screen-tile element. */
+.screen-tile video {
+  object-fit: contain;
 }
 
 /* F6 fallback (no Fullscreen API): expanding a tile across the whole grid. */

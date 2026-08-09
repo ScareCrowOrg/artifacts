@@ -173,7 +173,7 @@ async def _handle_join_room(
         sessionId    (str)  — Cloudflare session id of the caller
         participantId (str, optional) — defaults to user_id
         displayName  (str, optional) — defaults to user name / user_id
-        tracks       (list, optional) — defaults to ["mic", "camera"]
+        tracks       (list, optional) — defaults to [] (Caso B: join silent)
         trackNames   (list, optional) — the publisher's NATIVE MediaStreamTrack
           ids (sender.track.id) as registered on the Cloudflare SFU
         isMuted      (bool, optional) — defaults to False
@@ -199,7 +199,7 @@ async def _handle_join_room(
     if not display_name:
         display_name = participant_id
 
-    tracks: List[str] = cell_data.get("tracks") or ["mic", "camera"]
+    tracks: List[str] = cell_data.get("tracks") or []
     track_names: Optional[List[str]] = cell_data.get("trackNames")
     joined_at: int = int(cell_data.get("joinedAt") or int(time.time() * 1000))
 

@@ -95,12 +95,33 @@ class TestJoinRoom:
         assert len(state) == 1
         assert state[0]["participantId"] == "user-alice"
         assert state[0]["sessionId"] == "session-a"
-        assert state[0]["tracks"] == ["mic", "camera"]
+        # Caso B (party-cell-usability-ux): no media captured on join by default
+        assert state[0]["tracks"] == []
 
         # Snapshot must be persisted to the presence key
         key, raw_saved = mock_client.set.call_args.args
         assert key == "calls:presence:planet-lobby"
         assert len(json.loads(raw_saved)) == 1
+
+    async def test_join_room_uses_explicit_tracks_when_provided(self):
+        """join_room with an explicit tracks set stores it (opt-in media — Caso B)."""
+        mock_client = _make_async_redis(get_return=[])
+
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock_client)):
+            result = await main.execute_cell(
+                {
+                    "action": "join_room",
+                    "roomId": "room-1",
+                    "sessionId": "sess-1",
+                    "tracks": ["mic"],
+                },
+                user_id="user-alice",
+            )
+
+        assert result["success"] is True
+        _, raw_payload = _last_publish(mock_client)
+        state = json.loads(raw_payload)["payload"]["state"]
+        assert state[0]["tracks"] == ["mic"]
 
     async def test_join_room_uses_display_name_from_user(self):
         """displayName defaults to the authenticated user's name."""
