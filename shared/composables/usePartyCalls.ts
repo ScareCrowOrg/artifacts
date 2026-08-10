@@ -144,6 +144,27 @@ const _remoteTrackTypes = new Map<string, Map<string, string>>()
  *  track.id OPAQUE (no {sessionId}/{trackName} slash format), so the ontrack can
  *  classify via event.transceiver.mid against this map (F3 CICLO 4). */
 const _remoteMidToTrackName = new Map<string, { sessionId: string; trackName: string }>()
+/** F3 FIX (ITER_1 H3): transceiver-scoped copy of the same classification —
+ *  ``RTCRtpTransceiver`` → {sessionId, trackName}.  The ontrack fires from a
+ *  STABLE RTCRtpTransceiver, but ``_remoteMidToTrackName`` is a mid-keyed GLOBAL
+ *  Map that concurrent operations (prune removeOwnerMappings /
+ *  removeScreenMapping, _teardownRemoteMedia, interleaved _refreshDiscovery
+ *  across heartbeats) mutate BETWEEN the population and the ontrack firing.  In
+ *  F7 ciclo 2 the video ontrack read the global Map with mid "1" already gone
+ *  (despite a 2-entry mid_map populated) and fell back to the opaque stream.id —
+ *  a separate generic tile instead of the publisher's tile.  Storing the
+ *  classification ON the transceiver (WeakMap — no strong refs, GC-safe) makes
+ *  the ontrack read the mapping that belongs to ITS transceiver, immune to the
+ *  race. */
+const _transceiverMeta = new WeakMap<RTCRtpTransceiver, { sessionId: string; trackName: string }>()
+/** Drop the transceiver-scoped meta for a mid, keeping the WeakMap in lockstep
+ *  with ``_remoteMidToTrackName`` deletions (prune / teardown).  Safe to call
+ *  for a mid whose transceiver is gone or whose meta was never set. */
+function _dropTransceiverMeta(mid: string | null | undefined): void {
+  if (!mid || !_pc) return
+  const tx = _pc.getTransceivers().find((t) => t.mid === mid)
+  if (tx) _transceiverMeta.delete(tx)
+}
 /** One-shot guard for the F2 (ITER_1) stats dump — H2: a video inbound-rtp with
  *  bytesReceived==0 ~5s after subscribe means the SFU resolved the subscription
  *  (mid 1, no errorCode) but is NOT forwarding video RTP to this subscriber
@@ -349,9 +370,23 @@ async function _subscribeToRemoteTracks(
     const midEntries = (Array.isArray(result?.tracks) ? result.tracks : [])
       .filter((t: SfuTrackResult) => t && typeof t === 'object' && t.mid && t.trackName && !t.errorCode)
       .map((t: SfuTrackResult) => ({ mid: t.mid, trackName: t.trackName }))
+    let transceiverMetaSets = 0
     for (const entry of midEntries) {
       if (entry.mid && entry.trackName) {
         _remoteMidToTrackName.set(entry.mid, { sessionId: remote.sessionId, trackName: entry.trackName })
+        // F3 FIX (ITER_1 H3): ALSO anchor the classification on the transceiver
+        // that will carry this mid — the ontrack reads _transceiverMeta as a
+        // race-immune fallback when the global mid Map was pruned/overwritten
+        // between this population and the ontrack firing (video mid "1" fell
+        // back to the opaque stream.id in F7 ciclo 2 despite a 2-entry map).
+        // The recvonly transceivers created at join already carry their mids
+        // (DIAG transceivers_before_offer=2 recvonly_mids=[0, 1] on this flow),
+        // so the lookup matches; a miss is non-fatal (global Map stays primary).
+        const tx = _pc.getTransceivers().find((t) => t.mid === entry.mid)
+        if (tx) {
+          _transceiverMeta.set(tx, { sessionId: remote.sessionId, trackName: entry.trackName })
+          transceiverMetaSets += 1
+        }
       }
     }
     if (midEntries.length > 0) {
@@ -362,9 +397,10 @@ async function _subscribeToRemoteTracks(
       // echoed by the SFU never enters the map, so its ontrack falls back to the
       // opaque stream.id (separate generic tile) instead of the owner tile.
       log.warn(
-        '[DIAG][subscribe] mid_map populated session=%s entries=%j raw_tracks=%j',
+        '[DIAG][subscribe] mid_map populated session=%s entries=%j raw_tracks=%j transceiver_meta_sets=%d',
         remote.sessionId, midEntries,
         Array.isArray(result?.tracks) ? result.tracks : [],
+        transceiverMetaSets,
       )
     }
 
@@ -521,7 +557,12 @@ async function _refreshDiscovery(
       // F3 FIX (CICLO 4): drop the pruned session's mid → trackName mappings so
       // a dead session's mids can't misclassify a re-subscribed track later.
       for (const [mid, info] of _remoteMidToTrackName) {
-        if (info.sessionId === ownerId) _remoteMidToTrackName.delete(mid)
+        if (info.sessionId === ownerId) {
+          _remoteMidToTrackName.delete(mid)
+          // F3 FIX (ITER_1 H3): keep the transceiver-scoped meta in lockstep so
+          // a pruned mid can never misclassify a later re-subscribed track.
+          _dropTransceiverMeta(mid)
+        }
       }
     }
 
@@ -541,6 +582,8 @@ async function _refreshDiscovery(
       for (const [mid, info] of _remoteMidToTrackName) {
         if (info.sessionId === ownerId && screenNativeIds.includes(info.trackName)) {
           _remoteMidToTrackName.delete(mid)
+          // F3 FIX (ITER_1 H3): keep the transceiver-scoped meta in lockstep.
+          _dropTransceiverMeta(mid)
         }
       }
     }
@@ -815,6 +858,11 @@ function _teardownRemoteMedia(mids: string[]): void {
       }
     }
     _remoteMidToTrackName.delete(mid)
+    // F3 FIX (ITER_1 H3): drop the transceiver-scoped meta for the same mid.
+    // Uses the in-scope `tx` because removeTransceiver (above) already removed
+    // it from _pc.getTransceivers() — a fresh _dropTransceiverMeta lookup would
+    // miss it and leak the entry until GC.
+    if (tx) _transceiverMeta.delete(tx)
   }
 }
 
@@ -1120,6 +1168,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
     const trackIdMatch = /^([^/]+)\/(.+)$/.exec(event.track.id || '')
     let sessionKey: string
+    // F3 FIX (ITER_1 H3): where the owner/trackName classification came from —
+    // reported on the classified DIAG so F7 can prove the WeakMap anchor
+    // resolved the video (meta_source=transceiver) vs the global mid Map.
+    let metaSource: 'map' | 'transceiver' | 'none' = 'none'
     if (trackIdMatch) {
       // Backward compat: track.id in the historical {sessionId}/{trackName}
       // slash format.  Cloudflare does NOT deliver this on the receiving side
@@ -1142,7 +1194,23 @@ export function usePartyCalls(): UsePartyCallsReturn {
       // OWNER sessionId so mic+camera merge into ONE tile per participant
       // (no more stream.id duplicates) and ghost pruning works on the key.
       const transceiverMid = event.transceiver?.mid ?? null
-      const info = transceiverMid ? _remoteMidToTrackName.get(transceiverMid) : undefined
+      // F3 FIX (ITER_1 H3): the global mid → {sessionId, trackName} Map is the
+      // PRIMARY classification, but concurrent operations (prune
+      // removeOwnerMappings / removeScreenMapping, _teardownRemoteMedia,
+      // interleaved _refreshDiscovery across heartbeats) can mutate it BETWEEN
+      // the population and this ontrack firing — in F7 ciclo 2 the video ontrack
+      // read the map with mid "1" already gone (despite a 2-entry mid_map
+      // populated) and fell back to the opaque stream.id (separate generic
+      // tile).  When the global Map misses, fall back to the transceiver-scoped
+      // meta: the ontrack's OWN RTCRtpTransceiver is stable, so its WeakMap
+      // entry is race-immune.
+      let info = transceiverMid ? _remoteMidToTrackName.get(transceiverMid) : undefined
+      if (info) {
+        metaSource = 'map'
+      } else if (event.transceiver) {
+        info = _transceiverMeta.get(event.transceiver) ?? undefined
+        if (info) metaSource = 'transceiver'
+      }
       if (info) {
         const ownerId = info.sessionId
         const display = _remoteTrackTypes.get(ownerId)?.get(info.trackName)
@@ -1168,9 +1236,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
     // (a separate, generic "remoteUser" tile).  kind=video + via_stream_id_fallback=yes
     // ⇒ the video never merged into the publisher's tile — consistent with H3.
     log.warn(
-      '[DIAG][remote-track-classified] kind=%s sessionKey=%s mid=%s via_stream_id_fallback=%s',
+      '[DIAG][remote-track-classified] kind=%s sessionKey=%s mid=%s via_stream_id_fallback=%s meta_source=%s',
       event.track.kind, sessionKey, event.transceiver?.mid ?? 'none',
       (stream && sessionKey === stream.id) ? 'yes' : 'no',
+      metaSource,
     )
 
     // F3 FIX (ITER_1 H1): NEVER drop a remote track that arrived with an EMPTY
@@ -1191,7 +1260,11 @@ export function usePartyCalls(): UsePartyCallsReturn {
     // stopped or the SFU dropped it).  Camera/mic mute stays reversible
     // (onmute/onunmute no-op, no cleanup).
     const _txMid = event.transceiver?.mid ?? null
-    const _infoAtReceive = _txMid ? _remoteMidToTrackName.get(_txMid) : undefined
+    // F3 FIX (ITER_1 H3): mirror the classification fallback — bind the end-of-
+    // track handlers to the SAME owner/trackName the ontrack resolved (WeakMap
+    // anchor when the global mid Map was already pruned before the handlers fire).
+    const _infoAtReceive = (_txMid ? _remoteMidToTrackName.get(_txMid) : undefined)
+      ?? (event.transceiver ? _transceiverMeta.get(event.transceiver) : undefined)
     const _trackNameAtReceive = _infoAtReceive?.trackName ?? null
     const _displayAtReceive = _infoAtReceive
       ? _remoteTrackTypes.get(_infoAtReceive.sessionId)?.get(_infoAtReceive.trackName)
@@ -1955,6 +2028,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
     _subscribedTrackNames.clear()
     _remoteTrackTypes.clear()
     _remoteMidToTrackName.clear()
+    // F3 FIX (ITER_1 H3): drop every transceiver-scoped meta before the pc is
+    // closed (the WeakMap would GC them anyway, but clear explicitly so a
+    // recycled module-level WeakMap can never tag a future session's mid).
+    if (_pc) for (const tx of _pc.getTransceivers()) _transceiverMeta.delete(tx)
     _localTrackNamesByDisplay.clear()
     _screenTrackId = null
     _orphanScreenTx = null
