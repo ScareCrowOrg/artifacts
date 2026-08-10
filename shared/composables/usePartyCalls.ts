@@ -144,6 +144,11 @@ const _remoteTrackTypes = new Map<string, Map<string, string>>()
  *  track.id OPAQUE (no {sessionId}/{trackName} slash format), so the ontrack can
  *  classify via event.transceiver.mid against this map (F3 CICLO 4). */
 const _remoteMidToTrackName = new Map<string, { sessionId: string; trackName: string }>()
+/** One-shot guard for the F2 (ITER_1) stats dump — H2: a video inbound-rtp with
+ *  bytesReceived==0 ~5s after subscribe means the SFU resolved the subscription
+ *  (mid 1, no errorCode) but is NOT forwarding video RTP to this subscriber
+ *  (vs H1: the track is dropped client-side at the ontrack !stream guard). */
+let _statsDumpScheduled = false
 /** The native MediaStreamTrack id of the currently shared screen (if any) —
  *  used by stopSharing to detach the correct sender from the peer connection. */
 let _screenTrackId: string | null = null
@@ -229,6 +234,36 @@ async function _executePartyAction(input: Record<string, unknown>): Promise<void
 // ─────────────────────────────────────────────────────────────────────────────
 // Multi-user SFU helpers (subscribe / discover / heartbeat)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** One-shot stats dump (F2 ITER_1 H2): ~5s after the first successful remote
+ *  subscribe, read the inbound-rtp stats of the audio and video receivers.  A
+ *  VIDEO receiver with bytesReceived==0 means the SFU accepted the subscription
+ *  but is NOT delivering video RTP to this subscriber — discriminating H2 from
+ *  H1 (the video track dropped client-side at the ontrack !stream guard) and
+ *  from H3 (the video merged onto an opaque stream.id tile). */
+async function _logSfuStatsDump(): Promise<void> {
+  if (!_pc) return
+  try {
+    const report = await _pc.getStats()
+    const inbound: Record<string, { kind: string; bytesReceived: number; packetsReceived: number }> = {}
+    report.forEach((raw) => {
+      const s = raw as unknown as {
+        type: string
+        kind?: string
+        bytesReceived?: number
+        packetsReceived?: number
+      }
+      if (s.type !== 'inbound-rtp') return
+      const kind = s.kind || 'unknown'
+      if (!inbound[kind]) inbound[kind] = { kind, bytesReceived: 0, packetsReceived: 0 }
+      inbound[kind].bytesReceived += s.bytesReceived || 0
+      inbound[kind].packetsReceived += s.packetsReceived || 0
+    })
+    log.warn('[DIAG][stats] inbound_rtp=%j', inbound)
+  } catch (err) {
+    log.warn('[DIAG][stats] getStats failed: %s', err instanceof Error ? err.message : String(err))
+  }
+}
 
 /**
  * Subscribe to a remote session's media tracks via Cloudflare tracks/new.
@@ -320,9 +355,16 @@ async function _subscribeToRemoteTracks(
       }
     }
     if (midEntries.length > 0) {
+      // DIAG (F2 ITER_1 H3): also log the FULL raw tracks[] response, not just
+      // the resolved map entries.  Confirms whether BOTH audio (mid 0) and video
+      // (mid 1) entered _remoteMidToTrackName and surfaces any errorCode on
+      // tracks that were filtered out — a video track whose trackName is NOT
+      // echoed by the SFU never enters the map, so its ontrack falls back to the
+      // opaque stream.id (separate generic tile) instead of the owner tile.
       log.warn(
-        '[DIAG][subscribe] mid_map populated session=%s entries=%j',
+        '[DIAG][subscribe] mid_map populated session=%s entries=%j raw_tracks=%j',
         remote.sessionId, midEntries,
+        Array.isArray(result?.tracks) ? result.tracks : [],
       )
     }
 
@@ -338,6 +380,15 @@ async function _subscribeToRemoteTracks(
         remote.sessionId, respSd.type, respSdp.length,
         (respSdp.match(/^m=\w+/gm) || []).length,
         _pc.getTransceivers().map((t) => t.mid),
+      )
+      // DIAG (F2 ITER_1 H1/H3): SDP preview + a=msid lines.  A video m-line
+      // WITHOUT a=msid (or an msid with no stream label) makes the video ontrack
+      // arrive with an EMPTY event.streams → dropped at the !stream guard, which
+      // would explain "audio flows, video never reaches the tile".
+      log.warn(
+        '[DIAG][subscribe] %s: offer sdp_preview="%s" a_msid_lines=%j',
+        remote.sessionId, respSdp.slice(0, 200),
+        respSdp.match(/^a=msid:[^\r\n]*$/gm) || [],
       )
 
       const localAnswer = await _pc.createAnswer()
@@ -388,6 +439,15 @@ async function _subscribeToRemoteTracks(
         '[subscribe] subscribed to remote session=%s answer_type=%s trackNames=%j',
         remote.sessionId, respSd?.type, trackNames,
       )
+      // DIAG (F2 ITER_1 H2): one-shot stats dump ~5s after the FIRST successful
+      // remote subscribe.  If the VIDEO receiver's inbound-rtp bytesReceived is
+      // still 0 at that point, the SFU resolved the subscription (mid 1, no
+      // errorCode) but is NOT forwarding video RTP — distinguishing H2 from H1
+      // (the track never reached the tile) and H3 (it reached an opaque tile).
+      if (!_statsDumpScheduled) {
+        _statsDumpScheduled = true
+        window.setTimeout(() => { void _logSfuStatsDump() }, 5000)
+      }
     }
   } catch (err) {
     log.warn('[subscribe] failed for remote session=%s current_session=%s: %s',
@@ -1022,8 +1082,28 @@ export function usePartyCalls(): UsePartyCallsReturn {
    * instead of letting the camera win or showing a black tile (GAP 4).
    */
   function _handleRemoteTrack(event: RTCTrackEvent): void {
-    const [stream] = event.streams
-    if (!stream) return
+    // F3 FIX (ITER_1 H1): keep the stream reference but ALLOW it to be empty.
+    // Cloudflare can deliver a video ontrack with an EMPTY event.streams (the
+    // video m-line in the SFU offer carries no a=msid).  The old `if (!stream)
+    // return` guard discarded that track SILENTLY — the exact "audio flows, video
+    // never reaches the tile" symptom.  stream === null now means "create a fresh
+    // MediaStream and attach the track" (handled after classification).
+    const stream = Array.isArray(event.streams) && event.streams.length > 0
+      ? event.streams[0]
+      : null
+    // DIAG (F2 ITER_1 H1 — DECISIVE): emitted BEFORE stream-creation so the
+    // evidence of the F3 fix is captured.  Records kind/streams_len/mid on EVERY
+    // ontrack — including the previously-dropped empty-stream video case — so F7
+    // can confirm kind=video streams_len=0 still classifies + merges (H1 fixed).
+    // receiver_readyState/muted double as the lightweight H2 probe (no RTP →
+    // readyState stays 0/muted); the [DIAG][stats] dump adds bytesReceived.
+    log.warn(
+      '[DIAG][ontrack-before-drop] kind=%s track_id=%s mid=%s streams_len=%d stream_present=%s stream_id=%s receiver_readyState=%s receiver_muted=%s',
+      event.track.kind, event.track.id, event.transceiver?.mid ?? 'none',
+      Array.isArray(event.streams) ? event.streams.length : -1,
+      stream ? 'yes' : 'no', stream?.id ?? 'none',
+      event.receiver?.track.readyState ?? 'n/a', event.receiver?.track.muted ?? 'n/a',
+    )
 
     // DIAG (F2 CICLO 4): capture the raw ontrack fields BEFORE classification.
     // Cloudflare delivers an OPAQUE track.id (no '/'), so the regex branch below
@@ -1033,9 +1113,9 @@ export function usePartyCalls(): UsePartyCallsReturn {
     // the mid echoed in the tracks/new response (see the [DIAG][subscribe]
     // mid_map log) — the bridge that makes an opaque track.id classifiable.
     log.warn(
-      '[DIAG][remote-track] ontrack session=%s track_id=%s track_id_has_slash=%s transceiver_mid=%s stream_id=%s',
-      _currentSessionId, event.track.id, /\//.test(event.track.id || ''),
-      event.transceiver?.mid ?? 'none', stream.id,
+      '[DIAG][remote-track] ontrack kind=%s session=%s track_id=%s track_id_has_slash=%s transceiver_mid=%s stream_id=%s',
+      event.track.kind, _currentSessionId, event.track.id, /\//.test(event.track.id || ''),
+      event.transceiver?.mid ?? 'none', stream ? stream.id : 'none',
     )
 
     const trackIdMatch = /^([^/]+)\/(.+)$/.exec(event.track.id || '')
@@ -1051,7 +1131,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
       if (display === 'screen') {
         log.warn(
           '[DIAG][remote-track] screen track received sessionId=%s trackName=%s sessionKey=%s stream_id=%s',
-          ownerId, trackName, sessionKey, stream.id,
+          ownerId, trackName, sessionKey, stream ? stream.id : 'none',
         )
       }
     } else {
@@ -1070,15 +1150,39 @@ export function usePartyCalls(): UsePartyCallsReturn {
         if (display === 'screen') {
           log.warn(
             '[DIAG][remote-track] screen track received sessionId=%s trackName=%s sessionKey=%s stream_id=%s',
-            ownerId, info.trackName, sessionKey, stream.id,
+            ownerId, info.trackName, sessionKey, stream ? stream.id : 'none',
           )
         }
       } else {
         // Last resort: mid absent (very old browser without transceiver) or the
-        // track was never mapped — keep the historical stream.id behavior.
-        sessionKey = stream.id
+        // track was never mapped — keep the historical stream.id behavior; when
+        // event.streams was EMPTY there is no stream.id, so key by the opaque
+        // track id (defensive — mid-map should have resolved a real track).
+        sessionKey = stream ? stream.id : (event.track.id || 'remote')
       }
     }
+
+    // DIAG (F2 ITER_1 H3): after classification, before the tile merge — shows
+    // whether this track (audio/video) was resolved via _remoteMidToTrackName to
+    // the OWNER tile (sessionKey = ownerId) or fell back to the OPAQUE stream.id
+    // (a separate, generic "remoteUser" tile).  kind=video + via_stream_id_fallback=yes
+    // ⇒ the video never merged into the publisher's tile — consistent with H3.
+    log.warn(
+      '[DIAG][remote-track-classified] kind=%s sessionKey=%s mid=%s via_stream_id_fallback=%s',
+      event.track.kind, sessionKey, event.transceiver?.mid ?? 'none',
+      (stream && sessionKey === stream.id) ? 'yes' : 'no',
+    )
+
+    // F3 FIX (ITER_1 H1): NEVER drop a remote track that arrived with an EMPTY
+    // event.streams.  Create a fresh MediaStream and attach the track so the merge
+    // below can add it to the publisher's tile — this fixes the video track that
+    // previously died at the `if (!stream) return` guard while its audio sibling
+    // (stream-bearing) had already created the tile.  When the audio track came
+    // first, `existing` holds that tile's stream and the video track is merged
+    // into it via the existing.addTrack path (the already-attached <video> picks
+    // the new track up automatically via MediaStreamTrack events).
+    const effectiveStream = stream ?? new MediaStream()
+    if (!stream) effectiveStream.addTrack(event.track)
 
     // S2 subscriber side: bind end/change-of-track handlers that tear down the
     // local media path when the publisher stops the share.  A real end is:
@@ -1103,23 +1207,23 @@ export function usePartyCalls(): UsePartyCallsReturn {
       }
       trk.onunmute = () => { /* camera/mic mute stays reversible — no cleanup */ }
     }
-    for (const trk of stream.getTracks()) _bindTrackEndHandlers(trk)
-    stream.onremovetrack = () => {
+    for (const trk of effectiveStream.getTracks()) _bindTrackEndHandlers(trk)
+    effectiveStream.onremovetrack = () => {
       _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive)
     }
 
     const next = new Map(remoteStreams.value)
     const existing = next.get(sessionKey)
-    if (existing && existing !== stream) {
+    if (existing && existing !== effectiveStream) {
       // Merge additional tracks (e.g. audio + video) into one per participant
-      for (const track of stream.getTracks()) {
+      for (const track of effectiveStream.getTracks()) {
         if (!existing.getTracks().includes(track)) {
           existing.addTrack(track)
         }
       }
       next.set(sessionKey, existing)
     } else {
-      next.set(sessionKey, stream)
+      next.set(sessionKey, effectiveStream)
     }
     remoteStreams.value = next
     log.debug('[PC] remote track received, key=%s', sessionKey)
