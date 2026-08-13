@@ -144,8 +144,10 @@ class TestJoinRoom:
         state = json.loads(raw_payload)["payload"]["state"]
         assert state[0]["displayName"] == "Alice"
 
-    async def test_join_room_upserts_existing_participant(self):
-        """Re-joining must replace the existing entry (dedup by participantId)."""
+    async def test_join_room_two_sessions_of_same_user_coexist(self):
+        """REV-1 (F4 gate): a 2nd session of the SAME user must be APPENDED
+        (matched by sessionId), not replace the 1st by participantId — so the
+        first session's tile still resolves to a presence entry."""
         existing = [{
             "participantId": "user-alice",
             "sessionId": "old-session",
@@ -167,12 +169,50 @@ class TestJoinRoom:
             )
 
         assert result["success"] is True
+        # Both sessions present → the 2nd did NOT replace the 1st
+        assert result["output"]["count"] == 2
+        _, raw_payload = _last_publish(mock_client)
+        state = json.loads(raw_payload)["payload"]["state"]
+        assert len(state) == 2
+        session_ids = [p["sessionId"] for p in state]
+        assert "old-session" in session_ids and "new-session" in session_ids
+        # 1st entry keeps its original joinedAt; 2nd is the fresh join
+        old = next(p for p in state if p["sessionId"] == "old-session")
+        assert old["joinedAt"] == 100
+        assert old["displayName"] == "Alice"
+
+    async def test_join_room_same_session_replaces(self):
+        """Reconnect/refresh of the SAME sessionId replaces its own entry
+        (joinedAt preserved) — no duplicate presence for one session."""
+        existing = [{
+            "participantId": "user-alice",
+            "sessionId": "sess-1",
+            "displayName": "Alice",
+            "tracks": ["mic", "camera"],
+            "isMuted": False,
+            "joinedAt": 100,
+        }]
+        mock_client = _make_async_redis(get_return=existing)
+
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock_client)):
+            result = await main.execute_cell(
+                {
+                    "action": "join_room",
+                    "roomId": "room-1",
+                    "sessionId": "sess-1",
+                    "tracks": ["mic"],
+                },
+                user_id="user-alice",
+            )
+
+        assert result["success"] is True
         assert result["output"]["count"] == 1
         _, raw_payload = _last_publish(mock_client)
         state = json.loads(raw_payload)["payload"]["state"]
         assert len(state) == 1
-        assert state[0]["sessionId"] == "new-session"
-        # joinedAt preserved on upsert
+        assert state[0]["sessionId"] == "sess-1"
+        assert state[0]["tracks"] == ["mic"]
+        # joinedAt preserved on the same-session upsert
         assert state[0]["joinedAt"] == 100
 
     async def test_join_room_rejects_empty_room_id(self):
@@ -240,6 +280,28 @@ class TestLeaveRoom:
         # No publish when nothing changed
         assert mock_client.publish.call_count == 0
 
+    async def test_leave_room_removes_only_given_session(self):
+        """REV-1 (F4 gate): leave_room with sessionId removes ONLY that session
+        — a parallel tab of the same user (other sessionId) must survive."""
+        existing = [
+            {"participantId": "user-alice", "sessionId": "s-a"},
+            {"participantId": "user-alice", "sessionId": "s-b"},
+        ]
+        mock_client = _make_async_redis(get_return=existing)
+
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock_client)):
+            result = await main.execute_cell(
+                {"action": "leave_room", "roomId": "room-1", "sessionId": "s-a"},
+                user_id="user-alice",
+            )
+
+        assert result["success"] is True
+        assert result["output"]["count"] == 1
+        _, raw_payload = _last_publish(mock_client)
+        state = json.loads(raw_payload)["payload"]["state"]
+        # The parallel session s-b of the SAME user survives
+        assert [p["sessionId"] for p in state] == ["s-b"]
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # mute_toggle
@@ -277,6 +339,28 @@ class TestMuteToggle:
 
         assert result["output"]["isMuted"] is False
 
+    async def test_mute_toggle_targets_session_id(self):
+        """REV-1 (F4 gate): with 2 sessions of the same user, mute_toggle with
+        sessionId flips ONLY that session — not the first participantId match."""
+        existing = [
+            {"participantId": "user-alice", "sessionId": "s-a", "isMuted": False},
+            {"participantId": "user-alice", "sessionId": "s-b", "isMuted": False},
+        ]
+        mock_client = _make_async_redis(get_return=existing)
+
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock_client)):
+            result = await main.execute_cell(
+                {"action": "mute_toggle", "roomId": "room-1", "sessionId": "s-b"},
+                user_id="user-alice",
+            )
+
+        assert result["success"] is True
+        _, raw_payload = _last_publish(mock_client)
+        state = json.loads(raw_payload)["payload"]["state"]
+        muted_by_session = {p["sessionId"]: p["isMuted"] for p in state}
+        assert muted_by_session["s-a"] is False   # untouched
+        assert muted_by_session["s-b"] is True    # flipped only this session
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # tracks_update
@@ -304,6 +388,33 @@ class TestTracksUpdate:
         _, raw_payload = _last_publish(mock_client)
         state = json.loads(raw_payload)["payload"]["state"]
         assert state[0]["tracks"] == ["mic", "camera", "screen"]
+
+    async def test_tracks_update_targets_session_id(self):
+        """REV-1 (F4 gate): tracks_update with sessionId updates ONLY that
+        session's tracks when the same user has 2 parallel sessions."""
+        existing = [
+            {"participantId": "user-alice", "sessionId": "s-a", "tracks": ["mic"]},
+            {"participantId": "user-alice", "sessionId": "s-b", "tracks": ["mic"]},
+        ]
+        mock_client = _make_async_redis(get_return=existing)
+
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock_client)):
+            result = await main.execute_cell(
+                {
+                    "action": "tracks_update",
+                    "roomId": "room-1",
+                    "sessionId": "s-b",
+                    "tracks": ["mic", "camera", "screen"],
+                },
+                user_id="user-alice",
+            )
+
+        assert result["success"] is True
+        _, raw_payload = _last_publish(mock_client)
+        state = json.loads(raw_payload)["payload"]["state"]
+        tracks_by_session = {p["sessionId"]: p["tracks"] for p in state}
+        assert tracks_by_session["s-a"] == ["mic"]                          # untouched
+        assert tracks_by_session["s-b"] == ["mic", "camera", "screen"]      # updated only this session
 
 
 # ─────────────────────────────────────────────────────────────────────────────

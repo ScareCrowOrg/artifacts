@@ -464,11 +464,29 @@ const remoteStreamList = computed<RemoteGridEntry[]>(() => {
   return Array.from(remoteStreams.value.entries()).map(([key, stream]) => {
     const isScreen = key.endsWith('/screen')
     const ownerId = isScreen ? key.slice(0, -'/screen'.length) : key
+    const participant = parts.find((p) => p.sessionId === ownerId)
+    // DIAG (ITER_1 party-cell-mock-remote-user): the exact point where a tile
+    // becomes the generic "Usuário Remoto" (View.vue:482) — the owner lookup
+    // FAILED.  Fires only for orphan tiles (no participant match).  Discriminates
+    // H1 (ownerId is a REAL registry session — cross-reference the
+    // [DIAG][discovery] enumeration: it appears there ⇒ parallel/ghost session)
+    // from H2 (ownerId is an OPAQUE stream.id — absent from the enumeration;
+    // non-screen key with no '/' track segment).  Known participant sessionIds
+    // are logged so the mismatch is visible directly.  Placed in the computed
+    // (state-driven, not per-frame) to avoid template-render noise.
+    if (!participant) {
+      logger.warn(
+        '[DIAG][remoteLabel][LOOKUP-FAIL] tile key=%s ownerId=%s isScreen=%s opaque_key=%s known_sessionIds=%j',
+        key, ownerId, isScreen ? 'yes' : 'no',
+        isScreen ? 'no' : (parts.some((p) => p.sessionId === ownerId) ? 'no' : 'yes'),
+        parts.map((p) => p.sessionId),
+      )
+    }
     return {
       key,
       stream,
       isScreen,
-      participant: parts.find((p) => p.sessionId === ownerId),
+      participant,
     }
   })
 })

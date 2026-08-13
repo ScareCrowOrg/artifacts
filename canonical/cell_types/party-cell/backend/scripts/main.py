@@ -168,6 +168,17 @@ async def _handle_join_room(
     """
     Upsert the calling participant into the room presence snapshot.
 
+    Match key: ``sessionId`` (NOT ``participantId``).  REV-1 (F4 gate,
+    party-cell-mock-remote-user): a single user may hold SEVERAL parallel
+    sessions in the same room (two tabs/windows).  Upserting by
+    ``participantId = user_id`` made the LAST join REPLACE the FIRST — so the
+    first session's tile had no presence entry and rendered as the generic
+    "Usuário Remoto".  Matching by ``sessionId`` makes each session its OWN
+    presence entry: the two sessions COEXIST, and a subscriber's lookup
+    ``parts.find(p => p.sessionId === ownerId)`` resolves BOTH to the correct
+    ``displayName``.  ``participantId`` is still stored on the entry (kept for
+    compatibility / other actions).
+
     Expected keys in *cell_data*:
         roomId       (str)  — room identifier
         sessionId    (str)  — Cloudflare session id of the caller
@@ -216,8 +227,12 @@ async def _handle_join_room(
 
     participants = await _load_participants(room_id)
     replaced = False
+    # REV-1 (F4 gate): upsert/match by sessionId — NOT participantId.  A reconnect
+    # / refresh of the SAME session replaces its own entry (joinedAt preserved);
+    # a SECOND session of the same user (parallel tab) is APPENDED so the two
+    # coexist in presence (each resolves to its own tile/displayName).
     for idx, existing in enumerate(participants):
-        if existing.get("participantId") == participant_id:
+        if existing.get("sessionId") == session_id:
             # Preserve joinedAt so a reconnect does not reset the join time
             participant["joinedAt"] = existing.get("joinedAt", joined_at)
             participants[idx] = participant
@@ -247,11 +262,17 @@ async def _handle_leave_room(
     user_id: Optional[str],
 ) -> Dict[str, Any]:
     """
-    Remove the calling participant from the room presence snapshot.
+    Remove the calling session from the room presence snapshot.
+
+    Match key: ``sessionId`` when present (REV-1, F4 gate — a parallel tab of
+    the same user must SURVIVE this leave, so only this session's entry is
+    removed).  Falls back to ``participantId`` for legacy clients that only
+    send the participant (note: that removes ALL of the user's sessions).
 
     Expected keys in *cell_data*:
         roomId       (str)
-        participantId (str, optional) — defaults to user_id
+        sessionId    (str, optional) — REV-1: the exact session to remove
+        participantId (str, optional) — defaults to user_id (legacy fallback)
     """
     room_id: str = cell_data.get("roomId", "").strip()
     if not room_id:
@@ -259,18 +280,23 @@ async def _handle_leave_room(
     if not _room_id_is_safe(room_id):
         return {"success": False, "output": {}, "error": "roomId contains invalid characters"}
 
+    session_id: str = (cell_data.get("sessionId") or "").strip()
     participant_id: str = cell_data.get("participantId") or (user_id or "unknown")
 
     participants = await _load_participants(room_id)
-    remaining = [p for p in participants if p.get("participantId") != participant_id]
+    if session_id:
+        remaining = [p for p in participants if p.get("sessionId") != session_id]
+    else:
+        # Legacy compat: no sessionId in payload → remove by participantId.
+        remaining = [p for p in participants if p.get("participantId") != participant_id]
 
     if len(remaining) != len(participants):
         await _save_participants(room_id, remaining)
         await _publish_snapshot(room_id, remaining, participant_id, int(time.time() * 1000))
 
     logger.info(
-        "[party-cell] leave_room: room=%s participant=%s remaining=%d",
-        room_id, participant_id, len(remaining),
+        "[party-cell] leave_room: room=%s session=%s participant=%s remaining=%d",
+        room_id, session_id or "(none)", participant_id, len(remaining),
     )
     return {
         "success": True,
@@ -286,11 +312,17 @@ async def _handle_mute_toggle(
     user_id: Optional[str],
 ) -> Dict[str, Any]:
     """
-    Flip the calling participant's ``isMuted`` flag and publish the snapshot.
+    Flip the calling session's ``isMuted`` flag and publish the snapshot.
+
+    Match key: ``sessionId`` when present (REV-1, F4 gate — with multi-session
+    presence a participantId match would flip the WRONG session when the same
+    user has 2 parallel sessions).  Falls back to ``participantId`` for legacy
+    clients.
 
     Expected keys in *cell_data*:
         roomId       (str)
-        participantId (str, optional) — defaults to user_id
+        sessionId    (str, optional) — REV-1: target the exact session
+        participantId (str, optional) — defaults to user_id (legacy fallback)
         isMuted      (bool, optional) — when provided, set to this value
     """
     room_id: str = cell_data.get("roomId", "").strip()
@@ -299,12 +331,17 @@ async def _handle_mute_toggle(
     if not _room_id_is_safe(room_id):
         return {"success": False, "output": {}, "error": "roomId contains invalid characters"}
 
+    session_id: str = (cell_data.get("sessionId") or "").strip()
     participant_id: str = cell_data.get("participantId") or (user_id or "unknown")
 
     participants = await _load_participants(room_id)
     new_muted: Optional[bool] = None
     for p in participants:
-        if p.get("participantId") == participant_id:
+        if session_id:
+            match = p.get("sessionId") == session_id
+        else:
+            match = p.get("participantId") == participant_id
+        if match:
             if "isMuted" in cell_data:
                 new_muted = bool(cell_data["isMuted"])
             else:
@@ -335,11 +372,17 @@ async def _handle_tracks_update(
     user_id: Optional[str],
 ) -> Dict[str, Any]:
     """
-    Update the calling participant's published tracks (e.g. after screen share).
+    Update the calling session's published tracks (e.g. after screen share).
+
+    Match key: ``sessionId`` when present (REV-1, F4 gate — same rationale as
+    mute_toggle: with multi-session presence, a participantId match would
+    update the WRONG session of the same user).  Falls back to
+    ``participantId`` for legacy clients.
 
     Expected keys in *cell_data*:
         roomId       (str)
-        participantId (str, optional) — defaults to user_id
+        sessionId    (str, optional) — REV-1: target the exact session
+        participantId (str, optional) — defaults to user_id (legacy fallback)
         tracks       (list) — new list of TrackType values
         trackNames   (list, optional) — the publisher's NATIVE MediaStreamTrack
           ids (sender.track.id) as registered on the Cloudflare SFU
@@ -350,6 +393,7 @@ async def _handle_tracks_update(
     if not _room_id_is_safe(room_id):
         return {"success": False, "output": {}, "error": "roomId contains invalid characters"}
 
+    session_id: str = (cell_data.get("sessionId") or "").strip()
     participant_id: str = cell_data.get("participantId") or (user_id or "unknown")
     tracks: List[str] = cell_data.get("tracks") or []
     track_names: Optional[List[str]] = cell_data.get("trackNames")
@@ -357,7 +401,11 @@ async def _handle_tracks_update(
     participants = await _load_participants(room_id)
     updated = False
     for p in participants:
-        if p.get("participantId") == participant_id:
+        if session_id:
+            match = p.get("sessionId") == session_id
+        else:
+            match = p.get("participantId") == participant_id
+        if match:
             p["tracks"] = tracks
             if track_names:
                 p["trackNames"] = track_names

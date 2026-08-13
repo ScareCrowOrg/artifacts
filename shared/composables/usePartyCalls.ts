@@ -496,6 +496,7 @@ async function _subscribeToRemoteTracks(
 async function _refreshDiscovery(
   roomId: string,
   remoteStreams: Ref<Map<string, MediaStream>>,
+  knownParticipants?: ReadonlyArray<{ sessionId?: string }>,
 ): Promise<void> {
   if (!_currentSessionId) return
   try {
@@ -503,7 +504,47 @@ async function _refreshDiscovery(
     const sessions = (resp.sessions || []) as RemoteSession[]
     const activeIds = new Set(sessions.map((s) => s.sessionId))
 
+    // DIAG (ITER_1 party-cell-mock-remote-user): enumerate EVERY session the
+    // registry returned, tagging own-vs-remote and the current user id (from the
+    // caller's OWN registry entry).  Cross-reference with the View.vue
+    // [DIAG][remoteLabel][LOOKUP-FAIL] log: an orphan tile whose ownerId IS in
+    // this list ⇒ H1 (parallel/ghost session); NOT in this list ⇒ H2 (opaque
+    // stream.id key that never matches any session).
+    const _currentUserId = sessions.find((x) => x.sessionId === _currentSessionId)?.userId
     for (const s of sessions) {
+      const isOwn = s.sessionId === _currentSessionId
+      log.warn(
+        '[DIAG][discovery] session=%s userId=%s displayName=%s own=%s tracks=%j trackNames=%j',
+        s.sessionId, s.userId ?? '(none)', s.displayName ?? '(none)',
+        isOwn ? 'yes' : 'no', s.tracks ?? [], s.trackNames ?? [],
+      )
+      // REV-2 (F4 gate, party-cell-mock-remote-user): a REMOTE session owned by
+      // the SAME user (parallel tab / ghost ≤60s in the registry) IS subscribed
+      // again.  With the backend presence now upserting by sessionId (REV-1,
+      // main.py), each session has its OWN presence entry — so this same-user
+      // tile resolves to its participant and renders with the CORRECT
+      // displayName instead of "Usuário Remoto" (View.vue:482).  The original
+      // F3 FIX (skip same-user) is REVERTED here per the F4 review; the H2
+      // opaque-orphan prune (FIX-2) remains as the "never show orphans" guard.
+      // Other users' sessions are still subscribed (multiuser flow intact).
+      const isSameUser = !isOwn && !!s.userId && !!_currentUserId && s.userId === _currentUserId
+      if (isSameUser) {
+        log.warn(
+          '[DIAG][discovery][H1-SAME-USER] remote session=%s userId=%s == current_user_id=%s — parallel tab / ghost session of the same user (SUBSCRIBED: REV-1 presence-by-sessionId makes its tile resolve to the correct displayName)',
+          s.sessionId, s.userId, _currentUserId,
+        )
+      }
+      if (!isOwn && knownParticipants && !knownParticipants.some((p) => p.sessionId === s.sessionId)) {
+        // GHOST suspect: remote session NOT present in the presence list.  Its
+        // tile (if media resolves) has no matching participant → "Usuário Remoto".
+        // Either a registry ghost (≤60s TTL, calls_rooms.py:63) or a transient
+        // presence race (snapshot not yet converged).
+        log.warn(
+          '[DIAG][discovery][GHOST-SUSPECT] remote session=%s userId=%s NOT in participants=%j — ghost/registry-stale session or presence race',
+          s.sessionId, s.userId ?? '(none)',
+          (knownParticipants || []).map((p) => p.sessionId),
+        )
+      }
       // GAP 4: keep the nativeId → display mapping (positional tracks↔trackNames)
       // so _handleRemoteTrack can tell a screen track from the camera.
       if (s.trackNames && s.trackNames.length) {
@@ -522,7 +563,13 @@ async function _refreshDiscovery(
         })
         _remoteTrackTypes.set(s.sessionId, typeMap)
       }
-      if (s.sessionId !== _currentSessionId) {
+      // REV-2 (F4 gate): restore subscribing same-user sessions (isSameUser is
+      // computed above only for the informative H1-SAME-USER log).  With the
+      // backend presence upserting by sessionId (REV-1), a parallel session of
+      // the SAME user resolves to its own participant entry → its tile renders
+      // with the correct displayName instead of "Usuário Remoto".  Only the own
+      // session is excluded via !isOwn (unchanged original guard).
+      if (!isOwn) {
         await _subscribeToRemoteTracks(s, remoteStreams)
       }
     }
@@ -596,7 +643,30 @@ async function _refreshDiscovery(
       const sessionLeft = ownersToPrune.has(ownerId)
       const screenRemoved = key.endsWith('/screen') && activeIds.has(ownerId)
         && !(activeTracksByOwner.get(ownerId) ?? []).includes('screen')
-      if (sessionLeft || screenRemoved) {
+      // F3 FIX (ITER_1 party-cell-mock-remote-user, H2): an OPAQUE-ORPHAN tile —
+      // a non-screen key that is neither an active registry session NOR a
+      // successfully-subscribed session.  These keys come from the
+      // _handleRemoteTrack last-resort fallback `sessionKey = stream.id ||
+      // track.id || 'remote'` (:1267): a received track whose mid resolved to
+      // NO owner.  Such a key never matches a participant (permanent
+      // "Usuário Remoto", View.vue:482) and the existing prune (ownersToPrune /
+      // screenRemoved) never removes it, because it is absent from BOTH
+      // _subscribedSessions AND activeIds.  Screen tiles (own or not) and real
+      // owner tiles are left untouched — only truly-orphaned opaque keys are
+      // cleaned.  This is the "never pruned" half of the ghost-tile symptom.
+      const opaqueOrphan = !key.endsWith('/screen')
+        && !activeIds.has(ownerId) && !_subscribedSessions.has(ownerId)
+      if (sessionLeft || screenRemoved || opaqueOrphan) {
+        // DIAG (ITER_1 party-cell-mock-remote-user, H2): the opaque-key tile is
+        // being removed — surfaces the orphan so F7 can confirm the prune fired
+        // for a tile that the discovery subscribe-guard never created (the
+        // session this key belongs to is NOT in activeIds/subscribedSessions).
+        if (opaqueOrphan) {
+          log.warn(
+            '[DIAG][discovery][H2-PRUNED-OPAQUE] key=%s ownerId=%s — tile with opaque/non-resolvable key removed (no participant, never pruned before)',
+            key, ownerId,
+          )
+        }
         // S2 (F3): capture the receiver mids for the removed screen BEFORE the
         // mappings are dropped (removeScreenMapping deletes them), so the
         // recvonly transceivers can be stopped locally — the prune removes the
@@ -646,6 +716,7 @@ async function _registerAndDiscoverSessions(
   remoteStreams: Ref<Map<string, MediaStream>>,
   tracks: TrackType[],
   trackNames: string[],
+  knownParticipants?: ReadonlyArray<{ sessionId?: string }>,
 ): Promise<void> {
   if (!_currentSessionId) return
   const body: Record<string, unknown> = {
@@ -661,7 +732,7 @@ async function _registerAndDiscoverSessions(
     method: 'POST',
     body: JSON.stringify(body),
   })
-  await _refreshDiscovery(roomId, remoteStreams)
+  await _refreshDiscovery(roomId, remoteStreams, knownParticipants)
 }
 
 /**
@@ -676,6 +747,7 @@ async function _updateRegistryTracks(
   tracks: TrackType[],
   trackNames: string[],
   remoteStreams: Ref<Map<string, MediaStream>>,
+  knownParticipants?: ReadonlyArray<{ sessionId?: string }>,
 ): Promise<void> {
   if (!_currentSessionId) return
   const body: Record<string, unknown> = {
@@ -691,7 +763,7 @@ async function _updateRegistryTracks(
     method: 'POST',
     body: JSON.stringify(body),
   })
-  await _refreshDiscovery(roomId, remoteStreams)
+  await _refreshDiscovery(roomId, remoteStreams, knownParticipants)
 }
 
 /** Start the periodic heartbeat + discovery refresh. */
@@ -699,6 +771,7 @@ function _startHeartbeat(
   roomId: string,
   sessionId: string,
   remoteStreams: Ref<Map<string, MediaStream>>,
+  knownParticipants?: ReadonlyArray<{ sessionId?: string }>,
 ): void {
   _stopHeartbeat()
   _heartbeatTimer = window.setInterval(() => {
@@ -712,7 +785,7 @@ function _startHeartbeat(
         log.warn('[heartbeat] renewal failed: %s',
           err instanceof Error ? err.message : String(err))
       }
-      await _refreshDiscovery(roomId, remoteStreams)
+      await _refreshDiscovery(roomId, remoteStreams, knownParticipants)
     })()
   }, HEARTBEAT_INTERVAL_MS)
 }
@@ -1060,7 +1133,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
       _discoveryDebounce = window.setTimeout(() => {
         _discoveryDebounce = null
         const roomId = _currentRoomRef.value
-        if (roomId && _pc) void _refreshDiscovery(roomId, remoteStreams)
+        if (roomId && _pc) void _refreshDiscovery(roomId, remoteStreams, participants.value)
       }, 600)
     },
   )
@@ -1227,6 +1300,24 @@ export function usePartyCalls(): UsePartyCallsReturn {
         // event.streams was EMPTY there is no stream.id, so key by the opaque
         // track id (defensive — mid-map should have resolved a real track).
         sessionKey = stream ? stream.id : (event.track.id || 'remote')
+        // DIAG (ITER_1 party-cell-mock-remote-user, H2): this is the OPAQUE-key
+        // fallback — a track that resolved to NO owner.  Surface WHY: mid present
+        // but missing from the mid→{sessionId,trackName} map (pruned/never
+        // populated) vs mid absent entirely.  A tile keyed by stream.id/track.id
+        // never matches a participant (permanent "Usuário Remoto") and is never
+        // pruned (prune only removes known owner keys).  Cross-reference the
+        // sessionKey against the [DIAG][discovery] enumeration: it appears there
+        // ⇒ H1, absent ⇒ H2 confirmed.
+        log.warn(
+          '[DIAG][remote-track][H2-OPAQUE-FALLBACK] kind=%s mid=%s mid_in_map=%s mid_in_txmeta=%s sessionKey=%s track_id=%s subscribed_sessions=%j',
+          event.track.kind,
+          event.transceiver?.mid ?? 'none',
+          event.transceiver?.mid ? _remoteMidToTrackName.has(event.transceiver.mid) : false,
+          event.transceiver ? _transceiverMeta.has(event.transceiver) : false,
+          sessionKey,
+          event.track.id,
+          [..._subscribedSessions],
+        )
       }
     }
 
@@ -1560,7 +1651,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
       // 7. Register session in the room + discover & subscribe to others
       connectionPhase.value = 'registering'
-      await _registerAndDiscoverSessions(roomId, remoteStreams, localTracks, localTrackNames)
+      await _registerAndDiscoverSessions(roomId, remoteStreams, localTracks, localTrackNames, participants.value)
 
       // 7b. Caso B: SKIP _registerLocalTracksOnSfu on join — there are no local
       // tracks to publish (localTrackObjs is empty).  Tracks are registered on
@@ -1580,7 +1671,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
       await _executePartyAction({ action: 'snapshot_request', roomId })
 
       // 10. Periodic heartbeat + discovery refresh (ghost cleanup)
-      _startHeartbeat(roomId, mySessionId, remoteStreams)
+      _startHeartbeat(roomId, mySessionId, remoteStreams, participants.value)
 
       // Only NOW is the call fully established (registry + presence + heartbeat
       // all in place; local SFU tracks are added on opt-in) — flip the "live"
@@ -1786,17 +1877,20 @@ export function usePartyCalls(): UsePartyCallsReturn {
       _localTrackNamesByDisplay.set('screen', screenNames)
 
       if (roomId) {
-        await _updateRegistryTracks(roomId, tracksDisplay, trackNames, remoteStreams)
+        await _updateRegistryTracks(roomId, tracksDisplay, trackNames, remoteStreams, participants.value)
       }
 
       // Notify room presence with the REAL tracks/trackNames (not hardcoded) so
       // the snapshot reflects the shared screen.
       if (roomId) {
+        // REV-2 (F4 gate): send sessionId so the backend targets THIS session's
+        // presence entry (REV-1 multi-session presence).
         await _executePartyAction({
           action: 'tracks_update',
           roomId,
           tracks: tracksDisplay,
           trackNames,
+          sessionId: _currentSessionId,
         })
       }
 
@@ -1829,7 +1923,15 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
     const roomId = _currentRoomRef.value
     if (roomId) {
-      await _executePartyAction({ action: 'mute_toggle', roomId, isMuted: muted })
+      // REV-2 (F4 gate): send sessionId so the backend targets THIS session's
+      // presence entry — with multi-session presence a participantId-only
+      // toggle would flip the WRONG session of the same user (REV-1).
+      await _executePartyAction({
+        action: 'mute_toggle',
+        roomId,
+        isMuted: muted,
+        sessionId: _currentSessionId,
+      })
     }
   }
 
@@ -1870,8 +1972,16 @@ export function usePartyCalls(): UsePartyCallsReturn {
       roomId, _publishedTracks, _publishedTrackNames,
     )
     try {
-      await _updateRegistryTracks(roomId, tracks, trackNames, remoteStreams)
-      await _executePartyAction({ action: 'tracks_update', roomId, tracks, trackNames })
+      await _updateRegistryTracks(roomId, tracks, trackNames, remoteStreams, participants.value)
+      // REV-2 (F4 gate): send sessionId so the backend targets THIS session's
+      // presence entry (REV-1 multi-session presence).
+      await _executePartyAction({
+        action: 'tracks_update',
+        roomId,
+        tracks,
+        trackNames,
+        sessionId: _currentSessionId,
+      })
     } catch (err) {
       log.warn(
         '[updatePublishedTracks] republish failed room=%s tracks=%j — heartbeat will reconcile: %s',
@@ -1989,7 +2099,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
   async function refreshRoom(): Promise<void> {
     await requestSnapshot()
     const roomId = _currentRoomRef.value
-    if (roomId) await _refreshDiscovery(roomId, remoteStreams)
+    if (roomId) await _refreshDiscovery(roomId, remoteStreams, participants.value)
   }
 
   /** List rooms that currently have ≥1 active session (F4). */
@@ -2013,9 +2123,12 @@ export function usePartyCalls(): UsePartyCallsReturn {
 
     _stopHeartbeat()
 
-    // Broadcast leave so other clients drop us from presence (best-effort)
+    // Broadcast leave so other clients drop us from presence (best-effort).
+    // REV-2 (F4 gate): include sessionId so the backend (REV-1) removes ONLY
+    // THIS session's presence entry — a parallel tab of the same user must
+    // survive this leave instead of all of the user's sessions being dropped.
     if (roomId) {
-      void _executePartyAction({ action: 'leave_room', roomId })
+      void _executePartyAction({ action: 'leave_room', roomId, sessionId })
     }
 
     // Remove the room registry entry (best-effort — TTL is the safety net)
