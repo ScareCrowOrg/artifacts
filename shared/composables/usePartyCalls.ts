@@ -165,11 +165,49 @@ function _dropTransceiverMeta(mid: string | null | undefined): void {
   const tx = _pc.getTransceivers().find((t) => t.mid === mid)
   if (tx) _transceiverMeta.delete(tx)
 }
+/**
+ * F3 FIX (ITER_1 guest-screenshare): re-anchor ``_transceiverMeta`` for a remote
+ * session's mids AFTER the SFU offer has been applied at setRemoteDescription.
+ *
+ * The FIRST population pass (in _subscribeToRemoteTracks, before
+ * setRemoteDescription) anchors only transceivers that already exist at that
+ * instant — the recvonly audio/video transceivers created at join.  A track
+ * added mid-call (the shared screen) gets its transceiver created ONLY when the
+ * SFU's offer is applied at setRemoteDescription, so the first pass found
+ * nothing and the WeakMap stayed EMPTY for the screen.  The screen's ontrack
+ * then depends 100% on the global ``_remoteMidToTrackName`` — if a concurrent
+ * discovery/prune drops that entry between the population and the ontrack
+ * (race H3), the ontrack falls back to the opaque stream.id → generic tile →
+ * pruned → the screen never renders (the guest→host asymmetry).
+ *
+ * ontrack handlers are dispatched as tasks AFTER setRemoteDescription resolves,
+ * so this second pass (running in the ``await`` continuation) anchors the NEW
+ * transceiver before the screen's ontrack fires.  Idempotent and race-safe:
+ * skips transceivers already anchored and never overwrites an existing entry.
+ * Returns how many anchors it added (DIAG only — no behavior change).
+ */
+function _anchorTransceiverMetaFromMidMap(sessionId: string): number {
+  if (!_pc) return 0
+  let anchored = 0
+  for (const [mid, meta] of _remoteMidToTrackName) {
+    if (meta.sessionId !== sessionId) continue
+    const tx = _pc.getTransceivers().find((t) => t.mid === mid)
+    if (tx && !_transceiverMeta.has(tx)) {
+      _transceiverMeta.set(tx, meta)
+      anchored += 1
+    }
+  }
+  return anchored
+}
 /** One-shot guard for the F2 (ITER_1) stats dump — H2: a video inbound-rtp with
  *  bytesReceived==0 ~5s after subscribe means the SFU resolved the subscription
  *  (mid 1, no errorCode) but is NOT forwarding video RTP to this subscriber
  *  (vs H1: the track is dropped client-side at the ontrack !stream guard). */
 let _statsDumpScheduled = false
+/** Monotonic seq for _refreshDiscovery entry/exit DIAGs (B4) — lets F3 prove
+ *  concurrent interleavings (race H3) by correlating [start] seq=N with
+ *  [end] seq=N on the SAME discovery pass. */
+let _discoverySeq = 0
 /** The native MediaStreamTrack id of the currently shared screen (if any) —
  *  used by stopSharing to detach the correct sender from the peer connection. */
 let _screenTrackId: string | null = null
@@ -280,7 +318,15 @@ async function _logSfuStatsDump(): Promise<void> {
       inbound[kind].bytesReceived += s.bytesReceived || 0
       inbound[kind].packetsReceived += s.packetsReceived || 0
     })
-    log.warn('[DIAG][stats] inbound_rtp=%j', inbound)
+    // DIAG (B5/F3-H2): summary line with has_video so a single grep proves
+    // whether the HOST receiver got ANY video RTP from the GUEST's shared
+    // screen — bytesReceived stays 0 when the SFU resolved the subscribe (mid,
+    // no errorCode) but is NOT forwarding the screen's video.
+    const hasVideo = Object.prototype.hasOwnProperty.call(inbound, 'video')
+    log.warn(
+      '[DIAG][stats] inbound_rtp=%j has_video=%s video_bytes=%d audio_bytes=%d',
+      inbound, hasVideo, inbound.video?.bytesReceived ?? 0, inbound.audio?.bytesReceived ?? 0,
+    )
   } catch (err) {
     log.warn('[DIAG][stats] getStats failed: %s', err instanceof Error ? err.message : String(err))
   }
@@ -409,6 +455,22 @@ async function _subscribeToRemoteTracks(
       // via the renegotiate proxy so the SFU completes the m-line setup.
       await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
 
+      // F3 FIX (ITER_1 guest-screenshare): the SFU offer just created the
+      // transceiver for the NEW screen track (it did not exist during the first
+      // _transceiverMeta population above).  Re-anchor the WeakMap NOW — the
+      // screen's ontrack is dispatched as a task AFTER setRemoteDescription
+      // resolves, so it will read the populated fallback instead of depending on
+      // the prunable global map.  Idempotent; no-op for the already-anchored
+      // audio/video transceivers.
+      const _anchoredPostOffer = _anchorTransceiverMetaFromMidMap(remote.sessionId)
+      if (_anchoredPostOffer > 0) {
+        log.warn(
+          '[DIAG][subscribe] %s: transceiver_meta anchored post-setRemoteDescription=%d anchored_mids=%j',
+          remote.sessionId, _anchoredPostOffer,
+          _pc.getTransceivers().filter((t) => t.mid && _transceiverMeta.has(t)).map((t) => t.mid),
+        )
+      }
+
       // DIAG (F1 P2): the SFU offer's m-sections / mids — confirms the media
       // lines are bounded (recvonly only; no growth across retries).
       log.warn(
@@ -444,6 +506,10 @@ async function _subscribeToRemoteTracks(
       // is non-empty: applying an empty SDP crashes setRemoteDescription with
       // "Failed to parse SessionDescription. Expect line: v=".
       await _pc.setRemoteDescription(new RTCSessionDescription(respSd))
+      // F3 FIX (ITER_1 guest-screenshare): direct-answer branch — transceivers
+      // already exist here (no new m-line created), but run the same idempotent
+      // re-anchor for uniformity/defense (no-op when already anchored).
+      _anchorTransceiverMetaFromMidMap(remote.sessionId)
       subscribed = true
     } else {
       // Canonical no-op (react-native-webrtc #1536 / realtime-examples echo):
@@ -497,8 +563,18 @@ async function _refreshDiscovery(
   roomId: string,
   remoteStreams: Ref<Map<string, MediaStream>>,
   knownParticipants?: ReadonlyArray<{ sessionId?: string }>,
+  callerLabel = 'unknown',
 ): Promise<void> {
   if (!_currentSessionId) return
+  const _dseq = ++_discoverySeq
+  // DIAG (B4): entry marker for EVERY discovery pass — proves the race H3
+  // concurrency (R1/R3) by letting F3 correlate interleaved [start]/[end]
+  // pairs.  mid_map_size at entry is the state a concurrent prune can drop
+  // before the screen ontrack fires.
+  log.warn(
+    '[DIAG][discovery][start] seq=%d caller=%s room=%s session=%s mid_map_size=%d',
+    _dseq, callerLabel, roomId, _currentSessionId, _remoteMidToTrackName.size,
+  )
   try {
     const resp = await _apiFetchJson(`/calls/rooms/${roomId}/sessions`)
     const sessions = (resp.sessions || []) as RemoteSession[]
@@ -636,6 +712,7 @@ async function _refreshDiscovery(
     }
 
     let changed = false
+    let _screenRemovedCount = 0
     // B3 pass 2: decide per key using the pre-computed owner set (never mutated
     // during the iteration) plus the B2 screen-removed condition.
     for (const key of next.keys()) {
@@ -685,6 +762,7 @@ async function _refreshDiscovery(
         if (sessionLeft) removeOwnerMappings(ownerId)
         else removeScreenMapping(ownerId)
         if (screenRemoved) {
+          _screenRemovedCount += 1
           // S2 (F3): stop the receiver transceivers for the removed screen
           // track locally (no tracks/remove endpoint to un-subscribe via SFU).
           _teardownRemoteMedia(screenMids)
@@ -697,9 +775,25 @@ async function _refreshDiscovery(
     for (const ownerId of ownersToPrune) removeOwnerMappings(ownerId)
 
     if (changed) remoteStreams.value = next
+    // DIAG (B4): exit marker — how the mid map + subscribed set changed across
+    // this pass.  owners_to_prune>0 / screen_removed>0 mean a prune deleted
+    // mids; F3 correlates against [start] mid_map_size to prove whether a
+    // CONCURRENT pass pruned the screen mid between population (:376) and the
+    // screen ontrack (race H3).
+    log.warn(
+      '[DIAG][discovery][end] seq=%d caller=%s session=%s mid_map_size=%d owners_to_prune=%d screen_removed=%d subscribed_sessions=%d',
+      _dseq, callerLabel, _currentSessionId, _remoteMidToTrackName.size,
+      ownersToPrune.size, _screenRemovedCount, _subscribedSessions.size,
+    )
   } catch (err) {
     log.warn('[discovery] refresh failed: %s',
       err instanceof Error ? err.message : String(err))
+    // DIAG (B4): error path still emits the end marker so a failing pass can't
+    // be mistaken for a pass that never ran.
+    log.warn(
+      '[DIAG][discovery][end][error] seq=%d caller=%s session=%s mid_map_size=%d',
+      _dseq, callerLabel, _currentSessionId, _remoteMidToTrackName.size,
+    )
   }
 }
 
@@ -732,7 +826,7 @@ async function _registerAndDiscoverSessions(
     method: 'POST',
     body: JSON.stringify(body),
   })
-  await _refreshDiscovery(roomId, remoteStreams, knownParticipants)
+  await _refreshDiscovery(roomId, remoteStreams, knownParticipants, 'register')
 }
 
 /**
@@ -763,7 +857,7 @@ async function _updateRegistryTracks(
     method: 'POST',
     body: JSON.stringify(body),
   })
-  await _refreshDiscovery(roomId, remoteStreams, knownParticipants)
+  await _refreshDiscovery(roomId, remoteStreams, knownParticipants, 'registry')
 }
 
 /** Start the periodic heartbeat + discovery refresh. */
@@ -785,7 +879,7 @@ function _startHeartbeat(
         log.warn('[heartbeat] renewal failed: %s',
           err instanceof Error ? err.message : String(err))
       }
-      await _refreshDiscovery(roomId, remoteStreams, knownParticipants)
+      await _refreshDiscovery(roomId, remoteStreams, knownParticipants, 'heartbeat')
     })()
   }, HEARTBEAT_INTERVAL_MS)
 }
@@ -1133,7 +1227,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
       _discoveryDebounce = window.setTimeout(() => {
         _discoveryDebounce = null
         const roomId = _currentRoomRef.value
-        if (roomId && _pc) void _refreshDiscovery(roomId, remoteStreams, participants.value)
+        if (roomId && _pc) void _refreshDiscovery(roomId, remoteStreams, participants.value, 'watcher')
       }, 600)
     },
   )
@@ -1281,6 +1375,17 @@ export function usePartyCalls(): UsePartyCallsReturn {
       if (info) {
         metaSource = 'map'
       } else if (event.transceiver) {
+        // F3 FIX (ITER_1 guest-screenshare): edge-case defense for the NEW
+        // screen transceiver.  If the global mid map STILL carries this mid but
+        // the WeakMap was never anchored for the transceiver — the transceiver is
+        // created during setRemoteDescription, and in a synchronous-ontrack
+        // browser it can fire before our post-setRemoteDescription re-anchor —
+        // anchor it ON THE SPOT so the race-immune fallback resolves this
+        // ontrack.  Idempotent (set() with the same meta) and only fires when
+        // the global map is authoritative (never invents a mapping).
+        if (transceiverMid && _remoteMidToTrackName.has(transceiverMid)) {
+          _transceiverMeta.set(event.transceiver, _remoteMidToTrackName.get(transceiverMid)!)
+        }
         info = _transceiverMeta.get(event.transceiver) ?? undefined
         if (info) metaSource = 'transceiver'
       }
@@ -1332,6 +1437,32 @@ export function usePartyCalls(): UsePartyCallsReturn {
       (stream && sessionKey === stream.id) ? 'yes' : 'no',
       metaSource,
     )
+
+    // DIAG (B1/B4 — CRITICAL F1+F2 proof): full dump when this ontrack is the
+    // SCREEN (resolved to '{sid}/screen') OR fell to the opaque stream.id
+    // fallback (metaSource 'none' — a screen whose mid was pruned/never mapped
+    // is indistinguishable from a camera here; the dump proves the map state).
+    //  • mid_map_entries — the GLOBAL map at ontrack time: if the screen mid is
+    //    MISSING despite a populated map, a concurrent prune dropped it (race
+    //    H3, F2).
+    //  • tx_meta_present/tx_meta — the _transceiverMeta WeakMap entry for the
+    //    ontrack's OWN transceiver: '(none)' for a NEW screen transceiver
+    //    proves F1 (no race-immune fallback → classification depends 100% on
+    //    the global map).
+    //  • meta_source — which path classified this track: 'map' (:1280) /
+    //    'transceiver' (:1284) / 'none' (opaque fallback :1302).
+    if (event.track.kind === 'video' && (sessionKey.endsWith('/screen') || metaSource === 'none')) {
+      const _txMetaVal = event.transceiver ? _transceiverMeta.get(event.transceiver) : undefined
+      log.warn(
+        '[DIAG][ontrack][screen] kind=%s sessionKey=%s mid=%s meta_source=%s track_id=%s stream_id=%s opaque=%s mid_map_entries=%s tx_meta_present=%s tx_meta=%s',
+        event.track.kind, sessionKey, event.transceiver?.mid ?? 'none', metaSource,
+        event.track.id, stream ? stream.id : 'none',
+        (stream && sessionKey === stream.id) ? 'yes' : 'no',
+        JSON.stringify([..._remoteMidToTrackName.entries()]),
+        event.transceiver ? _transceiverMeta.has(event.transceiver) : false,
+        _txMetaVal ? JSON.stringify(_txMetaVal) : '(none)',
+      )
+    }
 
     // F3 FIX (ITER_1 H1): NEVER drop a remote track that arrived with an EMPTY
     // event.streams.  Create a fresh MediaStream and attach the track so the merge
@@ -1750,9 +1881,15 @@ export function usePartyCalls(): UsePartyCallsReturn {
       // was re-negotiated away from 'sendonly' by the previous offer, so the old
       // direction-only search silently missed and stacked a new transceiver
       // (transceivers 5→6 in F7 → 413 risk).
+      // DIAG (B7): publisher identity — participantId ("typically the user's
+      // id") lets F3 correlate WHO shared with the discovery enumeration to
+      // label host (1st to join) vs guest (2nd) in the test.  No role check
+      // exists in code — this is purely a runtime correlation marker.
+      const _publisherUserId = participants.value
+        .find((p) => p.sessionId === _currentSessionId)?.participantId ?? '(unknown)'
       log.warn(
-        '[DIAG][shareStream] addTransceiver sendonly session=%s track=%s transceivers_before=%d',
-        _currentSessionId, videoTrack.id, _pc.getTransceivers().length,
+        '[DIAG][shareStream] addTransceiver sendonly session=%s userId=%s track=%s transceivers_before=%d',
+        _currentSessionId, _publisherUserId, videoTrack.id, _pc.getTransceivers().length,
       )
       let screenTx: RTCRtpTransceiver | null = null
       if (_orphanScreenTx?.sender) {
@@ -1801,6 +1938,17 @@ export function usePartyCalls(): UsePartyCallsReturn {
           trackName: t.sender!.track!.id,
         }))
       let regResult: any = null
+      // PERMANENTE (B2/F4): a share that reaches this point with EMPTY
+      // screenTrackObjs means the sendonly transceiver never got its mid —
+      // the screen is NOT registered on the SFU, yet registry + presence still
+      // update below.  Silent inconsistency: the publisher sees the self-view,
+      // subscribers get not_found_track_error forever.  Always visible.
+      if (!screenTrackObjs.length) {
+        log.warn(
+          '[PERM][shareStream] screenTrackObjs EMPTY session=%s — screen track NOT registered on SFU (no mid); subscribers will not resolve it',
+          _currentSessionId,
+        )
+      }
       if (screenTrackObjs.length) {
         // DIAG (CICLO 2 L3): tracks/new now carries the publisher's offer.
         log.warn(
@@ -1883,6 +2031,14 @@ export function usePartyCalls(): UsePartyCallsReturn {
       // Notify room presence with the REAL tracks/trackNames (not hardcoded) so
       // the snapshot reflects the shared screen.
       if (roomId) {
+        // DIAG (B6): presence tracks_update payload — lets F3 compare it against
+        // the [DIAG][registry] re-register log to catch presence/registry
+        // divergence (e.g. presence carrying 'screen' while the registry dropped
+        // it, or a tracks↔trackNames positional misalignment — F7).
+        log.warn(
+          '[DIAG][shareStream] presence tracks_update room=%s session=%s tracks=%j trackNames=%j',
+          roomId, _currentSessionId, tracksDisplay, trackNames,
+        )
         // REV-2 (F4 gate): send sessionId so the backend targets THIS session's
         // presence entry (REV-1 multi-session presence).
         await _executePartyAction({
@@ -2099,7 +2255,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
   async function refreshRoom(): Promise<void> {
     await requestSnapshot()
     const roomId = _currentRoomRef.value
-    if (roomId) await _refreshDiscovery(roomId, remoteStreams, participants.value)
+    if (roomId) await _refreshDiscovery(roomId, remoteStreams, participants.value, 'refreshRoom')
   }
 
   /** List rooms that currently have ≥1 active session (F4). */
