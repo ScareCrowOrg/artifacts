@@ -173,6 +173,21 @@ const _transceiverMeta = new WeakMap<RTCRtpTransceiver, { sessionId: string; tra
 const _pendingSubscribeMids = new Set<string>()
 const _PENDING_SUBSCRIBE_TIMEOUT_MS = 5000
 
+/**
+ * F3 FIX (ITER_1 guest-screenshare CICLO 3): wall-clock time each remote-stream
+ * tile key was last ADDED to `remoteStreams`.  Used as a GRACE-PERIOD guard in
+ * `_cleanupEndedRemoteTrack`: a SPURIOUS end-of-track event (mute/ended fired by
+ * Chrome on a STALE track riding a REUSED transceiver mid — confirmed in F7: the
+ * screen tile entered _handleRemoteTrack and was removed in the SAME dispatch)
+ * arrives within milliseconds of the ontrack.  A REAL end (publisher stops → SFU
+ * reaper signals event=ended) arrives much later, so a ~400ms grace only blocks
+ * the spurious same-dispatch removal and never defers a genuine teardown
+ * meaningfully.  Entries are deleted when the tile is legitimately removed and
+ * cleared on hangUp.
+ */
+const _remoteStreamAddedAt = new Map<string, number>()
+const _REMOTE_STREAM_GRACE_MS = 400
+
 /** Drop the transceiver-scoped meta for a mid, keeping the WeakMap in lockstep
  *  with ``_remoteMidToTrackName`` deletions (prune / teardown).  Safe to call
  *  for a mid whose transceiver is gone or whose meta was never set.  F3 FIX
@@ -859,7 +874,7 @@ async function _refreshDiscovery(
           _screenRemovedCount += 1
           // S2 (F3): stop the receiver transceivers for the removed screen
           // track locally (no tracks/remove endpoint to un-subscribe via SFU).
-          _teardownRemoteMedia(screenMids)
+          _teardownRemoteMedia(screenMids, 'prune')
         }
         changed = true
       }
@@ -1106,8 +1121,15 @@ async function _registerLocalTracksOnSfu(
  * decoded or surfaced — closing the S2 leak where a peer that already
  * subscribed keeps receiving the shared screen after the publisher stops.
  */
-function _teardownRemoteMedia(mids: string[]): void {
+function _teardownRemoteMedia(mids: string[], callerLabel = 'unknown'): void {
   if (!_pc || !mids.length) return
+  // DIAG (F2 CICLO 3, B5): prove WHICH path stopped the receiver transceivers
+  // ('cleanup' = _cleanupEndedRemoteTrack / end-of-track handler, 'prune' =
+  // discovery B2 removeScreenMapping).  A 'cleanup' teardown of mid=1 logged
+  // right after [DIAG][merge] screen added confirms the spurious end-of-track
+  // handler is the one stopping the just-received screen — NOT the prune (which
+  // would also bump owners_to_prune/screen_removed in [DIAG][discovery][end]).
+  log.warn('[DIAG][teardown] caller=%s mids=%s', callerLabel, JSON.stringify(mids))
   for (const mid of mids) {
     // F3 FIX (ITER_1 guest-screenshare CICLO 2): never tear down a subscription
     // still in flight — a concurrent prune can race the incoming screen
@@ -1372,13 +1394,49 @@ export function usePartyCalls(): UsePartyCallsReturn {
     key: string,
     mid: string | null,
     trackName: string | null,
+    // DIAG (F2 CICLO 3, B1): WHICH end-of-track handler fired — the origin lets
+    // F7 discriminate a spurious cleanup (onmute/onended on a stale ended/muted
+    // track riding the reused mid-1 transceiver) from a legitimate one.  The
+    // three call sites in _handleRemoteTrack pass their fixed literal.
+    origin: 'onmute' | 'onended' | 'onremovetrack' | 'unknown' = 'unknown',
   ): void {
+    // DIAG (F2 CICLO 3, B1): prove the cleanup fired and against which tile.
+    // F7 cross-references [DIAG][merge] "screen added key={sid}/screen" →
+    // [DIAG][cleanup] origin=... key={sid}/screen → [DIAG][cleanup] removed — the
+    // spurious-removal sequence in the SAME dispatch as the ontrack.
+    log.warn(
+      '[DIAG][cleanup] origin=%s key=%s mid=%s trackName=%s',
+      origin, key, mid ?? 'none', trackName ?? 'none',
+    )
+    // F3 FIX (ITER_1 guest-screenshare CICLO 3): grace-period guard against the
+    // SPURIOUS end-of-track removal.  If this tile key was added to remoteStreams
+    // within the last _REMOTE_STREAM_GRACE_MS, this cleanup is the spurious event
+    // fired by a STALE track (readyState=ended / muted) riding a REUSED
+    // transceiver mid — the confirmed mechanism: the screen tile entered in
+    // _handleRemoteTrack and was removed in the SAME dispatch by onmute/onended.
+    // Skip the removal + teardown so the just-received tile survives; a REAL end
+    // of this subscription is handled by the B2 registry prune and by any
+    // post-grace end-of-track event (both arrive well after the grace window).
+    const _addedAt = _remoteStreamAddedAt.get(key)
+    if (_addedAt !== undefined && Date.now() - _addedAt < _REMOTE_STREAM_GRACE_MS) {
+      log.warn(
+        '[DIAG][cleanup] blocked key=%s origin=%s age_ms=%d (tile just added — spurious end-track guard)',
+        key, origin, Date.now() - _addedAt,
+      )
+      return
+    }
     const next = new Map(remoteStreams.value)
     if (next.has(key)) {
       next.delete(key)
       remoteStreams.value = next
+      _remoteStreamAddedAt.delete(key)
+      // PERMANENTE: a screen tile disappearing from the reactive Map was the
+      // silent blind spot of this bug class (took 3+ iterations to find).  Keep
+      // the removal visible permanently so any future silent tile loss is caught
+      // on the first run instead of after N E2E passes.
+      log.warn('[DIAG][cleanup] removed key=%s size=%d', key, remoteStreams.value.size)
     }
-    if (mid) _teardownRemoteMedia([mid])
+    if (mid) _teardownRemoteMedia([mid], 'cleanup')
     const ownerId = key.endsWith('/screen') ? key.slice(0, -'/screen'.length) : key
     if (trackName) {
       const already = _subscribedTrackNames.get(ownerId)
@@ -1601,19 +1659,61 @@ export function usePartyCalls(): UsePartyCallsReturn {
       ? _remoteTrackTypes.get(_infoAtReceive.sessionId)?.get(_infoAtReceive.trackName)
       : undefined
     const _bindTrackEndHandlers = (trk: MediaStreamTrack) => {
+      // DIAG (F2 CICLO 3, B2): record the track state at BIND time.  If the
+      // screen track arrives ALREADY ended/muted (stale echo of the pruned host
+      // camera on the reused mid-1 transceiver), Chrome fires mute/ended right
+      // after the ontrack returns → spurious cleanup.  F7 reads this to confirm
+      // the bound track is the stale one (cross-ref [DIAG][ontrack-before-drop]
+      // receiver_readyState=ended receiver_muted=true).
+      log.warn(
+        '[DIAG][bind] key=%s track_id=%s kind=%s readyState=%s muted=%s',
+        sessionKey, trk.id, trk.kind, trk.readyState, trk.muted,
+      )
+      // F3 FIX (ITER_1 guest-screenshare CICLO 3): if the track arrived ALREADY
+      // ended (the stale echo of a pruned camera riding a REUSED transceiver mid —
+      // confirmed in F7 by receiver_readyState=ended receiver_muted=true on the
+      // screen ontrack), binding onmute/onended makes Chrome fire those events
+      // right after the ontrack returns → spurious cleanup of the just-added
+      // screen tile.  An already-ended track cannot fire a meaningful NEW end
+      // later (the end already happened) — a real end of this subscription is
+      // handled by the B2 registry prune and by the post-grace guard in
+      // _cleanupEndedRemoteTrack.  Skip binding the cleanup handlers so the tile
+      // persists (video validity is validated by F7).
+      if (trk.readyState === 'ended') {
+        log.warn(
+          '[DIAG][bind-skip] key=%s track_id=%s kind=%s readyState=ended — stale track on reused transceiver, end handlers NOT bound',
+          sessionKey, trk.id, trk.kind,
+        )
+        return
+      }
       trk.onended = () => {
-        _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive)
+        // DIAG (F2 CICLO 3, B2): prove the end-of-track handler FIRED and against
+        // which tile key (real end vs spurious stale-track event).
+        log.warn('[DIAG][track-event] onended fired key=%s', sessionKey)
+        _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive, 'onended')
       }
       trk.onmute = () => {
         if (_displayAtReceive === 'screen') {
-          _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive)
+          // DIAG (F2 CICLO 3, B2): the mute handler fired on a SCREEN track — the
+          // only mute path that calls cleanup.  If the bound track is the stale
+          // ended/muted one, this is the spurious removal trigger.
+          log.warn('[DIAG][track-event] onmute fired key=%s gate=screen', sessionKey)
+          _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive, 'onmute')
+        } else {
+          // DIAG (F2 CICLO 3): mute on a camera/mic track is reversible — no
+          // cleanup.  Logging the gate=skip path keeps the trace complete so F7
+          // can prove the gate decision (not a silent no-op).
+          log.warn(
+            '[DIAG][track-event] onmute fired key=%s gate=skip display=%s',
+            sessionKey, _displayAtReceive ?? 'none',
+          )
         }
       }
       trk.onunmute = () => { /* camera/mic mute stays reversible — no cleanup */ }
     }
     for (const trk of effectiveStream.getTracks()) _bindTrackEndHandlers(trk)
     effectiveStream.onremovetrack = () => {
-      _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive)
+      _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive, 'onremovetrack')
     }
 
     const next = new Map(remoteStreams.value)
@@ -1630,6 +1730,21 @@ export function usePartyCalls(): UsePartyCallsReturn {
       next.set(sessionKey, effectiveStream)
     }
     remoteStreams.value = next
+    // F3 FIX (ITER_1 guest-screenshare CICLO 3): record when this tile key entered
+    // the Map — the grace guard in _cleanupEndedRemoteTrack uses it to block a
+    // spurious SAME-DISPATCH end-of-track removal (mute/ended on a stale track
+    // riding a reused transceiver mid).  Reset on every merge; a real end arrives
+    // well past the grace window, so this never defers a genuine teardown.
+    _remoteStreamAddedAt.set(sessionKey, Date.now())
+    // DIAG (F2 CICLO 3, B1): proof the classified SCREEN tile ENTERED the reactive
+    // Map.  F7 expects the spurious-removal sequence: [DIAG][merge] screen added
+    // key={sid}/screen → [DIAG][cleanup] origin=onmute|onended key={sid}/screen →
+    // [DIAG][cleanup] removed key={sid}/screen, all in the SAME dispatch as the
+    // ontrack.  size = Map size after the set (a persistent tile stays ≥ its
+    // pre-merge size; a spurious removal drops it back).
+    if (sessionKey.endsWith('/screen')) {
+      log.warn('[DIAG][merge] screen added key=%s size=%d', sessionKey, remoteStreams.value.size)
+    }
     log.debug('[PC] remote track received, key=%s', sessionKey)
   }
 
@@ -2410,6 +2525,9 @@ export function usePartyCalls(): UsePartyCallsReturn {
     // protection — a stale pending mid must never survive into the next call on
     // this recycled module-level state.
     _pendingSubscribeMids.clear()
+    // F3 FIX (ITER_1 guest-screenshare CICLO 3): drop the per-tile add-time
+    // grace map — a stale entry must never survive into the next call.
+    _remoteStreamAddedAt.clear()
     // F3 FIX (ITER_1 H3): drop every transceiver-scoped meta before the pc is
     // closed (the WeakMap would GC them anyway, but clear explicitly so a
     // recycled module-level WeakMap can never tag a future session's mid).

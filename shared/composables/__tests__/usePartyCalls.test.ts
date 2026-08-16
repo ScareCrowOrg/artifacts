@@ -409,4 +409,180 @@ describe('usePartyCalls — guest screen-share transceiver meta anchoring', () =
     expect(clearedLog![1]).toBe('1')           // mid 1 released
     expect(api.remoteStreams.has('guest/screen')).toBe(true)
   })
+
+  // ── Shared mock fetch for the CICLO 3 tests ──────────────────────────────
+  // Guest shares its screen; the SFU's tracks/new offer maps the screen to the
+  // EXISTING video transceiver mid '1' (the F7-proven reused-transceiver case).
+  // Discovery #1 (register) sees no remotes; #2 (refreshRoom) sees the guest.
+  function mockGuestShareOnExistingMidFetch(): void {
+    let discoveryCount = 0
+    const guestSession = {
+      sessionId: 'guest',
+      tracks: ['screen'],
+      trackNames: ['screen-native'],
+    }
+    ;(globalThis as any).__mockApiFetch = vi.fn(async (path: string, options: RequestInit = {}) => {
+      const method = (options.method || 'GET').toUpperCase()
+      if (path === '/calls/provision' && method === 'POST') return jsonResp({ status: 'already_exists' })
+      if (path === '/calls/session' && method === 'POST') {
+        return jsonResp({ sessionId: 'me', sessionDescription: { type: 'answer', sdp: 'v=0\r\na=mid:0\r\na=mid:1\r\n' } })
+      }
+      if (path === '/calls/rooms/room/sessions' && method === 'POST') return jsonResp({ ok: true })
+      if (path === '/calls/rooms/room/sessions' && method === 'GET') {
+        discoveryCount += 1
+        return jsonResp({ sessions: discoveryCount >= 2 ? [guestSession] : [] })
+      }
+      if (path === '/calls/sessions/me/tracks/new' && method === 'POST') {
+        return jsonResp({
+          requiresImmediateRenegotiation: true,
+          sessionDescription: { type: 'offer', sdp: 'v=0\r\na=mid:0\r\na=mid:1\r\na=mid:2\r\n' },
+          tracks: [{ trackName: 'screen-native', mid: '1' }],
+        })
+      }
+      if (path === '/calls/sessions/me/renegotiate' && method === 'PUT') return jsonResp({ ok: true })
+      if (path.includes('/heartbeat') && method === 'PUT') return jsonResp({ ok: true })
+      if (path === '/api/cells/execute-ephemeral' && method === 'POST') return jsonResp({ ok: true })
+      if (path.includes('/sessions/me') && method === 'DELETE') return jsonResp({ ok: true })
+      throw new Error(`Unhandled mock fetch: ${method} ${path}`)
+    })
+  }
+
+  it('keeps {guest}/screen when the reused-transceiver track arrives ended/muted — stale end-handler bind is skipped so spurious mute/ended do NOT remove the tile', async () => {
+    // F7 confirmed the mechanism: the SFU reuses the EXISTING video transceiver
+    // (mid 1) to deliver the screen, and the ontrack carries the STALE track —
+    // receiver_readyState=ended receiver_muted=true (echo of the pruned camera).
+    // Before the fix, _bindTrackEndHandlers bound onmute/onended to that stale
+    // track, Chrome fired them right after the ontrack, and the tile was removed
+    // in the SAME dispatch.  The fix (candidate 1) skips binding end handlers for
+    // an already-ended track → the tile survives.
+    let staleTrackRef: MockMediaStreamTrack | null = null
+    class StaleOntrackPC extends MockRTCPeerConnection {
+      async setRemoteDescription(desc: { type?: string; sdp?: string }): Promise<void> {
+        this.remoteDescription = desc
+        const mids = [...(desc.sdp || '').matchAll(/a=mid:(\S+)/g)].map((m) => m[1])
+        for (const mid of mids) {
+          let tx = this.transceivers.find((t) => t.mid === mid)
+          if (!tx) {
+            tx = new MockTransceiver(mid, 'recvonly')
+            this.transceivers.push(tx)
+          }
+        }
+        if (mids.includes('2')) {
+          const screenTx = this.transceivers.find((t) => t.mid === '1')
+          if (screenTx) {
+            const staleTrack = new MockMediaStreamTrack('video', 'stale-cam-echo')
+            staleTrack.readyState = 'ended'
+            staleTrack.muted = true
+            staleTrackRef = staleTrack
+            const staleStream = new MockMediaStream()
+            staleStream.addTrack(staleTrack)
+            this.ontrack?.({
+              track: staleTrack,
+              receiver: { track: { readyState: 'ended', muted: true } },
+              transceiver: screenTx,
+              streams: [staleStream],
+            })
+          }
+        }
+      }
+    }
+    ;(globalThis as any).RTCPeerConnection = StaleOntrackPC
+    mockGuestShareOnExistingMidFetch()
+
+    wrapper = mountComposable()
+    const api = wrapper.vm as any
+
+    await api.startCall('room')
+    await api.refreshRoom() // discovery #2 — subscribe to the guest's screen (stale track on mid 1)
+
+    // The screen tile ENTERED the Map (the merge executed).
+    expect(api.remoteStreams.has('guest/screen')).toBe(true)
+
+    // The fix skipped the stale end-handler bind (candidate 1).
+    const bindSkipLog = warnCalls.find((args) =>
+      args.some((a) => typeof a === 'string' && a.includes('[DIAG][bind-skip]')))
+    expect(bindSkipLog).toBeDefined()
+
+    // Simulate Chrome firing mute/ended on the stale track after the ontrack —
+    // the spurious events that previously removed the tile in the SAME dispatch.
+    // The cleanup handlers are NOT bound → the tile survives.
+    // TS cannot trace the assignment inside the mock's async method, so it
+    // narrows `staleTrackRef` to `null`/`never` — cast the initializer back to
+    // the union so the `if (staleTrack)` guard narrows to the mock type.
+    const staleTrack = staleTrackRef as MockMediaStreamTrack | null
+    if (staleTrack) {
+      staleTrack.onended?.()
+      staleTrack.onmute?.()
+    }
+    expect(api.remoteStreams.has('guest/screen')).toBe(true)
+
+    // No spurious removal of the screen tile occurred.
+    const cleanupRemovedLog = warnCalls.find((args) =>
+      args.some((a) => typeof a === 'string' && a.includes('[DIAG][cleanup] removed key=guest/screen')))
+    expect(cleanupRemovedLog).toBeUndefined()
+  })
+
+  it('grace guard blocks a same-dispatch mute on a live-but-muted screen track, but a real end after the grace period still cleans up', async () => {
+    // Edge case the confirmed ended-track fix does NOT cover: a screen track that
+    // arrives LIVE but MUTED (not skipped by candidate 1) — Chrome can still fire
+    // mute right after the ontrack.  The grace guard (candidate 2) blocks the
+    // same-dispatch removal, while a REAL end (mute persists past the grace
+    // window, i.e. the publisher actually stopped) still tears down normally.
+    let mutedTrackRef: MockMediaStreamTrack | null = null
+    class MutedOntrackPC extends MockRTCPeerConnection {
+      async setRemoteDescription(desc: { type?: string; sdp?: string }): Promise<void> {
+        this.remoteDescription = desc
+        const mids = [...(desc.sdp || '').matchAll(/a=mid:(\S+)/g)].map((m) => m[1])
+        for (const mid of mids) {
+          let tx = this.transceivers.find((t) => t.mid === mid)
+          if (!tx) {
+            tx = new MockTransceiver(mid, 'recvonly')
+            this.transceivers.push(tx)
+          }
+        }
+        if (mids.includes('2')) {
+          const screenTx = this.transceivers.find((t) => t.mid === '1')
+          if (screenTx) {
+            const mutedTrack = new MockMediaStreamTrack('video', 'muted-screen-track')
+            mutedTrack.readyState = 'live'
+            mutedTrack.muted = true
+            mutedTrackRef = mutedTrack
+            const mStream = new MockMediaStream()
+            mStream.addTrack(mutedTrack)
+            this.ontrack?.({
+              track: mutedTrack,
+              receiver: { track: { readyState: 'live', muted: true } },
+              transceiver: screenTx,
+              streams: [mStream],
+            })
+          }
+        }
+      }
+    }
+    ;(globalThis as any).RTCPeerConnection = MutedOntrackPC
+    mockGuestShareOnExistingMidFetch()
+
+    wrapper = mountComposable()
+    const api = wrapper.vm as any
+
+    await api.startCall('room')
+    await api.refreshRoom()
+    expect(api.remoteStreams.has('guest/screen')).toBe(true)
+
+    // The track is LIVE but MUTED → candidate 1 does NOT skip → onmute IS bound
+    // (gate=screen).  Firing it in the same dispatch is the spurious case → the
+    // grace guard blocks the removal and the tile survives.
+    const mutedTrack = mutedTrackRef!
+    mutedTrack.onmute?.()
+    expect(api.remoteStreams.has('guest/screen')).toBe(true)
+    const blockedLog = warnCalls.find((args) =>
+      args.some((a) => typeof a === 'string' && a.includes('[DIAG][cleanup] blocked')))
+    expect(blockedLog).toBeDefined()
+
+    // After the grace window, a REAL end (mute persists — publisher actually
+    // stopped) cleans up normally: the tile is removed.
+    await new Promise((resolve) => setTimeout(resolve, 550))
+    mutedTrack.onmute?.()
+    expect(api.remoteStreams.has('guest/screen')).toBe(false)
+  })
 })
