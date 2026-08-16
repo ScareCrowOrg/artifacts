@@ -300,4 +300,113 @@ describe('usePartyCalls — guest screen-share transceiver meta anchoring', () =
     expect(anchoredLog![2]).toBe(1)            // exactly ONE new anchor (the screen)
     expect(JSON.stringify(anchoredLog![3])).toContain('"2"') // the screen mid is anchored
   })
+
+  it('protects a pending screen subscription (screen on the EXISTING video transceiver) from a concurrent prune — ontrack still resolves {guest}/screen', async () => {
+    // F7 ciclo 1 proved the REAL mechanism: the screen arrives on the EXISTING
+    // video transceiver (mid 1), the first pass anchors its WeakMap
+    // (transceiver_meta_sets=1), but a concurrent discovery/prune drops the mid
+    // between the population and the ontrack (race H3) → the map/WeakMap are
+    // gone at the ontrack → opaque stream.id → the screen never renders.  This
+    // test drives that exact ordering: the subscription populates mid 1 and
+    // marks it PENDING, the ontrack is DEFERRED, a concurrent STALE discovery
+    // runs a prune that would drop the mid — and asserts the pending protection
+    // blocks the drop so the deferred ontrack classifies to {guest}/screen.
+    class DeferredOntrackPC extends MockRTCPeerConnection {
+      async setRemoteDescription(desc: { type?: string; sdp?: string }): Promise<void> {
+        this.remoteDescription = desc
+        const mids = [...(desc.sdp || '').matchAll(/a=mid:(\S+)/g)].map((m) => m[1])
+        for (const mid of mids) {
+          let tx = this.transceivers.find((t) => t.mid === mid)
+          if (!tx) {
+            tx = new MockTransceiver(mid, 'recvonly')
+            this.transceivers.push(tx)
+          }
+        }
+        // Only the SFU subscription offer (it carries a NEW m-section mid '2',
+        // which the base/local negotiation does not) schedules the screen
+        // ontrack.  The screen fires on the EXISTING video transceiver (mid '1')
+        // — deferred to a macrotask so a concurrent discovery prune can run in
+        // between the population and the ontrack.
+        if (mids.includes('2')) {
+          const screenTx = this.transceivers.find((t) => t.mid === '1')
+          if (screenTx) {
+            window.setTimeout(() => {
+              this.ontrack?.({
+                track: new MockMediaStreamTrack('video', 'screen-track'),
+                receiver: { track: { readyState: 'live', muted: false } },
+                transceiver: screenTx,
+                streams: [],
+              })
+            }, 0)
+          }
+        }
+      }
+    }
+    ;(globalThis as any).RTCPeerConnection = DeferredOntrackPC
+
+    let discoveryCount = 0
+    const guestSession = {
+      sessionId: 'guest',
+      tracks: ['screen'],
+      trackNames: ['screen-native'],
+    }
+    ;(globalThis as any).__mockApiFetch = vi.fn(async (path: string, options: RequestInit = {}) => {
+      const method = (options.method || 'GET').toUpperCase()
+      if (path === '/calls/provision' && method === 'POST') return jsonResp({ status: 'already_exists' })
+      if (path === '/calls/session' && method === 'POST') {
+        return jsonResp({ sessionId: 'me', sessionDescription: { type: 'answer', sdp: 'v=0\r\na=mid:0\r\na=mid:1\r\n' } })
+      }
+      if (path === '/calls/rooms/room/sessions' && method === 'POST') return jsonResp({ ok: true })
+      if (path === '/calls/rooms/room/sessions' && method === 'GET') {
+        discoveryCount += 1
+        // #1 (register): no remotes.  #2 (refreshRoom): the guest shares its
+        // screen.  #3 (concurrent refresh): STALE — the guest is ABSENT, so its
+        // prune tries to ghost-drop the in-flight screen subscription.
+        return jsonResp({ sessions: discoveryCount === 2 ? [guestSession] : [] })
+      }
+      if (path === '/calls/sessions/me/tracks/new' && method === 'POST') {
+        return jsonResp({
+          requiresImmediateRenegotiation: true,
+          sessionDescription: { type: 'offer', sdp: 'v=0\r\na=mid:0\r\na=mid:1\r\na=mid:2\r\n' },
+          tracks: [{ trackName: 'screen-native', mid: '1' }],
+        })
+      }
+      if (path === '/calls/sessions/me/renegotiate' && method === 'PUT') return jsonResp({ ok: true })
+      if (path.includes('/heartbeat') && method === 'PUT') return jsonResp({ ok: true })
+      if (path === '/api/cells/execute-ephemeral' && method === 'POST') return jsonResp({ ok: true })
+      if (path.includes('/sessions/me') && method === 'DELETE') return jsonResp({ ok: true })
+      throw new Error(`Unhandled mock fetch: ${method} ${path}`)
+    })
+
+    wrapper = mountComposable()
+    const api = wrapper.vm as any
+
+    await api.startCall('room')
+    await api.refreshRoom() // discovery #2 — subscribe to the guest's screen (mid 1); ontrack DEFERRED
+
+    // The subscription populated mid 1 and marked it pending (proof the fix's
+    // protection is armed for the F7-proven mid-on-existing-transceiver case).
+    const markedLog = warnCalls.find((args) =>
+      args.some((a) => typeof a === 'string' && a.includes('[DIAG][pending] marked')))
+    expect(markedLog).toBeDefined()
+    expect(JSON.stringify(markedLog![1])).toContain('"1"') // mid 1 marked pending
+    expect(markedLog![2]).toBe('guest')
+
+    // Discovery #3 is a STALE snapshot (guest absent) → its prune targets the
+    // in-flight subscription.  The pending protection must block the drop.
+    await api.refreshRoom()
+    const protectLog = warnCalls.find((args) =>
+      args.some((a) => typeof a === 'string' && a.includes('[DIAG][pending] protect')))
+    expect(protectLog).toBeDefined()
+    expect(protectLog![0]).toContain('prune=owner') // the owner prune was deferred
+
+    // Now the deferred ontrack fires → mid 1 is STILL mapped (protection held)
+    // → classifies to the dedicated {guest}/screen tile (NOT an opaque orphan).
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const clearedLog = warnCalls.find((args) =>
+      args.some((a) => typeof a === 'string' && a.includes('[DIAG][pending] cleared on ontrack')))
+    expect(clearedLog).toBeDefined()
+    expect(clearedLog![1]).toBe('1')           // mid 1 released
+    expect(api.remoteStreams.has('guest/screen')).toBe(true)
+  })
 })

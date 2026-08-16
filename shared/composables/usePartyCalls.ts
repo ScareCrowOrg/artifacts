@@ -157,13 +157,71 @@ const _remoteMidToTrackName = new Map<string, { sessionId: string; trackName: st
  *  the ontrack read the mapping that belongs to ITS transceiver, immune to the
  *  race. */
 const _transceiverMeta = new WeakMap<RTCRtpTransceiver, { sessionId: string; trackName: string }>()
+/**
+ * F3 FIX (ITER_1 guest-screenshare CICLO 2): mids whose remote subscription is
+ * IN FLIGHT — the SFU tracks/new resolved the mid and ``_subscribeToRemoteTracks``
+ * populated ``_remoteMidToTrackName`` / ``_transceiverMeta``, but the ontrack has
+ * NOT fired yet.  Concurrent ``_refreshDiscovery`` prunes (removeOwnerMappings /
+ * removeScreenMapping) must NOT drop those mids between the population and the
+ * ontrack.  F7 ciclo 1 proved exactly this drop (race H3): the screen arrived on
+ * the EXISTING video transceiver (mid 1), the first pass anchored its WeakMap
+ * (transceiver_meta_sets=1), yet a concurrent prune dropped BOTH the WeakMap and
+ * the global map before the ontrack, so the screen fell back to the opaque
+ * stream.id and was pruned.  A mid leaves the set when its ontrack classifies,
+ * or after ``_PENDING_SUBSCRIBE_TIMEOUT_MS`` (guard for a subscription whose
+ * ontrack never fires — the timeout must never leak protected mids). */
+const _pendingSubscribeMids = new Set<string>()
+const _PENDING_SUBSCRIBE_TIMEOUT_MS = 5000
+
 /** Drop the transceiver-scoped meta for a mid, keeping the WeakMap in lockstep
  *  with ``_remoteMidToTrackName`` deletions (prune / teardown).  Safe to call
- *  for a mid whose transceiver is gone or whose meta was never set. */
+ *  for a mid whose transceiver is gone or whose meta was never set.  F3 FIX
+ *  (CICLO 2): never drops a mid whose subscription is still in flight (pending)
+ *  — the prune is a transient signal that can race the incoming screen. */
 function _dropTransceiverMeta(mid: string | null | undefined): void {
   if (!mid || !_pc) return
+  if (_pendingSubscribeMids.has(mid)) return
   const tx = _pc.getTransceivers().find((t) => t.mid === mid)
   if (tx) _transceiverMeta.delete(tx)
+}
+
+/** F3 FIX (CICLO 2): protect the given mids (populated by a remote subscription)
+ *  from concurrent prunes until their ontrack classifies or the timeout fires.
+ *  One bounded 5s timer per mid, cleared by the ontrack — a timer firing for an
+ *  already-cleared mid is a harmless no-op delete. */
+function _markMidsPending(mids: string[], sessionId: string): void {
+  const added: string[] = []
+  for (const mid of mids) {
+    if (!mid || _pendingSubscribeMids.has(mid)) continue
+    _pendingSubscribeMids.add(mid)
+    added.push(mid)
+    window.setTimeout(() => {
+      _pendingSubscribeMids.delete(mid)
+    }, _PENDING_SUBSCRIBE_TIMEOUT_MS)
+  }
+  if (added.length > 0) {
+    log.warn('[DIAG][pending] marked mids=%j session=%s', added, sessionId)
+  }
+}
+
+/** F3 FIX (CICLO 2): the ontrack for a pending mid fired and classified — the
+ *  subscription has landed on a tile, so the pending protection is released. */
+function _unmarkMidPending(mid: string | null | undefined, sessionKey: string): void {
+  if (mid && _pendingSubscribeMids.delete(mid)) {
+    log.warn('[DIAG][pending] cleared on ontrack mid=%s sessionKey=%s', mid, sessionKey)
+  }
+}
+
+/** F3 FIX (CICLO 2): does the owner have any subscription still in flight?  A
+ *  ``removeOwnerMappings`` for such an owner is a stale concurrent snapshot (the
+ *  tracks/new resolved, so the session IS active) — pruning would drop the
+ *  just-populated map/WeakMap/_remoteTrackTypes of the incoming track. */
+function _ownerHasPendingMids(ownerId: string): boolean {
+  for (const mid of _pendingSubscribeMids) {
+    const info = _remoteMidToTrackName.get(mid)
+    if (info?.sessionId === ownerId) return true
+  }
+  return false
 }
 /**
  * F3 FIX (ITER_1 guest-screenshare): re-anchor ``_transceiverMeta`` for a remote
@@ -448,6 +506,12 @@ async function _subscribeToRemoteTracks(
         Array.isArray(result?.tracks) ? result.tracks : [],
         transceiverMetaSets,
       )
+      // F3 FIX (ITER_1 guest-screenshare CICLO 2): mark these mids as pending —
+      // concurrent _refreshDiscovery prunes (removeOwnerMappings /
+      // removeScreenMapping / _dropTransceiverMeta / _teardownRemoteMedia) must
+      // NOT drop the just-populated map/WeakMap between here and the ontrack
+      // (race H3).  Released on the ontrack classification or after 5s.
+      _markMidsPending(midEntries.map((e: { mid: string; trackName: string }) => e.mid), remote.sessionId)
     }
 
     if (result?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
@@ -674,6 +738,16 @@ async function _refreshDiscovery(
 
     /** Drop all per-owner mappings for a session that left/ghosted. */
     const removeOwnerMappings = (ownerId: string): void => {
+      // F3 FIX (ITER_1 guest-screenshare CICLO 2): a session with an in-flight
+      // subscription is NOT genuinely ghosted — a stale concurrent snapshot
+      // excluded it, but tracks/new just resolved for it.  Pruning here would
+      // drop the just-populated map/WeakMap/_remoteTrackTypes of the incoming
+      // screen (race H3).  Defer the owner prune until the pending clears (its
+      // ontrack or the 5s timeout); the next discovery re-evaluates.
+      if (_ownerHasPendingMids(ownerId)) {
+        log.warn('[DIAG][pending] protect owner=%s prune=owner', ownerId)
+        return
+      }
       _subscribedSessions.delete(ownerId)
       _subscribedTrackNames.delete(ownerId)
       _remoteTrackTypes.delete(ownerId)
@@ -697,13 +771,33 @@ async function _refreshDiscovery(
         .filter(([, display]) => display === 'screen')
         .map(([nativeId]) => nativeId)
       if (screenNativeIds.length === 0) return
-      for (const nativeId of screenNativeIds) typeMap.delete(nativeId)
+      // F3 FIX (ITER_1 guest-screenshare CICLO 2): the screen nativeIds whose
+      // subscription is STILL IN FLIGHT (race H3) must keep their typeMap entry,
+      // _subscribedTrackNames entry and mid mapping — a concurrent stale
+      // snapshot sees the owner without 'screen' (or the owner as ghosted) while
+      // the new screen's tracks/new already resolved.  Dropping them here would
+      // make the incoming ontrack fall back to the opaque stream.id.
+      const protectedNativeIds = new Set<string>()
+      for (const mid of _pendingSubscribeMids) {
+        const info = _remoteMidToTrackName.get(mid)
+        if (info?.sessionId === ownerId && screenNativeIds.includes(info.trackName)) {
+          protectedNativeIds.add(info.trackName)
+        }
+      }
+      for (const nativeId of screenNativeIds) {
+        if (!protectedNativeIds.has(nativeId)) typeMap.delete(nativeId)
+      }
       const already = _subscribedTrackNames.get(ownerId)
       if (already) {
-        _subscribedTrackNames.set(ownerId, already.filter((n) => !screenNativeIds.includes(n)))
+        _subscribedTrackNames.set(ownerId, already.filter((n) =>
+          !screenNativeIds.includes(n) || protectedNativeIds.has(n)))
       }
       for (const [mid, info] of _remoteMidToTrackName) {
         if (info.sessionId === ownerId && screenNativeIds.includes(info.trackName)) {
+          if (protectedNativeIds.has(info.trackName)) {
+            log.warn('[DIAG][pending] protect mid=%s session=%s prune=screen', mid, ownerId)
+            continue
+          }
           _remoteMidToTrackName.delete(mid)
           // F3 FIX (ITER_1 H3): keep the transceiver-scoped meta in lockstep.
           _dropTransceiverMeta(mid)
@@ -1015,6 +1109,15 @@ async function _registerLocalTracksOnSfu(
 function _teardownRemoteMedia(mids: string[]): void {
   if (!_pc || !mids.length) return
   for (const mid of mids) {
+    // F3 FIX (ITER_1 guest-screenshare CICLO 2): never tear down a subscription
+    // still in flight — a concurrent prune can race the incoming screen
+    // (tx.stop() would kill the transceiver the ontrack is about to fire on, and
+    // the map/WeakMap deletion is the race H3 drop).  The pending protection
+    // releases on the ontrack or after the 5s timeout.
+    if (_pendingSubscribeMids.has(mid)) {
+      log.warn('[DIAG][pending] protect mid=%s prune=teardown', mid)
+      continue
+    }
     const tx = _pc.getTransceivers().find((t) => t.mid === mid)
     if (tx && tx.receiver) {
       try {
@@ -1425,6 +1528,12 @@ export function usePartyCalls(): UsePartyCallsReturn {
         )
       }
     }
+
+    // F3 FIX (ITER_1 guest-screenshare CICLO 2): the ontrack for a pending mid
+    // has fired and classified — the subscription has landed on a tile, so the
+    // pending protection is released (a later legitimate prune of this mid may
+    // proceed).  Runs AFTER the classification read the map/WeakMap.
+    _unmarkMidPending(event.transceiver?.mid ?? null, sessionKey)
 
     // DIAG (F2 ITER_1 H3): after classification, before the tile merge — shows
     // whether this track (audio/video) was resolved via _remoteMidToTrackName to
@@ -2297,6 +2406,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
     _subscribedTrackNames.clear()
     _remoteTrackTypes.clear()
     _remoteMidToTrackName.clear()
+    // F3 FIX (ITER_1 guest-screenshare CICLO 2): drop any pending-subscription
+    // protection — a stale pending mid must never survive into the next call on
+    // this recycled module-level state.
+    _pendingSubscribeMids.clear()
     // F3 FIX (ITER_1 H3): drop every transceiver-scoped meta before the pc is
     // closed (the WeakMap would GC them anyway, but clear explicitly so a
     // recycled module-level WeakMap can never tag a future session's mid).
