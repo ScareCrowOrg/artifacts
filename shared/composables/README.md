@@ -52,6 +52,7 @@ This directory provides a single source of truth for reusable Vue composition fu
 | Directory | Description |
 |-----------|-------------|
 | `actions/` | Action composables organized by domain (AI models, audit, books, cells, config, discovery, GitHub, issues, permissions, proposals, roles, runtime, services, sessions, system, traces, users, utilities) |
+| `party-calls/` | Módulos do composable `usePartyCalls` (Cloudflare Calls/WebRTC): types, state, http, sfuSignaling, subscription, discovery, remoteMedia, localMedia — ver [README.md](party-calls/README.md) |
 
 ## Usage
 

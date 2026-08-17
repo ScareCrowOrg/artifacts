@@ -25,6 +25,12 @@ export default defineConfig({
     include: [
       './canonical/cell_types/**/tests/**/*.spec.ts',
       './canonical/cell_types/**/tests/**/*.test.ts',
+      // usePartyCalls (shared composable) lives in shared/composables/__tests__/,
+      // outside the canonical/cell_types glob.  Wired in so `npx vitest run`
+      // covers it.  (Other __tests__/ files, ex: useBaseViewer.test.ts, are NOT
+      // wired because they still have unresolved @/stores imports — see
+      // party-calls-modularization PR review finding #11.)
+      './shared/composables/__tests__/usePartyCalls.test.ts',
     ],
   },
   resolve: {
@@ -35,6 +41,13 @@ export default defineConfig({
       // Stubs — real implementations are provided by vi.mock() in each test
       '@/services/apiService.js': path.resolve(__dirname, 'tests/stubs/apiService.js'),
       '@/config/endpoints.js': path.resolve(__dirname, 'tests/stubs/endpoints.js'),
+      // Subpath imports (mirror of vite.config.ts) — needed by shared composable
+      // tests (ex: usePartyCalls.test.ts mocks #artifacts/shared/services/apiService)
+      '#artifacts': __dirname,
+      '#shared': path.resolve(__dirname, 'shared'),
+      '#canonical': path.resolve(__dirname, 'canonical'),
+      '#runtime': path.resolve(__dirname, 'runtime'),
+      '#sandbox': path.resolve(__dirname, 'sandbox'),
     },
   },
   coverage: {
