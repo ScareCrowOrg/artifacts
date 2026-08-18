@@ -19,7 +19,6 @@ import {
   _remoteMidToTrackName,
   _transceiverMeta,
   _unmarkMidPending,
-  _subscribedSessions,
   _remoteStreamAddedAt,
   _REMOTE_STREAM_GRACE_MS,
   _subscribedTrackNames,
@@ -49,13 +48,19 @@ function _cleanupEndedRemoteTrack(
   // three call sites in _handleRemoteTrack pass their fixed literal.
   origin: 'onmute' | 'onended' | 'onremovetrack' | 'unknown' = 'unknown',
   remoteStreams: Ref<Map<string, MediaStream>>,
+  // F1 FIX (bug-hardening): bypass the grace-period guard.  Used ONLY for a
+  // non-screen (mic/camera) track that ARRIVED already ended — a genuinely dead
+  // track (the publisher stopped it) has no reason to keep a black tile, so the
+  // 400ms grace guard (which exists to protect NEW tiles from spurious
+  // same-dispatch mute/ended events) must not defer its removal.
+  bypassGrace = false,
 ): void {
-  // DIAG (F2 CICLO 3, B1): prove the cleanup fired and against which tile.
-  // F7 cross-references [DIAG][merge] "screen added key={sid}/screen" →
-  // [DIAG][cleanup] origin=... key={sid}/screen → [DIAG][cleanup] removed — the
-  // spurious-removal sequence in the SAME dispatch as the ontrack.
+  // Prove the cleanup fired and against which tile: F7 cross-references the
+  // merge "screen added key={sid}/screen" → [cleanup] origin=... key={sid}/screen
+  // → [cleanup] removed — the spurious-removal sequence in the SAME dispatch as
+  // the ontrack.
   log.warn(
-    '[DIAG][cleanup] origin=%s key=%s mid=%s trackName=%s',
+    '[cleanup] origin=%s key=%s mid=%s trackName=%s',
     origin, key, mid ?? 'none', trackName ?? 'none',
   )
   // F3 FIX (ITER_1 guest-screenshare CICLO 3): grace-period guard against the
@@ -68,9 +73,9 @@ function _cleanupEndedRemoteTrack(
   // of this subscription is handled by the B2 registry prune and by any
   // post-grace end-of-track event (both arrive well after the grace window).
   const _addedAt = _remoteStreamAddedAt.get(key)
-  if (_addedAt !== undefined && Date.now() - _addedAt < _REMOTE_STREAM_GRACE_MS) {
+  if (!bypassGrace && _addedAt !== undefined && Date.now() - _addedAt < _REMOTE_STREAM_GRACE_MS) {
     log.warn(
-      '[DIAG][cleanup] blocked key=%s origin=%s age_ms=%d (tile just added — spurious end-track guard)',
+      '[cleanup] blocked key=%s origin=%s age_ms=%d (tile just added — spurious end-track guard)',
       key, origin, Date.now() - _addedAt,
     )
     return
@@ -84,7 +89,7 @@ function _cleanupEndedRemoteTrack(
     // silent blind spot of this bug class (took 3+ iterations to find).  Keep
     // the removal visible permanently so any future silent tile loss is caught
     // on the first run instead of after N E2E passes.
-    log.warn('[DIAG][cleanup] removed key=%s size=%d', key, remoteStreams.value.size)
+    log.warn('[cleanup] removed key=%s size=%d', key, remoteStreams.value.size)
   }
   if (mid) _teardownRemoteMedia([mid], 'cleanup')
   const ownerId = key.endsWith('/screen') ? key.slice(0, -'/screen'.length) : key
@@ -96,6 +101,23 @@ function _cleanupEndedRemoteTrack(
     const typeMap = _remoteTrackTypes.get(ownerId)
     if (typeMap) typeMap.delete(trackName)
   }
+  if (!_subscribedTrackNames.get(ownerId)?.length) _subscribedTrackNames.delete(ownerId)
+  if (!_remoteTrackTypes.get(ownerId)?.size) _remoteTrackTypes.delete(ownerId)
+}
+
+/** R#1/R#4 FIX (review #3077): drop a single trackName from the per-owner
+ *  subscription maps WITHOUT touching the participant tile.  Used by the
+ *  keep-tile cleanup paths — a dead non-screen track arriving while the owner
+ *  has a LIVE tile (F1 regression), and an onremovetrack that leaves surviving
+ *  tracks on the merged stream (F2) — which tear down only the removed track's
+ *  transceiver + mapping, never the whole tile. */
+function _dropTrackNameMapping(sessionKey: string, trackName: string | null): void {
+  if (!trackName) return
+  const ownerId = sessionKey.endsWith('/screen') ? sessionKey.slice(0, -'/screen'.length) : sessionKey
+  const already = _subscribedTrackNames.get(ownerId)
+  if (already) _subscribedTrackNames.set(ownerId, already.filter((n) => n !== trackName))
+  const typeMap = _remoteTrackTypes.get(ownerId)
+  if (typeMap) typeMap.delete(trackName)
   if (!_subscribedTrackNames.get(ownerId)?.length) _subscribedTrackNames.delete(ownerId)
   if (!_remoteTrackTypes.get(ownerId)?.size) _remoteTrackTypes.delete(ownerId)
 }
@@ -120,39 +142,8 @@ export function _handleRemoteTrack(
   const stream = Array.isArray(event.streams) && event.streams.length > 0
     ? event.streams[0]
     : null
-  // DIAG (F2 ITER_1 H1 — DECISIVE): emitted BEFORE stream-creation so the
-  // evidence of the F3 fix is captured.  Records kind/streams_len/mid on EVERY
-  // ontrack — including the previously-dropped empty-stream video case — so F7
-  // can confirm kind=video streams_len=0 still classifies + merges (H1 fixed).
-  // receiver_readyState/muted double as the lightweight H2 probe (no RTP →
-  // readyState stays 0/muted); the [DIAG][stats] dump adds bytesReceived.
-  log.warn(
-    '[DIAG][ontrack-before-drop] kind=%s track_id=%s mid=%s streams_len=%d stream_present=%s stream_id=%s receiver_readyState=%s receiver_muted=%s',
-    event.track.kind, event.track.id, event.transceiver?.mid ?? 'none',
-    Array.isArray(event.streams) ? event.streams.length : -1,
-    stream ? 'yes' : 'no', stream?.id ?? 'none',
-    event.receiver?.track.readyState ?? 'n/a', event.receiver?.track.muted ?? 'n/a',
-  )
-
-  // DIAG (F2 CICLO 4): capture the raw ontrack fields BEFORE classification.
-  // Cloudflare delivers an OPAQUE track.id (no '/'), so the regex branch below
-  // never matches and classification must resolve the owner via
-  // event.transceiver.mid → _remoteMidToTrackName (F3). This log lets F7
-  // confirm the mid present on the ontrack (e.g. '4' for the screen) matches
-  // the mid echoed in the tracks/new response (see the [DIAG][subscribe]
-  // mid_map log) — the bridge that makes an opaque track.id classifiable.
-  log.warn(
-    '[DIAG][remote-track] ontrack kind=%s session=%s track_id=%s track_id_has_slash=%s transceiver_mid=%s stream_id=%s',
-    event.track.kind, state._currentSessionId, event.track.id, /\//.test(event.track.id || ''),
-    event.transceiver?.mid ?? 'none', stream ? stream.id : 'none',
-  )
-
   const trackIdMatch = /^([^/]+)\/(.+)$/.exec(event.track.id || '')
   let sessionKey: string
-  // F3 FIX (ITER_1 H3): where the owner/trackName classification came from —
-  // reported on the classified DIAG so F7 can prove the WeakMap anchor
-  // resolved the video (meta_source=transceiver) vs the global mid Map.
-  let metaSource: 'map' | 'transceiver' | 'none' = 'none'
   if (trackIdMatch) {
     // Backward compat: track.id in the historical {sessionId}/{trackName}
     // slash format.  Cloudflare does NOT deliver this on the receiving side
@@ -161,12 +152,6 @@ export function _handleRemoteTrack(
     const trackName = trackIdMatch[2]
     const display = _remoteTrackTypes.get(ownerId)?.get(trackName)
     sessionKey = display === 'screen' ? `${ownerId}/screen` : ownerId
-    if (display === 'screen') {
-      log.warn(
-        '[DIAG][remote-track] screen track received sessionId=%s trackName=%s sessionKey=%s stream_id=%s',
-        ownerId, trackName, sessionKey, stream ? stream.id : 'none',
-      )
-    }
   } else {
     // F3 FIX (CICLO 4): the real Cloudflare receiver delivers an OPAQUE
     // track.id (no '/'), so classify via event.transceiver.mid → the
@@ -186,9 +171,7 @@ export function _handleRemoteTrack(
     // meta: the ontrack's OWN RTCRtpTransceiver is stable, so its WeakMap
     // entry is race-immune.
     let info = transceiverMid ? _remoteMidToTrackName.get(transceiverMid) : undefined
-    if (info) {
-      metaSource = 'map'
-    } else if (event.transceiver) {
+    if (!info && event.transceiver) {
       // F3 FIX (ITER_1 guest-screenshare): edge-case defense for the NEW
       // screen transceiver.  If the global mid map STILL carries this mid but
       // the WeakMap was never anchored for the transceiver — the transceiver is
@@ -201,88 +184,27 @@ export function _handleRemoteTrack(
         _transceiverMeta.set(event.transceiver, _remoteMidToTrackName.get(transceiverMid)!)
       }
       info = _transceiverMeta.get(event.transceiver) ?? undefined
-      if (info) metaSource = 'transceiver'
     }
     if (info) {
       const ownerId = info.sessionId
       const display = _remoteTrackTypes.get(ownerId)?.get(info.trackName)
       sessionKey = display === 'screen' ? `${ownerId}/screen` : ownerId
-      if (display === 'screen') {
-        log.warn(
-          '[DIAG][remote-track] screen track received sessionId=%s trackName=%s sessionKey=%s stream_id=%s',
-          ownerId, info.trackName, sessionKey, stream ? stream.id : 'none',
-        )
-      }
     } else {
       // Last resort: mid absent (very old browser without transceiver) or the
       // track was never mapped — keep the historical stream.id behavior; when
       // event.streams was EMPTY there is no stream.id, so key by the opaque
       // track id (defensive — mid-map should have resolved a real track).
       sessionKey = stream ? stream.id : (event.track.id || 'remote')
-      // DIAG (ITER_1 party-cell-mock-remote-user, H2): this is the OPAQUE-key
-      // fallback — a track that resolved to NO owner.  Surface WHY: mid present
-      // but missing from the mid→{sessionId,trackName} map (pruned/never
-      // populated) vs mid absent entirely.  A tile keyed by stream.id/track.id
-      // never matches a participant (permanent "Usuário Remoto") and is never
-      // pruned (prune only removes known owner keys).  Cross-reference the
-      // sessionKey against the [DIAG][discovery] enumeration: it appears there
-      // ⇒ H1, absent ⇒ H2 confirmed.
-      log.warn(
-        '[DIAG][remote-track][H2-OPAQUE-FALLBACK] kind=%s mid=%s mid_in_map=%s mid_in_txmeta=%s sessionKey=%s track_id=%s subscribed_sessions=%j',
-        event.track.kind,
-        event.transceiver?.mid ?? 'none',
-        event.transceiver?.mid ? _remoteMidToTrackName.has(event.transceiver.mid) : false,
-        event.transceiver ? _transceiverMeta.has(event.transceiver) : false,
-        sessionKey,
-        event.track.id,
-        [..._subscribedSessions],
-      )
     }
   }
 
-  // F3 FIX (ITER_1 guest-screenshare CICLO 2): the ontrack for a pending mid
-  // has fired and classified — the subscription has landed on a tile, so the
-  // pending protection is released (a later legitimate prune of this mid may
-  // proceed).  Runs AFTER the classification read the map/WeakMap.
-  _unmarkMidPending(event.transceiver?.mid ?? null, sessionKey)
+  // G1 FIX (bug-hardening): the pending protection is NO LONGER released here —
+  // the ontrack fires BEFORE the subscription is confirmed on the SFU
+  // (_subscribedSessions.add runs after the PUT /renegotiate round-trip), so
+  // releasing at the ontrack re-opened the race: a concurrent stale prune in
+  // the ontrack→confirm gap dropped the just-arrived tile.  The release now
+  // happens in _subscribeToRemoteTracks after the subscription confirms.
 
-  // DIAG (F2 ITER_1 H3): after classification, before the tile merge — shows
-  // whether this track (audio/video) was resolved via _remoteMidToTrackName to
-  // the OWNER tile (sessionKey = ownerId) or fell back to the OPAQUE stream.id
-  // (a separate, generic "remoteUser" tile).  kind=video + via_stream_id_fallback=yes
-  // ⇒ the video never merged into the publisher's tile — consistent with H3.
-  log.warn(
-    '[DIAG][remote-track-classified] kind=%s sessionKey=%s mid=%s via_stream_id_fallback=%s meta_source=%s',
-    event.track.kind, sessionKey, event.transceiver?.mid ?? 'none',
-    (stream && sessionKey === stream.id) ? 'yes' : 'no',
-    metaSource,
-  )
-
-  // DIAG (B1/B4 — CRITICAL F1+F2 proof): full dump when this ontrack is the
-  // SCREEN (resolved to '{sid}/screen') OR fell to the opaque stream.id
-  // fallback (metaSource 'none' — a screen whose mid was pruned/never mapped
-  // is indistinguishable from a camera here; the dump proves the map state).
-  //  • mid_map_entries — the GLOBAL map at ontrack time: if the screen mid is
-  //    MISSING despite a populated map, a concurrent prune dropped it (race
-  //    H3, F2).
-  //  • tx_meta_present/tx_meta — the _transceiverMeta WeakMap entry for the
-  //    ontrack's OWN transceiver: '(none)' for a NEW screen transceiver
-  //    proves F1 (no race-immune fallback → classification depends 100% on
-  //    the global map).
-  //  • meta_source — which path classified this track: 'map' (:1280) /
-  //    'transceiver' (:1284) / 'none' (opaque fallback :1302).
-  if (event.track.kind === 'video' && (sessionKey.endsWith('/screen') || metaSource === 'none')) {
-    const _txMetaVal = event.transceiver ? _transceiverMeta.get(event.transceiver) : undefined
-    log.warn(
-      '[DIAG][ontrack][screen] kind=%s sessionKey=%s mid=%s meta_source=%s track_id=%s stream_id=%s opaque=%s mid_map_entries=%s tx_meta_present=%s tx_meta=%s',
-      event.track.kind, sessionKey, event.transceiver?.mid ?? 'none', metaSource,
-      event.track.id, stream ? stream.id : 'none',
-      (stream && sessionKey === stream.id) ? 'yes' : 'no',
-      JSON.stringify([..._remoteMidToTrackName.entries()]),
-      event.transceiver ? _transceiverMeta.has(event.transceiver) : false,
-      _txMetaVal ? JSON.stringify(_txMetaVal) : '(none)',
-    )
-  }
 
   // F3 FIX (ITER_1 H1): NEVER drop a remote track that arrived with an EMPTY
   // event.streams.  Create a fresh MediaStream and attach the track so the merge
@@ -302,6 +224,12 @@ export function _handleRemoteTrack(
   // stopped or the SFU dropped it).  Camera/mic mute stays reversible
   // (onmute/onunmute no-op, no cleanup).
   const _txMid = event.transceiver?.mid ?? null
+  // F1 FIX (bug-hardening): when a NON-screen incoming stream arrives with ALL
+  // its tracks already ended, the subscription is genuinely dead (the publisher
+  // stopped the mic/camera) — the tile must NOT be added (a black camera tile
+  // that lingers until the session leaves).  Set by the bind loop below; the
+  // merge step checks it before creating/merging the tile.
+  let _deadNonScreenStream = false
   // F3 FIX (ITER_1 H3): mirror the classification fallback — bind the end-of-
   // track handlers to the SAME owner/trackName the ontrack resolved (WeakMap
   // anchor when the global mid Map was already pruned before the handlers fire).
@@ -312,16 +240,6 @@ export function _handleRemoteTrack(
     ? _remoteTrackTypes.get(_infoAtReceive.sessionId)?.get(_infoAtReceive.trackName)
     : undefined
   const _bindTrackEndHandlers = (trk: MediaStreamTrack) => {
-    // DIAG (F2 CICLO 3, B2): record the track state at BIND time.  If the
-    // screen track arrives ALREADY ended/muted (stale echo of the pruned host
-    // camera on the reused mid-1 transceiver), Chrome fires mute/ended right
-    // after the ontrack returns → spurious cleanup.  F7 reads this to confirm
-    // the bound track is the stale one (cross-ref [DIAG][ontrack-before-drop]
-    // receiver_readyState=ended receiver_muted=true).
-    log.warn(
-      '[DIAG][bind] key=%s track_id=%s kind=%s readyState=%s muted=%s',
-      sessionKey, trk.id, trk.kind, trk.readyState, trk.muted,
-    )
     // F3 FIX (ITER_1 guest-screenshare CICLO 3): if the track arrived ALREADY
     // ended (the stale echo of a pruned camera riding a REUSED transceiver mid —
     // confirmed in F7 by receiver_readyState=ended receiver_muted=true on the
@@ -334,39 +252,101 @@ export function _handleRemoteTrack(
     // persists (video validity is validated by F7).
     if (trk.readyState === 'ended') {
       log.warn(
-        '[DIAG][bind-skip] key=%s track_id=%s kind=%s readyState=ended — stale track on reused transceiver, end handlers NOT bound',
+        '[bind-skip] key=%s track_id=%s kind=%s readyState=ended — stale track on reused transceiver, end handlers NOT bound',
         sessionKey, trk.id, trk.kind,
       )
+      // F1 FIX (bug-hardening): a NON-SCREEN (mic/camera) track that arrives
+      // ALREADY ended is genuinely dead — the publisher stopped it and no
+      // newer track is coming on this transceiver (unlike a SCREEN arriving as
+      // the stale echo of a pruned camera, which the grace guard protects).  If
+      // the whole incoming stream is dead, do not add the tile at all and clean
+      // up the mapping + transceiver (bypassing the grace guard — a dead tile
+      // has no reason to render black until the session leaves).
+      if (!sessionKey.endsWith('/screen') && effectiveStream.getTracks().every((t: MediaStreamTrack) => t.readyState === 'ended')) {
+        _deadNonScreenStream = true
+        // This mid's ontrack HAS fired (with a genuinely dead track) — release
+        // the pending protection so _teardownRemoteMedia (inside the cleanup)
+        // is not deferred by it: there is nothing left to protect, and the dead
+        // track + its mapping must not leak until the session leaves.
+        _unmarkMidPending(_txMid, sessionKey)
+        // R#1 (review #3077): a dead non-screen track must NEVER delete a LIVE
+        // participant tile.  If the owner already has a tile with a live track
+        // (e.g. the mic from a prior audio ontrack), tear down ONLY the dead
+        // track's transceiver + mapping and keep the tile — the full-tile
+        // cleanup below runs only when the participant has no live tile.
+        const _existing = remoteStreams.value.get(sessionKey)
+        const _existingHasLive = _existing
+          ? _existing.getTracks().some((t: MediaStreamTrack) => t.readyState !== 'ended')
+          : false
+        if (_existingHasLive) {
+          log.warn(
+            '[cleanup] dead non-screen track skipped — owner tile has live tracks key=%s trackName=%s',
+            sessionKey, _trackNameAtReceive ?? 'none',
+          )
+          if (_txMid) _teardownRemoteMedia([_txMid], 'cleanup')
+          _dropTrackNameMapping(sessionKey, _trackNameAtReceive)
+        } else {
+          _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive, 'onended', remoteStreams, true)
+        }
+      }
       return
     }
     trk.onended = () => {
-      // DIAG (F2 CICLO 3, B2): prove the end-of-track handler FIRED and against
-      // which tile key (real end vs spurious stale-track event).
-      log.warn('[DIAG][track-event] onended fired key=%s', sessionKey)
       _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive, 'onended', remoteStreams)
     }
     trk.onmute = () => {
+      // Screen tracks have no mute button — a mute means the publisher stopped
+      // or the SFU dropped it → cleanup.  Camera/mic mute stays reversible (skip).
       if (_displayAtReceive === 'screen') {
-        // DIAG (F2 CICLO 3, B2): the mute handler fired on a SCREEN track — the
-        // only mute path that calls cleanup.  If the bound track is the stale
-        // ended/muted one, this is the spurious removal trigger.
-        log.warn('[DIAG][track-event] onmute fired key=%s gate=screen', sessionKey)
         _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive, 'onmute', remoteStreams)
-      } else {
-        // DIAG (F2 CICLO 3): mute on a camera/mic track is reversible — no
-        // cleanup.  Logging the gate=skip path keeps the trace complete so F7
-        // can prove the gate decision (not a silent no-op).
-        log.warn(
-          '[DIAG][track-event] onmute fired key=%s gate=skip display=%s',
-          sessionKey, _displayAtReceive ?? 'none',
-        )
       }
     }
     trk.onunmute = () => { /* camera/mic mute stays reversible — no cleanup */ }
   }
   for (const trk of effectiveStream.getTracks()) _bindTrackEndHandlers(trk)
-  effectiveStream.onremovetrack = () => {
-    _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive, 'onremovetrack', remoteStreams)
+  // F2 FIX (bug-hardening): event-driven onremovetrack — resolve the removed
+  // track's OWN transceiver/mid/trackName at event time instead of closing over
+  // the FIRST track's values.  The old closure made a merged stream's
+  // onremovetrack clean up the wrong transceiver (the first track's mid) when a
+  // DIFFERENT track was removed — killing a live mic while re-subscribing with
+  // a duplicate mid.  The handler is re-bound to the surviving stream on the
+  // merge path below so it always targets the removed track's transceiver.
+  const _bindOnRemoveTrack = (stream: MediaStream) => {
+    stream.onremovetrack = (ev: Event) => {
+      const removedTrack = (ev as MediaStreamTrackEvent).track
+      const removedTx = state._pc
+        ? state._pc.getTransceivers().find((t) => t.receiver?.track === removedTrack)
+        : undefined
+      const removedMid = removedTx?.mid ?? null
+      const removedInfo = (removedMid ? _remoteMidToTrackName.get(removedMid) : undefined)
+        ?? (removedTx ? _transceiverMeta.get(removedTx) : undefined)
+      const removedTrackName = removedInfo?.trackName ?? null
+      // R#4 (review #3077): a single-track removal from a MERGED participant
+      // stream must not delete the whole tile — the browser already removed the
+      // track from `stream`; if OTHER tracks remain (e.g. the mic while only the
+      // camera was stopped), keep the tile alive and tear down ONLY the removed
+      // track's transceiver + mapping.  Full tile teardown runs only when
+      // nothing remains.
+      const remaining = stream.getTracks().filter((t: MediaStreamTrack) => t !== removedTrack)
+      if (remaining.length > 0) {
+        log.warn(
+          '[cleanup] onremovetrack key=%s — tile kept (remaining=%d) mid=%s trackName=%s',
+          sessionKey, remaining.length, removedMid ?? 'none', removedTrackName ?? 'none',
+        )
+        if (removedMid) _teardownRemoteMedia([removedMid], 'cleanup')
+        _dropTrackNameMapping(sessionKey, removedTrackName)
+      } else {
+        _cleanupEndedRemoteTrack(sessionKey, removedMid, removedTrackName, 'onremovetrack', remoteStreams)
+      }
+    }
+  }
+  _bindOnRemoveTrack(effectiveStream)
+
+  // F1 FIX (bug-hardening): a non-screen incoming stream that arrived with all
+  // tracks ended was already cleaned up in the bind loop — do NOT add its tile.
+  if (_deadNonScreenStream) {
+    log.warn('[cleanup] dead non-screen stream key=%s — tile not added', sessionKey)
+    return
   }
 
   const next = new Map(remoteStreams.value)
@@ -378,6 +358,10 @@ export function _handleRemoteTrack(
         existing.addTrack(track)
       }
     }
+    // F2 FIX (bug-hardening): re-bind onremovetrack on the SURVIVING stream so
+    // a later removal cleans up the removed track's own transceiver (the old
+    // code kept the abandoned stream's first-track closure).
+    _bindOnRemoveTrack(existing)
     next.set(sessionKey, existing)
   } else {
     next.set(sessionKey, effectiveStream)
@@ -389,14 +373,5 @@ export function _handleRemoteTrack(
   // riding a reused transceiver mid).  Reset on every merge; a real end arrives
   // well past the grace window, so this never defers a genuine teardown.
   _remoteStreamAddedAt.set(sessionKey, Date.now())
-  // DIAG (F2 CICLO 3, B1): proof the classified SCREEN tile ENTERED the reactive
-  // Map.  F7 expects the spurious-removal sequence: [DIAG][merge] screen added
-  // key={sid}/screen → [DIAG][cleanup] origin=onmute|onended key={sid}/screen →
-  // [DIAG][cleanup] removed key={sid}/screen, all in the SAME dispatch as the
-  // ontrack.  size = Map size after the set (a persistent tile stays ≥ its
-  // pre-merge size; a spurious removal drops it back).
-  if (sessionKey.endsWith('/screen')) {
-    log.warn('[DIAG][merge] screen added key=%s size=%d', sessionKey, remoteStreams.value.size)
-  }
   log.debug('[PC] remote track received, key=%s', sessionKey)
 }

@@ -36,10 +36,6 @@ export function _waitForIceConnected(
     }
     const onChange = () => {
       const s = pc.iceConnectionState
-      log.warn(
-        '[DIAG][PC] iceConnectionState=%s connectionState=%s',
-        s, pc.connectionState,
-      )
       if (s === 'connected' || s === 'completed') done(true)
       else if (s === 'failed' || s === 'disconnected' || s === 'closed') done(false)
     }
@@ -76,9 +72,7 @@ export async function _registerLocalTracksOnSfu(
 
   const connected = await _waitForIceConnected(pc, 10_000)
   if (!connected) {
-    log.warn(
-      '[DIAG][publish] ICE not connected within timeout — local tracks NOT registered on SFU',
-    )
+    log.warn('[publish] ICE not connected within timeout — local tracks NOT registered on SFU')
     return null
   }
 
@@ -97,23 +91,18 @@ export async function _registerLocalTracksOnSfu(
     if (sessionDescription && sessionDescription.sdp) {
       body.sessionDescription = sessionDescription
     }
-    log.warn(
-      '[DIAG][publish] tracks/new session=%s has_sdp=%s sdp_type=%s sdp_len=%d',
-      sessionId,
-      Object.prototype.hasOwnProperty.call(body, 'sessionDescription') ? 'yes' : 'no',
-      sessionDescription?.type,
-      String(sessionDescription?.sdp || '').length,
-    )
     const result = await _apiFetchJson(
       `/calls/sessions/${sessionId}/tracks/new`,
       { method: 'POST', body: JSON.stringify(body) },
     )
+    // PERMANENTE: the per-track resolution of the registration — a track with an
+    // errorCode was NOT resolved on the SFU and must never be advertised.
     const perTrack = (Array.isArray(result?.tracks) ? result.tracks : [])
       .map((t: SfuTrackResult) => (t && typeof t === 'object'
         ? { trackName: t.trackName, mid: t.mid, errorCode: t.errorCode, errorDescription: t.errorDescription }
         : t))
     log.warn(
-      '[DIAG][publish] local tracks registered on SFU session=%s answer_type=%s answer_sdp_len=%d requires_renog=%s per_track=%j',
+      '[publish] local tracks registered on SFU session=%s answer_type=%s answer_sdp_len=%d requires_renog=%s per_track=%j',
       sessionId,
       result?.sessionDescription?.type,
       String(result?.sessionDescription?.sdp || '').length,
@@ -126,7 +115,7 @@ export async function _registerLocalTracksOnSfu(
     return result
   } catch (err) {
     log.warn(
-      '[DIAG][publish] local track registration failed session=%s: %s',
+      '[publish] local track registration failed session=%s: %s',
       sessionId, err instanceof Error ? err.message : String(err),
     )
     return null
@@ -146,13 +135,13 @@ export async function _registerLocalTracksOnSfu(
  */
 export function _teardownRemoteMedia(mids: string[], callerLabel = 'unknown'): void {
   if (!state._pc || !mids.length) return
-  // DIAG (F2 CICLO 3, B5): prove WHICH path stopped the receiver transceivers
-  // ('cleanup' = _cleanupEndedRemoteTrack / end-of-track handler, 'prune' =
-  // discovery B2 removeScreenMapping).  A 'cleanup' teardown of mid=1 logged
-  // right after [DIAG][merge] screen added confirms the spurious end-of-track
-  // handler is the one stopping the just-received screen — NOT the prune (which
-  // would also bump owners_to_prune/screen_removed in [DIAG][discovery][end]).
-  log.warn('[DIAG][teardown] caller=%s mids=%s', callerLabel, JSON.stringify(mids))
+  // Prove WHICH path stopped the receiver transceivers ('cleanup' =
+  // _cleanupEndedRemoteTrack / end-of-track handler, 'prune' = discovery B2
+  // removeScreenMapping).  A 'cleanup' teardown of mid=1 logged right after the
+  // merge confirms the spurious end-of-track handler is the one stopping the
+  // just-received screen — NOT the prune (which would also bump
+  // owners_to_prune/screen_removed in the discovery end prune).
+  log.warn('[teardown] caller=%s mids=%s', callerLabel, JSON.stringify(mids))
   for (const mid of mids) {
     // F3 FIX (ITER_1 guest-screenshare CICLO 2): never tear down a subscription
     // still in flight — a concurrent prune can race the incoming screen
@@ -160,14 +149,19 @@ export function _teardownRemoteMedia(mids: string[], callerLabel = 'unknown'): v
     // the map/WeakMap deletion is the race H3 drop).  The pending protection
     // releases on the ontrack or after the 5s timeout.
     if (_pendingSubscribeMids.has(mid)) {
-      log.warn('[DIAG][pending] protect mid=%s prune=teardown', mid)
+      log.warn('[pending] protect mid=%s prune=teardown', mid)
       continue
     }
     const tx = state._pc.getTransceivers().find((t) => t.mid === mid)
     if (tx && tx.receiver) {
       try {
         tx.stop()
-        state._pc.removeTransceiver(tx)
+        // F12 FIX (bug-hardening): removeTransceiver is not exposed on the
+        // installed lib.dom RTCPeerConnection type (TS2339) — safe-cast so
+        // `tsc --noEmit` is clean while keeping the real browser API call
+        // (removeTransceiver stops + removes the transceiver; transceiver.stop()
+        // above is the fallback when the method is absent).
+        ;(state._pc as RTCPeerConnection & { removeTransceiver?: (t: RTCRtpTransceiver) => void }).removeTransceiver?.(tx)
       } catch {
         try { tx.direction = 'inactive' } catch { /* ignore */ }
       }
@@ -211,6 +205,70 @@ export async function _answerSfuRenegotiationOffer(respSd: RTCSessionDescription
 }
 
 /**
+ * F9 FIX (bug-hardening): single implementation of the PUBLISHER renegotiation
+ * close after a ``tracks/new`` (local) response — previously byte-identical in
+ * ``_enableLocalTrack`` and ``shareStream`` (deduplicated).  Handles the three
+ * response shapes:
+ *
+ *  1. ``requiresImmediateRenegotiation`` + SFU offer → answer via
+ *     ``_answerSfuRenegotiationOffer`` (PUT /renegotiate);
+ *  2. direct answer SDP → apply as-is via ``setRemoteDescription``;
+ *  3. nothing usable (regResult null/absent or a per-track errorCode) → G2:
+ *     ROLL BACK the local offer (``setLocalDescription({type:'rollback'})``) so
+ *     the PC returns to 'stable' instead of wedging in 'have-local-offer' — a
+ *     wedged PC makes every later ``createOffer`` throw ``InvalidStateError``
+ *     and the call is unrecoverable until ``hangUp``.
+ *
+ * Returns ``true`` when an SDP was applied (renegotiation closed cleanly);
+ * ``false`` when nothing was applied — the caller MUST NOT publish the track to
+ * the registry/presence (the SFU never registered it).
+ */
+export async function _closeLocalRenegotiation(regResult: any): Promise<boolean> {
+  if (!state._pc || !state._currentSessionId) return false
+  const respSd = regResult?.sessionDescription
+  const respSdp = respSd?.sdp ? String(respSd.sdp) : ''
+  // R#2 (review #3077): a per-track errorCode means the SFU did NOT resolve the
+  // track — the caller MUST NOT publish it, whatever SDP shape the response
+  // carries.  Checked BEFORE any setRemoteDescription: a rollback only works
+  // from 'have-local-offer' — after an answer is applied the PC is 'stable' and
+  // cannot roll back.  This closes the hole where a direct-answer SDP carrying
+  // per-track errors was applied and returned true → the track announced in
+  // registry/presence → subscribers stuck on not_found_track_error forever.
+  const trackErrors = (Array.isArray(regResult?.tracks) ? regResult.tracks : [])
+    .filter((t: SfuTrackResult) => t && typeof t === 'object' && (t.errorCode || t.errorDescription))
+  if (trackErrors.length > 0) {
+    log.warn('[closeLocalRenegotiation] per-track errorCode — rolling back local offer track_errors=%j', trackErrors)
+    try {
+      await state._pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit)
+    } catch (rollbackErr) {
+      log.warn('[closeLocalRenegotiation] rollback failed: %s',
+        rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr))
+    }
+    return false
+  }
+  if (regResult?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
+    await _answerSfuRenegotiationOffer(respSd)
+    return true
+  }
+  if (respSd?.type === 'answer' && respSdp.length > 0) {
+    await state._pc.setRemoteDescription(new RTCSessionDescription(respSd))
+    return true
+  }
+  if (!regResult) {
+    log.warn('[closeLocalRenegotiation] no SFU response — rolling back local offer')
+  } else {
+    log.warn('[closeLocalRenegotiation] no offer/answer from SFU track_errors=%j', trackErrors)
+  }
+  try {
+    await state._pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit)
+  } catch (rollbackErr) {
+    log.warn('[closeLocalRenegotiation] rollback failed: %s',
+      rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr))
+  }
+  return false
+}
+
+/**
  * Remove a published track from the Cloudflare SFU session (backend
  * ``DELETE /calls/sessions/{sid}/tracks/{mid}`` → Cloudflare
  * ``PUT /sessions/{sid}/tracks/close``).  Called by stopSharing after
@@ -241,17 +299,6 @@ export async function _answerSfuRenegotiationOffer(respSd: RTCSessionDescription
  */
 export async function _removeTrackFromSfu(mid: string): Promise<void> {
   if (!state._currentSessionId) return
-  // DIAG (F2, P3): expose the value actually placed in the URL + the mid
-  // available on the orphaned sendonly screen transceiver (state._orphanScreenTx set
-  // by stopSharing).  The tracks/close contract requires the transceiver MID
-  // (CloseTrackObject.mid), NOT the native MediaStreamTrack id (_screenTrackId)
-  // — F7 greps this line to confirm target === orphan_mid (both the same mid)
-  // after the F3 fix.
-  log.warn(
-    '[stopSharing] _removeTrackFromSfu DIAG target=%s session=%s orphan_mid=%s url=%s',
-    mid, state._currentSessionId, state._orphanScreenTx?.mid ?? 'none',
-    `/calls/sessions/${state._currentSessionId}/tracks/${encodeURIComponent(mid)}`,
-  )
   try {
     const result = await _apiFetchJson(
       `/calls/sessions/${state._currentSessionId}/tracks/${encodeURIComponent(mid)}`,
@@ -261,19 +308,10 @@ export async function _removeTrackFromSfu(mid: string): Promise<void> {
       '[stopSharing] track removed from SFU session=%s track=%s',
       state._currentSessionId, mid,
     )
-    // DIAG (F2, P6): the tracks/close RESPONSE — lets F7 validate the `force`
-    // blind spot (whether the SFU asks for a renegotiation answer).  Requires
-    // the F3 backend change to propagate requiresImmediateRenegotiation/
-    // sessionDescription.
+    // The tracks/close response — the `force` blind spot (whether the SFU asks
+    // for a renegotiation answer).
     const respSd = result?.sessionDescription
     const respSdp = respSd?.sdp ? String(respSd.sdp) : ''
-    log.warn(
-      '[stopSharing] _removeTrackFromSfu DIAG response session=%s target=%s requires_renog=%s resp_sd_type=%s resp_sdp_chars=%d',
-      state._currentSessionId, mid,
-      String(result?.requiresImmediateRenegotiation),
-      respSd?.type,
-      respSdp.length,
-    )
     // P6: if the SFU asks for a renegotiation after the close, answer the offer
     // so the m-section is really removed.  This is the publisher mirror of the
     // subscriber answer flow (_subscribeToRemoteTracks) — the SFU generates the

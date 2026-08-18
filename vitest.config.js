@@ -5,11 +5,12 @@
  * Cell types extending BaseCell resolve @/types and @/utils via shared/.
  * Service and config imports are stubbed (tests override with vi.mock).
  *
- * Usage (from repo root):
- *   npx vitest run --config artifacts/vitest.config.js
- *
- * Usage (from artifacts/ dir):
+ * Usage (from artifacts/ dir — REQUIRED):
  *   npx vitest run
+ *
+ * ⚠️ `npx vitest run --config artifacts/vitest.config.js` from the repo root FAILS
+ * ("No test files found") — `test.include` is resolved relative to the cwd (root),
+ * not the config file location. Run from artifacts/ instead.
  */
 
 import { defineConfig } from 'vitest/config'
@@ -31,6 +32,8 @@ export default defineConfig({
       // wired because they still have unresolved @/stores imports — see
       // party-calls-modularization PR review finding #11.)
       './shared/composables/__tests__/usePartyCalls.test.ts',
+      // Bug-hardening suite (issue party-calls-bug-hardening): G1/F1-F11.
+      './shared/composables/__tests__/usePartyCalls.bugHardening.test.ts',
     ],
   },
   resolve: {

@@ -43,61 +43,13 @@ export async function _refreshDiscovery(
   callerLabel = 'unknown',
 ): Promise<void> {
   if (!state._currentSessionId) return
-  const _dseq = ++state._discoverySeq
-  // DIAG (B4): entry marker for EVERY discovery pass — proves the race H3
-  // concurrency (R1/R3) by letting F3 correlate interleaved [start]/[end]
-  // pairs.  mid_map_size at entry is the state a concurrent prune can drop
-  // before the screen ontrack fires.
-  log.warn(
-    '[DIAG][discovery][start] seq=%d caller=%s room=%s session=%s mid_map_size=%d',
-    _dseq, callerLabel, roomId, state._currentSessionId, _remoteMidToTrackName.size,
-  )
   try {
     const resp = await _apiFetchJson(`/calls/rooms/${roomId}/sessions`)
     const sessions = (resp.sessions || []) as RemoteSession[]
     const activeIds = new Set(sessions.map((s) => s.sessionId))
 
-    // DIAG (ITER_1 party-cell-mock-remote-user): enumerate EVERY session the
-    // registry returned, tagging own-vs-remote and the current user id (from the
-    // caller's OWN registry entry).  Cross-reference with the View.vue
-    // [DIAG][remoteLabel][LOOKUP-FAIL] log: an orphan tile whose ownerId IS in
-    // this list ⇒ H1 (parallel/ghost session); NOT in this list ⇒ H2 (opaque
-    // stream.id key that never matches any session).
-    const _currentUserId = sessions.find((x) => x.sessionId === state._currentSessionId)?.userId
     for (const s of sessions) {
       const isOwn = s.sessionId === state._currentSessionId
-      log.warn(
-        '[DIAG][discovery] session=%s userId=%s displayName=%s own=%s tracks=%j trackNames=%j',
-        s.sessionId, s.userId ?? '(none)', s.displayName ?? '(none)',
-        isOwn ? 'yes' : 'no', s.tracks ?? [], s.trackNames ?? [],
-      )
-      // REV-2 (F4 gate, party-cell-mock-remote-user): a REMOTE session owned by
-      // the SAME user (parallel tab / ghost ≤60s in the registry) IS subscribed
-      // again.  With the backend presence now upserting by sessionId (REV-1,
-      // main.py), each session has its OWN presence entry — so this same-user
-      // tile resolves to its participant and renders with the CORRECT
-      // displayName instead of "Usuário Remoto" (View.vue:482).  The original
-      // F3 FIX (skip same-user) is REVERTED here per the F4 review; the H2
-      // opaque-orphan prune (FIX-2) remains as the "never show orphans" guard.
-      // Other users' sessions are still subscribed (multiuser flow intact).
-      const isSameUser = !isOwn && !!s.userId && !!_currentUserId && s.userId === _currentUserId
-      if (isSameUser) {
-        log.warn(
-          '[DIAG][discovery][H1-SAME-USER] remote session=%s userId=%s == current_user_id=%s — parallel tab / ghost session of the same user (SUBSCRIBED: REV-1 presence-by-sessionId makes its tile resolve to the correct displayName)',
-          s.sessionId, s.userId, _currentUserId,
-        )
-      }
-      if (!isOwn && knownParticipants && !knownParticipants.some((p) => p.sessionId === s.sessionId)) {
-        // GHOST suspect: remote session NOT present in the presence list.  Its
-        // tile (if media resolves) has no matching participant → "Usuário Remoto".
-        // Either a registry ghost (≤60s TTL, calls_rooms.py:63) or a transient
-        // presence race (snapshot not yet converged).
-        log.warn(
-          '[DIAG][discovery][GHOST-SUSPECT] remote session=%s userId=%s NOT in participants=%j — ghost/registry-stale session or presence race',
-          s.sessionId, s.userId ?? '(none)',
-          (knownParticipants || []).map((p) => p.sessionId),
-        )
-      }
       // GAP 4: keep the nativeId → display mapping (positional tracks↔trackNames)
       // so _handleRemoteTrack can tell a screen track from the camera.
       if (s.trackNames && s.trackNames.length) {
@@ -106,7 +58,7 @@ export async function _refreshDiscovery(
           // Positional fragility guard: display labels ↔ native trackNames must
           // stay aligned for the 'screen' classification in _handleRemoteTrack.
           log.warn(
-            '[DIAG][discovery] %s: tracks.length=%d != trackNames.length=%d — screen type may misclassify',
+            '[discovery] %s: tracks.length=%d != trackNames.length=%d — screen type may misclassify',
             s.sessionId, s.tracks.length, s.trackNames.length,
           )
         }
@@ -158,9 +110,20 @@ export async function _refreshDiscovery(
       // screen (race H3).  Defer the owner prune until the pending clears (its
       // ontrack or the 5s timeout); the next discovery re-evaluates.
       if (_ownerHasPendingMids(ownerId)) {
-        log.warn('[DIAG][pending] protect owner=%s prune=owner', ownerId)
+        log.warn('[pending] protect owner=%s prune=owner', ownerId)
         return
       }
+      // F7 FIX (bug-hardening): stop the owner's recvonly receiver transceivers
+      // BEFORE dropping the mappings — a ghosted owner must not keep decoding
+      // RTP from the dead session (previously only the tile + mappings were
+      // dropped; the recvonly receiver kept the SFU subscription alive locally).
+      // _teardownRemoteMedia also deletes the mid→trackName + transceiver meta
+      // for non-pending mids, so the loop below is a safety net for any leftovers.
+      const ownerMids: string[] = []
+      for (const [mid, info] of _remoteMidToTrackName) {
+        if (info.sessionId === ownerId) ownerMids.push(mid)
+      }
+      if (ownerMids.length) _teardownRemoteMedia(ownerMids, 'prune-owner')
       _subscribedSessions.delete(ownerId)
       _subscribedTrackNames.delete(ownerId)
       _remoteTrackTypes.delete(ownerId)
@@ -208,7 +171,7 @@ export async function _refreshDiscovery(
       for (const [mid, info] of _remoteMidToTrackName) {
         if (info.sessionId === ownerId && screenNativeIds.includes(info.trackName)) {
           if (protectedNativeIds.has(info.trackName)) {
-            log.warn('[DIAG][pending] protect mid=%s session=%s prune=screen', mid, ownerId)
+            log.warn('[pending] protect mid=%s session=%s prune=screen', mid, ownerId)
             continue
           }
           _remoteMidToTrackName.delete(mid)
@@ -219,7 +182,6 @@ export async function _refreshDiscovery(
     }
 
     let changed = false
-    let _screenRemovedCount = 0
     // B3 pass 2: decide per key using the pre-computed owner set (never mutated
     // during the iteration) plus the B2 screen-removed condition.
     for (const key of next.keys()) {
@@ -240,17 +202,14 @@ export async function _refreshDiscovery(
       // cleaned.  This is the "never pruned" half of the ghost-tile symptom.
       const opaqueOrphan = !key.endsWith('/screen')
         && !activeIds.has(ownerId) && !_subscribedSessions.has(ownerId)
+      // G1 FIX (bug-hardening): a session with a subscription still IN FLIGHT
+      // (pending mids) is treated as ONE protected set against the prune — the
+      // mappings were already protected in removeOwnerMappings, but the old
+      // `next.delete(key)` below ran REGARDLESS and dropped the just-arrived
+      // tile.  Skip BOTH the tile deletion and the owner prune for such an
+      // owner; the next discovery re-evaluates after the pending clears.
+      const pendingProtected = _ownerHasPendingMids(ownerId)
       if (sessionLeft || screenRemoved || opaqueOrphan) {
-        // DIAG (ITER_1 party-cell-mock-remote-user, H2): the opaque-key tile is
-        // being removed — surfaces the orphan so F7 can confirm the prune fired
-        // for a tile that the discovery subscribe-guard never created (the
-        // session this key belongs to is NOT in activeIds/subscribedSessions).
-        if (opaqueOrphan) {
-          log.warn(
-            '[DIAG][discovery][H2-PRUNED-OPAQUE] key=%s ownerId=%s — tile with opaque/non-resolvable key removed (no participant, never pruned before)',
-            key, ownerId,
-          )
-        }
         // S2 (F3): capture the receiver mids for the removed screen BEFORE the
         // mappings are dropped (removeScreenMapping deletes them), so the
         // recvonly transceivers can be stopped locally — the prune removes the
@@ -265,16 +224,17 @@ export async function _refreshDiscovery(
             }
           }
         }
-        next.delete(key)
+        if (!pendingProtected) {
+          next.delete(key)
+          changed = true
+        }
         if (sessionLeft) removeOwnerMappings(ownerId)
         else removeScreenMapping(ownerId)
         if (screenRemoved) {
-          _screenRemovedCount += 1
           // S2 (F3): stop the receiver transceivers for the removed screen
           // track locally (no tracks/remove endpoint to un-subscribe via SFU).
           _teardownRemoteMedia(screenMids, 'prune')
         }
-        changed = true
       }
     }
 
@@ -282,25 +242,9 @@ export async function _refreshDiscovery(
     for (const ownerId of ownersToPrune) removeOwnerMappings(ownerId)
 
     if (changed) remoteStreams.value = next
-    // DIAG (B4): exit marker — how the mid map + subscribed set changed across
-    // this pass.  owners_to_prune>0 / screen_removed>0 mean a prune deleted
-    // mids; F3 correlates against [start] mid_map_size to prove whether a
-    // CONCURRENT pass pruned the screen mid between population (:376) and the
-    // screen ontrack (race H3).
-    log.warn(
-      '[DIAG][discovery][end] seq=%d caller=%s session=%s mid_map_size=%d owners_to_prune=%d screen_removed=%d subscribed_sessions=%d',
-      _dseq, callerLabel, state._currentSessionId, _remoteMidToTrackName.size,
-      ownersToPrune.size, _screenRemovedCount, _subscribedSessions.size,
-    )
   } catch (err) {
     log.warn('[discovery] refresh failed: %s',
       err instanceof Error ? err.message : String(err))
-    // DIAG (B4): error path still emits the end marker so a failing pass can't
-    // be mistaken for a pass that never ran.
-    log.warn(
-      '[DIAG][discovery][end][error] seq=%d caller=%s session=%s mid_map_size=%d',
-      _dseq, callerLabel, state._currentSessionId, _remoteMidToTrackName.size,
-    )
   }
 }
 
@@ -325,10 +269,6 @@ export async function _registerAndDiscoverSessions(
     tracks,
   }
   if (trackNames.length) body.trackNames = trackNames
-  log.warn(
-    '[DIAG][register] room=%s session=%s tracks=%j trackNames=%j',
-    roomId, state._currentSessionId, tracks, trackNames,
-  )
   await _apiFetchJson(`/calls/rooms/${roomId}/sessions`, {
     method: 'POST',
     body: JSON.stringify(body),
@@ -356,10 +296,6 @@ export async function _updateRegistryTracks(
     tracks,
   }
   if (trackNames.length) body.trackNames = trackNames
-  log.warn(
-    '[DIAG][registry] re-register room=%s session=%s tracks=%j trackNames=%j',
-    roomId, state._currentSessionId, tracks, trackNames,
-  )
   await _apiFetchJson(`/calls/rooms/${roomId}/sessions`, {
     method: 'POST',
     body: JSON.stringify(body),

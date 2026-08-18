@@ -55,10 +55,6 @@ export const state = {
    *  this subscriber (vs H1: the track is dropped client-side at the ontrack
    *  !stream guard). */
   _statsDumpScheduled: false,
-  /** Monotonic seq for _refreshDiscovery entry/exit DIAGs (B4) — lets F3 prove
-   *  concurrent interleavings (race H3) by correlating [start] seq=N with
-   *  [end] seq=N on the SAME discovery pass. */
-  _discoverySeq: 0,
   /** The native MediaStreamTrack id of the currently shared screen (if any) —
    *  used by stopSharing to detach the correct sender from the peer
    *  connection. */
@@ -114,11 +110,22 @@ export const _transceiverMeta = new WeakMap<RTCRtpTransceiver, { sessionId: stri
  * the EXISTING video transceiver (mid 1), the first pass anchored its WeakMap
  * (transceiver_meta_sets=1), yet a concurrent prune dropped BOTH the WeakMap and
  * the global map before the ontrack, so the screen fell back to the opaque
- * stream.id and was pruned.  A mid leaves the set when its ontrack classifies,
- * or after ``_PENDING_SUBSCRIBE_TIMEOUT_MS`` (guard for a subscription whose
- * ontrack never fires — the timeout must never leak protected mids). */
+ * stream.id and was pruned.  G1 (bug-hardening): a mid leaves the set when the
+ * subscription CONFIRMS (``_subscribedSessions.add`` / PUT /renegotiate in
+ * ``_subscribeToRemoteTracks``) — NOT at the ontrack (which fires before the
+ * confirm) — or after ``_PENDING_SUBSCRIBE_TIMEOUT_MS`` (guard for a
+ * subscription whose confirm never completes — the timeout must never leak
+ * protected mids). */
 export const _pendingSubscribeMids = new Set<string>()
 export const _PENDING_SUBSCRIBE_TIMEOUT_MS = 5000
+/**
+ * F4 FIX (bug-hardening): mid → timerId for each pending-subscribe timeout.
+ * Tracked so ``hangUp``/``onUnmounted`` can cancel them all — a stale timer
+ * from a PREVIOUS call must never clear a pending mid re-marked on the NEXT
+ * call (would re-introduce the race-H3 drop).  The timer for a mid is also
+ * cancelled when the mid is released by ``_unmarkMidPending``.
+ */
+export const _pendingSubscribeTimers = new Map<string, number>()
 
 /**
  * F3 FIX (ITER_1 guest-screenshare CICLO 3): wall-clock time each remote-stream
@@ -148,30 +155,52 @@ export function _dropTransceiverMeta(mid: string | null | undefined): void {
 }
 
 /** F3 FIX (CICLO 2): protect the given mids (populated by a remote subscription)
- *  from concurrent prunes until their ontrack classifies or the timeout fires.
- *  One bounded 5s timer per mid, cleared by the ontrack — a timer firing for an
- *  already-cleared mid is a harmless no-op delete. */
+ *  from concurrent prunes until their subscription CONFIRMS (G1 — release moved
+ *  from the ontrack to after _subscribedSessions.add) or the timeout fires.
+ *  One bounded 5s timer per mid, cancelled when the mid is released or on
+ *  hangUp; a timer firing for an already-cleared mid is a harmless no-op. */
 export function _markMidsPending(mids: string[], sessionId: string): void {
   const added: string[] = []
   for (const mid of mids) {
     if (!mid || _pendingSubscribeMids.has(mid)) continue
     _pendingSubscribeMids.add(mid)
     added.push(mid)
-    window.setTimeout(() => {
+    // F4: track the timer id so hangUp/_unmarkMidPending can cancel it.
+    const timerId = window.setTimeout(() => {
       _pendingSubscribeMids.delete(mid)
+      _pendingSubscribeTimers.delete(mid)
     }, _PENDING_SUBSCRIBE_TIMEOUT_MS)
+    _pendingSubscribeTimers.set(mid, timerId)
   }
   if (added.length > 0) {
-    log.warn('[DIAG][pending] marked mids=%j session=%s', added, sessionId)
+    log.warn('[pending] marked mids=%j session=%s', added, sessionId)
   }
 }
 
-/** F3 FIX (CICLO 2): the ontrack for a pending mid fired and classified — the
- *  subscription has landed on a tile, so the pending protection is released. */
+/**
+ * G1 FIX (bug-hardening): the subscription for the given mid has CONFIRMED on
+ * the SFU (after ``_subscribedSessions.add`` / the PUT /renegotiate round-trip)
+ * — the pending protection is released.  This is the ONLY release point; the
+ * ontrack no longer releases it (releasing at the ontrack re-opened the race:
+ * ``_subscribedSessions.add`` runs after the ontrack, so a stale prune in the
+ * ontrack→confirm gap could drop the just-arrived tile).
+ */
 export function _unmarkMidPending(mid: string | null | undefined, sessionKey: string): void {
   if (mid && _pendingSubscribeMids.delete(mid)) {
-    log.warn('[DIAG][pending] cleared on ontrack mid=%s sessionKey=%s', mid, sessionKey)
+    const timerId = _pendingSubscribeTimers.get(mid)
+    if (timerId !== undefined) window.clearTimeout(timerId)
+    _pendingSubscribeTimers.delete(mid)
+    log.warn('[pending] cleared after subscribe confirmed mid=%s session=%s', mid, sessionKey)
   }
+}
+
+/** F4 FIX (bug-hardening): cancel every pending-subscribe timeout (hangUp /
+ *  onUnmounted) so a stale timer from a previous call can never fire into the
+ *  next call's state.  The mids themselves are cleared by the caller (hangUp
+ *  already clears ``_pendingSubscribeMids``). */
+export function _clearPendingSubscribeTimers(): void {
+  for (const timerId of _pendingSubscribeTimers.values()) window.clearTimeout(timerId)
+  _pendingSubscribeTimers.clear()
 }
 
 /** F3 FIX (CICLO 2): does the owner have any subscription still in flight?  A

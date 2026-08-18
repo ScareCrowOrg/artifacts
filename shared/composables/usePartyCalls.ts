@@ -33,6 +33,7 @@ import {
   _remoteMidToTrackName,
   _transceiverMeta,
   _pendingSubscribeMids,
+  _clearPendingSubscribeTimers,
   _remoteStreamAddedAt,
   _localTrackNamesByDisplay,
 } from './party-calls/state'
@@ -172,6 +173,15 @@ export function usePartyCalls(): UsePartyCallsReturn {
    * 8. Starts the periodic heartbeat + discovery refresh (ghost cleanup)
    */
   async function startCall(roomId: string): Promise<void> {
+    // F5 FIX (bug-hardening): reentrancy guard — while the call is being set up
+    // (provisioning → registering) an overlapping startCall must NOT create a
+    // second PC/heartbeat.  The old `if (state._pc)` guard was false before the
+    // PC was created (~line 210), so 2 overlapping invocations interleaved
+    // writes on the shared state (2 PCs, 2 heartbeats, orphaned registry).
+    if (isConnecting.value) {
+      log.warn('[startCall] Call setup already in progress (phase=%s) — ignoring overlapping startCall', connectionPhase.value)
+      return
+    }
     connectionError.value = null
     isProvisioning.value = false
     connectionPhase.value = 'provisioning'
@@ -216,19 +226,6 @@ export function usePartyCalls(): UsePartyCallsReturn {
       connectionPhase.value = 'signaling'
       const offer = await _createAndSetOffer(pc)
 
-      // DIAG: inspect the offer before it leaves the browser
-      const offerSdp = offer.sdp || ''
-      const firstM = offerSdp.match(/^m=\w+/gm)
-      log.warn(
-        '[DIAG][usePartyCalls] STEP3 createOffer: hasAudio=%s hasVideo=%s firstM=%s',
-        /^m=audio/m.test(offerSdp), /^m=video/m.test(offerSdp),
-        firstM ? firstM[0] : '(sem mídia)',
-      )
-      log.warn(
-        '[DIAG][usePartyCalls] STEP4 POST /calls/session: type=%s hasMedia=%s sdpLen=%d',
-        offer.type, /^m=/m.test(offerSdp), offerSdp.length,
-      )
-
       // 4. Send offer to signaling proxy.  Caso B: there are NO local tracks at
       //    join — localTracks/trackNames stay empty (the offer carries only the
       //    recvonly m-sections) and grow only after _enableLocalTrack publishes
@@ -239,10 +236,6 @@ export function usePartyCalls(): UsePartyCallsReturn {
       const localTracks: TrackType[] = []
       const localTrackNames: string[] = []
       const localTrackObjs: Array<{ location: 'local'; mid: string; trackName: string }> = []
-      log.warn(
-        '[DIAG][startCall] publishing to Cloudflare native trackNames=%j (display tracks=%j)',
-        localTrackNames, localTracks,
-      )
 
       const sessionData = await _apiFetchJson('/calls/session', {
         method: 'POST',
@@ -261,10 +254,6 @@ export function usePartyCalls(): UsePartyCallsReturn {
       await pc.setRemoteDescription(answer)
       const mySessionId: string = sessionData.sessionId
       state._currentSessionId = mySessionId
-
-      // DIAG: local tracks were attached BEFORE the offer was built
-      log.warn('[DIAG][usePartyCalls] STEP6 addTrack: transceivers=%d',
-        pc.getTransceivers().length)
 
       // 6. Room presence via computed contextId (auto WS reconnect)
       _currentRoomRef.value = roomId
@@ -313,12 +302,6 @@ export function usePartyCalls(): UsePartyCallsReturn {
       const msg = err instanceof Error ? err.message : 'Failed to start call'
       connectionError.value = msg
       log.error('[startCall] Error:', msg)
-      log.warn(
-        '[DIAG][usePartyCalls] catch: pc=%s transceivers=%d room=%s',
-        state._pc ? 'created' : 'null',
-        state._pc ? state._pc.getTransceivers().length : -1,
-        _currentRoomRef.value,
-      )
       hangUp()
     }
   }
@@ -373,6 +356,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
     // protection — a stale pending mid must never survive into the next call on
     // this recycled module-level state.
     _pendingSubscribeMids.clear()
+    // F4 FIX (bug-hardening): cancel every pending-subscribe timeout — a stale
+    // timer from this call must never fire into the next call's pending state
+    // (would re-introduce the race-H3 drop).
+    _clearPendingSubscribeTimers()
     // F3 FIX (ITER_1 guest-screenshare CICLO 3): drop the per-tile add-time
     // grace map — a stale entry must never survive into the next call.
     _remoteStreamAddedAt.clear()
@@ -381,6 +368,10 @@ export function usePartyCalls(): UsePartyCallsReturn {
     // recycled module-level WeakMap can never tag a future session's mid).
     if (state._pc) for (const tx of state._pc.getTransceivers()) _transceiverMeta.delete(tx)
     _localTrackNamesByDisplay.clear()
+    // F11 FIX (bug-hardening): reset the one-shot H2 stats-dump guard so the
+    // dump re-arms on the NEXT call (the flag stayed true from the first call,
+    // silently disabling the diagnostic telemetry for the rest of the page).
+    state._statsDumpScheduled = false
     state._screenTrackId = null
     state._orphanScreenTx = null
     state._localAudioTx = null
@@ -456,6 +447,9 @@ export function usePartyCalls(): UsePartyCallsReturn {
       window.clearTimeout(_discoveryDebounce)
       _discoveryDebounce = null
     }
+    // F4: cancel pending-subscribe timers even when no PC is live — a stale
+    // timer must never fire into a future composable instance on the same page.
+    _clearPendingSubscribeTimers()
     if (state._pc || state._localStream) {
       log.info('[cleanup] Component unmounted — hanging up')
       hangUp()

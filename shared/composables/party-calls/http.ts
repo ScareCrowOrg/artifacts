@@ -29,20 +29,42 @@ export async function _apiFetchJson(path: string, options: RequestInit = {}): Pr
   return resp.json()
 }
 
-/** Poll the async provision task until it completes or fails. */
+/**
+ * Poll the async provision task until it completes or fails.
+ *
+ * F8 FIX (bug-hardening): a transient HTTP error mid-poll (502/404/5xx — a
+ * proxy/gateway blip while the provision task is still running) is RETRIED with
+ * backoff instead of aborting the call; only a definitive task failure
+ * (``status: 'failed'``) aborts.  A hard global time budget (< 200s) bounds the
+ * loop and surfaces a descriptive error instead of polling forever.
+ */
 export async function _pollProvisionTask(
   taskId: string,
   maxRetries = 100,
   intervalMs = 2000,
+  timeoutMs = 180_000,
 ): Promise<{ app_id: string }> {
+  const startedAt = Date.now()
   for (let i = 0; i < maxRetries; i++) {
-    const resp = await _apiFetchJson(`/calls/provision/${taskId}`)
-    if (resp.status === 'completed') {
-      log.debug('[pollProvision] task completed, app_id=%s', resp.app_id)
-      return { app_id: resp.app_id }
-    }
-    if (resp.status === 'failed') {
-      throw new Error(`Provision failed: ${resp.error || 'Unknown provision error'}`)
+    if (Date.now() - startedAt >= timeoutMs) break
+    try {
+      const resp = await _apiFetchJson(`/calls/provision/${taskId}`)
+      if (resp.status === 'completed') {
+        log.debug('[pollProvision] task completed, app_id=%s', resp.app_id)
+        return { app_id: resp.app_id }
+      }
+      if (resp.status === 'failed') {
+        throw new Error(`Provision failed: ${resp.error || 'Unknown provision error'}`)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // Definitive failure → rethrow (aborts the call with a descriptive error).
+      if (msg.startsWith('Provision failed')) throw err
+      // Transient HTTP/network error mid-poll → retry with backoff (the task is
+      // still provisioning; a 502 blip must not kill a call about to complete).
+      log.warn('[pollProvision] transient error mid-poll attempt=%d: %s', i, msg)
+      await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs + i * 500, 10_000)))
+      continue
     }
     await new Promise(resolve => setTimeout(resolve, intervalMs))
   }

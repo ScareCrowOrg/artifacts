@@ -16,9 +16,9 @@ Windows é case-insensitive: uma pasta `usePartyCalls/` colidiria com o arquivo
 | Módulo | Domínio | Funções exportadas |
 |--------|---------|--------------------|
 | `types.ts` | Contratos públicos | `ConnectionPhase`, `AvailableRoom`, `UsePartyCallsReturn`, `RemoteSession`, `SfuTrackResult` |
-| `state.ts` | Estado singleton + invariantes + log | TODO estado module-level (`_pc`, `_localStream`, `_transceiverMeta`, `_pendingSubscribeMids`, `_remoteStreamAddedAt`, …), helpers `_dropTransceiverMeta`/`_markMidsPending`/`_unmarkMidPending`/`_ownerHasPendingMids`/`_anchorTransceiverMetaFromMidMap`, `log` (`'composable:usePartyCalls'`), constantes |
-| `http.ts` | Transporte | `_apiFetchJson`, `_pollProvisionTask`, `_executePartyAction` |
-| `sfuSignaling.ts` | Primitivas WebRTC/SFU | `_waitForIceConnected`, `_registerLocalTracksOnSfu`, `_teardownRemoteMedia`, `_answerSfuRenegotiationOffer`, `_removeTrackFromSfu`, `_createAndSetOffer` |
+| `state.ts` | Estado singleton + invariantes + log | TODO estado module-level (`_pc`, `_localStream`, `_transceiverMeta`, `_pendingSubscribeMids`, `_remoteStreamAddedAt`, …), coleção `_pendingSubscribeTimers` (F4), helpers `_dropTransceiverMeta`/`_markMidsPending`/`_unmarkMidPending`/`_ownerHasPendingMids`/`_anchorTransceiverMetaFromMidMap`/`_clearPendingSubscribeTimers` (F4), `log` (`'composable:usePartyCalls'`), constantes |
+| `http.ts` | Transporte | `_apiFetchJson`, `_pollProvisionTask` (F8: retry transiente com backoff), `_executePartyAction` |
+| `sfuSignaling.ts` | Primitivas WebRTC/SFU | `_waitForIceConnected`, `_registerLocalTracksOnSfu`, `_teardownRemoteMedia`, `_answerSfuRenegotiationOffer`, `_closeLocalRenegotiation` (F9: fechamento único de renegociação + rollback em regResult null — G2), `_removeTrackFromSfu`, `_createAndSetOffer` |
 | `subscription.ts` | Assinatura remota | `_subscribeToRemoteTracks` (+ `_logSfuStatsDump` interno) |
 | `discovery.ts` | Descoberta/registry/heartbeat | `_refreshDiscovery`, `_registerAndDiscoverSessions`, `_updateRegistryTracks`, `_startHeartbeat`, `_stopHeartbeat` |
 | `remoteMedia.ts` | Classificação ontrack + merge | `_handleRemoteTrack` (param `remoteStreams`) (+ `_cleanupEndedRemoteTrack` interno) |
@@ -55,5 +55,12 @@ usePartyCalls.ts (facade)
 
 Todos os módulos importam `log` de `state.ts` com label
 `'composable:usePartyCalls'` **preservado** — filtros de telemetria e greps de
-debug dependem dele. Strings DIAG preservadas verbatim (o teste unitário
-`__tests__/usePartyCalls.test.ts` as asserta).
+debug dependem dele. 
+
+> 🧹 **Bug-hardening (2026-08-17)**: as strings `[DIAG]` temporárias dos ciclos
+> de debug foram **removidas** (F14). Mantidos os logs operacionais/PERMANENTES —
+> ex: `[pending] marked/protect/cleared`, `[cleanup] origin/blocked/removed`,
+> `[bind-skip]`, `[subscribe] mid_map populated` / `transceiver_meta anchored`,
+> `[publish] local tracks registered`, `[stats] inbound_rtp`, `[teardown]`. O
+> teste `__tests__/usePartyCalls.test.ts` + `usePartyCalls.bugHardening.test.ts`
+> assertam esses logs limpos (sem prefixo `[DIAG]`).

@@ -21,8 +21,13 @@
  * See ``party-calls/README.md``.
  */
 
-import { _apiFetchJson, _executePartyAction } from './http'
-import { _createAndSetOffer, _registerLocalTracksOnSfu, _removeTrackFromSfu } from './sfuSignaling'
+import { _executePartyAction } from './http'
+import {
+  _createAndSetOffer,
+  _registerLocalTracksOnSfu,
+  _removeTrackFromSfu,
+  _closeLocalRenegotiation,
+} from './sfuSignaling'
 import { _updateRegistryTracks } from './discovery'
 import {
   log,
@@ -31,7 +36,6 @@ import {
 } from './state'
 import type { TrackType, Participant } from '#artifacts/shared/stores/partyStore'
 import type { Ref } from 'vue'
-import type { SfuTrackResult } from './types'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local media / publish context
@@ -153,25 +157,45 @@ export function createLocalMediaActions(ctx: LocalMediaContext) {
       )
     }
 
-    // Close the renegotiation (3 branches, mirror of shareStream).
-    const respSd = regResult?.sessionDescription
-    const respSdp = respSd?.sdp ? String(respSd.sdp) : ''
-    if (regResult?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
-      // SFU generated a fresh offer for the new track — answer it back.
-      await state._pc.setRemoteDescription(new RTCSessionDescription(respSd))
-      const localAnswer = await state._pc.createAnswer()
-      await state._pc.setLocalDescription(localAnswer)
-      await _apiFetchJson(
-        `/calls/sessions/${state._currentSessionId}/renegotiate`,
-        {
-          method: 'PUT',
-          body: JSON.stringify({
-            sessionDescription: { type: localAnswer.type, sdp: localAnswer.sdp },
-          }),
-        },
-      )
-    } else if (respSd?.type === 'answer' && respSdp.length > 0) {
-      await state._pc.setRemoteDescription(new RTCSessionDescription(respSd))
+    // Close the renegotiation (F9: single helper — offer → answer, direct
+    // answer → apply, null → roll back so the PC is not wedged in
+    // have-local-offer).
+    const closed = await _closeLocalRenegotiation(regResult)
+    if (!closed) {
+      // G2 FIX (bug-hardening): the SFU registration FAILED (regResult null or
+      // a per-track error) — the track was never registered.  Do NOT index or
+      // publish it (registry/presence must not announce tracks the SFU never
+      // resolved → not_found_track_error for subscribers); revert the enable
+      // state so the next toggle click can retry cleanly.  The local offer was
+      // already rolled back by the helper, so the PC is back in 'stable' (no
+      // InvalidStateError on a subsequent createOffer).
+      log.warn('[enableLocalTrack] %s SFU registration failed — track NOT published to registry/presence', kind)
+      ctx.connectionError.value = `Could not enable ${kind === 'mic' ? 'microphone' : 'camera'} — media registration with the SFU failed. Please try again.`
+      for (const t of stream.getTracks()) {
+        state._localStream?.removeTrack(t)
+        t.stop()
+      }
+      if (state._localStream && state._localStream.getTracks().length === 0) {
+        state._localStream = null
+        ctx.localStream.value = null
+      }
+      try {
+        await tx.sender.replaceTrack(null)
+        tx.direction = 'recvonly'
+      } catch { /* ignore — rollback already returned the PC to stable */ }
+      if (kind === 'camera') {
+        ctx.cameraEnabled.value = false
+        // R#5 (review #3077): while a screen share is active the self-view
+        // shows the SHARED SCREEN — a failed camera registration must not
+        // blank it.  Only fall back to the (now-null) local stream when not
+        // sharing.
+        if (!ctx.isSharingScreen.value) {
+          ctx.selfViewStream.value = ctx.localStream.value
+        }
+      } else {
+        ctx.micEnabled.value = false
+      }
+      return
     }
 
     // Index the native track name for _updatePublishedTracks (registry/presence
@@ -304,13 +328,10 @@ export function createLocalMediaActions(ctx: LocalMediaContext) {
         audio: false,
       })
       await shareStream(stream)
-      // Only reflect the "sharing" state if the share actually started
-      // (shareStream bails on a stream without a video track).  A cancelled
-      // getDisplayMedia throws before this point → state unchanged.
-      if (state._screenStream) {
-        state._screenTrackId = stream.getVideoTracks()[0]?.id ?? null
-        ctx.isSharingScreen.value = true
-      }
+      // F6/F10: shareStream now populates state._screenTrackId and flips
+      // isSharingScreen itself on success, and reverts them on failure — nothing
+      // to reflect here.  A cancelled getDisplayMedia throws before this point →
+      // state unchanged.
     } catch (err) {
       log.warn(
         '[toggleScreenShare] cancelled or failed: %s',
@@ -328,26 +349,28 @@ export function createLocalMediaActions(ctx: LocalMediaContext) {
     _stopStream(state._screenStream)
     state._screenStream = null
     if (state._pc) {
+      const pc = state._pc
       let removedSender = false
-      for (const sender of state._pc.getSenders()) {
-        if (sender.track?.id === state._screenTrackId) {
-          // Keep the sendonly transceiver for the next shareStream — removeTrack
-          // only nulls sender.track; the transceiver/m-section survives.  A1:
-          // reuse it via replaceTrack instead of stacking a new transceiver per
-          // share/stop cycle (avoids the SFU's 413 accumulation error).
-          const orphanTx = state._pc.getTransceivers().find((t) => t.sender === sender)
-          if (orphanTx) state._orphanScreenTx = orphanTx
-          // DIAG (F2): the screen transceiver's mid survives removeTrack — this
-          // is the value the tracks/close contract needs (CloseTrackObject.mid).
-          // F7 compares it to the target sent by _removeTrackFromSfu (both should
-          // equal the same mid after the F3 fix).
-          log.warn(
-            '[stopSharing] DIAG detached sender screen_track=%s orphan_mid=%s orphan_direction=%s',
-            sender.track?.id, orphanTx?.mid ?? 'none', orphanTx?.direction ?? 'n/a',
-          )
-          state._pc.removeTrack(sender)
-          removedSender = true
-        }
+      // F6 FIX (bug-hardening): match the screen sender.  Primary: the native
+      // track id (state._screenTrackId — now populated by shareStream so a
+      // DIRECT caller like glb-content-viewer is covered).  Fallback when the id
+      // is null: a dedicated SENDONLY video transceiver (the camera is sendrecv,
+      // so a sendonly video sender is unambiguously the screen) — prevents the
+      // share/stop cycle from stacking a transceiver when the id was never set.
+      const matchedSender = pc.getSenders().find((s) => s.track?.id === state._screenTrackId)
+        ?? (state._screenTrackId === null
+          ? pc.getSenders().find((s) => s.track?.kind === 'video'
+              && pc.getTransceivers().find((t) => t.sender === s)?.direction === 'sendonly')
+          : undefined)
+      if (matchedSender) {
+        // Keep the sendonly transceiver for the next shareStream — removeTrack
+        // only nulls sender.track; the transceiver/m-section survives.  A1:
+        // reuse it via replaceTrack instead of stacking a new transceiver per
+        // share/stop cycle (avoids the SFU's 413 accumulation error).
+        const orphanTx = pc.getTransceivers().find((t) => t.sender === matchedSender)
+        if (orphanTx) state._orphanScreenTx = orphanTx
+        pc.removeTrack(matchedSender)
+        removedSender = true
       }
       // Tell the SFU the track is gone — replaces the renegotiate-with-offer
       // path, which the Cloudflare contract rejects (406 "answer is expected" →
@@ -407,9 +430,22 @@ export function createLocalMediaActions(ctx: LocalMediaContext) {
         return
       }
       state._screenStream = stream
+      // F6 FIX (bug-hardening): populate _screenTrackId HERE (it was only set in
+      // toggleScreenShare) so a DIRECT shareStream caller (glb-content-viewer,
+      // no toggleScreenShare) still lets stopSharing match the sender and run
+      // _removeTrackFromSfu instead of stacking a transceiver per share.
+      state._screenTrackId = videoTrack.id
       // S1 (F3): expose the shared screen as the self-view source so the
       // publisher's own grid tile shows what is being shared (local preview).
       ctx.selfViewStream.value = stream
+      // F3 FIX (bug-hardening): the browser's NATIVE "Stop sharing" ends the
+      // display track — run the same cleanup as stopSharing so isSharingScreen,
+      // the registry/presence, the self-view and the SFU registration all stay
+      // consistent (previously the share stayed stale: isSharingScreen true,
+      // registry advertising a dead track, subscribers stuck on a black tile).
+      videoTrack.addEventListener('ended', () => {
+        if (state._screenStream) void stopSharing()
+      })
       // CICLO 3: use a DEDICATED sendonly transceiver for the screen track.
       // addTrack would REUSE an existing recvonly video transceiver (e.g. the one
       // subscribed to B's camera) making it sendrecv on the same m-section — the
@@ -428,16 +464,6 @@ export function createLocalMediaActions(ctx: LocalMediaContext) {
       // was re-negotiated away from 'sendonly' by the previous offer, so the old
       // direction-only search silently missed and stacked a new transceiver
       // (transceivers 5→6 in F7 → 413 risk).
-      // DIAG (B7): publisher identity — participantId ("typically the user's
-      // id") lets F3 correlate WHO shared with the discovery enumeration to
-      // label host (1st to join) vs guest (2nd) in the test.  No role check
-      // exists in code — this is purely a runtime correlation marker.
-      const _publisherUserId = ctx.participants.value
-        .find((p) => p.sessionId === state._currentSessionId)?.participantId ?? '(unknown)'
-      log.warn(
-        '[DIAG][shareStream] addTransceiver sendonly session=%s userId=%s track=%s transceivers_before=%d',
-        state._currentSessionId, _publisherUserId, videoTrack.id, state._pc.getTransceivers().length,
-      )
       let screenTx: RTCRtpTransceiver | null = null
       if (state._orphanScreenTx?.sender) {
         screenTx = state._orphanScreenTx
@@ -497,112 +523,65 @@ export function createLocalMediaActions(ctx: LocalMediaContext) {
         )
       }
       if (screenTrackObjs.length) {
-        // DIAG (CICLO 2 L3): tracks/new now carries the publisher's offer.
-        log.warn(
-          '[DIAG][shareStream] tracks/new with offer session=%s track_objs=%d sdp_type=%s sdp_len=%d',
-          state._currentSessionId, screenTrackObjs.length, offer.type, (offer.sdp || '').length,
-        )
         regResult = await _registerLocalTracksOnSfu(
           state._pc,
           state._currentSessionId,
           screenTrackObjs,
           { type: offer.type, sdp: offer.sdp || '' },
         )
-        // DIAG (CICLO 2 L4): what the SFU answered to tracks/new+offer — a
-        // direct answer SDP, a renegotiation offer (requiresImmediateRenegotiation),
-        // or nothing (per-track errorCode).
-        log.warn(
-          '[DIAG][shareStream] tracks/new response session=%s answer_type=%s answer_sdp_len=%d requires_renog=%s answer_tracks=%s',
-          state._currentSessionId,
-          regResult?.sessionDescription?.type,
-          String(regResult?.sessionDescription?.sdp || '').length,
-          String(regResult?.requiresImmediateRenegotiation),
-          Array.isArray(regResult?.tracks) ? `present(${regResult.tracks.length})` : 'absent',
-        )
       }
 
-      // Close the publisher renegotiation with the SFU's response (CICLO 2).
-      // tracks/new+offer returns either a DIRECT answer (apply as-is) or, when
-      // requiresImmediateRenegotiation, a fresh SFU offer that we answer and
-      // send back via PUT /renegotiate (mirroring the subscriber flow in
-      // _subscribeToRemoteTracks).  Never apply an empty/absent SDP — it
-      // crashes setRemoteDescription with "Expect line: v=".
-      const respSd = regResult?.sessionDescription
-      const respSdp = respSd?.sdp ? String(respSd.sdp) : ''
-      if (regResult?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
-        // SFU generated a fresh offer for the new track — answer it and send
-        // the answer back so the SFU completes the m-line setup.
-        await state._pc.setRemoteDescription(new RTCSessionDescription(respSd))
-        const localAnswer = await state._pc.createAnswer()
-        await state._pc.setLocalDescription(localAnswer)
-        await _apiFetchJson(
-          `/calls/sessions/${state._currentSessionId}/renegotiate`,
-          {
-            method: 'PUT',
-            body: JSON.stringify({
-              sessionDescription: { type: localAnswer.type, sdp: localAnswer.sdp },
-            }),
-          },
-        )
-      } else if (respSd?.type === 'answer' && respSdp.length > 0) {
-        // Direct answer — apply as-is.
-        await state._pc.setRemoteDescription(new RTCSessionDescription(respSd))
-      } else if (regResult) {
-        // The SFU answered without an offer/answer SDP (e.g. a per-track
-        // errorCode on the new track).  Surface it for the F7 to observe —
-        // do NOT apply an empty SDP.
-        const trackErrors = (Array.isArray(regResult?.tracks) ? regResult.tracks : [])
-          .filter((t: SfuTrackResult) => t && typeof t === 'object' && (t.errorCode || t.errorDescription))
-        log.warn(
-          '[DIAG][shareStream] tracks/new no offer/answer from SFU session=%s track_errors=%j',
-          state._currentSessionId, trackErrors,
-        )
+      // Close the publisher renegotiation (F9 single helper — offer → answer,
+      // direct answer → apply, null → roll back so the PC is not wedged in
+      // have-local-offer).
+      const closed = await _closeLocalRenegotiation(regResult)
+      if (!closed) {
+        // G2 FIX (bug-hardening): the screen track was NOT registered on the
+        // SFU (regResult null / per-track error).  The local offer was already
+        // rolled back by the helper; clean up the share state and do NOT
+        // publish 'screen' to the registry/presence — subscribers would get
+        // not_found_track_error forever while the self-view showed a share that
+        // never reached anyone.
+        log.warn('[shareStream] SFU registration failed — screen track NOT shared')
+        // R#3 (review #3077): detach the sendonly transceiver from the stopped
+        // track and restore it as the ORPHAN so the NEXT shareStream reuses it
+        // (sender.track === null → replaceTrack) instead of stacking a new
+        // transceiver per failed share — mirror of the _enableLocalTrack G2
+        // branch.  Without this, repeated share-fail cycles accumulate
+        // m-sections → the SFU's 413 error that the A1 orphan-reuse exists to
+        // prevent.  Looked up by sender.track because `screenTx` above is null
+        // when a NEW transceiver was created via addTransceiver.
+        const _failedScreenTx = state._pc?.getTransceivers().find((t) => t.sender?.track === videoTrack) ?? null
+        if (_failedScreenTx?.sender) {
+          try { await _failedScreenTx.sender.replaceTrack(null) } catch { /* ignore — PC rolled back to stable */ }
+          state._orphanScreenTx = _failedScreenTx
+        }
+        _stopStream(stream)
+        state._screenStream = null
+        state._screenTrackId = null
+        ctx.selfViewStream.value = ctx.localStream.value
+        ctx.isSharingScreen.value = false
+        ctx.connectionError.value = 'Could not start screen share — media registration with the SFU failed. Please try again.'
+        return
       }
 
-      // GAP 2: extend the room registry (upsert) so discovery returns the
-      // screen in trackNames and subscribers learn about the new track.
+      // F10 FIX (bug-hardening): single writer — index the screen's native track
+      // and let _updatePublishedTracks compute the REAL published set + registry
+      // + presence (this hand-rolled append was a SECOND writer of the
+      // _publishedTracks set and could drift from the canonical function).
       const roomId = ctx.getRoomId()
-      const tracksDisplay: TrackType[] = [...state._publishedTracks, 'screen']
-      const trackNames: string[] = [...state._publishedTrackNames, videoTrack.id]
-
-      // Index the screen's native track so _updatePublishedTracks keeps it in
-      // the published set while sharing (F2).
       const screenNames = _localTrackNamesByDisplay.get('screen') ?? []
       if (!screenNames.includes(videoTrack.id)) screenNames.push(videoTrack.id)
       _localTrackNamesByDisplay.set('screen', screenNames)
-
+      // _updatePublishedTracks publishes 'screen' only while isSharingScreen is
+      // true — set it here (also lets a DIRECT shareStream caller's stopSharing
+      // and the F3 ended-handler run the canonical cleanup).
+      ctx.isSharingScreen.value = true
       if (roomId) {
-        await _updateRegistryTracks(roomId, tracksDisplay, trackNames, ctx.remoteStreams, ctx.participants.value)
+        await _updatePublishedTracks(roomId)
       }
 
-      // Notify room presence with the REAL tracks/trackNames (not hardcoded) so
-      // the snapshot reflects the shared screen.
-      if (roomId) {
-        // DIAG (B6): presence tracks_update payload — lets F3 compare it against
-        // the [DIAG][registry] re-register log to catch presence/registry
-        // divergence (e.g. presence carrying 'screen' while the registry dropped
-        // it, or a tracks↔trackNames positional misalignment — F7).
-        log.warn(
-          '[DIAG][shareStream] presence tracks_update room=%s session=%s tracks=%j trackNames=%j',
-          roomId, state._currentSessionId, tracksDisplay, trackNames,
-        )
-        // REV-2 (F4 gate): send sessionId so the backend targets THIS session's
-        // presence entry (REV-1 multi-session presence).
-        await _executePartyAction({
-          action: 'tracks_update',
-          roomId,
-          tracks: tracksDisplay,
-          trackNames,
-          sessionId: state._currentSessionId,
-        })
-      }
-
-      // Persist the extended publish set for any future share/update.
-      state._publishedTracks = tracksDisplay
-      state._publishedTrackNames = trackNames
-
-      log.info('[shareStream] Stream shared successfully tracks=%j trackNames=%j',
-        tracksDisplay, trackNames)
+      log.info('[shareStream] Stream shared successfully trackNames=%j', screenNames)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to share stream'
       ctx.connectionError.value = msg

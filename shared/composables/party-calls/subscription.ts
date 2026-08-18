@@ -19,6 +19,7 @@ import {
   _transceiverMeta,
   _subscribedSessions,
   _markMidsPending,
+  _unmarkMidPending,
   _anchorTransceiverMetaFromMidMap,
 } from './state'
 import type { RemoteSession, SfuTrackResult } from './types'
@@ -52,17 +53,15 @@ async function _logSfuStatsDump(): Promise<void> {
       inbound[kind].bytesReceived += s.bytesReceived || 0
       inbound[kind].packetsReceived += s.packetsReceived || 0
     })
-    // DIAG (B5/F3-H2): summary line with has_video so a single grep proves
-    // whether the HOST receiver got ANY video RTP from the GUEST's shared
-    // screen — bytesReceived stays 0 when the SFU resolved the subscribe (mid,
-    // no errorCode) but is NOT forwarding the screen's video.
+    // H2 telemetry: has_video + bytesReceived discriminates "SFU accepted the
+    // subscribe but is NOT forwarding video RTP" from a client-side drop.
     const hasVideo = Object.prototype.hasOwnProperty.call(inbound, 'video')
     log.warn(
-      '[DIAG][stats] inbound_rtp=%j has_video=%s video_bytes=%d audio_bytes=%d',
+      '[stats] inbound_rtp=%j has_video=%s video_bytes=%d audio_bytes=%d',
       inbound, hasVideo, inbound.video?.bytesReceived ?? 0, inbound.audio?.bytesReceived ?? 0,
     )
   } catch (err) {
-    log.warn('[DIAG][stats] getStats failed: %s', err instanceof Error ? err.message : String(err))
+    log.warn('[stats] getStats failed: %s', err instanceof Error ? err.message : String(err))
   }
 }
 
@@ -103,23 +102,11 @@ export async function _subscribeToRemoteTracks(
   const trackNames = allTrackNames.filter((n) => !already.includes(n))
   if (trackNames.length === 0) return
 
-  // DIAG (F1 P2): transceiver count BEFORE the request — in the tracks-only
-  // flow no recvonly transceivers are added client-side, so this stays flat
-  // across heartbeat retries (no accumulation → no 413).
-  const txsBeforeOffer = state._pc.getTransceivers()
-  log.warn(
-    '[DIAG][subscribe] %s: transceivers_before_offer=%d recvonly_mids=%j new_trackNames=%j',
-    remote.sessionId, txsBeforeOffer.length,
-    txsBeforeOffer.filter((t) => t.direction === 'recvonly').map((t) => t.mid),
-    trackNames,
-  )
-
   const tracksToSend = trackNames.map((trackName) => ({
     location: 'remote' as const,
     sessionId: remote.sessionId,
     trackName,
   }))
-  log.warn('[DIAG][subscribe] %s: tracks_payload=%j', remote.sessionId, tracksToSend)
 
   try {
     const result = await _apiFetchJson(
@@ -170,14 +157,12 @@ export async function _subscribeToRemoteTracks(
       }
     }
     if (midEntries.length > 0) {
-      // DIAG (F2 ITER_1 H3): also log the FULL raw tracks[] response, not just
-      // the resolved map entries.  Confirms whether BOTH audio (mid 0) and video
-      // (mid 1) entered _remoteMidToTrackName and surfaces any errorCode on
-      // tracks that were filtered out — a video track whose trackName is NOT
-      // echoed by the SFU never enters the map, so its ontrack falls back to the
-      // opaque stream.id (separate generic tile) instead of the owner tile.
+      // PERMANENTE: which mids resolved to which publisher trackNames (the
+      // bridge the ontrack uses to classify an opaque track.id).  Surfaces any
+      // errorCode on tracks filtered out — a track whose name the SFU never
+      // echoes never enters the map and falls back to the opaque stream.id.
       log.warn(
-        '[DIAG][subscribe] mid_map populated session=%s entries=%j raw_tracks=%j transceiver_meta_sets=%d',
+        '[subscribe] mid_map populated session=%s entries=%j raw_tracks=%j transceiver_meta_sets=%d',
         remote.sessionId, midEntries,
         Array.isArray(result?.tracks) ? result.tracks : [],
         transceiverMetaSets,
@@ -205,29 +190,11 @@ export async function _subscribeToRemoteTracks(
       const _anchoredPostOffer = _anchorTransceiverMetaFromMidMap(remote.sessionId)
       if (_anchoredPostOffer > 0) {
         log.warn(
-          '[DIAG][subscribe] %s: transceiver_meta anchored post-setRemoteDescription=%d anchored_mids=%j',
+          '[subscribe] %s: transceiver_meta anchored post-setRemoteDescription=%d anchored_mids=%j',
           remote.sessionId, _anchoredPostOffer,
           state._pc.getTransceivers().filter((t) => t.mid && _transceiverMeta.has(t)).map((t) => t.mid),
         )
       }
-
-      // DIAG (F1 P2): the SFU offer's m-sections / mids — confirms the media
-      // lines are bounded (recvonly only; no growth across retries).
-      log.warn(
-        '[DIAG][subscribe] %s: offer type=%s sdp_len=%d m_sections=%d mids=%j',
-        remote.sessionId, respSd.type, respSdp.length,
-        (respSdp.match(/^m=\w+/gm) || []).length,
-        state._pc.getTransceivers().map((t) => t.mid),
-      )
-      // DIAG (F2 ITER_1 H1/H3): SDP preview + a=msid lines.  A video m-line
-      // WITHOUT a=msid (or an msid with no stream label) makes the video ontrack
-      // arrive with an EMPTY event.streams → dropped at the !stream guard, which
-      // would explain "audio flows, video never reaches the tile".
-      log.warn(
-        '[DIAG][subscribe] %s: offer sdp_preview="%s" a_msid_lines=%j',
-        remote.sessionId, respSdp.slice(0, 200),
-        respSdp.match(/^a=msid:[^\r\n]*$/gm) || [],
-      )
 
       const localAnswer = await state._pc.createAnswer()
       await state._pc.setLocalDescription(localAnswer)
@@ -273,6 +240,17 @@ export async function _subscribeToRemoteTracks(
     if (subscribed) {
       _subscribedSessions.add(remote.sessionId)
       _subscribedTrackNames.set(remote.sessionId, [...already, ...trackNames])
+      // G1 FIX (bug-hardening): the subscription is now CONFIRMED on the SFU
+      // (_subscribedSessions.add after the PUT /renegotiate round-trip) — this
+      // is the ONLY release point for the pending protection.  Releasing at the
+      // ontrack (which fires BEFORE the round-trip) re-opened the race: a
+      // concurrent stale prune in the ontrack→confirm gap dropped the
+      // just-arrived tile (race H3).  A pending mid whose ontrack never fired
+      // is still released here on confirm; the 5s timeout guards a subscription
+      // that never confirms.
+      for (const entry of midEntries) {
+        if (entry.mid) _unmarkMidPending(entry.mid, remote.sessionId)
+      }
       // F3 FIX (CICLO 5): the _remoteMidToTrackName population was MOVED up to
       // right after the tracks/new (remote) fetch, BEFORE the branch below — so
       // the map is populated before setRemoteDescription fires the ontrack.  L7
