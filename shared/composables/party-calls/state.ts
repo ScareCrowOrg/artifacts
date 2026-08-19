@@ -41,8 +41,17 @@ export const state = {
   _localStream: null as MediaStream | null,
   _currentSessionId: null as string | null,
   _heartbeatTimer: null as number | null,
-  /** The display stream being shared (screen/3D canvas) — stopped on hangUp. */
+  /** DIAGNOSTIC MIRROR of the most recent screen share (F13 — the ACTIVE
+   *  per-instance screen state now lives in ``ctx.screenState`` inside
+   *  ``createLocalMediaActions``; this field is written by shareStream/
+   *  stopSharing for debug visibility + test backward-compat, never read by
+   *  production behavior).  The display stream being shared (screen/3D canvas)
+   *  — stopped on hangUp. */
   _screenStream: null as MediaStream | null,
+  /** DIAGNOSTIC MIRROR — native MediaStreamTrack id of the most recent shared
+   *  screen's DISPLAY AUDIO track (optional — only present when the sharer
+   *  checked "share tab audio").  See ``_screenStream`` above. */
+  _screenAudioTrackId: null as string | null,
   /** Display-friendly TrackTypes this caller has published to the room
    *  (startCall base + 'screen' after shareStream) — kept so registry/presence
    *  updates carry the REAL track set (GAP 2). */
@@ -55,18 +64,36 @@ export const state = {
    *  this subscriber (vs H1: the track is dropped client-side at the ontrack
    *  !stream guard). */
   _statsDumpScheduled: false,
-  /** The native MediaStreamTrack id of the currently shared screen (if any) —
-   *  used by stopSharing to detach the correct sender from the peer
-   *  connection. */
+  /** True once this PC's ICE ever reached 'connected'/'completed' (set by
+   *  ``_waitForIceConnected``).  Lets the 2D/b ICE gate
+   *  (``_registerLocalTracksOnSfu``) distinguish a MID-CALL ICE restart (was
+   *  connected → short grace then send the offer — the offer completes the
+   *  restart) from the INITIAL connection (never connected → wait the full
+   *  timeout before a 1st camera/mic opt-in could 425).  Reset on hangUp so a
+   *  new call starts fresh. */
+  _iceWasEverConnected: false,
+  /** DIAGNOSTIC MIRROR — native MediaStreamTrack id of the most recent shared
+   *  screen.  The ACTIVE per-instance value lives in ``ctx.screenState.trackId``
+   *  (F13); this mirror is written by shareStream/stopSharing for debug +
+   *  test backward-compat, never read by production behavior. */
   _screenTrackId: null as string | null,
-  /** The sendonly screen transceiver orphaned by the last stopSharing
-   *  (``sender.track`` nulled by ``removeTrack`` but the transceiver kept) —
-   *  reused by the next shareStream via ``replaceTrack`` so each share/stop
+  /** DIAGNOSTIC MIRROR — the sendonly screen VIDEO transceiver orphaned by the
+   *  last stopSharing (``sender.track`` nulled by ``removeTrack`` but the
+   *  transceiver kept).  The ACTIVE per-instance orphan lives in
+   *  ``ctx.screenState.orphanVideoTx`` (F13) — this mirror is written for debug
+   *  visibility + test backward-compat, never read by production behavior.
+   *  Reused by the next shareStream via ``replaceTrack`` so each share/stop
    *  cycle does NOT stack a new transceiver (A1; avoids the SFU's 413
    *  accumulation error).  Captured explicitly because the old direction-only
    *  orphan search missed the transceiver once the last offer had re-negotiated
    *  its direction. */
   _orphanScreenTx: null as RTCRtpTransceiver | null,
+  /** DIAGNOSTIC MIRROR — the sendonly screen AUDIO transceiver orphaned by the
+   *  last stopSharing (Ajuste 1 — display-audio track).  The ACTIVE per-instance
+   *  orphan lives in ``ctx.screenState.orphanAudioTx`` (F13).  Reused by the
+   *  next shareStream with audio so each share/stop cycle does NOT stack a new
+   *  audio transceiver. */
+  _orphanScreenAudioTx: null as RTCRtpTransceiver | null,
   /** The recvonly transceivers created at join (audio/video) — kept so
    *  _enableLocalTrack can attach a local track and switch the matching one to
    *  'sendrecv' on the first opt-in click (Caso B: media opt-in, no capture on
@@ -255,7 +282,56 @@ export function _anchorTransceiverMetaFromMidMap(sessionId: string): number {
  *  toggled off/on or the screen is stopped (F2). */
 export const _localTrackNamesByDisplay = new Map<TrackType, string[]>()
 
+/**
+ * F13 (review #4/#5 — party-calls-screen-audio-session-isolation): per-instance
+ * published screen ids for the SHARED session, keyed by the per-instance
+ * `ctx.screenState` object.
+ *
+ *  - `_updatePublishedTracks` merges the screens of ALL active instances — a
+ *    republish from ONE instance (camera/mic toggle, own share stop) must NOT
+ *    drop another instance's live screen ids from the registry (that would make
+ *    subscribers prune a screen tile that is still flowing on the SFU).
+ *  - `hangUp` checks it to decide a SOFT hang-up: if another instance is still
+ *    sharing, the shared PC/session/heartbeat/registry must survive (the
+ *    glb-content-viewer piggybacks on the party-cell's PC — a hard teardown
+ *    would kill the other instance's share).
+ *
+ * Entries are added on a successful `shareStream`, deleted on `stopSharing`,
+ * the share-failure G2 branch, and `hangUp`.
+ */
+export const _activeScreenIdsByInstance = new Map<object, { videoId: string | null; audioId: string | null }>()
+
 /** Sessions this caller has subscribed to (registry/prune bookkeeping). */
 export const _subscribedSessions = new Set<string>()
 
 export const HEARTBEAT_INTERVAL_MS = 20_000 // must be < the 60 s registry TTL
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Renegotiation serialization (2C — party-cell-screen-share-sfu-register-fail)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * FIX (party-cell-screen-share-sfu-register-fail, CHANGE_PLAN 2C): serialize
+ * renegotiations on the shared peer connection.
+ *
+ * The diagnosis (H1+H3, `docs/issues/party-cell-screen-share-sfu-register-fail/diagnosis/FINDINGS.md`)
+ * proved that when the 2nd participant publishes their screen right after the
+ * SFU REUSED the base transceivers to deliver the 1st participant's screen, a
+ * renegotiation overlapping another on the SAME PC corrupts the signaling/ICE
+ * state — ICE stuck in 'new' (never recovering → `_waitForIceConnected` timeout
+ * → the publish was never sent) or, in other environments, an SFU answer the
+ * browser rejected at `setRemoteDescription` (`mid='2'`).
+ *
+ * This promise-chain mutex guarantees only ONE createOffer / setRemoteDescription
+ * / answer round-trip runs at a time: the publish offer from `shareStream` and
+ * the subscribe offer/answer round-trips queue instead of overlapping.  Each
+ * critical section awaits the previous one; a failure in one section never
+ * blocks the next (the tail swallows rejections while the caller still receives
+ * the original rejection).
+ */
+let _negotiationTail: Promise<unknown> = Promise.resolve()
+export function _withNegotiationLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = _negotiationTail.then(fn, fn)
+  _negotiationTail = run.catch(() => {})
+  return run
+}

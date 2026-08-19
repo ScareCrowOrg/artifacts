@@ -34,6 +34,11 @@ export default defineConfig({
       './shared/composables/__tests__/usePartyCalls.test.ts',
       // Bug-hardening suite (issue party-calls-bug-hardening): G1/F1-F11.
       './shared/composables/__tests__/usePartyCalls.bugHardening.test.ts',
+      // 2nd screen-share SFU-register fix (issue party-cell-screen-share-sfu-register-fail): 2D/2C/2B.
+      './shared/composables/__tests__/usePartyCalls.sfuRegisterFail.test.ts',
+      // Screen display-audio + per-instance session isolation (issue
+      // party-calls-screen-audio-session-isolation): Ajuste 1 (E1-E5) + Ajuste 2 (F1-F2).
+      './shared/composables/__tests__/usePartyCalls.screenAudioSessionIsolation.test.ts',
     ],
   },
   resolve: {

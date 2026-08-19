@@ -14,6 +14,7 @@ import { _apiFetchJson } from './http'
 import {
   log,
   state,
+  _withNegotiationLock,
   _subscribedTrackNames,
   _remoteMidToTrackName,
   _transceiverMeta,
@@ -176,47 +177,58 @@ export async function _subscribeToRemoteTracks(
     }
 
     if (result?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
-      // SFU generated the offer — apply it, answer, and send the answer back
-      // via the renegotiate proxy so the SFU completes the m-line setup.
-      await state._pc.setRemoteDescription(new RTCSessionDescription(respSd))
+      // 2C (party-cell-screen-share-sfu-register-fail): the setRemoteDescription
+      // → answer → PUT /renegotiate round-trip mutates the SAME peer connection
+      // the publish offer of shareStream renegotiates — serialize it so a
+      // subscribe never overlaps a publish (the diagnosed signaling/ICE
+      // corruption on a PC that already receives another participant's screen).
+      await _withNegotiationLock(async () => {
+        // SFU generated the offer — apply it, answer, and send the answer back
+        // via the renegotiate proxy so the SFU completes the m-line setup.
+        await state._pc!.setRemoteDescription(new RTCSessionDescription(respSd))
 
-      // F3 FIX (ITER_1 guest-screenshare): the SFU offer just created the
-      // transceiver for the NEW screen track (it did not exist during the first
-      // _transceiverMeta population above).  Re-anchor the WeakMap NOW — the
-      // screen's ontrack is dispatched as a task AFTER setRemoteDescription
-      // resolves, so it will read the populated fallback instead of depending on
-      // the prunable global map.  Idempotent; no-op for the already-anchored
-      // audio/video transceivers.
-      const _anchoredPostOffer = _anchorTransceiverMetaFromMidMap(remote.sessionId)
-      if (_anchoredPostOffer > 0) {
-        log.warn(
-          '[subscribe] %s: transceiver_meta anchored post-setRemoteDescription=%d anchored_mids=%j',
-          remote.sessionId, _anchoredPostOffer,
-          state._pc.getTransceivers().filter((t) => t.mid && _transceiverMeta.has(t)).map((t) => t.mid),
+        // F3 FIX (ITER_1 guest-screenshare): the SFU offer just created the
+        // transceiver for the NEW screen track (it did not exist during the first
+        // _transceiverMeta population above).  Re-anchor the WeakMap NOW — the
+        // screen's ontrack is dispatched as a task AFTER setRemoteDescription
+        // resolves, so it will read the populated fallback instead of depending on
+        // the prunable global map.  Idempotent; no-op for the already-anchored
+        // audio/video transceivers.
+        const _anchoredPostOffer = _anchorTransceiverMetaFromMidMap(remote.sessionId)
+        if (_anchoredPostOffer > 0) {
+          log.warn(
+            '[subscribe] %s: transceiver_meta anchored post-setRemoteDescription=%d anchored_mids=%j',
+            remote.sessionId, _anchoredPostOffer,
+            state._pc!.getTransceivers().filter((t) => t.mid && _transceiverMeta.has(t)).map((t) => t.mid),
+          )
+        }
+
+        const localAnswer = await state._pc!.createAnswer()
+        await state._pc!.setLocalDescription(localAnswer)
+        await _apiFetchJson(
+          `/calls/sessions/${state._currentSessionId}/renegotiate`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              sessionDescription: { type: localAnswer.type, sdp: localAnswer.sdp },
+            }),
+          },
         )
-      }
-
-      const localAnswer = await state._pc.createAnswer()
-      await state._pc.setLocalDescription(localAnswer)
-      await _apiFetchJson(
-        `/calls/sessions/${state._currentSessionId}/renegotiate`,
-        {
-          method: 'PUT',
-          body: JSON.stringify({
-            sessionDescription: { type: localAnswer.type, sdp: localAnswer.sdp },
-          }),
-        },
-      )
+      })
       subscribed = true
     } else if (respSd?.type === 'answer' && respSdp.length > 0) {
       // Direct answer (no SFU offer) — apply as-is.  Only applied when the SDP
       // is non-empty: applying an empty SDP crashes setRemoteDescription with
       // "Failed to parse SessionDescription. Expect line: v=".
-      await state._pc.setRemoteDescription(new RTCSessionDescription(respSd))
-      // F3 FIX (ITER_1 guest-screenshare): direct-answer branch — transceivers
-      // already exist here (no new m-line created), but run the same idempotent
-      // re-anchor for uniformity/defense (no-op when already anchored).
-      _anchorTransceiverMetaFromMidMap(remote.sessionId)
+      // 2C (party-cell-screen-share-sfu-register-fail): same serialization as
+      // the offer branch — never mutate the PC while another renegotiation runs.
+      await _withNegotiationLock(async () => {
+        await state._pc!.setRemoteDescription(new RTCSessionDescription(respSd))
+        // F3 FIX (ITER_1 guest-screenshare): direct-answer branch — transceivers
+        // already exist here (no new m-line created), but run the same idempotent
+        // re-anchor for uniformity/defense (no-op when already anchored).
+        _anchorTransceiverMetaFromMidMap(remote.sessionId)
+      })
       subscribed = true
     } else {
       // Canonical no-op (react-native-webrtc #1536 / realtime-examples echo):

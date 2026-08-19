@@ -13,6 +13,7 @@ import { _apiFetchJson } from './http'
 import {
   log,
   state,
+  _withNegotiationLock,
   _pendingSubscribeMids,
   _remoteMidToTrackName,
   _transceiverMeta,
@@ -36,16 +37,70 @@ export function _waitForIceConnected(
     }
     const onChange = () => {
       const s = pc.iceConnectionState
-      if (s === 'connected' || s === 'completed') done(true)
-      else if (s === 'failed' || s === 'disconnected' || s === 'closed') done(false)
+      if (s === 'connected' || s === 'completed') {
+        // F4 (review #3078): record that THIS PC's ICE has reached a usable
+        // state — the 2D/b gate uses it to tell a mid-call restart (short grace)
+        // from the initial connection (full wait).
+        state._iceWasEverConnected = true
+        done(true)
+      } else if (s === 'failed' || s === 'disconnected' || s === 'closed') done(false)
     }
     const timer = window.setTimeout(
-      () => done(pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed'),
+      () => {
+        const connected = pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed'
+        if (connected) state._iceWasEverConnected = true
+        done(connected)
+      },
       timeoutMs,
     )
     pc.addEventListener('iceconnectionstatechange', onChange)
     onChange() // reflect the current state immediately
   })
+}
+
+/**
+ * FIX (party-cell-screen-share-sfu-register-fail, CHANGE_PLAN 2D/a): verify the
+ * peer connection is in a HEALTHY, STABLE state before a local renegotiation
+ * (the `shareStream` publish) builds its offer.
+ *
+ * Guard 1 — ``signalingState === 'stable'``: a renegotiation still in flight
+ * (e.g. a remote subscribe that just landed on this PC) must settle first;
+ * creating an offer mid-renegotiation throws ``InvalidStateError`` and wedges
+ * the PC.
+ *
+ * Guard 2 — terminal ICE fails fast: 'failed'/'disconnected'/'closed' means
+ * there is nothing to negotiate with.  NON-terminal ICE ('new'/'connecting') is
+ * ALLOWED to proceed — the register gate in ``_registerLocalTracksOnSfu`` gives
+ * a short grace and then sends the offer, which is what completes a restart
+ * (waiting for ICE here would deadlock against the answer only the POST brings
+ * back — the diagnosed "publish never sent").
+ *
+ * F3 (review #3078): callers MUST run this OUTSIDE ``_withNegotiationLock`` (the
+ * lock already guarantees no concurrent renegotiation is in flight, so a PC
+ * stuck non-stable is a pre-existing wedge — a bounded 3s wait detects it, then
+ * fails fast instead of holding the global lock for the full poll).  Default
+ * timeout shortened to 3s for that reason.
+ *
+ * Returns true when the PC is ready to renegotiate, false otherwise.
+ */
+export async function _ensurePcReadyForNegotiation(
+  pc: RTCPeerConnection,
+  timeoutMs = 3_000,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (pc.signalingState !== 'stable') {
+    if (Date.now() > deadline) {
+      log.warn('[publish] PC not stable-signaling within %dms — aborting share renegotiation', timeoutMs)
+      return false
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  const ice = pc.iceConnectionState
+  if (ice === 'failed' || ice === 'disconnected' || ice === 'closed') {
+    log.warn('[publish] ICE in terminal state %s — cannot start screen share', ice)
+    return false
+  }
+  return true
 }
 
 /**
@@ -70,10 +125,40 @@ export async function _registerLocalTracksOnSfu(
 ): Promise<any> {
   if (!state._currentSessionId || !trackObjs.length) return null
 
-  const connected = await _waitForIceConnected(pc, 10_000)
-  if (!connected) {
-    log.warn('[publish] ICE not connected within timeout — local tracks NOT registered on SFU')
+  // 2D/b (party-cell-screen-share-sfu-register-fail): the ICE gate must not
+  // deadlock a MID-CALL renegotiation.  An established session whose ICE is
+  // 'new'/'connecting' is mid-restart — the restart completes when the offer we
+  // are about to send is ANSWERED by the SFU, so waiting the full 10s here only
+  // guarantees failure (the diagnosed "ICE stuck in 'new', publish never sent").
+  // TERMINAL ICE ('failed'/'disconnected'/'closed') hard-fails.
+  //
+  // F4 (review #3078): distinguish the RESTART from the INITIAL connection.
+  // ``state._iceWasEverConnected`` is true once this PC's ICE reached
+  // connected/completed — a 'new'/'connecting' state then IS a mid-call restart
+  // → 3s grace then send the offer (the offer completes the restart).  When the
+  // PC NEVER connected (e.g. a fast camera/mic opt-in while ICE is still
+  // 'connecting'), send the offer only after the full wait — an early POST
+  // would 425 ("Session is not ready yet") and fail the 1st opt-in on a slow
+  // connection (a regression the old 10s wait did not have).
+  const iceState = pc.iceConnectionState
+  if (iceState === 'failed' || iceState === 'disconnected' || iceState === 'closed') {
+    log.warn('[publish] ICE in terminal state %s — local tracks NOT registered on SFU', iceState)
     return null
+  }
+  if (iceState !== 'connected' && iceState !== 'completed') {
+    const graceMs = state._iceWasEverConnected ? 3_000 : 10_000
+    const connected = await _waitForIceConnected(pc, graceMs)
+    if (!connected) {
+      if (state._iceWasEverConnected) {
+        log.warn(
+          '[publish] ICE %s after grace — sending tracks/new anyway (the offer completes the restart)',
+          pc.iceConnectionState,
+        )
+      } else {
+        log.warn('[publish] ICE not connected within timeout — local tracks NOT registered on SFU')
+        return null
+      }
+    }
   }
 
   try {
@@ -247,11 +332,51 @@ export async function _closeLocalRenegotiation(regResult: any): Promise<boolean>
     return false
   }
   if (regResult?.requiresImmediateRenegotiation && respSd?.type === 'offer' && respSdp.length > 0) {
-    await _answerSfuRenegotiationOffer(respSd)
+    // F1 (review #3078): the SFU-offer branch must be as rollback-protected as
+    // the answer branch below.  A browser REJECTING the SFU's offer at
+    // setRemoteDescription (inside _answerSfuRenegotiationOffer) would otherwise
+    // escape, wedge the PC in have-local-offer (no rollback), surface a raw
+    // error via the caller's catch, skip the G2 cleanup — the same class as the
+    // diagnosed mid='2' Surface B, just on the offer branch.
+    try {
+      await _answerSfuRenegotiationOffer(respSd)
+    } catch (applyErr) {
+      log.warn(
+        '[closeLocalRenegotiation] SFU offer rejected by browser — rolling back local offer: %s',
+        applyErr instanceof Error ? applyErr.message : String(applyErr),
+      )
+      try {
+        await state._pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit)
+      } catch (rollbackErr) {
+        log.warn('[closeLocalRenegotiation] rollback failed: %s',
+          rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr))
+      }
+      return false
+    }
     return true
   }
   if (respSd?.type === 'answer' && respSdp.length > 0) {
-    await state._pc.setRemoteDescription(new RTCSessionDescription(respSd))
+    // 2D (party-cell-screen-share-sfu-register-fail): an SFU answer that the
+    // browser REJECTS (the diagnosed `Failed to set remote video description
+    // send parameters for m-section with mid='2'` on the 2nd screen share) must
+    // NOT wedge the PC or surface as a raw error.  Roll back the local offer
+    // (PC back to 'stable', recoverable) and return false → the caller shows the
+    // friendly G2 message instead of the raw setRemoteDescription error.
+    try {
+      await state._pc.setRemoteDescription(new RTCSessionDescription(respSd))
+    } catch (applyErr) {
+      log.warn(
+        '[closeLocalRenegotiation] SFU answer rejected by browser — rolling back local offer: %s',
+        applyErr instanceof Error ? applyErr.message : String(applyErr),
+      )
+      try {
+        await state._pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit)
+      } catch (rollbackErr) {
+        log.warn('[closeLocalRenegotiation] rollback failed: %s',
+          rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr))
+      }
+      return false
+    }
     return true
   }
   if (!regResult) {
@@ -277,10 +402,11 @@ export async function _closeLocalRenegotiation(regResult: any): Promise<boolean>
  * which the Cloudflare contract rejects (``406 sessionDescription.type=answer
  * is expected`` → 502 on every stop).
  *
- * The ``mid`` argument is the publisher's sendonly screen-transceiver mid
- * (``state._orphanScreenTx.mid``), which survives ``removeTrack`` — NOT the native
- * MediaStreamTrack id (``_screenTrackId``).  The Cloudflare ``CloseTrackObject``
- * identifies tracks by transceiver ``mid``.
+ * The ``mid`` argument is a publisher's sendonly screen-transceiver mid (the
+ * per-instance ``ctx.screenState.orphanVideoTx.mid`` / ``orphanAudioTx.mid`` —
+ * Ajuste 1 + F13), which survives ``removeTrack`` — NOT the native
+ * MediaStreamTrack id.  The Cloudflare ``CloseTrackObject`` identifies tracks by
+ * transceiver ``mid``.
  *
  * The backend proxies this DELETE to Cloudflare ``PUT .../tracks/close`` and
  * sends ``force: true`` by default (the real API REQUIRES the field — a body
@@ -316,8 +442,11 @@ export async function _removeTrackFromSfu(mid: string): Promise<void> {
     // so the m-section is really removed.  This is the publisher mirror of the
     // subscriber answer flow (_subscribeToRemoteTracks) — the SFU generates the
     // offer, the client sends back an ANSWER via PUT /renegotiate.
+    // F2 (review #3078): this renegotiation mutates the SAME peer connection the
+    // publish/subscribe serialize — run it under the lock too so a stopShare
+    // answer can never overlap a concurrent shareStream/subscribe.
     if (result?.requiresImmediateRenegotiation === true && respSd?.type === 'offer' && respSdp.length > 0) {
-      await _answerSfuRenegotiationOffer(respSd)
+      await _withNegotiationLock(() => _answerSfuRenegotiationOffer(respSd))
     }
   } catch (err) {
     log.warn(
@@ -333,4 +462,178 @@ export async function _createAndSetOffer(pc: RTCPeerConnection): Promise<RTCSess
   const offer = await pc.createOffer()
   await pc.setLocalDescription(offer)
   return offer
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Screen-share transceiver helpers (Ajuste 1 + F13 — issue
+// party-calls-screen-audio-session-isolation).  Extracted from localMedia.ts so
+// that module stays under RULESET 1.1's 650-line limit.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Allocate a DEDICATED sendonly transceiver for a screen-share track (the
+ * screen VIDEO or its DISPLAY-AUDIO).
+ *
+ * CICLO 3: never addTrack — addTrack would REUSE an existing recvonly
+ * transceiver (e.g. the one subscribed to B's camera/mic) making it sendrecv on
+ * the same m-section; the SFU accepts that offer but never resolves the track
+ * for subscribers (not_found_track_error).  A fresh transceiver gets its own
+ * mid (no collision with receive mids).
+ *
+ * A1 (F8): reuse the transceiver orphaned by the previous stopSharing instead
+ * of stacking a new one per share/stop cycle (avoids m-section growth and the
+ * SFU's 413 accumulation error).  The ONLY reuse candidate is ``orphan`` — the
+ * transceiver explicitly captured by THIS instance's stopSharing (sender.track
+ * nulled by removeTrack but the transceiver kept), per-instance since F13.
+ * There is deliberately NO global `pc.getTransceivers()` fallback search: on a
+ * SHARED PC (party-cell + glb-content-viewer on the same page) a global search
+ * can steal ANOTHER instance's orphan and clobber its active share (review #2
+ * of party-calls-screen-audio-session-isolation).  When no orphan is available
+ * a fresh transceiver is allocated — an extra m-section is cheaper than
+ * corrupting a live share.
+ * Force direction back to 'sendonly' before replaceTrack — the direction was
+ * re-negotiated away from 'sendonly' by the previous offer, so the old
+ * direction-only search silently missed and stacked a new transceiver
+ * (transceivers 5→6 in F7 → 413 risk).
+ *
+ * Returns the allocated transceiver + whether the ORPHAN was reused (the caller
+ * clears its orphan handle + the diagnostic mirror when true).
+ */
+export async function _allocateSendonlyTransceiver(
+  pc: RTCPeerConnection,
+  track: MediaStreamTrack,
+  orphan: RTCRtpTransceiver | null,
+): Promise<{ tx: RTCRtpTransceiver; reusedOrphan: boolean }> {
+  let tx: RTCRtpTransceiver | null = null
+  let reusedOrphan = false
+  if (orphan?.sender) {
+    tx = orphan
+    reusedOrphan = true
+  }
+  if (tx?.sender) {
+    try {
+      tx.direction = 'sendonly'
+    } catch { /* ignore — non-mutating on some browsers */ }
+    await tx.sender.replaceTrack(track)
+  } else {
+    // Capture the fresh transceiver so the codec filter (2B) can act on the
+    // very transceiver created for this share.
+    tx = pc.addTransceiver(track, { direction: 'sendonly' })
+  }
+  return { tx, reusedOrphan }
+}
+
+/**
+ * 2B (defensive — party-cell-screen-share-sfu-register-fail): keep the quality
+ * video codecs (VP8/VP9/AV1/H264) on the given transceiver and drop only the
+ * families that surfaced the SFU codec artifact (H265/H266) plus the FEC/rtx
+ * baggage.  F5 (review #3078): H2 was DISCARDED as the root cause, so the
+ * filter is purely defensive and must NOT degrade the share's quality on Chrome
+ * (which offers VP9/AV1 via getCapabilities).  Fallback: browsers without
+ * setCodecPreferences / RTCRtpSender.getCapabilities keep the current behavior
+ * (no filter).
+ */
+export function _applyVideoCodecFilter(tx: RTCRtpTransceiver | null): void {
+  if (!tx?.setCodecPreferences) return
+  const codecCaps = (typeof RTCRtpSender !== 'undefined' && RTCRtpSender.getCapabilities
+    ? (RTCRtpSender.getCapabilities('video')?.codecs ?? [])
+    : [])
+    .filter((c) => /(^|\/)(vp8|vp9|av1|h264)$/i.test(c.mimeType))
+  if (codecCaps.length > 0) {
+    try {
+      tx.setCodecPreferences(codecCaps)
+    } catch { /* ignore — non-mutating on some browsers */ }
+  }
+}
+
+/**
+ * Build the ``tracks/new`` (location:'local') payload for the given sender-owned
+ * screen tracks (the shared video + its optional display-audio).  GAP 1: the
+ * publisher registers its OWN tracks via tracks/new AFTER the renegotiation
+ * offer — the native track id (sender.track.id) is what remote subscribers must
+ * reference to resolve the media.
+ *
+ * ⚠️ The ``t.sender.track`` truthiness guard is REQUIRED: when a track argument
+ * is null (share without display audio), ``sender.track === audioTrack`` would
+ * otherwise match the base recvonly transceivers whose sender.track is null
+ * (null === null) — and ``track!.id`` on that null track crashes the share.
+ */
+export function _buildLocalTrackObjs(
+  pc: RTCPeerConnection,
+  tracks: Array<MediaStreamTrack | null>,
+): Array<{ location: 'local'; mid: string; trackName: string }> {
+  const trackSet = new Set(tracks.filter((t): t is MediaStreamTrack => !!t))
+  return pc.getTransceivers()
+    .filter((t) => t.sender && t.sender.track && trackSet.has(t.sender.track) && t.mid)
+    .map((t) => ({
+      location: 'local' as const,
+      mid: t.mid as string,
+      trackName: t.sender!.track!.id,
+    }))
+}
+
+/**
+ * G2/R#3 (review #3077) failure cleanup: detach the sendonly transceivers
+ * owning the given tracks (``replaceTrack(null)``) and return them so the caller
+ * can restore them as ORPHANS for the NEXT shareStream to reuse
+ * (sender.track === null → replaceTrack) instead of stacking a new transceiver
+ * per failed share.  Without this, repeated share-fail cycles accumulate
+ * m-sections → the SFU's 413 error that the A1 orphan-reuse exists to prevent.
+ */
+export function _detachSendonlyTransceivers(
+  pc: RTCPeerConnection,
+  tracks: Array<MediaStreamTrack | null>,
+): Array<RTCRtpTransceiver | null> {
+  const trackSet = new Set(tracks.filter((t): t is MediaStreamTrack => !!t))
+  const orphans: Array<RTCRtpTransceiver | null> = []
+  for (const track of trackSet) {
+    const tx = pc.getTransceivers().find((t) => t.sender?.track === track) ?? null
+    if (tx?.sender) {
+      try { void tx.sender.replaceTrack(null) } catch { /* ignore — PC rolled back to stable */ }
+    }
+    orphans.push(tx)
+  }
+  return orphans
+}
+
+/**
+ * Register the given screen tracks on the SFU and close the publisher
+ * renegotiation in one step — the ``_registerLocalTracksOnSfu`` +
+ * ``_closeLocalRenegotiation`` composition used by shareStream.
+ *
+ * Returns true when an SDP was applied (the tracks were registered on the SFU);
+ * false when nothing was applied (regResult null / per-track errorCode) — the
+ * caller MUST NOT publish the tracks to the registry/presence.
+ *
+ * PERMANENTE (B2/F4): an EMPTY trackObjs reaching this point means the sendonly
+ * transceiver never got its mid — the screen is NOT registered on the SFU, yet
+ * registry + presence would still update below if the caller proceeded.  Silent
+ * inconsistency: the publisher sees the self-view, subscribers get
+ * not_found_track_error forever.  Always visible.
+ */
+export async function _publishLocalTracks(
+  pc: RTCPeerConnection,
+  sessionId: string,
+  screenTrackObjs: Array<{ location: 'local'; mid: string; trackName: string }>,
+  offer: RTCSessionDescriptionInit,
+): Promise<boolean> {
+  let regResult: any = null
+  if (!screenTrackObjs.length) {
+    log.warn(
+      '[PERM][shareStream] screenTrackObjs EMPTY session=%s — screen track NOT registered on SFU (no mid); subscribers will not resolve it',
+      sessionId,
+    )
+  }
+  if (screenTrackObjs.length) {
+    regResult = await _registerLocalTracksOnSfu(
+      pc,
+      sessionId,
+      screenTrackObjs,
+      { type: offer.type, sdp: offer.sdp || '' },
+    )
+  }
+  // Close the publisher renegotiation (F9 single helper — offer → answer,
+  // direct answer → apply, null → roll back so the PC is not wedged in
+  // have-local-offer).
+  return _closeLocalRenegotiation(regResult)
 }

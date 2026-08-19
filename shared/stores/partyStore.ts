@@ -20,7 +20,7 @@ import { ref } from 'vue'
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type TrackType = 'mic' | 'camera' | 'screen'
+export type TrackType = 'mic' | 'camera' | 'screen' | 'screenAudio'
 
 export interface Participant {
   /** Unique participant identifier (typically the user's id) */

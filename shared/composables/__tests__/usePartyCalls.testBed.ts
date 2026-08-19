@@ -65,6 +65,10 @@ export class MockTransceiver {
   stopped = false
   sender: { track: MockMediaStreamTrack | null; replaceTrack: ReturnType<typeof vi.fn> }
   receiver: { track: { readyState: string; muted: boolean } & Partial<MockMediaStreamTrack> }
+  /** 2B (party-cell-screen-share-sfu-register-fail): the codec list passed to
+   *  setCodecPreferences, if the screen share applied the VP8/H264 filter. */
+  codecPreferences: Array<{ mimeType: string }> = []
+  setCodecPreferences: ReturnType<typeof vi.fn>
   constructor(mid: string | null, direction: string) {
     this.mid = mid
     this.direction = direction
@@ -76,6 +80,9 @@ export class MockTransceiver {
       replaceTrack: vi.fn(async (track: MockMediaStreamTrack | null) => { this.sender.track = track }),
     }
     this.receiver = { track: { readyState: 'live', muted: false } }
+    // Capture the filtered codecs so tests can assert the offer carries only
+    // VP8/H264 (2B) — mirrors the real browser API.
+    this.setCodecPreferences = vi.fn((codecs: Array<{ mimeType: string }>) => { this.codecPreferences = codecs })
   }
   stop(): void { this.stopped = true }
 }
@@ -87,6 +94,10 @@ export class MockRTCPeerConnection {
   oniceconnectionstatechange: (() => void) | null = null
   ontrack: ((ev: unknown) => void) | null = null
   iceConnectionState = 'connected'
+  /** Mirrors the real PC's JSEP state so the 2D stable-signaling guard
+   *  (_ensurePcReadyForNegotiation) is testable: offer → have-local-offer /
+   *  have-remote-offer, answer/rollback → stable. */
+  signalingState: string = 'stable'
 
   addTransceiver(trackOrKind: string | MockMediaStreamTrack, init?: { direction?: string }): MockTransceiver {
     const kind = typeof trackOrKind === 'string' ? trackOrKind : trackOrKind.kind
@@ -110,10 +121,18 @@ export class MockRTCPeerConnection {
     this.transceivers.forEach((tx, i) => { if (tx.mid === null) tx.mid = String(i) })
     return { type: 'offer', sdp: this._buildSdp() }
   }
-  async setLocalDescription(desc: unknown): Promise<void> { this.localDescription = desc }
+  async setLocalDescription(desc: unknown): Promise<void> {
+    this.localDescription = desc
+    const type = (desc as { type?: string } | null)?.type
+    if (type === 'offer') this.signalingState = 'have-local-offer'
+    else if (type === 'answer' || type === 'rollback') this.signalingState = 'stable'
+  }
 
   async setRemoteDescription(desc: { type?: string; sdp?: string }): Promise<void> {
     this.remoteDescription = desc
+    const type = desc?.type
+    if (type === 'offer') this.signalingState = 'have-remote-offer'
+    else if (type === 'answer') this.signalingState = 'stable'
     // Simulate the SFU offer creating NEW receive transceivers for m-lines whose
     // mids do not exist yet — the shared screen (mid '2') is exactly this case.
     const mids = [...(desc.sdp || '').matchAll(/a=mid:(\S+)/g)].map((m) => m[1])

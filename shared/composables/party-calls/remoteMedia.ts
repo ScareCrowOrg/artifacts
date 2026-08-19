@@ -151,7 +151,10 @@ export function _handleRemoteTrack(
     const ownerId = trackIdMatch[1]
     const trackName = trackIdMatch[2]
     const display = _remoteTrackTypes.get(ownerId)?.get(trackName)
-    sessionKey = display === 'screen' ? `${ownerId}/screen` : ownerId
+    // Ajuste 1: the screen's DISPLAY-AUDIO track ('screenAudio') merges into the
+    // SAME {ownerId}/screen tile as the screen video — the <video> plays both, and
+    // the receiver can mute only that tile's sound without touching the mic.
+    sessionKey = (display === 'screen' || display === 'screenAudio') ? `${ownerId}/screen` : ownerId
   } else {
     // F3 FIX (CICLO 4): the real Cloudflare receiver delivers an OPAQUE
     // track.id (no '/'), so classify via event.transceiver.mid → the
@@ -188,7 +191,9 @@ export function _handleRemoteTrack(
     if (info) {
       const ownerId = info.sessionId
       const display = _remoteTrackTypes.get(ownerId)?.get(info.trackName)
-      sessionKey = display === 'screen' ? `${ownerId}/screen` : ownerId
+      // Ajuste 1: 'screenAudio' merges into the screen tile (see the comment on
+      // the slash-format branch above).
+      sessionKey = (display === 'screen' || display === 'screenAudio') ? `${ownerId}/screen` : ownerId
     } else {
       // Last resort: mid absent (very old browser without transceiver) or the
       // track was never mapped — keep the historical stream.id behavior; when
@@ -292,16 +297,27 @@ export function _handleRemoteTrack(
       return
     }
     trk.onended = () => {
+      // review #1 (party-calls-screen-audio-session-isolation): a DISPLAY-AUDIO
+      // track ending is NOT "share over" — the screen VIDEO may still be flowing.
+      // Drop only the audio track's mapping + receiver transceiver and KEEP the
+      // {sid}/screen tile (a silent screen is still the screen); the video
+      // track's own end/mute is what signals a real stop.
+      if (_displayAtReceive === 'screenAudio') {
+        if (_txMid) _teardownRemoteMedia([_txMid], 'cleanup')
+        _dropTrackNameMapping(sessionKey, _trackNameAtReceive)
+        return
+      }
       _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive, 'onended', remoteStreams)
     }
     trk.onmute = () => {
-      // Screen tracks have no mute button — a mute means the publisher stopped
-      // or the SFU dropped it → cleanup.  Camera/mic mute stays reversible (skip).
+      // Screen VIDEO has no mute button — a mute means the publisher stopped or
+      // the SFU dropped it → cleanup.  DISPLAY-AUDIO mute is reversible (the
+      // video keeps flowing) → no cleanup.  Camera/mic mute stays reversible.
       if (_displayAtReceive === 'screen') {
         _cleanupEndedRemoteTrack(sessionKey, _txMid, _trackNameAtReceive, 'onmute', remoteStreams)
       }
     }
-    trk.onunmute = () => { /* camera/mic mute stays reversible — no cleanup */ }
+    trk.onunmute = () => { /* camera/mic/screenAudio mute stays reversible — no cleanup */ }
   }
   for (const trk of effectiveStream.getTracks()) _bindTrackEndHandlers(trk)
   // F2 FIX (bug-hardening): event-driven onremovetrack — resolve the removed

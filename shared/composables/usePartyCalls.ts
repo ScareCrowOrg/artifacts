@@ -36,12 +36,13 @@ import {
   _clearPendingSubscribeTimers,
   _remoteStreamAddedAt,
   _localTrackNamesByDisplay,
+  _activeScreenIdsByInstance,
 } from './party-calls/state'
 import { _apiFetchJson, _pollProvisionTask, _executePartyAction } from './party-calls/http'
 import { _createAndSetOffer } from './party-calls/sfuSignaling'
 import { _refreshDiscovery, _registerAndDiscoverSessions, _startHeartbeat, _stopHeartbeat } from './party-calls/discovery'
 import { _handleRemoteTrack } from './party-calls/remoteMedia'
-import { createLocalMediaActions, _stopStream, type LocalMediaContext } from './party-calls/localMedia'
+import { createLocalMediaActions, _stopStream, type LocalMediaContext, type ScreenShareState } from './party-calls/localMedia'
 import type { ConnectionPhase, AvailableRoom, UsePartyCallsReturn } from './party-calls/types'
 
 export type { ConnectionPhase, AvailableRoom, UsePartyCallsReturn } from './party-calls/types'
@@ -75,6 +76,18 @@ export function usePartyCalls(): UsePartyCallsReturn {
   const remoteStreams = ref<Map<string, MediaStream>>(new Map())
   const connectionError = ref<string | null>(null)
   const _currentRoomRef = ref<string | null>(null)
+
+  // F13 (party-calls-screen-audio-session-isolation): PER-INSTANCE screen-share
+  // state.  Each usePartyCalls() gets its own object, so a party-cell +
+  // glb-content-viewer on the same page (same room, shared PC/session) no longer
+  // clobber each other's share — a stop on one instance never touches the other.
+  const screenState: ScreenShareState = {
+    stream: null,
+    trackId: null,
+    audioTrackId: null,
+    orphanVideoTx: null,
+    orphanAudioTx: null,
+  }
 
   /** Expose participants from the store as a convenience ref. */
   const participants = computed<Participant[]>(() => store.participants)
@@ -332,6 +345,48 @@ export function usePartyCalls(): UsePartyCallsReturn {
     const roomId = _currentRoomRef.value
     const sessionId = state._currentSessionId
 
+    // F13 (review #5 — party-calls-screen-audio-session-isolation): if ANOTHER
+    // instance is still actively sharing on the SHARED session (e.g. the
+    // glb-content-viewer piggybacking on the party-cell's PC), this hangUp must
+    // NOT tear down the shared PC/session/registry/heartbeat — a SOFT hang-up
+    // only resets THIS instance's own state so the other instance's share
+    // survives this component unmounting.
+    _activeScreenIdsByInstance.delete(screenState)
+    const otherInstanceSharing = [..._activeScreenIdsByInstance.values()]
+      .some((ids) => ids.videoId || ids.audioId)
+    if (otherInstanceSharing) {
+      // Stop THIS instance's screen capture + clear its screen mirrors.
+      _stopStream(screenState.stream)
+      screenState.stream = null
+      screenState.trackId = null
+      screenState.audioTrackId = null
+      screenState.orphanVideoTx = null
+      screenState.orphanAudioTx = null
+      state._screenStream = null // diagnostic mirror
+      state._screenTrackId = null // diagnostic mirror
+      state._screenAudioTrackId = null // diagnostic mirror
+      state._orphanScreenTx = null // diagnostic mirror
+      state._orphanScreenAudioTx = null // diagnostic mirror
+      // Disconnect THIS instance's room presence (per-instance ref) + reset its
+      // reactive shell.  The shared session (PC, sessionId, heartbeat, registry,
+      // subscription maps, localStream) stays alive for the other instance.
+      if (_discoveryDebounce !== null) {
+        window.clearTimeout(_discoveryDebounce)
+        _discoveryDebounce = null
+      }
+      _currentRoomRef.value = null
+      isConnected.value = false
+      connectionPhase.value = 'idle'
+      cameraEnabled.value = false
+      micEnabled.value = false
+      isSharingScreen.value = false
+      localStream.value = null
+      selfViewStream.value = null
+      remoteStreams.value = new Map()
+      log.info('[hangUp] Soft hang-up — another instance still shares the session; shared PC kept')
+      return
+    }
+
     _stopHeartbeat()
 
     // Broadcast leave so other clients drop us from presence (best-effort).
@@ -368,12 +423,21 @@ export function usePartyCalls(): UsePartyCallsReturn {
     // recycled module-level WeakMap can never tag a future session's mid).
     if (state._pc) for (const tx of state._pc.getTransceivers()) _transceiverMeta.delete(tx)
     _localTrackNamesByDisplay.clear()
+    // F13 (review #4/#5): the whole shared session is being torn down — drop
+    // every per-instance screen contribution (no instance remains).
+    _activeScreenIdsByInstance.clear()
     // F11 FIX (bug-hardening): reset the one-shot H2 stats-dump guard so the
     // dump re-arms on the NEXT call (the flag stayed true from the first call,
     // silently disabling the diagnostic telemetry for the rest of the page).
     state._statsDumpScheduled = false
-    state._screenTrackId = null
-    state._orphanScreenTx = null
+    // F4 (review #3078): reset the ICE-was-connected flag so the next call's
+    // initial connection (first opt-in while ICE is still 'connecting') gets the
+    // full wait instead of the mid-call restart grace.
+    state._iceWasEverConnected = false
+    state._screenTrackId = null // diagnostic mirror
+    state._screenAudioTrackId = null // diagnostic mirror
+    state._orphanScreenTx = null // diagnostic mirror
+    state._orphanScreenAudioTx = null // diagnostic mirror
     state._localAudioTx = null
     state._localVideoTx = null
     // Cancel a pending Caso D discovery so it cannot fire after the hang-up.
@@ -390,11 +454,18 @@ export function usePartyCalls(): UsePartyCallsReturn {
     state._currentSessionId = null
 
     // Stop local media (mic/camera + shared screen — leak fix: the screen
-    // stream was never stopped before, so the tab kept capturing after hangUp)
+    // stream was never stopped before, so the tab kept capturing after hangUp).
+    // F13: the screen stream is PER-INSTANCE (this composable's screenState) —
+    // the module-level mirrors are reset alongside.
     _stopStream(state._localStream)
     state._localStream = null
-    _stopStream(state._screenStream)
-    state._screenStream = null
+    _stopStream(screenState.stream)
+    screenState.stream = null
+    screenState.trackId = null
+    screenState.audioTrackId = null
+    screenState.orphanVideoTx = null
+    screenState.orphanAudioTx = null
+    state._screenStream = null // diagnostic mirror
     state._publishedTracks = []
     state._publishedTrackNames = []
 
@@ -436,6 +507,7 @@ export function usePartyCalls(): UsePartyCallsReturn {
     remoteStreams,
     connectionError,
     participants,
+    screenState,
     getRoomId: () => _currentRoomRef.value,
   }
   const { shareStream, muteAudio, toggleCamera, toggleScreenShare, stopSharing } = createLocalMediaActions(mediaCtx)

@@ -143,8 +143,12 @@ export async function _refreshDiscovery(
     const removeScreenMapping = (ownerId: string): void => {
       const typeMap = _remoteTrackTypes.get(ownerId)
       if (!typeMap) return
+      // Ajuste 1: prune BOTH the screen VIDEO and the DISPLAY-AUDIO native ids
+      // (the registry drops 'screen' AND 'screenAudio' together on stopSharing —
+      // a stale 'screenAudio' mapping would otherwise leak and misclassify a
+      // later re-subscription).
       const screenNativeIds = [...typeMap.entries()]
-        .filter(([, display]) => display === 'screen')
+        .filter(([, display]) => display === 'screen' || display === 'screenAudio')
         .map(([nativeId]) => nativeId)
       if (screenNativeIds.length === 0) return
       // F3 FIX (ITER_1 guest-screenshare CICLO 2): the screen nativeIds whose
@@ -189,6 +193,9 @@ export async function _refreshDiscovery(
       const sessionLeft = ownersToPrune.has(ownerId)
       const screenRemoved = key.endsWith('/screen') && activeIds.has(ownerId)
         && !(activeTracksByOwner.get(ownerId) ?? []).includes('screen')
+        // Ajuste 1: 'screenAudio' only ever accompanies 'screen', but check both
+        // so the tile is pruned even if the registry reports only the audio.
+        && !(activeTracksByOwner.get(ownerId) ?? []).includes('screenAudio')
       // F3 FIX (ITER_1 party-cell-mock-remote-user, H2): an OPAQUE-ORPHAN tile —
       // a non-screen key that is neither an active registry session NOR a
       // successfully-subscribed session.  These keys come from the
@@ -218,8 +225,11 @@ export async function _refreshDiscovery(
         const screenMids: string[] = []
         if (screenRemoved) {
           for (const [mid, info] of _remoteMidToTrackName) {
-            if (info.sessionId === ownerId
-              && _remoteTrackTypes.get(ownerId)?.get(info.trackName) === 'screen') {
+            const display = _remoteTrackTypes.get(ownerId)?.get(info.trackName)
+            // Ajuste 1: tear down the receiver transceivers of BOTH the screen
+            // video and the display-audio (the audio's own mid must be stopped
+            // or the recvonly receiver keeps decoding the dropped screen audio).
+            if (info.sessionId === ownerId && (display === 'screen' || display === 'screenAudio')) {
               screenMids.push(mid)
             }
           }
