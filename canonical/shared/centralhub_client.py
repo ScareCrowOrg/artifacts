@@ -99,6 +99,15 @@ class CentralHubClient:
             "status=%s body_preview=%.200s",
             method, path, response.status_code, response.text or "",
         )
+        if response.status_code >= 400:
+            # PERMANENTE: surface non-2xx CentralHub responses. The base client
+            # deliberately does NOT raise_for_status() (contract preserved), but a
+            # 4xx/5xx being silently consumed upstream must always be visible.
+            logger.error(
+                "PERMANENTE [PNG-JOB] CENTRALHUB_NON_2XX: method=%s path=%s "
+                "status=%s body_preview=%.200s",
+                method, path, response.status_code, response.text or "",
+            )
         return response
 
     async def health_check(self) -> Dict[str, Any]:

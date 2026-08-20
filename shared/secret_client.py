@@ -104,7 +104,9 @@ class SecretClient:
             logger.debug(f"[SecretClient] [{request_id}] Step 2: Publishing request to Redis at key '{request_channel}'")
             self._redis.setex(request_channel, 60, request_payload)
             logger.debug(f"[SecretClient] [{request_id}] ✅ STEP 2 OK: Request published (TTL: 60s)")
+            logger.info(f"[DIAG] SecretClient: Publishing request for key={secret_key} ttl=60s")
         except Exception as e:
+            logger.info(f"[DIAG] SecretClient: Returning None for key={secret_key} after {time.time() - start_time:.1f}s — Redis setex failed")
             logger.error(f"[SecretClient] [{request_id}] ❌ STEP 2 FAILED: Could not publish request to Redis")
             logger.error(f"[SecretClient] [{request_id}] Error: {type(e).__name__}: {str(e)}")
             return None
@@ -122,12 +124,14 @@ class SecretClient:
             try:
                 raw = self._redis.get(response_key)
             except Exception as e:
+                logger.info(f"[DIAG] SecretClient: Returning None for key={secret_key} after {time.time() - start_time:.1f}s — Redis read error")
                 logger.error(f"[SecretClient] [{request_id}] ❌ Poll cycle {poll_count} FAILED: Redis read error")
                 logger.error(f"[SecretClient] [{request_id}] Error: {type(e).__name__}: {str(e)}")
                 return None
 
             if raw is not None:
                 poll_elapsed = time.time() - start_time
+                logger.info(f"[DIAG] SecretClient: GOT RESPONSE key={secret_key} elapsed={poll_elapsed:.1f}s size={len(raw)}")
                 logger.debug(f"[SecretClient] [{request_id}] ✅ Response found after {poll_count} polls (~{poll_elapsed:.1f}s)")
                 logger.debug(f"[SecretClient] [{request_id}] Response size: {len(raw)} bytes")
 
@@ -190,9 +194,13 @@ class SecretClient:
             time.sleep(0.1)
             if poll_count % 10 == 0:  # Log every 10 polls (every 1s)
                 logger.debug(f"[SecretClient] [{request_id}] Still polling... ({poll_count} polls, {remaining:.1f}s remaining)")
+            if poll_count % 50 == 0:  # Log every 50 polls (every ~5s)
+                poll_elapsed = time.time() - start_time
+                logger.info(f"[DIAG] SecretClient: Polling key={secret_key} elapsed={poll_elapsed:.1f}s (attempt {poll_count})")
 
         # Timeout occurred
         total_elapsed = time.time() - start_time
+        logger.info(f"[DIAG] SecretClient: TIMEOUT key={secret_key} elapsed={total_elapsed:.1f}s — no response from Launcher")
         logger.error(f"[SecretClient] ❌ TIMEOUT: No response from Launcher after {timeout}s")
         logger.error(f"[SecretClient] [{request_id}] Tried {poll_count} polls across {total_elapsed:.2f}s")
         logger.error(f"[SecretClient] [{request_id}] Expected response key: {response_key}")
@@ -201,6 +209,7 @@ class SecretClient:
         logger.error(f"[SecretClient] [{request_id}]   2. Orchestrator loop not polling Redis")
         logger.error(f"[SecretClient] [{request_id}]   3. Service seed not registered")
         logger.error(f"[SecretClient] [{request_id}]   4. Network/Redis connectivity issues")
+        logger.info(f"[DIAG] SecretClient: Returning None for key={secret_key} elapsed={total_elapsed:.1f}s — timeout")
         return None
 
     # -------------------------------------------------------------------------

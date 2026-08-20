@@ -42,7 +42,7 @@ import os
 import time
 from typing import Any, Optional
 
-__all__ = ["get_config", "clear_cache"]
+__all__ = ["get_config", "clear_cache", "cache_secret", "get_cached_secret"]
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,11 @@ _cache: dict[str, tuple[Any, float]] = {}
 # Each secret is cached only after first successful retrieval from Launcher.
 # On Backend restart, cache clears and secrets are re-fetched fresh.
 _secrets_cache: dict[str, str] = {}
+
+# Negative cache: None results cached with short TTL to avoid re-triggering
+# SecretClient immediately after a timeout.  Prevents cascading 60s waits.
+_NEGATIVE_CACHE_TTL_SECONDS: int = 30
+_negative_cache: dict[str, tuple[Optional[str], float]] = {}
 
 
 def _cache_get(key: str) -> tuple[bool, Any]:
@@ -103,9 +108,69 @@ def _secrets_cache_set(key: str, value: str) -> None:
 
 
 def clear_cache() -> None:
-    """Flush the in-memory settings cache (useful in tests)."""
+    """Flush the in-memory caches (useful in tests)."""
     _cache.clear()
     _secrets_cache.clear()
+    _negative_cache.clear()
+
+
+def cache_secret(key: str, value: str) -> None:
+    """Inject a value into the lazy secrets cache.
+
+    Useful for auto-provisioned secrets that the backend just created
+    and wants available immediately via ``get_config('vault.{key}')``.
+
+    Once cached, subsequent ``get_config("vault.{key}")`` calls return the
+    value instantly without hitting the Launcher / SecretClient.
+
+    Args:
+        key:   Secret name (without the ``vault.`` prefix).
+        value: Plaintext value to cache.
+    """
+    _secrets_cache_set(key, value)
+
+
+def get_cached_secret(key: str) -> Optional[str]:
+    """Fast path: check the in-memory secrets cache only (no I/O).
+
+    Unlike ``get_config("vault.{key}")`` this call **never** falls through
+    to environment variables or the SecretClient — it returns instantly or
+    returns ``None``.
+
+    Use in latency-sensitive code paths (e.g. the POST /calls/provision
+    handler) where triggering a 60-second SecretClient timeout would block
+    the event loop.
+
+    Args:
+        key: Secret name (without the ``vault.`` prefix).
+
+    Returns:
+        Cached value, or ``None`` if not in cache.
+    """
+    hit, value = _secrets_cache_get(key)
+    return value if hit else None
+
+
+# ---------------------------------------------------------------------------
+# Negative cache helpers (None results with TTL)
+# ---------------------------------------------------------------------------
+
+
+def _negative_cache_get(key: str) -> tuple[bool, Optional[str]]:
+    """Return (hit, value) from the negative cache (TTL 30s)."""
+    entry = _negative_cache.get(key)
+    if entry is None:
+        return False, None
+    value, expiry = entry
+    if time.monotonic() > expiry:
+        del _negative_cache[key]
+        return False, None
+    return True, value
+
+
+def _negative_cache_set(key: str) -> None:
+    """Cache that ``key`` resolved to ``None`` (30s TTL)."""
+    _negative_cache[key] = (None, time.monotonic() + _NEGATIVE_CACHE_TTL_SECONDS)
 
 
 # ---------------------------------------------------------------------------
@@ -183,48 +248,69 @@ def get_config(key: str) -> Optional[str]:
     if Launcher/Redis are not yet ready.
     """
 
+    logger.info("[DIAG] config_manager.get_config: key=%s", key)
+
     # ------------------------------------------------------------------
-    # Path 1: vault.* → Lazy secrets cache or SecretClient
+    # Path 1: vault.* → Lazy secrets cache → env var → SecretClient
     # ------------------------------------------------------------------
     if key.startswith("vault."):
         secret_name = key[len("vault."):]
 
-        # Check lazy secrets cache first (per-process, no TTL)
+        # Step 1: Check lazy secrets cache first (per-process, no TTL)
         hit, cached_value = _secrets_cache_get(secret_name)
         if hit:
             logger.info("[Config] ✅ Secrets cache HIT for 'vault.%s' — returning cached value (preview: %s...)",
                         secret_name, cached_value[:15] if len(cached_value) >= 15 else cached_value)
             return cached_value
-        logger.info("[Config] Secrets cache MISS for 'vault.%s' — will request from SecretClient", secret_name)
+        logger.info("[DIAG] config_manager.get_config: CACHE MISS key=vault.%s", secret_name)
+        logger.info("[Config] Secrets cache MISS for 'vault.%s' — checking env vars (fast path before SecretClient)", secret_name)
 
+        # Step 2: Check env var BEFORE SecretClient (avoids 60s blocking timeout)
+        env_key = secret_name.upper().replace(":", "_").replace(".", "_").replace("-", "_")
+        env_value = os.getenv(env_key)
+        if env_value:   # not None and not empty
+            env_preview = env_value[:15] if len(env_value) >= 15 else env_value
+            logger.info("[DIAG] config_manager.get_config: env var %s=found (value: %s...)", env_key, env_preview)
+            logger.info("[Config] ✅ Env var '%s' found: '%s...' (len=%d) — caching and returning (fast path)",
+                        env_key, env_preview, len(env_value))
+            # Cache env fallback too (for consistency)
+            _secrets_cache_set(secret_name, env_value)
+            return env_value
+        logger.info("[DIAG] config_manager.get_config: env var %s=not_found", env_key)
+        logger.info("[Config] Env var '%s' not set for '%s' — falling back to SecretClient", env_key, secret_name)
+
+        # Step 3: Check negative cache before SecretClient (avoids 30s wait
+        # for keys that previously timed out)
+        neg_hit, neg_value = _negative_cache_get(key)
+        if neg_hit:
+            logger.info("[Config] ✅ Negative cache HIT for '%s' — skipping SecretClient (TTL 30s)", key)
+            return neg_value
+
+        # Step 4: Fall back to SecretClient (TOTP-authenticated, may block for 60s)
         client = _get_secret_client()
         if client is not None:
+            logger.info("[DIAG] config_manager.get_config: calling SecretClient.request_secret(key=%s, timeout=60s)", secret_name)
             logger.info("[Config] ▶️ Calling SecretClient.request_secret('%s') (timeout: 60s)", secret_name)
             try:
                 value = client.request_secret(secret_name)
                 if value is not None:
+                    logger.info("[DIAG] config_manager.get_config: SecretClient returned value for key=%s", secret_name)
                     # Cache on first successful retrieval (lazy cache, no TTL)
                     _secrets_cache_set(secret_name, value)
                     return value
+                logger.info("[DIAG] config_manager.get_config: SecretClient returned None for key=%s", secret_name)
                 logger.warning("[Config] SecretClient returned None for '%s'", secret_name)
+                # Cache the negative result so subsequent calls don't re-trigger
+                _negative_cache_set(key)
             except (ConnectionError, TimeoutError, OSError) as exc:
                 logger.warning(
                     "[Config] SecretClient error for '%s': %s – falling back to env",
                     secret_name,
                     exc,
                 )
-        # Fallback: env var with VAULT_ prefix stripped
-        env_key = secret_name.upper().replace(":", "_").replace(".", "_").replace("-", "_")
-        logger.info("[Config] SecretClient returned None for '%s' — falling back to env var '%s'", secret_name, env_key)
-        env_value = os.getenv(env_key)
-        if env_value is not None:
-            env_preview = env_value[:15] if len(env_value) >= 15 else env_value
-            logger.info("[Config] ✅ Env var '%s' found: '%s...' (len=%d) — caching and returning",
-                        env_key, env_preview, len(env_value))
-            # Cache env fallback too (for consistency)
-            _secrets_cache_set(secret_name, env_value)
-            return env_value
-        logger.warning("[Config] ❌ Env var '%s' also NOT SET for secret '%s' — returning None", env_key, secret_name)
+
+        # All sources exhausted
+        logger.warning("[Config] ❌ All sources exhausted for secret '%s' — returning None", secret_name)
         return None
 
     # ------------------------------------------------------------------

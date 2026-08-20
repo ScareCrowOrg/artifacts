@@ -24,6 +24,11 @@
     "viewerGranted": "Já Concedido",
     "loginPrompt": "Autentique-se para transmitir mensagens e solicitar acesso ao planeta.",
     "loginButton": "Autenticar-se",
-    "notAuthenticated": "Você está explorando o Salão Planetário como visitante. Autentique-se para interagir com o guardião."
+    "notAuthenticated": "Você está explorando o Salão Planetário como visitante. Autentique-se para interagir com o guardião.",
+    "live": "Ao Vivo",
+    "startCall": "Iniciar Party",
+    "leaveCall": "Sair",
+    "connecting": "Conectando…",
+    "provisioning": "Ativando…"
   }
 }

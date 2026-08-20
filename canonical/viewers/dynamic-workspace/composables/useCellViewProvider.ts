@@ -23,7 +23,7 @@
  * - Backend is API-only; Vite is the sovereign artifact host
  */
 
-import { defineAsyncComponent, markRaw, shallowRef, ref } from 'vue'
+import { defineAsyncComponent, markRaw, shallowRef, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import type { CellTypeDefinition, ViewSpec } from '../types'
 import { createLogger } from '@/utils/logger'
@@ -215,6 +215,24 @@ export function useCellViewProvider() {
       ;(instance as any).__cellTypeName = cellTypeName
       // Set stage so BaseCell.loadCellTypeFromDiscovery loads from correct path (sandbox vs canonical)
       ;(instance as any).__cellStage = cellType.stage || 'canonical'
+
+      // ── Signal cell when MFE handshake completes ─────────────────────────
+      // If the handshake already completed, signal immediately.
+      // Otherwise, watch for store.status === 'ready' and signal once.
+      const store = useWorkspaceStore()
+      if (store.status === 'ready') {
+        instance._signalReady()
+      } else {
+        const unwatch = watch(
+          () => store.status,
+          (status) => {
+            if (status === 'ready') {
+              instance._signalReady()
+              unwatch()
+            }
+          },
+        )
+      }
 
       log.info('[useCellViewProvider] instantiateCellByType: cell instantiated', {
         cellTypeName,

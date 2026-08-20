@@ -110,6 +110,28 @@ export function useBaseViewer(options: UseBaseViewerOptions = {}) {
 
   // ── Handshake internals ───────────────────────────────────────────────
 
+  /** Callbacks registered via onReady(), fired once when handshake completes. */
+  const _readyCallbacks: (() => void)[] = []
+
+  /**
+   * Register a callback that fires when the MFE handshake (INIT_WORKSPACE) completes.
+   * If the handshake has already completed, the callback fires immediately.
+   * Each callback fires at most once (one-shot registration).
+   */
+  function onReady(cb: () => void) {
+    if (store.status === 'ready') {
+      cb()
+    } else {
+      _readyCallbacks.push(cb)
+    }
+  }
+
+  /** Fire all registered ready callbacks and clear the registry. */
+  function _fireReady() {
+    _readyCallbacks.forEach(cb => cb())
+    _readyCallbacks.length = 0
+  }
+
   /** Track pending validation request to match response with request. */
   let pendingValidationRequest: {
     workspaceId: string
@@ -289,6 +311,7 @@ export function useBaseViewer(options: UseBaseViewerOptions = {}) {
         store.setReady()
         log.info('[WORKSPACE] Session validation succeeded', { workspaceId, userId })
         sendReady(workspaceId, pendingValidationRequest.cockpitOrigin, pendingValidationRequest.source)
+        _fireReady()
         handshakeResolve?.()
       } else {
         const code = 'VALIDATION_FAILED'
@@ -335,6 +358,7 @@ export function useBaseViewer(options: UseBaseViewerOptions = {}) {
       clearHandshakeTimeout()
       store.setReady()
       sendReady(workspaceId, cockpitOrigin, event.source)
+      _fireReady()
       handshakeResolve?.()
     }
   }
@@ -441,6 +465,9 @@ export function useBaseViewer(options: UseBaseViewerOptions = {}) {
 
     // Lifecycle
     loadData,
+
+    // MFE Ready Lifecycle
+    onReady,
 
     // Utilities
     formatDate,

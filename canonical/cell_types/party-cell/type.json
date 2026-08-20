@@ -1,0 +1,75 @@
+{
+  "id": "party-cell",
+  "name": "party-cell",
+  "display_name": "Party",
+  "description": "Real-time voice, video, and screen sharing cell powered by Cloudflare Calls WebRTC SFU",
+  "version": "1.0.0",
+  "category": "communication",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/PartyCell.ts"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "default_initial_data": {
+    "roomId": null
+  },
+  "allow_instance_override_refs": false,
+  "properties_schema": {
+    "roomId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null,
+      "description": "Room identifier for the call. Null = auto-generated from cell instance ID."
+    }
+  },
+  "_discovery": {
+    "labels": [
+      "#webrtc",
+      "#realtime",
+      "#calls",
+      "#party",
+      "#cloudflare"
+    ],
+    "describe": "Real-time voice, video, and screen sharing cell powered by Cloudflare Calls SFU. Users can start or join a party call, share their camera/mic, broadcast their screen or 3D canvas, and see remote participants in a video grid. Uses Cloudflare Calls for signaling and media (no backend media processing), with room presence synchronised via Redis Pub/Sub.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [
+      "webrtc",
+      "cloudflare-calls"
+    ],
+    "dependencies": [
+      "calls_router",
+      "wss_pubsub_router",
+      "redis_l1",
+      "cloudflare_calls_api"
+    ],
+    "tags": [
+      "webrtc",
+      "calls",
+      "party",
+      "cloudflare",
+      "realtime",
+      "voice",
+      "video",
+      "screen-sharing"
+    ],
+    "use_cases": [
+      "Voice/video call with party members while exploring 3D content",
+      "Broadcast 3D viewport to other users in the room",
+      "Screen sharing during collaborative sessions",
+      "Social hangout in the planet hall"
+    ]
+  },
+  "kind": "cell",
+  "updated_at": "2026-07-21T00:00:00",
+  "created_at": "2026-07-21T00:00:00",
+  "stage": "canonical"
+}

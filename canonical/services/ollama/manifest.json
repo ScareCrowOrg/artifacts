@@ -9,8 +9,8 @@
   "generate_env_file": false,
   "totp_seed": false,
   "lastBuilt": {
-    "staging": "2026-07-17T15:33:27.389Z",
-    "production": "2026-07-18T20:51:23.299Z"
+    "staging": "2026-07-22T03:36:31.241Z",
+    "production": "2026-08-20T20:13:03.892Z"
   },
   "planet": "production"
 }

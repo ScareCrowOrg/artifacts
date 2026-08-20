@@ -5,11 +5,12 @@
  * Cell types extending BaseCell resolve @/types and @/utils via shared/.
  * Service and config imports are stubbed (tests override with vi.mock).
  *
- * Usage (from repo root):
- *   npx vitest run --config artifacts/vitest.config.js
- *
- * Usage (from artifacts/ dir):
+ * Usage (from artifacts/ dir — REQUIRED):
  *   npx vitest run
+ *
+ * ⚠️ `npx vitest run --config artifacts/vitest.config.js` from the repo root FAILS
+ * ("No test files found") — `test.include` is resolved relative to the cwd (root),
+ * not the config file location. Run from artifacts/ instead.
  */
 
 import { defineConfig } from 'vitest/config'
@@ -25,6 +26,19 @@ export default defineConfig({
     include: [
       './canonical/cell_types/**/tests/**/*.spec.ts',
       './canonical/cell_types/**/tests/**/*.test.ts',
+      // usePartyCalls (shared composable) lives in shared/composables/__tests__/,
+      // outside the canonical/cell_types glob.  Wired in so `npx vitest run`
+      // covers it.  (Other __tests__/ files, ex: useBaseViewer.test.ts, are NOT
+      // wired because they still have unresolved @/stores imports — see
+      // party-calls-modularization PR review finding #11.)
+      './shared/composables/__tests__/usePartyCalls.test.ts',
+      // Bug-hardening suite (issue party-calls-bug-hardening): G1/F1-F11.
+      './shared/composables/__tests__/usePartyCalls.bugHardening.test.ts',
+      // 2nd screen-share SFU-register fix (issue party-cell-screen-share-sfu-register-fail): 2D/2C/2B.
+      './shared/composables/__tests__/usePartyCalls.sfuRegisterFail.test.ts',
+      // Screen display-audio + per-instance session isolation (issue
+      // party-calls-screen-audio-session-isolation): Ajuste 1 (E1-E5) + Ajuste 2 (F1-F2).
+      './shared/composables/__tests__/usePartyCalls.screenAudioSessionIsolation.test.ts',
     ],
   },
   resolve: {
@@ -35,6 +49,13 @@ export default defineConfig({
       // Stubs — real implementations are provided by vi.mock() in each test
       '@/services/apiService.js': path.resolve(__dirname, 'tests/stubs/apiService.js'),
       '@/config/endpoints.js': path.resolve(__dirname, 'tests/stubs/endpoints.js'),
+      // Subpath imports (mirror of vite.config.ts) — needed by shared composable
+      // tests (ex: usePartyCalls.test.ts mocks #artifacts/shared/services/apiService)
+      '#artifacts': __dirname,
+      '#shared': path.resolve(__dirname, 'shared'),
+      '#canonical': path.resolve(__dirname, 'canonical'),
+      '#runtime': path.resolve(__dirname, 'runtime'),
+      '#sandbox': path.resolve(__dirname, 'sandbox'),
     },
   },
   coverage: {

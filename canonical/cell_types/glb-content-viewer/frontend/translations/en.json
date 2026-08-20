@@ -20,6 +20,8 @@
     "gridOff": "Grid: Off",
     "vertices": "Vertices",
     "fileSize": "File size",
-    "format": "Format"
+    "format": "Format",
+    "share3D": "Share 3D View",
+    "sharing3D": "Sharing 3D..."
   }
 }

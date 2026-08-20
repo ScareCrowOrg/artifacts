@@ -174,10 +174,39 @@ export class ArtifactsManagerCell extends BaseCell {
       body: JSON.stringify({ artifact_id: artifactId, user_id: user.id }),
     })
 
-    if (!response.ok) {
-      const detail = await response.text()
+    // DIAG: log the raw backend response (status + body) for the allowance POST.
+    // The backend may return HTTP 200 with an error body ({"detail":"Planet not
+    // found"}) which response.ok treats as success — F7 must observe this
+    // false-success in the runtime logs.
+    const rawText = await response.text()
+    log.info('[ArtifactsManagerCell][DIAG] allowArtifact() raw backend response', {
+      artifactId,
+      userId: user.id,
+      status: response.status,
+      ok: response.ok,
+      body: rawText.slice(0, 500),
+    })
+
+    // F3: the backend proxy may return HTTP 200 with an error body
+    // ({"detail":"Planet not found"}) when it fails to resolve the planet.
+    // response.ok alone would treat that as success — never do that.
+    let backendDetail: string | null = null
+    if (rawText && rawText.trim().startsWith('{')) {
+      try {
+        const parsedBody = JSON.parse(rawText)
+        if (parsedBody && typeof parsedBody.detail === 'string' && parsedBody.detail) {
+          backendDetail = parsedBody.detail
+        }
+      } catch {
+        // not JSON — leave backendDetail as null
+      }
+    }
+
+    if (!response.ok || backendDetail) {
+      const detail = backendDetail || rawText
       log.error('[ArtifactsManagerCell] allowArtifact() backend error', {
         status: response.status,
+        ok: response.ok,
         detail,
       })
       throw new Error(`Failed to grant permission (${response.status}): ${detail}`)
@@ -186,6 +215,8 @@ export class ArtifactsManagerCell extends BaseCell {
     log.info('[ArtifactsManagerCell] allowArtifact() persisted successfully', {
       artifactId,
       userId: user.id,
+      status: response.status,
+      body: rawText.slice(0, 500),
     })
     return user
   }

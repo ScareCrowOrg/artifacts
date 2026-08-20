@@ -20,6 +20,36 @@
             {{ $t('planetHall.loginButton') }}
           </a>
         </div>
+        <div v-else class="flex items-center gap-3">
+          <!-- Connection indicator -->
+          <span
+            v-if="partyConnected"
+            class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            {{ $t('planetHall.live') }}
+          </span>
+          <!-- Party button -->
+          <button
+            class="ph-btn text-sm px-3 py-1.5"
+            :disabled="partyStarting || isProvisioning"
+            @click="togglePartyCall"
+          >
+            <span v-if="partyConnected">{{ $t('planetHall.leaveCall') }}</span>
+            <span v-else-if="isProvisioning">{{ $t('planetHall.provisioning') }}</span>
+            <span v-else-if="partyStarting">{{ $t('planetHall.connecting') }}</span>
+            <span v-else>{{ $t('planetHall.startCall') }}</span>
+          </button>
+          <!-- Party connection error -->
+          <span
+            v-if="partyConnectionError"
+            class="text-xs text-red-600 dark:text-red-400 max-w-[200px] truncate"
+            :title="partyConnectionError"
+            role="alert"
+          >
+            {{ partyConnectionError }}
+          </span>
+        </div>
       </div>
     </header>
 
@@ -239,6 +269,7 @@ import { createLogger } from '@/utils/logger'
 import MessagesCellView from '#canonical/cell_types/messages-cell/frontend/View.vue'
 import RequestsCellView from '#canonical/cell_types/requests-cell/frontend/View.vue'
 import { useRequestsCell } from '#canonical/cell_types/requests-cell/frontend/composables/useRequestsCell'
+import { usePartyCalls } from '#artifacts/shared/composables/usePartyCalls'
 import './planet-hall.css'
 import en from './i18n/en.json'
 import pt from './i18n/pt.json'
@@ -246,6 +277,28 @@ import pt from './i18n/pt.json'
 const log = createLogger('planet:hall')
 
 const { t } = useI18n()
+
+// ── Party Calls Integration ──
+const { isConnected: partyConnected, isProvisioning, startCall, hangUp: partyHangUp, connectionError: partyConnectionError } = usePartyCalls()
+
+const partyStarting = ref(false)
+
+function togglePartyCall(): void {
+  if (partyConnected.value) {
+    partyHangUp()
+  } else {
+    partyConnectionError.value = null
+    partyStarting.value = true
+    startCall('planet-lobby').catch((err) => {
+      partyConnectionError.value = err instanceof Error ? err.message : String(err)
+    }).finally(() => {
+      partyStarting.value = false
+      // Clear transient error after 10 s so user doesn't stare at stale
+      // "failed to start" after already having hung up.
+      setTimeout(() => { partyConnectionError.value = null }, 10_000)
+    })
+  }
+}
 
 const {
   loadingState, errorMessage, isAuthenticated,
