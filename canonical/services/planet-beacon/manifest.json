@@ -2,8 +2,8 @@
   "version": "0.1",
   "name": "planet-beacon",
   "build": false,
-  "image": "hub.scareverse.net/registry/production/scareverse-planet-beacon:prod",
-  "imageTag": "prod",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-planet-beacon:staging",
+  "imageTag": "staging",
   "dependencies": [],
   "generate_env_file": false,
   "totp_seed": false,
@@ -40,8 +40,8 @@
     }
   ],
   "lastBuilt": {
-    "staging": "2026-07-21T02:19:58.251Z",
+    "staging": "2026-08-21T11:19:23.460Z",
     "production": "2026-08-20T20:46:36.866Z"
   },
-  "planet": "production"
+  "planet": "staging"
 }

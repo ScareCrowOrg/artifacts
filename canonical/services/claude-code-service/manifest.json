@@ -3,8 +3,8 @@
   "name": "claude-code-service",
   "description": "Claude Code CLI service — WebSocket PTY with Redis heartbeat registration for AI agent terminal access",
   "build": false,
-  "image": "hub.scareverse.net/registry/production/scareverse-claude-code-service:prod",
-  "imageTag": "prod",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-claude-code-service:staging",
+  "imageTag": "staging",
   "dependencies": [],
   "generate_env_file": false,
   "totp_seed": false,
@@ -62,8 +62,8 @@
     }
   },
   "lastBuilt": {
-    "staging": "2026-07-21T02:19:58.231Z",
+    "staging": "2026-08-21T11:19:23.444Z",
     "production": "2026-08-20T20:46:36.853Z"
   },
-  "planet": "production"
+  "planet": "staging"
 }

@@ -2,8 +2,8 @@
   "version": "0.1",
   "name": "vite",
   "build": false,
-  "image": "hub.scareverse.net/registry/production/scareverse-vite:prod",
-  "imageTag": "prod",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-vite:staging",
+  "imageTag": "staging",
   "checksum": "sha256:c4cabc1cddf7ee4e8173bf88ac1c644bb19009ab6a6226d58af9741978e54596",
   "dependencies": [
     "artifacts/package.json",
@@ -28,8 +28,8 @@
     }
   ],
   "lastBuilt": {
-    "staging": "2026-08-17T15:13:53.996Z",
+    "staging": "2026-08-21T11:19:23.471Z",
     "production": "2026-08-20T20:46:36.873Z"
   },
-  "planet": "production"
+  "planet": "staging"
 }

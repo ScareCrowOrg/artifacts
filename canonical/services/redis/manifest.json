@@ -3,8 +3,8 @@
   "name": "redis",
   "description": "Redis cache layer",
   "build": false,
-  "image": "hub.scareverse.net/registry/production/scareverse-redis:prod",
-  "imageTag": "prod",
+  "image": "hub-staging.scareverse.net/registry/staging/scareverse-redis:staging",
+  "imageTag": "staging",
   "checksum": "sha256:24f92d1b3ad2bee349ba0435d7be4377507a1e4de6b4a2b1c5fc769f534b5934",
   "dependencies": [],
   "generate_env_file": false,
@@ -24,8 +24,8 @@
     }
   ],
   "lastBuilt": {
-    "staging": "2026-07-21T02:19:58.255Z",
+    "staging": "2026-08-21T11:19:23.462Z",
     "production": "2026-08-20T20:46:36.867Z"
   },
-  "planet": "production"
+  "planet": "staging"
 }
