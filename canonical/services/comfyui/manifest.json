@@ -8,7 +8,7 @@
   "totp_seed": false,
   "imageTag": "staging",
   "lastBuilt": {
-    "staging": "2026-08-21T11:19:23.449Z",
+    "staging": "2026-08-21T19:23:18.000Z",
     "production": "2026-08-20T20:46:36.857Z"
   },
   "planet": "staging"

@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
+FROM nvidia/cuda:12.6.3-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -24,12 +24,16 @@ RUN ln -sf /usr/bin/python3.11 /usr/bin/python \
     && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 \
     && python3.11 -m pip install --upgrade pip setuptools wheel
 
-# PyTorch com CUDA 12.1 explícito (--index-url cu121)
+# PyTorch com CUDA 12.6 explícito (--index-url cu126)
+# ComfyUI main passou a depender de comfy-kitchen, que exige torch >= 2.7.0:
+# torch.library.infer_schema só aceita builtin generics (PEP 585) a partir do 2.7
+# e torch.float8_e8m0fnu (usado em comfy_kitchen) também só existe no 2.7+.
+# Com torch 2.5.1 o import de comfy_kitchen crasha com ValueError.
 # Versões fixadas para evitar backtracking silencioso em caso de DNS flaky.
 # --retries 5: tolera falhas DNS intermitentes do download.pytorch.org
 RUN python3.11 -m pip install --no-cache-dir --retries 5 --timeout 120 \
-    "torch==2.5.1+cu121" "torchvision==0.20.1+cu121" "torchaudio==2.5.1+cu121" \
-    --index-url https://download.pytorch.org/whl/cu121
+    "torch==2.7.1+cu126" "torchvision==0.22.1+cu126" "torchaudio==2.7.1+cu126" \
+    --index-url https://download.pytorch.org/whl/cu126
 
 WORKDIR /app
 
@@ -45,10 +49,13 @@ WORKDIR /app/comfyui/custom_nodes
 
 RUN GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/ltdrdata/ComfyUI-Manager.git
 
-# Pin kornia < 0.7.4: 0.8.3 crasha com torch.jit.script em PyTorch 2.5.1+cu121
-# Pin numpy<2: torch instalado acima foi compilado com numpy 1.x ABI,
-# numpy 2.x causa "Failed to initialize NumPy: _ARRAY_API not found"
-RUN python3.11 -m pip install --no-cache-dir "kornia<0.7.4" "numpy<2" "setuptools<75"
+# kornia<0.7.4: 0.8.3 SEGFAULTa com torch.jit.script no import (essential.py:90) —
+#   confirmado em runtime também com torch 2.7.1+cu126 (não só no 2.5.1).
+#   ComfyUI requirements pede kornia>=0.7.1 → 0.7.3 satisfaz e importa limpo.
+# numpy<2 REMOVIDO: torch 2.7+ é compilado com numpy 2.x ABI — pinar numpy<2 causaria
+#   o erro inverso "Failed to initialize NumPy: _ARRAY_API not found".
+# setuptools<75: build_ext do Hunyuan3DWrapper (custom_rasterizer) roda via setup.py.
+RUN python3.11 -m pip install --no-cache-dir "kornia<0.7.4" "setuptools<75"
 
 # Hunyuan3DWrapper v2 (FP8) — compila extensões C++ com nvcc (devel necessário)
 # TORCH_CUDA_ARCH_LIST explícito: docker build não tem GPU visível para auto-detecção
