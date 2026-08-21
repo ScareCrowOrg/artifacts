@@ -37,6 +37,13 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(os.environ.get("PROJECT_ROOT") or Path(__file__).parent.parent.parent)
 _DEFAULT_PUBLIC_KEYS_DIR = _PROJECT_ROOT / "artifacts" / "canonical" / "public_keys"
 
+# Clock-skew tolerance (seconds) applied to iat/nbf/exp checks.
+# The token issuer (CentralHub on the VPS) and the validators (local launcher
+# backend, other planets) may drift by a few seconds. Without leeway, a small
+# forward skew on ``iat`` rejects otherwise-valid tokens with
+# ImmatureSignatureError ("The token is not yet valid").
+JWT_LEEWAY_SECONDS = 60
+
 
 def _get_public_keys_dir() -> Path:
     override = os.getenv("PUBLIC_KEYS_DIR")
@@ -211,6 +218,7 @@ def verify_jwt(
                     algorithms=["EdDSA"],
                     audience=audience,
                     options={"verify_aud": True},
+                    leeway=JWT_LEEWAY_SECONDS,
                 )
             except pyjwt.InvalidAudienceError:
                 actual_aud = unverified.get("aud", "unknown")
@@ -244,7 +252,7 @@ def verify_jwt(
                 sub,
             )
             try:
-                payload = pyjwt.decode(token, pub_key, algorithms=["EdDSA"])
+                payload = pyjwt.decode(token, pub_key, algorithms=["EdDSA"], leeway=JWT_LEEWAY_SECONDS)
             except pyjwt.ExpiredSignatureError as exc:
                 exp = _get_exp_from_unverified(token)
                 logger.warning(f"[verify_jwt] ✗ JWT expired (exp={exp}): {exc}")
@@ -262,7 +270,7 @@ def verify_jwt(
         # No audience expected — legacy decode (no aud validation)
         logger.debug(f"[DIAG] verify_jwt: no-audience branch (Branch B), token[:20]={token[:20]!r}, kid='{kid}', pub_key_type='{type(pub_key).__name__}', options={{\"verify_aud\": False}}")
         try:
-            payload = pyjwt.decode(token, pub_key, algorithms=["EdDSA"], options={"verify_aud": False})
+            payload = pyjwt.decode(token, pub_key, algorithms=["EdDSA"], options={"verify_aud": False}, leeway=JWT_LEEWAY_SECONDS)
         except pyjwt.ExpiredSignatureError as exc:
             exp = _get_exp_from_unverified(token)
             logger.warning(f"[verify_jwt] ✗ JWT expired (exp={exp}): {exc}")
