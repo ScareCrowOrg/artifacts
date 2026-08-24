@@ -8,8 +8,16 @@
   "dependencies": [],
   "generate_env_file": false,
   "totp_seed": true,
+  "injected_env_vars": [
+    {
+      "name": "CENTRALHUB_SERVICE_TOKEN",
+      "source": "vault",
+      "required": true,
+      "description": "Service token for CentralHub API"
+    }
+  ],
   "lastBuilt": {
-    "staging": "2026-08-21T11:19:23.452Z",
+    "staging": "2026-08-24T17:55:05.267Z",
     "production": "2026-08-20T20:46:36.860Z"
   },
   "planet": "staging"
