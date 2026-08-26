@@ -110,6 +110,19 @@ async def test_join_game_replaces_same_session(backend, redis):
 
 
 @pytest.mark.asyncio
+async def test_join_game_dedups_by_participant_id_across_sessions(backend, redis):
+    # A page reload generates a new sessionId; the roster must still show
+    # ONE entry per user (same participantId, different sessionId) — the old
+    # session's leave never fires on a reload, so sessionId-dedup would leak
+    # stale duplicates.
+    await backend.execute_cell({"action": "join_game", "roomId": "room1", "sessionId": "s-a", "displayName": "Alice"}, user_id="u1")
+    result = await backend.execute_cell({"action": "join_game", "roomId": "room1", "sessionId": "s-b", "displayName": "Alice"}, user_id="u1")
+    assert result["output"]["count"] == 1
+    assert result["output"]["participants"][0]["participantId"] == "u1"
+    assert result["output"]["participants"][0]["sessionId"] == "s-b"
+
+
+@pytest.mark.asyncio
 async def test_join_game_uses_current_user_name(backend, redis):
     current_user = MagicMock()
     current_user.id = "u1"

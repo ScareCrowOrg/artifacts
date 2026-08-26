@@ -398,14 +398,9 @@ async def _handle_join_game(room_id: str, state: Dict[str, Any], cell_data: Dict
         "isMuted": bool(cell_data.get("isMuted", False)),
         "joinedAt": int(cell_data.get("joinedAt") or _now_ms()),
     }
-    replaced = False
-    for idx, existing in enumerate(participants):
-        if str(existing.get("sessionId") or "") == entry["sessionId"]:
-            participants[idx] = entry
-            replaced = True
-            break
-    if not replaced:
-        participants.append(entry)
+    # One roster entry per participantId — reloads create new sessionIds; old leave never fires.
+    participants = [p for p in participants if str(p.get("participantId") or "") != entry["participantId"]]
+    participants.append(entry)
 
     await _redis_set_json(_presence_key(room_id), participants)
     await _publish(_presence_channel(room_id), _snapshot_envelope(_presence_channel(room_id), participants, participant_id))
@@ -604,8 +599,12 @@ async def _handle_snapshot_request(room_id: str, state: Dict[str, Any], cell_dat
     # Presence is also hydrated from the HTTP body — the WSS router is
     # forward-only, so a presence snapshot published before this client
     # subscribed to calls:room:{roomId} is lost (no re-publish).
-    participants = await _load_list(_presence_key(room_id))
-    output: Dict[str, Any] = {"state": state, "strokes": strokes, "guesses": guesses, "participants": participants}
+    seen: Dict[str, Any] = {}
+    for _p in await _load_list(_presence_key(room_id)):
+        _pid = str(_p.get("participantId") or "").strip()
+        if _pid:
+            seen[_pid] = _p
+    output: Dict[str, Any] = {"state": state, "strokes": strokes, "guesses": guesses, "participants": list(seen.values())}
     if _is_drawer(state, sender_id):
         word = await _redis_get_json(_key_word(room_id), None)
         if word:
