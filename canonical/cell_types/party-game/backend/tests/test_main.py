@@ -298,6 +298,18 @@ async def test_submit_guess_correct_scores_and_reveals(backend, redis):
 
 
 @pytest.mark.asyncio
+async def test_submit_guess_drawer_also_scores(backend, redis):
+    # The drawer earns the same points when someone guesses correctly — this
+    # is what makes the game make sense with 3+ players: the drawer is
+    # rewarded for being understood, guessers for guessing.
+    await _started_game(backend, redis)
+    result = await backend.execute_cell({"action": "submit_guess", "roomId": "room1", "guess": "penguin"}, user_id="u2")
+    state = _messages(redis, "game:room:room1:state")[-1]["payload"]["state"]
+    assert result["output"]["correct"] is True and result["output"]["points"] == 100
+    assert state["scores"]["u2"] == 100 and state["scores"]["u1"] == 100
+
+
+@pytest.mark.asyncio
 async def test_submit_guess_contains_match(backend, redis):
     await _started_game(backend, redis)
     result = await backend.execute_cell({"action": "submit_guess", "roomId": "room1", "guess": "i love penguins"}, user_id="u2")

@@ -498,6 +498,9 @@ async def _handle_submit_guess(room_id: str, state: Dict[str, Any], cell_data: D
         if caller_id not in winners:
             points = max(MIN_POINTS, CORRECT_POINTS - wrong_count * POINTS_PER_WRONG)
             scores[caller_id] = int(scores.get(caller_id, 0)) + points
+            drawer_id = str(state.get("drawerId") or "")
+            if drawer_id:
+                scores[drawer_id] = int(scores.get(drawer_id, 0)) + points
             winners.append(caller_id)
             await _append_guess(room_id, {
                 "id": f"g-{_now_ms()}",
@@ -599,12 +602,8 @@ async def _handle_snapshot_request(room_id: str, state: Dict[str, Any], cell_dat
     # Presence is also hydrated from the HTTP body — the WSS router is
     # forward-only, so a presence snapshot published before this client
     # subscribed to calls:room:{roomId} is lost (no re-publish).
-    seen: Dict[str, Any] = {}
-    for _p in await _load_list(_presence_key(room_id)):
-        _pid = str(_p.get("participantId") or "").strip()
-        if _pid:
-            seen[_pid] = _p
-    output: Dict[str, Any] = {"state": state, "strokes": strokes, "guesses": guesses, "participants": list(seen.values())}
+    seen = {str(p.get("participantId") or "").strip(): p for p in await _load_list(_presence_key(room_id))}
+    output: Dict[str, Any] = {"state": state, "strokes": strokes, "guesses": guesses, "participants": [v for k, v in seen.items() if k]}
     if _is_drawer(state, sender_id):
         word = await _redis_get_json(_key_word(room_id), None)
         if word:
