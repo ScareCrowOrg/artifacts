@@ -247,7 +247,7 @@ import {
   type Stroke,
   type Point2D,
 } from './gameStore'
-import { usePartyStore } from '#artifacts/shared/stores/partyStore'
+import { usePartyStore, type Participant } from '#artifacts/shared/stores/partyStore'
 import { PartyGameCell } from './PartyGameCell'
 import {
   commitStroke,
@@ -409,8 +409,15 @@ async function joinAndHydrate(roomId: string): Promise<void> {
   partyStore.currentRoom = roomId
   try {
     const join = await cell.joinGame(roomId, mySessionId.value)
-    if (join.success && join.output.participantId) {
-      myParticipantId.value = String(join.output.participantId)
+    if (join.success) {
+      if (join.output.participantId) myParticipantId.value = String(join.output.participantId)
+      // Hydrate presence from the join RESPONSE BODY — the WSS router is
+      // forward-only, so a presence snapshot published before this client's
+      // WS subscribed to calls:room:{roomId} is lost (party-game publishes
+      // presence only on join/leave, no heartbeat like party-cell).  The HTTP
+      // body is the reliable hydration path — same pattern as the game
+      // branches hydrated from the snapshot below.
+      if (Array.isArray(join.output.participants)) partyStore.setParticipants(join.output.participants)
     }
   } catch (err) {
     logger.warn('[joinAndHydrate] join failed', err)
@@ -425,11 +432,13 @@ async function joinAndHydrate(roomId: string): Promise<void> {
       state?: GameState
       strokes?: Stroke[]
       guesses?: GuessMessage[]
+      participants?: Participant[]
       secretWord?: string
     }
     if (out.state) gameStore.game = out.state
     if (out.strokes) gameStore.strokes = out.strokes
     if (out.guesses) gameStore.guesses = out.guesses
+    if (out.participants) partyStore.setParticipants(out.participants)
     if (out.secretWord && isDrawer.value) mySecretWord.value = out.secretWord
   }
 }

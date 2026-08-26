@@ -601,7 +601,11 @@ async def _handle_snapshot_request(room_id: str, state: Dict[str, Any], cell_dat
     await _publish(_channel_strokes(room_id), _snapshot_envelope(_channel_strokes(room_id), strokes, sender_id))
     await _publish(_channel_guesses(room_id), _snapshot_envelope(_channel_guesses(room_id), guesses, sender_id))
 
-    output: Dict[str, Any] = {"state": state, "strokes": strokes, "guesses": guesses}
+    # Presence is also hydrated from the HTTP body — the WSS router is
+    # forward-only, so a presence snapshot published before this client
+    # subscribed to calls:room:{roomId} is lost (no re-publish).
+    participants = await _load_list(_presence_key(room_id))
+    output: Dict[str, Any] = {"state": state, "strokes": strokes, "guesses": guesses, "participants": participants}
     if _is_drawer(state, sender_id):
         word = await _redis_get_json(_key_word(room_id), None)
         if word:
