@@ -1,0 +1,76 @@
+{
+  "id": "puyo-party-cell",
+  "name": "puyo-party-cell",
+  "display_name": "Puyo Party",
+  "description": "Real-time competitive Puyo Puyo 1v1 cell (Canvas 2D) built on the existing realtime building blocks — lockstep deterministic engine, server-authoritative sync and voice",
+  "version": "1.0.0",
+  "category": "game",
+  "can_render_dynamically": true,
+  "default_refs": {
+    "view": [
+      "frontend/View.vue"
+    ],
+    "basecell": [
+      "frontend/PuyoPartyCell.ts"
+    ],
+    "docs": [
+      "docs/README.md"
+    ]
+  },
+  "default_initial_data": {
+    "roomId": null
+  },
+  "allow_instance_override_refs": false,
+  "properties_schema": {
+    "roomId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null,
+      "description": "Room identifier for the game. Null = user enters a room name in the lobby."
+    }
+  },
+  "_discovery": {
+    "labels": [
+      "#game",
+      "#puyo",
+      "#realtime",
+      "#canvas2d",
+      "#party"
+    ],
+    "describe": "Real-time competitive Puyo Puyo 1v1 cell (Canvas 2D) built on the existing realtime building blocks (useDistributedState + usePartyCalls + server-authoritative backend). Two players share a room, get a shared deterministic seed, simulate the same piece sequence locally (lockstep, zero latency), attack each other with garbage (submit_garbage) and end when a board tops out (game_over). No new infrastructure: a single distributed state branch (game) over Redis Pub/Sub plus Cloudflare Calls for opt-in voice.",
+    "estimated_duration_seconds": 0,
+    "required_resources": [
+      "redis",
+      "websocket",
+      "webrtc"
+    ],
+    "dependencies": [
+      "wss_pubsub_router",
+      "redis_l1",
+      "cells_router",
+      "cloudflare_calls_api"
+    ],
+    "tags": [
+      "game",
+      "puyo",
+      "party",
+      "realtime",
+      "canvas",
+      "distributed-state",
+      "lockstep",
+      "webrtc",
+      "voice"
+    ],
+    "use_cases": [
+      "Play a competitive Puyo Puyo match 1v1 with a friend in the same room",
+      "Attack the opponent with garbage from chains (server-arbitrated)",
+      "Talk trash over opt-in voice while playing (Cloudflare Calls)"
+    ]
+  },
+  "kind": "cell",
+  "updated_at": "2026-08-26T00:00:00",
+  "created_at": "2026-08-26T00:00:00",
+  "stage": "canonical"
+}

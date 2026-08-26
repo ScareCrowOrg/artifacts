@@ -1,0 +1,32 @@
+{
+  "puyoPartyCell": {
+    "title": "Puyo Party",
+    "live": "Live",
+    "offline": "Offline",
+    "leaveRoom": "Leave",
+    "roomPlaceholder": "Room name…",
+    "joinRoom": "Join",
+    "lobbyTitle": "Waiting for players",
+    "lobbyHint": "Share this room name so friends can join.",
+    "players": "Players",
+    "you": "You",
+    "ready": "Ready",
+    "notReady": "Not ready",
+    "noPlayers": "No players yet",
+    "starting": "Everyone ready — starting…",
+    "round": "Round",
+    "score": "Score",
+    "garbage": "Garbage",
+    "opponent": "Opponent",
+    "keysHint": "Arrows: move · X / Up: rotate · Down: soft drop · Space: hard drop",
+    "enableMic": "Enable Mic",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "gameOver": "Game Over",
+    "youWin": "You win!",
+    "youLose": "You lose",
+    "winner": "Winner",
+    "playAgain": "Play Again",
+    "waitingForOpponent": "Waiting for the opponent…"
+  }
+}
