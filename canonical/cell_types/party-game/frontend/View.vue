@@ -31,15 +31,44 @@
         class="mt-1 w-full max-w-xs px-3 py-2 text-sm rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/40"
         :placeholder="$t('partyGame.roomPlaceholder') || 'Room name…'"
         :maxlength="256"
-        @keyup.enter="handleJoinRoom"
+        @keyup.enter="handleOpenRoom"
       />
       <button
         class="mt-3 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover transition disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="!roomInput.trim()"
-        @click="handleJoinRoom"
+        @click="handleOpenRoom"
       >
-        {{ $t('partyGame.joinRoom') || 'Join' }}
+        {{ $t('partyGame.openRoom') || 'Open Room' }}
       </button>
+
+      <!-- Room list (only when no roomId pinned — mirrors party-cell F4) -->
+      <div v-if="!props.roomId" class="mt-6 w-full max-w-xs">
+        <p class="text-xs font-medium mb-2 text-text-primary dark:text-text-primary-dark">
+          {{ $t('partyGame.availableSessions') }}
+        </p>
+        <div
+          v-if="localAvailableRooms.length === 0"
+          class="text-xs opacity-70 px-3 py-2 border border-dashed border-border dark:border-border-dark rounded"
+        >
+          {{ $t('partyGame.noSessions') }}
+        </div>
+        <ul v-else class="space-y-2">
+          <li
+            v-for="room in localAvailableRooms"
+            :key="room.roomId"
+            class="flex items-center justify-between gap-2 px-3 py-2 bg-surface-light dark:bg-surface-dark-light rounded border border-border dark:border-border-dark"
+          >
+            <span class="text-sm truncate">{{ room.roomId }}</span>
+            <span class="text-xs opacity-70 shrink-0">{{ room.sessionCount }}</span>
+            <button
+              class="px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary-hover transition shrink-0"
+              @click="handleJoinRoomById(room.roomId)"
+            >
+              {{ $t('partyGame.joinRoom') }}
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
 
     <!-- ── In-room content ────────────────────────────────────────────────── -->
@@ -214,13 +243,22 @@
         </div>
       </div>
 
-      <!-- Leave -->
-      <button
-        class="mt-3 px-3 py-1.5 text-xs rounded border border-border dark:border-border-dark text-text-secondary dark:text-text-secondary-dark hover:bg-surface-hover dark:hover:bg-surface-dark-hover transition"
-        @click="handleLeaveRoom"
-      >
-        {{ $t('partyGame.leaveRoom') || 'Leave' }}
-      </button>
+      <!-- Leave / Close Room (host-only) -->
+      <div class="mt-3 flex gap-2">
+        <button
+          v-if="canClose"
+          class="px-3 py-1.5 text-xs rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition"
+          @click="handleCloseRoom"
+        >
+          {{ $t('partyGame.closeRoom') || 'Close Room' }}
+        </button>
+        <button
+          class="px-3 py-1.5 text-xs rounded border border-border dark:border-border-dark text-text-secondary dark:text-text-secondary-dark hover:bg-surface-hover dark:hover:bg-surface-dark-hover transition"
+          @click="handleLeaveRoom"
+        >
+          {{ $t('partyGame.leaveRoom') || 'Leave' }}
+        </button>
+      </div>
     </template>
   </div>
 </template>
@@ -248,7 +286,7 @@ import {
   type Point2D,
 } from './gameStore'
 import { usePartyStore, type Participant } from '#artifacts/shared/stores/partyStore'
-import { PartyGameCell } from './PartyGameCell'
+import { PartyGameCell, resolveCanClose, type AvailableGameRoom } from './PartyGameCell'
 import {
   commitStroke,
   createStroke,
@@ -258,6 +296,7 @@ import {
   renderStroke,
 } from './canvas'
 import { createLogger } from '@/utils/logger'
+import { SessionExpiredError } from '@/services/apiService.js'
 
 const logger = createLogger('component:party-game')
 const { t } = useI18n()
@@ -295,6 +334,11 @@ const activeColor = ref('#000000')
 const activeWidth = ref(4)
 const inProgressStroke = ref<Stroke | null>(null)
 const canvasEl = ref<HTMLCanvasElement | null>(null)
+/** Active rooms discovered on mount (registry, only when no roomId pinned). */
+const localAvailableRooms = ref<AvailableGameRoom[]>([])
+/** Room creator id (from snapshot.hostId) — gates the "Close Room" button. */
+const localHostId = ref<string>('')
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
 function resolveRoomId(): string {
   const direct = props.roomId
@@ -330,6 +374,9 @@ const winnerName = computed(() => {
   const top = sortedScores.value[0]
   return top && top.score > 0 ? top.displayName : '—'
 })
+
+/** Only the room creator (host) can "Close Room" (host-gated on the backend too). */
+const canClose = computed(() => resolveCanClose(myParticipantId.value, localHostId.value, Boolean(localRoomId.value)))
 
 // ── Canvas helpers ──────────────────────────────────────────────────────────
 function canvasCtx(): CanvasRenderingContext2D | null {
@@ -397,26 +444,42 @@ async function handleClearCanvas(): Promise<void> {
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
-async function handleJoinRoom(): Promise<void> {
+async function handleOpenRoom(): Promise<void> {
   const name = roomInput.value.trim()
   if (!name) return
   localRoomId.value = name
   roomInput.value = ''
-  await joinAndHydrate(name)
+  await joinAndHydrate(name, true)
 }
 
-async function joinAndHydrate(roomId: string): Promise<void> {
+async function handleJoinRoomById(roomId: string): Promise<void> {
+  localRoomId.value = roomId
+  await joinAndHydrate(roomId, false)
+}
+
+async function joinAndHydrate(roomId: string, isHost = false): Promise<void> {
   partyStore.currentRoom = roomId
+  stopHeartbeat()
+  let joined = false
   try {
-    const join = await cell.joinGame(roomId, mySessionId.value)
+    // Register in the room registry so this room shows up in listAvailableRooms.
+    await cell.registerSession(roomId, mySessionId.value).catch((err) => {
+      logger.warn('[registerSession] failed', err)
+    })
+    // join_game also carries isHost so the backend fixes the host BEFORE the
+    // snapshot loads (hostId is exposed in snapshot.output.hostId; also echoed
+    // in join.output.hostId in case the snapshot later fails).
+    const join = await cell.joinGame(roomId, mySessionId.value, isHost)
+    joined = join.success
     if (join.success) {
       if (join.output.participantId) myParticipantId.value = String(join.output.participantId)
+      // The backend already fixed the host (if isHost) — read it so the host
+      // still sees "Encerrar Sala" even when the snapshot request fails.
+      if (join.output.hostId) localHostId.value = String(join.output.hostId)
       // Hydrate presence from the join RESPONSE BODY — the WSS router is
       // forward-only, so a presence snapshot published before this client's
       // WS subscribed to calls:room:{roomId} is lost (party-game publishes
-      // presence only on join/leave, no heartbeat like party-cell).  The HTTP
-      // body is the reliable hydration path — same pattern as the game
-      // branches hydrated from the snapshot below.
+      // presence only on join/leave, no heartbeat like party-cell).
       if (Array.isArray(join.output.participants)) partyStore.setParticipants(join.output.participants)
     }
   } catch (err) {
@@ -434,13 +497,18 @@ async function joinAndHydrate(roomId: string): Promise<void> {
       guesses?: GuessMessage[]
       participants?: Participant[]
       secretWord?: string
+      hostId?: string
     }
     if (out.state) gameStore.game = out.state
     if (out.strokes) gameStore.strokes = out.strokes
     if (out.guesses) gameStore.guesses = out.guesses
     if (out.participants) partyStore.setParticipants(out.participants)
     if (out.secretWord && isDrawer.value) mySecretWord.value = out.secretWord
+    if (out.hostId) localHostId.value = String(out.hostId)
   }
+  // Only renew the registry heartbeat when the join actually succeeded — a
+  // failed join must never keep a ghost session alive in the room list.
+  if (joined) startHeartbeat(roomId)
 }
 
 async function handleStartGame(): Promise<void> {
@@ -468,13 +536,58 @@ async function handleSubmitGuess(): Promise<void> {
   }
 }
 
+async function handleCloseRoom(): Promise<void> {
+  const result = await cell.closeRoom(localRoomId.value)
+  if (result.success) {
+    await handleLeaveRoom()
+  } else {
+    logger.warn('[closeRoom] failed', result.error)
+  }
+}
+
 async function handleLeaveRoom(): Promise<void> {
   await cell.leaveGame(localRoomId.value, mySessionId.value).catch(() => undefined)
+  // Drop this session from the registry so an empty room leaves the list ≤60s.
+  await cell.removeSession(localRoomId.value, mySessionId.value).catch(() => undefined)
+  stopHeartbeat()
   partyStore.currentRoom = null
   gameStore.reset()
   myParticipantId.value = ''
   mySecretWord.value = ''
+  localHostId.value = ''
   localRoomId.value = ''
+  if (!props.roomId) void loadAvailableRooms()
+}
+
+// ── Room registry (heartbeat + list) ─────────────────────────────────────────
+function startHeartbeat(roomId: string): void {
+  stopHeartbeat()
+  heartbeatTimer = window.setInterval(async () => {
+    const ok = await cell.heartbeatSession(roomId, mySessionId.value).catch(() => false)
+    if (!ok) logger.warn('[heartbeat] failed', { roomId })
+  }, 20_000)
+}
+
+function stopHeartbeat(): void {
+  if (heartbeatTimer !== null) {
+    window.clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+}
+
+async function loadAvailableRooms(): Promise<void> {
+  try {
+    localAvailableRooms.value = await cell.listAvailableRooms()
+  } catch (err) {
+    // An expired session (401) must NOT degrade the list to "No active rooms" —
+    // keep the current list and surface the auth problem instead.
+    if (err instanceof SessionExpiredError) {
+      logger.warn('[loadAvailableRooms] session expired — keeping current list')
+    } else {
+      logger.warn('[loadAvailableRooms] failed:', err instanceof Error ? err.message : err)
+      localAvailableRooms.value = []
+    }
+  }
 }
 
 // ── Secret word fetch (drawer only) ─────────────────────────────────────────
@@ -498,13 +611,17 @@ watch(
 onMounted(() => {
   logger.info('[party-game] mounted', { roomId: localRoomId.value })
   if (localRoomId.value) {
-    void joinAndHydrate(localRoomId.value)
+    void joinAndHydrate(localRoomId.value, false)
+  } else {
+    void loadAvailableRooms()
   }
 })
 
 onUnmounted(() => {
+  stopHeartbeat()
   if (localRoomId.value) {
     void cell.leaveGame(localRoomId.value, mySessionId.value).catch(() => undefined)
+    void cell.removeSession(localRoomId.value, mySessionId.value).catch(() => undefined)
   }
 })
 </script>

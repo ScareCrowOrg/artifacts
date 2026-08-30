@@ -86,6 +86,11 @@ def _lock_key(room_id: str) -> str:
     return f"puyo:lock:{room_id}"
 
 
+def _host_key(room_id: str) -> str:
+    """Redis key holding the room's creator (host) participant id."""
+    return f"puyo:host:{room_id}"
+
+
 # ── Redis helpers ────────────────────────────────────────────────────────────
 
 
@@ -129,6 +134,16 @@ async def _redis_set_json(key: str, value: Any) -> None:
         await client.set(key, json.dumps(value), ex=SNAPSHOT_TTL_SECONDS)
     except Exception as exc:
         logger.warning("[puyo] Failed to save %s: %s", key, exc)
+    finally:
+        await client.aclose()
+
+
+async def _redis_delete(key: str) -> None:
+    client = await _get_async_redis_client()
+    try:
+        await client.delete(key)
+    except Exception as exc:
+        logger.warning("[puyo] Failed to delete %s: %s", key, exc)
     finally:
         await client.aclose()
 
@@ -520,7 +535,7 @@ async def _handle_game_over(
     return {"success": True, "output": {"gameOver": state["gameOver"]}}
 
 
-@_action()
+@_action(locked=True)
 async def _handle_snapshot_request(
     room_id: str,
     state: Dict[str, Any],
@@ -536,6 +551,12 @@ async def _handle_snapshot_request(
     """
     sender = _caller_id(cell_data, user_id)
     players = await _roster(room_id, state, cell_data)
+    host = await _redis_get_json(_host_key(room_id), None)
+    # Host fixed ONLY on "Abrir Sala" (isHost) and only when no host yet OR the
+    # roster is empty (a re-created room → new creator; never steals an active room).
+    if cell_data.get("isHost") and (host is None or not players):
+        await _redis_set_json(_host_key(room_id), sender)
+        host = sender
     await _publish_snapshot(room_id, state, sender)
     return {
         "success": True,
@@ -543,8 +564,29 @@ async def _handle_snapshot_request(
             "state": state,
             "participantId": sender,
             "participants": players,
+            "hostId": host,
         },
     }
+
+
+@_action(locked=True)
+async def _handle_close_room(
+    room_id: str,
+    state: Dict[str, Any],
+    cell_data: Dict[str, Any],
+    user_id: Optional[str],
+) -> Dict[str, Any]:
+    """Close the room — host-gated (only the creator may close).  Clears the
+    game snapshot + presence + host key; the room drops from the registry when
+    its sessions expire (≤60s)."""
+    sender = _caller_id(cell_data, user_id)
+    host = await _redis_get_json(_host_key(room_id), None)
+    if host != sender:
+        return {"success": False, "output": {}, "error": "only the room creator can close the room"}
+    await _redis_delete(_snapshot_key(room_id))
+    await _redis_delete(_presence_key(room_id))
+    await _redis_delete(_host_key(room_id))
+    return {"success": True, "output": {"closed": True}}
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -557,6 +599,7 @@ _HANDLERS: Dict[str, Any] = {
     "piece_locked": _handle_piece_locked,
     "game_over": _handle_game_over,
     "snapshot_request": _handle_snapshot_request,
+    "close_room": _handle_close_room,
 }
 
 

@@ -21,6 +21,13 @@
           {{ gameConnected ? ($t('puyoPartyCell.live') || 'Live') : ($t('puyoPartyCell.offline') || 'Offline') }}
         </span>
         <button
+          v-if="canClose"
+          class="px-2 py-1 text-xs rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition"
+          @click="handleCloseRoom"
+        >
+          {{ $t('puyoPartyCell.closeRoom') || 'Close Room' }}
+        </button>
+        <button
           v-if="localRoomId"
           class="px-2 py-1 text-xs rounded border border-border dark:border-border-dark text-text-secondary dark:text-text-secondary-dark hover:bg-surface-hover dark:hover:bg-surface-dark-hover transition"
           @click="handleLeaveRoom"
@@ -40,15 +47,44 @@
         class="mt-1 w-full max-w-xs px-3 py-2 text-sm rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/40"
         :placeholder="$t('puyoPartyCell.roomPlaceholder') || 'Room name…'"
         :maxlength="256"
-        @keyup.enter="handleJoinRoom"
+        @keyup.enter="handleOpenRoom"
       />
       <button
         class="mt-3 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover transition disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="!roomInput.trim()"
-        @click="handleJoinRoom"
+        @click="handleOpenRoom"
       >
-        {{ $t('puyoPartyCell.joinRoom') || 'Join' }}
+        {{ $t('puyoPartyCell.openRoom') || 'Open Room' }}
       </button>
+
+      <!-- Room list (only when no roomId pinned — mirrors party-cell F4) -->
+      <div v-if="!props.roomId" class="mt-6 w-full max-w-xs">
+        <p class="text-xs font-medium mb-2 text-text-primary dark:text-text-primary-dark">
+          {{ $t('puyoPartyCell.availableSessions') }}
+        </p>
+        <div
+          v-if="localAvailableRooms.length === 0"
+          class="text-xs opacity-70 px-3 py-2 border border-dashed border-border dark:border-border-dark rounded"
+        >
+          {{ $t('puyoPartyCell.noSessions') }}
+        </div>
+        <ul v-else class="space-y-2">
+          <li
+            v-for="room in localAvailableRooms"
+            :key="room.roomId"
+            class="flex items-center justify-between gap-2 px-3 py-2 bg-surface-light dark:bg-surface-dark-light rounded border border-border dark:border-border-dark"
+          >
+            <span class="text-sm truncate">{{ room.roomId }}</span>
+            <span class="text-xs opacity-70 shrink-0">{{ room.sessionCount }}</span>
+            <button
+              class="px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary-hover transition shrink-0"
+              @click="handleJoinRoomById(room.roomId)"
+            >
+              {{ $t('puyoPartyCell.joinRoom') }}
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
 
     <!-- ── In-room content ────────────────────────────────────────────────── -->
@@ -188,7 +224,7 @@
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { usePartyCalls } from '#artifacts/shared/composables/usePartyCalls'
+import { usePartyCalls, type AvailableRoom } from '#artifacts/shared/composables/usePartyCalls'
 import { usePartyStore } from '#artifacts/shared/stores/partyStore'
 import { usePuyoStore, usePuyoRealtime, remoteGridOf, type PuyoGameState } from './store/puyoStore'
 import { PuyoPartyCell } from './PuyoPartyCell'
@@ -222,6 +258,7 @@ const {
   muteAudio,
   startCall,
   hangUp,
+  listAvailableRooms,
 } = usePartyCalls()
 
 /** Buffer Local (Layer 2): whether the local mic is published (Caso B — the
@@ -253,6 +290,10 @@ const session = ref<PuyoSession | null>(null)
 const lastGarbageReceived = ref(0)
 const selfCanvas = ref<HTMLCanvasElement | null>(null)
 const oppCanvas = ref<HTMLCanvasElement | null>(null)
+/** Active rooms discovered on mount (registry, only when no roomId pinned). */
+const localAvailableRooms = ref<AvailableRoom[]>([])
+/** Room creator id (from snapshot.hostId) — gates the "Close Room" button. */
+const localHostId = ref<string>('')
 
 // Gravity timer + render loop handles
 let gravityTimer: ReturnType<typeof setInterval> | null = null
@@ -336,6 +377,9 @@ const winnerName = computed(() => {
 })
 
 const didIWin = computed(() => game.value?.gameOver?.winnerId === myParticipantId.value)
+
+/** Only the room creator (host) can "Close Room" (host-gated on the backend too). */
+const canClose = computed(() => Boolean(localRoomId.value && myParticipantId.value && localHostId.value === myParticipantId.value))
 
 const micLabel = computed(() => {
   if (!localMicPublished.value) return t('puyoPartyCell.enableMic') || 'Enable Mic'
@@ -519,20 +563,27 @@ watch(
 )
 
 // ── Actions ─────────────────────────────────────────────────────────────────
-async function handleJoinRoom(): Promise<void> {
+async function handleOpenRoom(): Promise<void> {
   const name = roomInput.value.trim()
   if (!name) return
   const roomId = sanitizeRoomId(name)
   localRoomId.value = roomId
   roomInput.value = ''
   partyStore.currentRoom = roomId
-  await joinRoomAndHydrate(roomId)
+  await joinRoomAndHydrate(roomId, true)
+}
+
+async function handleJoinRoomById(roomId: string): Promise<void> {
+  localRoomId.value = roomId
+  partyStore.currentRoom = roomId
+  await joinRoomAndHydrate(roomId, false)
 }
 
 /** Join the party presence (voice opt-in — Caso B: no mic on join), then
  *  hydrate the game state.  A failed presence (Cloudflare down) does NOT block
- *  the game — the backend roster falls back to readyFlags/participants. */
-async function joinRoomAndHydrate(roomId: string): Promise<void> {
+ *  the game — the backend roster falls back to readyFlags/participants.
+ *  ``isHost`` (Abrir Sala) fixes the room creator on the snapshot_request. */
+async function joinRoomAndHydrate(roomId: string, isHost = false): Promise<void> {
   try {
     await startCall(roomId)
   } catch (err: unknown) {
@@ -543,16 +594,16 @@ async function joinRoomAndHydrate(roomId: string): Promise<void> {
     // without Cloudflare presence).
     partyStore.currentRoom = roomId
   }
-  await hydrate(roomId)
+  await hydrate(roomId, isHost)
 }
 
-async function hydrate(roomId: string): Promise<void> {
+async function hydrate(roomId: string, isHost = false): Promise<void> {
   // The WSS router is forward-only: a WS snapshot_request on connect is never
   // answered and a snapshot published before this client's WS subscribed is
   // lost.  The HTTP response body is the reliable hydration path.
-  const snap = await cell.requestSnapshot(roomId, myParticipantId.value).catch(() => null)
+  const snap = await cell.requestSnapshot(roomId, myParticipantId.value, isHost).catch(() => null)
   if (snap?.success && snap.output) {
-    const out = snap.output as { state?: PuyoGameState; participantId?: string; participants?: Array<{ participantId: string; displayName: string }> }
+    const out = snap.output as { state?: PuyoGameState; participantId?: string; participants?: Array<{ participantId: string; displayName: string }>; hostId?: string }
     // participantId FIRST so the status/seed watcher below sees my id ready.
     if (out.participantId) myParticipantId.value = String(out.participantId)
     if (out.state) {
@@ -562,6 +613,7 @@ async function hydrate(roomId: string): Promise<void> {
     if (Array.isArray(out.participants) && out.participants.length) {
       partyStore.setParticipants(out.participants)
     }
+    if (out.hostId) localHostId.value = String(out.hostId)
   }
 }
 
@@ -593,6 +645,17 @@ async function handleMicToggle(): Promise<void> {
   localMicMuted.value = wasEnabled ? !localMicMuted.value : false
 }
 
+async function handleCloseRoom(): Promise<void> {
+  const result = await cell.closeRoom(localRoomId.value)
+  if (result.success) {
+    // hangUp() removes this session from the registry; the room drops from the
+    // list when its remaining sessions expire (≤60s).  Then reset to join.
+    await handleLeaveRoom()
+  } else {
+    logger.warn('[puyo] closeRoom failed', result.error)
+  }
+}
+
 async function handleLeaveRoom(): Promise<void> {
   hangUp()
   stopLoop()
@@ -601,7 +664,18 @@ async function handleLeaveRoom(): Promise<void> {
   session.value = null
   myParticipantId.value = ''
   isMeReady.value = false
+  localHostId.value = ''
   localRoomId.value = ''
+  if (!props.roomId) void loadAvailableRooms()
+}
+
+async function loadAvailableRooms(): Promise<void> {
+  try {
+    localAvailableRooms.value = await listAvailableRooms()
+  } catch (err) {
+    logger.warn('[puyo] loadAvailableRooms failed:', err instanceof Error ? err.message : err)
+    localAvailableRooms.value = []
+  }
 }
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -610,7 +684,9 @@ onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   if (localRoomId.value) {
     partyStore.currentRoom = localRoomId.value
-    void joinRoomAndHydrate(localRoomId.value)
+    void joinRoomAndHydrate(localRoomId.value, false)
+  } else {
+    void loadAvailableRooms()
   }
 })
 

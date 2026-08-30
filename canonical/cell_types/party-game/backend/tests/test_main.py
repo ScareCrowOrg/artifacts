@@ -534,6 +534,113 @@ async def test_redis_helpers_swallow_errors(backend, redis):
     await backend._publish("ch", {"a": 1})
 
 
+# ── host / close_room ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_join_game_is_host_sets_host_when_no_host(backend, redis):
+    result = await backend.execute_cell(
+        {"action": "join_game", "roomId": "room1", "sessionId": "s-a", "displayName": "Alice", "isHost": True},
+        user_id="u1",
+    )
+    assert result["success"] is True
+    assert json.loads(redis.store["game:host:room1"]) == "u1"
+
+
+@pytest.mark.asyncio
+async def test_join_game_is_host_does_not_override_active_room(backend, redis):
+    # A room with an active host + a roster must NOT let a joiner steal it.
+    redis.store["game:host:room1"] = json.dumps("u2")
+    _seed_presence(redis, "room1", [_player("u2", "Bob", "s-b"), _player("u3", "Carol", "s-c")])
+    result = await backend.execute_cell(
+        {"action": "join_game", "roomId": "room1", "sessionId": "s-a", "displayName": "Alice", "isHost": True},
+        user_id="u1",
+    )
+    assert result["success"] is True
+    assert json.loads(redis.store["game:host:room1"]) == "u2"
+
+
+@pytest.mark.asyncio
+async def test_join_game_is_host_reclaims_empty_room(backend, redis):
+    # Stale 24h host from a previous session but the roster is empty → new host.
+    redis.store["game:host:room1"] = json.dumps("u2")
+    result = await backend.execute_cell(
+        {"action": "join_game", "roomId": "room1", "sessionId": "s-a", "displayName": "Alice", "isHost": True},
+        user_id="u1",
+    )
+    assert result["success"] is True
+    assert json.loads(redis.store["game:host:room1"]) == "u1"
+
+
+@pytest.mark.asyncio
+async def test_join_game_not_host_never_sets_host(backend, redis):
+    result = await backend.execute_cell(
+        {"action": "join_game", "roomId": "room1", "sessionId": "s-a", "displayName": "Alice"},
+        user_id="u1",
+    )
+    assert result["success"] is True
+    assert "game:host:room1" not in redis.store
+
+
+@pytest.mark.asyncio
+async def test_snapshot_request_exposes_host_id(backend, redis):
+    redis.store["game:host:room1"] = json.dumps("u1")
+    host = await backend.execute_cell({"action": "snapshot_request", "roomId": "room1"}, user_id="u1")
+    assert host["success"] is True and host["output"]["hostId"] == "u1"
+    other = await backend.execute_cell({"action": "snapshot_request", "roomId": "room1"}, user_id="u2")
+    assert other["output"]["hostId"] == "u1"
+
+
+@pytest.mark.asyncio
+async def test_close_room_host_clears_state_and_publishes(backend, redis):
+    redis.store["game:host:room1"] = json.dumps("u1")
+    _seed_presence(redis, "room1", [_player("u1", "Alice", "s-a"), _player("u2", "Bob", "s-b")])
+    redis.store["game:state:room1"] = json.dumps({"round": 1, "phase": "draw", "players": [_player("u1", "Alice")]})
+    redis.store["game:strokes:room1"] = json.dumps([{"id": "s-1"}])
+    result = await backend.execute_cell({"action": "close_room", "roomId": "room1"}, user_id="u1")
+    assert result["success"] is True and result["output"]["closed"] is True
+    assert json.loads(redis.store["game:state:room1"]) == {}
+    assert json.loads(redis.store["game:strokes:room1"]) == []
+    assert json.loads(redis.store["game:host:room1"]) is None
+    snap = _messages(redis, "game:room:room1:state")[-1]
+    assert snap["type"] == "snapshot" and snap["payload"]["state"] == {}
+
+
+@pytest.mark.asyncio
+async def test_close_room_rejects_non_host(backend, redis):
+    redis.store["game:host:room1"] = json.dumps("u1")
+    _seed_presence(redis, "room1", [_player("u1", "Alice", "s-a")])
+    result = await backend.execute_cell({"action": "close_room", "roomId": "room1"}, user_id="u2")
+    assert result["success"] is False and "only the room creator" in result["error"]
+    # State untouched when a non-host closes.
+    assert "game:host:room1" in redis.store
+
+
+@pytest.mark.asyncio
+async def test_close_room_validate_room(backend, redis):
+    assert (await backend.execute_cell({"action": "close_room", "roomId": "bad room!"}))["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_leave_game_host_releases_host_key(backend, redis):
+    """Blocker fix: a host leaving via 'Leave' (not close) releases the host so the
+    next 'Abrir Sala' can re-claim it — avoids a host-less 24h zombie room."""
+    redis.store["game:host:room1"] = json.dumps("u1")
+    _seed_presence(redis, "room1", [_player("u1", "Alice", "s-a"), _player("u2", "Bob", "s-b")])
+    result = await backend.execute_cell({"action": "leave_game", "roomId": "room1", "sessionId": "s-a"}, user_id="u1")
+    assert result["output"]["count"] == 1
+    assert json.loads(redis.store["game:host:room1"]) is None
+
+
+@pytest.mark.asyncio
+async def test_leave_game_non_host_keeps_host_key(backend, redis):
+    redis.store["game:host:room1"] = json.dumps("u1")
+    _seed_presence(redis, "room1", [_player("u1", "Alice", "s-a"), _player("u2", "Bob", "s-b")])
+    result = await backend.execute_cell({"action": "leave_game", "roomId": "room1", "sessionId": "s-b"}, user_id="u2")
+    assert result["output"]["count"] == 1
+    assert json.loads(redis.store["game:host:room1"]) == "u1"
+
+
 # ── word_bank ────────────────────────────────────────────────────────────────
 
 

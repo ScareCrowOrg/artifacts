@@ -556,6 +556,93 @@ class TestSnapshotRequest:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# host / close_room
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _make_redis_with(**kv):
+    """Redis mock whose ``get`` returns per-key json from ``kv``, else None."""
+    client = MagicMock()
+    client.aclose = AsyncMock()
+
+    def fake_get(key, *a, **k):
+        return json.dumps(kv[key]) if key in kv else None
+
+    client.get = AsyncMock(side_effect=fake_get)
+    client.set = AsyncMock(return_value=True)
+    client.publish = AsyncMock(return_value=1)
+    client.delete = AsyncMock(return_value=True)
+    return client
+
+
+@pytest.mark.asyncio
+class TestHostAndCloseRoom:
+
+    async def test_snapshot_request_is_host_sets_host_when_empty(self):
+        state = _waiting_state()
+        mock = _make_redis_with(**{main._snapshot_key("room-1"): state})
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock)):
+            result = await main.execute_cell({"action": "snapshot_request", "roomId": "room-1", "isHost": True}, user_id="user-alice")
+        assert result["success"] is True
+        assert result["output"]["hostId"] == "user-alice"
+        assert any(c.args[0] == main._host_key("room-1") for c in mock.set.call_args_list)
+
+    async def test_snapshot_request_is_host_does_not_override_active(self):
+        # A room with an active host + a roster must NOT let a joiner steal it.
+        state = _waiting_state()
+        mock = _make_redis_with(**{
+            main._snapshot_key("room-1"): state,
+            main._host_key("room-1"): "user-bob",
+            main._presence_key("room-1"): _presence(["user-alice", "user-bob"]),
+        })
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock)):
+            result = await main.execute_cell({"action": "snapshot_request", "roomId": "room-1", "isHost": True}, user_id="user-alice")
+        assert result["output"]["hostId"] == "user-bob"
+
+    async def test_snapshot_request_is_host_reclaims_empty_room(self):
+        # Stale 24h host from a previous session but the roster is empty → new host.
+        state = _waiting_state()
+        mock = _make_redis_with(**{main._snapshot_key("room-1"): state, main._host_key("room-1"): "user-bob"})
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock)):
+            result = await main.execute_cell({"action": "snapshot_request", "roomId": "room-1", "isHost": True}, user_id="user-alice")
+        assert result["output"]["hostId"] == "user-alice"
+
+    async def test_snapshot_request_exposes_host_id(self):
+        state = _waiting_state()
+        mock = _make_redis_with(**{main._snapshot_key("room-1"): state, main._host_key("room-1"): "user-bob"})
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock)):
+            result = await main.execute_cell({"action": "snapshot_request", "roomId": "room-1"}, user_id="user-alice")
+        assert result["output"]["hostId"] == "user-bob"
+
+    async def test_close_room_host_clears_keys(self):
+        state = _running_state()
+        mock = _make_redis_with(**{main._snapshot_key("room-1"): state, main._host_key("room-1"): "user-alice"})
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock)):
+            result = await main.execute_cell({"action": "close_room", "roomId": "room-1"}, user_id="user-alice")
+        assert result["success"] is True and result["output"]["closed"] is True
+        deleted = [c.args[0] for c in mock.delete.call_args_list]
+        assert main._snapshot_key("room-1") in deleted
+        assert main._presence_key("room-1") in deleted
+        assert main._host_key("room-1") in deleted
+
+    async def test_close_room_rejects_non_host(self):
+        state = _running_state()
+        mock = _make_redis_with(**{main._snapshot_key("room-1"): state, main._host_key("room-1"): "user-alice"})
+        with patch("main._get_async_redis_client", new=AsyncMock(return_value=mock)):
+            result = await main.execute_cell({"action": "close_room", "roomId": "room-1"}, user_id="user-bob")
+        assert result["success"] is False and "only the room creator" in result["error"]
+        # Only the lock key is deleted (released by the decorator) — never game keys.
+        deleted = [c.args[0] for c in mock.delete.call_args_list]
+        assert main._host_key("room-1") not in deleted
+        assert main._snapshot_key("room-1") not in deleted
+
+    async def test_close_room_validate_room(self):
+        result = await main.execute_cell({"action": "close_room", "roomId": ""})
+        assert result["success"] is False
+        assert "roomid" in result["error"].lower()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Validation branches (empty / unsafe roomId for every action)
 # ─────────────────────────────────────────────────────────────────────────────
 

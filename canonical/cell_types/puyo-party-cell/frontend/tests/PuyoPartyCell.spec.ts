@@ -160,6 +160,19 @@ describe('PuyoPartyCell', () => {
       expect(inputs).toHaveLength(6)
       for (const input of inputs) expect(input.participantId).toBe('me-1')
     })
+
+    it('requestSnapshot forwards isHost for Abrir Sala', async () => {
+      mockFetch.mockResolvedValueOnce(makeResponse())
+      await cell.requestSnapshot('room1', 'me-1', true)
+      expect(lastInputData()).toEqual({ action: 'snapshot_request', roomId: 'room1', participantId: 'me-1', isHost: true })
+    })
+
+    it('closeRoom posts close_room', async () => {
+      mockFetch.mockResolvedValueOnce(makeResponse({ result: { success: true, output: { closed: true } } }))
+      const res = await cell.closeRoom('room1')
+      expect(res.output).toEqual({ closed: true })
+      expect(lastInputData()).toEqual({ action: 'close_room', roomId: 'room1' })
+    })
   })
 
   describe('describe() / health_check()', () => {

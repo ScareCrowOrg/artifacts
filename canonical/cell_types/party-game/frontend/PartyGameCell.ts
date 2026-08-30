@@ -32,7 +32,7 @@ import type {
   EnvironmentConfig,
   HealthCheckResult,
 } from '@/types/BaseCell'
-import apiService from '@/services/apiService.js'
+import apiService, { SessionExpiredError } from '@/services/apiService.js'
 import { ENDPOINTS } from '@/config/endpoints.js'
 import { createLogger } from '@/utils/logger'
 
@@ -53,9 +53,28 @@ export const GAME_ACTIONS = [
   'append_stroke',
   'clear_canvas',
   'snapshot_request',
+  'close_room',
 ] as const
 
 export type GameAction = (typeof GAME_ACTIONS)[number]
+
+/** A room discovered via ``listAvailableRooms`` (room registry, 60s heartbeat). */
+export interface AvailableGameRoom {
+  roomId: string
+  sessionCount: number
+  sessions: Array<{ sessionId: string; displayName?: string }>
+}
+
+/** Pure, unit-testable host gate — the room creator can close the room.
+ *  Requires an active room (``hasRoomId``) + the caller to be the host, so a
+ *  host id lingering after "Leave" never re-enables the button. */
+export function resolveCanClose(
+  myParticipantId: string | null | undefined,
+  hostId: string | null | undefined,
+  hasRoomId = false,
+): boolean {
+  return Boolean(hasRoomId && myParticipantId && hostId && myParticipantId === hostId)
+}
 
 // ── Cell ────────────────────────────────────────────────────────────────────
 
@@ -113,8 +132,8 @@ export class PartyGameCell extends BaseCell {
 
   // ── Convenience action wrappers ───────────────────────────────────────────
 
-  async joinGame(roomId: string, sessionId: string): Promise<CellResult> {
-    return this.execute({ action: 'join_game', roomId, sessionId })
+  async joinGame(roomId: string, sessionId: string, isHost = false): Promise<CellResult> {
+    return this.execute({ action: 'join_game', roomId, sessionId, isHost })
   }
 
   async leaveGame(roomId: string, sessionId: string): Promise<CellResult> {
@@ -155,6 +174,72 @@ export class PartyGameCell extends BaseCell {
 
   async requestSnapshot(roomId: string): Promise<CellResult> {
     return this.execute({ action: 'snapshot_request', roomId })
+  }
+
+  /** Close a room — host-gated on the backend (returns success:false for non-host). */
+  async closeRoom(roomId: string): Promise<CellResult> {
+    return this.execute({ action: 'close_room', roomId })
+  }
+
+  // ── Room registry (liveness via GET/POST/PUT/DELETE /api/calls/rooms/*) ────
+  // These let the party-game participate in the shared room registry so it
+  // appears in ``listAvailableRooms`` (set by party-cell / puyo / party-game).
+  // The registry is plain Redis metadata — no Cloudflare media is involved, so
+  // joining the game does not touch the realtime/WebRTC contract.
+
+  /** List rooms that currently have ≥1 active session.
+   *  Failure → ``[]`` for transient/HTTP errors, but an expired session (401,
+   *  ``SessionExpiredError``) is re-thrown so the caller can surface the auth
+   *  problem instead of falsely showing "No active rooms". */
+  async listAvailableRooms(): Promise<AvailableGameRoom[]> {
+    try {
+      const resp = (await apiService.fetch(ENDPOINTS.listActiveRooms)) as Response
+      if (resp.status === 401) throw new SessionExpiredError()
+      if (!resp.ok) return []
+      const data = (await resp.json()) as { rooms?: AvailableGameRoom[] }
+      return data.rooms ?? []
+    } catch (err) {
+      if (err instanceof SessionExpiredError) throw err
+      return []
+    }
+  }
+
+  /** Register this session in the room registry (POST /sessions). */
+  async registerSession(roomId: string, sessionId: string): Promise<boolean> {
+    try {
+      const resp = (await apiService.fetch(ENDPOINTS.roomSessions(roomId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, tracks: [] }),
+      })) as Response
+      return resp.ok
+    } catch {
+      return false
+    }
+  }
+
+  /** Renew the 60s registry heartbeat (every ~20s). */
+  async heartbeatSession(roomId: string, sessionId: string): Promise<boolean> {
+    try {
+      const resp = (await apiService.fetch(`${ENDPOINTS.roomSession(roomId, sessionId)}/heartbeat`, {
+        method: 'PUT',
+      })) as Response
+      return resp.ok
+    } catch {
+      return false
+    }
+  }
+
+  /** Remove this session from the registry (on leave / close / unmount). */
+  async removeSession(roomId: string, sessionId: string): Promise<boolean> {
+    try {
+      const resp = (await apiService.fetch(ENDPOINTS.roomSession(roomId, sessionId), {
+        method: 'DELETE',
+      })) as Response
+      return resp.ok
+    } catch {
+      return false
+    }
   }
 
   // ── BaseCell contract ─────────────────────────────────────────────────────

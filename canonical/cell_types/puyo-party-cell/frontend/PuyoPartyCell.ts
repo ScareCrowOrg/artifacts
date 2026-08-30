@@ -49,6 +49,7 @@ export const PUYO_ACTIONS = [
   'piece_locked',
   'game_over',
   'snapshot_request',
+  'close_room',
 ] as const
 
 export type PuyoAction = (typeof PUYO_ACTIONS)[number]
@@ -153,9 +154,21 @@ export class PuyoPartyCell extends BaseCell {
     return this.execute({ action: 'game_over', roomId, reason, ...(participantId ? { participantId } : {}) })
   }
 
-  /** Re-publish the current snapshot (hydration via HTTP body). */
-  async requestSnapshot(roomId: string, participantId?: string): Promise<CellResult> {
-    return this.execute({ action: 'snapshot_request', roomId, ...(participantId ? { participantId } : {}) })
+  /** Re-publish the current snapshot (hydration via HTTP body).
+   *  ``isHost`` (Abrir Sala) fixes the room creator on the backend in the same
+   *  request — the hostId is returned in ``output.hostId`` (no separate race). */
+  async requestSnapshot(roomId: string, participantId?: string, isHost = false): Promise<CellResult> {
+    return this.execute({
+      action: 'snapshot_request',
+      roomId,
+      ...(participantId ? { participantId } : {}),
+      ...(isHost ? { isHost: true } : {}),
+    })
+  }
+
+  /** Close a room — host-gated on the backend (returns success:false for non-host). */
+  async closeRoom(roomId: string): Promise<CellResult> {
+    return this.execute({ action: 'close_room', roomId })
   }
 
   // ── BaseCell contract ─────────────────────────────────────────────────────

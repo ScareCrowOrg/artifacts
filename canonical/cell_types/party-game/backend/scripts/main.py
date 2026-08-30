@@ -1,22 +1,13 @@
-"""
-party-game — Backend Script (server-authoritative game orchestrator).
+"""party-game — server-authoritative game orchestrator (execute-ephemeral).
 
-Executed by ``cells_router`` via ``POST /api/v1/cells/execute-ephemeral``.
-Exports ``execute_cell(cell_data, user_id=None)``.  Gartic-like game where AI
-picks the word, judges guesses and gives hints.  Composes the realtime
-foundation: presence reuses ``party-cell``'s ``calls:presence:``/``calls:room:``
-contract; the WSS router is forward-only, so the BACKEND is the only writer to
-the game channels (``game:room:{roomId}:state|strokes|guesses``).  The secret
-word is returned ONLY to the drawer via ``get_secret``.
-
-Security (OWASP): ``_caller_id`` prefers the authenticated ``user_id`` over any
-client-supplied ``participantId`` (A07); destructive actions are drawer-gated
-via ``_action(drawer=True)`` (A01); state-mutating actions run under a per-room
-Redis lock ``game:lock:{roomId}`` to serialize read-modify-write (A04).
-
-Actions: join_game · leave_game · start_game · start_round · next_round ·
-end_game · get_secret · submit_guess · hint · append_stroke · clear_canvas ·
-snapshot_request.
+Gartic-like: AI sets the word, judges guesses and gives hints.  Presence reuses
+``party-cell``; the WSS router is forward-only so this backend is the only writer
+to the game channels; the secret word returns ONLY to the drawer (get_secret).
+Security: ``_caller_id`` prefers the authenticated ``user_id`` (A07); destructive
+actions are drawer-gated (A01); state mutation runs under per-room lock (A04).
+Actions: join_game · leave_game · start_game · start_round · next_round · end_game
+· get_secret · submit_guess · hint · append_stroke · clear_canvas ·
+snapshot_request · close_room.
 """
 
 import json
@@ -27,6 +18,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from word_bank import HINT_WRONG_COUNT, generate_hint, guess_matches, pick_word_with_llm
+import room_close
 
 logger = logging.getLogger(__name__)
 
@@ -206,11 +198,7 @@ def _require_room(cell_data: Dict[str, Any]) -> Tuple[str, Optional[str]]:
 
 
 def _caller_id(cell_data: Dict[str, Any], user_id: Optional[str]) -> str:
-    """Authoritative caller identity — the authenticated ``user_id`` wins.
-
-    A client-supplied ``participantId`` is only a fallback (e.g. tests/CLI).
-    This makes ``get_secret`` (and every drawer gate) non-spoofable (A07).
-    """
+    """Authoritative caller id — the authenticated ``user_id`` wins (A07)."""
     return str(user_id or cell_data.get("participantId") or "unknown")
 
 
@@ -390,6 +378,11 @@ async def _handle_join_game(room_id: str, state: Dict[str, Any], cell_data: Dict
     display_name = display_name or participant_id
 
     participants = await _load_list(_presence_key(room_id))
+    # Host fixed ONLY on "Abrir Sala" (isHost) and only when no host OR roster empty.
+    if cell_data.get("isHost"):
+        host = await _redis_get_json(room_close.host_key(room_id), None)
+        if host is None or not participants:
+            await _redis_set_json(room_close.host_key(room_id), participant_id)
     entry = {
         "participantId": participant_id,
         "sessionId": session_id or participant_id,
@@ -406,7 +399,7 @@ async def _handle_join_game(room_id: str, state: Dict[str, Any], cell_data: Dict
     await _publish(_presence_channel(room_id), _snapshot_envelope(_presence_channel(room_id), participants, participant_id))
     return {
         "success": True,
-        "output": {"participants": participants, "count": len(participants), "participantId": participant_id},
+        "output": {"participants": participants, "count": len(participants), "participantId": participant_id, "hostId": await _redis_get_json(room_close.host_key(room_id), None)},
     }
 
 
@@ -423,6 +416,10 @@ async def _handle_leave_game(room_id: str, state: Dict[str, Any], cell_data: Dic
         await _redis_set_json(_presence_key(room_id), remaining)
         await _publish(_presence_channel(room_id), _snapshot_envelope(_presence_channel(room_id), remaining, participant_id))
         participants = remaining
+    # Host leaving via "Leave" releases the host so the next "Abrir Sala" can
+    # re-claim — a 24h host key would leave a host-less zombie room.
+    if participant_id == await _redis_get_json(room_close.host_key(room_id), None):
+        await _redis_set_json(room_close.host_key(room_id), None)
     return {"success": True, "output": {"participants": participants, "count": len(participants)}}
 
 
@@ -599,16 +596,21 @@ async def _handle_snapshot_request(room_id: str, state: Dict[str, Any], cell_dat
     await _publish(_channel_strokes(room_id), _snapshot_envelope(_channel_strokes(room_id), strokes, sender_id))
     await _publish(_channel_guesses(room_id), _snapshot_envelope(_channel_guesses(room_id), guesses, sender_id))
 
-    # Presence is also hydrated from the HTTP body — the WSS router is
-    # forward-only, so a presence snapshot published before this client
-    # subscribed to calls:room:{roomId} is lost (no re-publish).
+    # Presence hydrated from the HTTP body too — the WSS router is forward-only.
     seen = {str(p.get("participantId") or "").strip(): p for p in await _load_list(_presence_key(room_id))}
     output: Dict[str, Any] = {"state": state, "strokes": strokes, "guesses": guesses, "participants": [v for k, v in seen.items() if k]}
     if _is_drawer(state, sender_id):
         word = await _redis_get_json(_key_word(room_id), None)
         if word:
             output["secretWord"] = word
+    output["hostId"] = await _redis_get_json(room_close.host_key(room_id), None)
     return {"success": True, "output": output}
+
+
+@_action(locked=True)
+async def _handle_close_room(room_id: str, state: Dict[str, Any], cell_data: Dict[str, Any], user_id: Optional[str]) -> Dict[str, Any]:
+    """Close the room — host-gated (only the creator may close); clears state."""
+    return await room_close.close_room(room_id, cell_data, user_id)
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -627,6 +629,7 @@ _HANDLERS: Dict[str, Any] = {
     "append_stroke": _handle_append_stroke,
     "clear_canvas": _handle_clear_canvas,
     "snapshot_request": _handle_snapshot_request,
+    "close_room": _handle_close_room,
 }
 
 

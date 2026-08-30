@@ -6,15 +6,26 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-vi.mock('@/services/apiService.js', () => ({
-  default: { fetch: vi.fn() },
-}))
+vi.mock('@/services/apiService.js', () => {
+  class SessionExpiredError extends Error {
+    constructor(message = 'Session expired or invalid token') {
+      super(message)
+      this.name = 'SessionExpiredError'
+    }
+  }
+  return { default: { fetch: vi.fn() }, SessionExpiredError }
+})
 
 vi.mock('@/config/endpoints.js', () => ({
-  ENDPOINTS: { executeEphemeralCell: '/api/v1/cells/execute-ephemeral' },
+  ENDPOINTS: {
+    executeEphemeralCell: '/api/v1/cells/execute-ephemeral',
+    listActiveRooms: '/api/calls/rooms',
+    roomSessions: (roomId: string) => `/api/calls/rooms/${roomId}/sessions`,
+    roomSession: (roomId: string, sessionId: string) => `/api/calls/rooms/${roomId}/sessions/${sessionId}`,
+  },
 }))
 
-import { PartyGameCell, GAME_ACTIONS } from '../PartyGameCell'
+import { PartyGameCell, GAME_ACTIONS, resolveCanClose } from '../PartyGameCell'
 import apiService from '@/services/apiService.js'
 
 const mockFetch = vi.mocked(apiService.fetch)
@@ -24,6 +35,14 @@ function makeResponse(overrides: Partial<{ ok: boolean; result: Record<string, u
   return {
     ok,
     json: async () => ({ result }),
+    text: async () => 'boom',
+  } as unknown as Response
+}
+
+function makeJsonResponse(body: unknown, ok = true) {
+  return {
+    ok,
+    json: async () => body,
     text: async () => 'boom',
   } as unknown as Response
 }
@@ -107,7 +126,7 @@ describe('PartyGameCell', () => {
       mockFetch.mockResolvedValueOnce(makeResponse({ result: { success: true, output: { participantId: 'u1' } } }))
       const res = await cell.joinGame('room1', 's-1')
       expect(res.output.participantId).toBe('u1')
-      expect(lastInputData()).toEqual({ action: 'join_game', roomId: 'room1', sessionId: 's-1' })
+      expect(lastInputData()).toEqual({ action: 'join_game', roomId: 'room1', sessionId: 's-1', isHost: false })
     })
 
     it('startGame posts start_game with optional totalRounds', async () => {
@@ -144,6 +163,94 @@ describe('PartyGameCell', () => {
         return (JSON.parse(String(c[1].body)) as { input_data: { action: string } }).input_data.action
       })
       expect(bodies).toEqual(['get_secret', 'snapshot_request', 'clear_canvas', 'next_round', 'end_game', 'hint', 'leave_game'])
+    })
+  })
+
+  describe('room registry + host', () => {
+    it('joinGame posts isHost', async () => {
+      mockFetch.mockResolvedValueOnce(makeResponse())
+      await cell.joinGame('room1', 's-1', true)
+      expect(lastInputData()).toEqual({ action: 'join_game', roomId: 'room1', sessionId: 's-1', isHost: true })
+    })
+
+    it('closeRoom posts close_room', async () => {
+      mockFetch.mockResolvedValueOnce(makeResponse({ result: { success: true, output: { closed: true } } }))
+      const res = await cell.closeRoom('room1')
+      expect(res.output).toEqual({ closed: true })
+      expect(lastInputData()).toEqual({ action: 'close_room', roomId: 'room1' })
+    })
+
+    it('listAvailableRooms returns rooms', async () => {
+      mockFetch.mockResolvedValueOnce(makeJsonResponse({ rooms: [{ roomId: 'a', sessionCount: 2, sessions: [] }] }))
+      const rooms = await cell.listAvailableRooms()
+      expect(rooms).toEqual([{ roomId: 'a', sessionCount: 2, sessions: [] }])
+      expect(mockFetch).toHaveBeenCalledWith('/api/calls/rooms')
+    })
+
+    it('listAvailableRooms returns [] on HTTP failure', async () => {
+      mockFetch.mockResolvedValueOnce(makeJsonResponse({}, false))
+      expect(await cell.listAvailableRooms()).toEqual([])
+    })
+
+    it('listAvailableRooms returns [] on network failure', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('down'))
+      expect(await cell.listAvailableRooms()).toEqual([])
+    })
+
+    it('listAvailableRooms throws on 401 (session expired) — never degrades to empty list', async () => {
+      const resp = { ok: false, status: 401, json: async () => ({}), text: async () => 'x' } as unknown as Response
+      mockFetch.mockResolvedValueOnce(resp)
+      await expect(cell.listAvailableRooms()).rejects.toThrow('Session expired')
+    })
+
+    it('registerSession posts to room sessions', async () => {
+      mockFetch.mockResolvedValueOnce(makeJsonResponse({ status: 'registered' }))
+      const ok = await cell.registerSession('room1', 's-1')
+      expect(ok).toBe(true)
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/calls/rooms/room1/sessions',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ sessionId: 's-1', tracks: [] }) }),
+      )
+    })
+
+    it('registerSession returns false on failure', async () => {
+      mockFetch.mockResolvedValueOnce(makeJsonResponse({}, false))
+      expect(await cell.registerSession('room1', 's-1')).toBe(false)
+    })
+
+    it('heartbeatSession PUTs the heartbeat endpoint', async () => {
+      mockFetch.mockResolvedValueOnce(makeJsonResponse({ status: 'ok' }))
+      const ok = await cell.heartbeatSession('room1', 's-1')
+      expect(ok).toBe(true)
+      expect(mockFetch).toHaveBeenCalledWith('/api/calls/rooms/room1/sessions/s-1/heartbeat', expect.objectContaining({ method: 'PUT' }))
+    })
+
+    it('removeSession DELETEs the session', async () => {
+      mockFetch.mockResolvedValueOnce(makeJsonResponse({ status: 'removed' }))
+      const ok = await cell.removeSession('room1', 's-1')
+      expect(ok).toBe(true)
+      expect(mockFetch).toHaveBeenCalledWith('/api/calls/rooms/room1/sessions/s-1', expect.objectContaining({ method: 'DELETE' }))
+    })
+
+    it('registry helpers return false on network failure', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('down'))
+      expect(await cell.registerSession('room1', 's-1')).toBe(false)
+      mockFetch.mockRejectedValueOnce(new Error('down'))
+      expect(await cell.heartbeatSession('room1', 's-1')).toBe(false)
+      mockFetch.mockRejectedValueOnce(new Error('down'))
+      expect(await cell.removeSession('room1', 's-1')).toBe(false)
+    })
+  })
+
+  describe('resolveCanClose', () => {
+    it('is true only when in a room AND my participant id is the host', () => {
+      expect(resolveCanClose('u1', 'u1', true)).toBe(true)
+      expect(resolveCanClose('u1', 'u2', true)).toBe(false)
+      expect(resolveCanClose(null, 'u1', true)).toBe(false)
+      expect(resolveCanClose('u1', null, true)).toBe(false)
+      expect(resolveCanClose('u1', undefined, true)).toBe(false)
+      // A lingering host id after "Leave" (no active room) never re-enables it.
+      expect(resolveCanClose('u1', 'u1', false)).toBe(false)
     })
   })
 

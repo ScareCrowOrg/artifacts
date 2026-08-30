@@ -106,6 +106,11 @@ export const ENDPOINTS = {
   getCell: (cellId) => `${API_BASE}/api/cells/${cellId}`,
   executeCell: (cellId) => `${API_BASE}/api/cells/${cellId}/execute`,
   executeEphemeralCell: `${API_BASE}/api/cells/execute-ephemeral`,
+
+  // Party rooms registry (Calls — shared by party-cell / puyo / party-game)
+  listActiveRooms: `${API_BASE}/api/calls/rooms`,
+  roomSessions: (roomId) => `${API_BASE}/api/calls/rooms/${roomId}/sessions`,
+  roomSession: (roomId, sessionId) => `${API_BASE}/api/calls/rooms/${roomId}/sessions/${sessionId}`,
   updateCell: (cellId) => `${API_BASE}/api/cells/${cellId}/update`,
   createCell: `${API_BASE}/api/cells/create`,
   listCells: `${API_BASE}/api/cells/list`,
