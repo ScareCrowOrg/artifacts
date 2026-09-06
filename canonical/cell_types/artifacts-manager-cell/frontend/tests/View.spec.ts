@@ -38,6 +38,13 @@ vi.mock('@/utils/logger', () => ({
   }),
 }))
 
+// ── Real pure helpers (dependency-free module — importable in vitest) ─────
+// ArtifactsManagerCell.ts itself cannot be imported (heavy #canonical/ chain),
+// so we test the REAL promotion.ts helpers directly and replicate the cell's
+// method logic in the stub below.
+import { artifactTypeToDirName, classifyPromoteError, PromoteError } from '../promotion'
+import type { DependencyPreview } from '../promotion'
+
 // ── Types ─────────────────────────────────────────────────────────────────
 
 interface SelectableUser {
@@ -64,9 +71,30 @@ const mockUser: SelectableUser = { id: 'user-123', name: 'Alice' }
 class ArtifactsManagerCellStub {
   private _userSelectionCell: { show: ReturnType<typeof vi.fn> }
 
+  /** Current lifecycle stage — allowance is gated on it being 'runtime'. */
+  private _stage = ''
+
   constructor() {
     this._userSelectionCell = {
       show: vi.fn(),
+    }
+  }
+
+  /** Set the artifact lifecycle stage (called by the View on mount / after promote). */
+  setStage(stage: string): void {
+    this._stage = stage
+  }
+
+  /** Allowance only exists for promoted (runtime) artifacts. */
+  canAllow(stage: string): boolean {
+    return stage === 'runtime'
+  }
+
+  private _assertAllowanceAllowed(): void {
+    if (!this.canAllow(this._stage)) {
+      throw new Error(
+        `Allowance is only available after promotion (current stage: '${this._stage || 'unknown'}').`,
+      )
     }
   }
 
@@ -146,8 +174,9 @@ class ArtifactsManagerCellStub {
     return { componentPath: 'frontend/View.vue' }
   }
 
-  /** Stub allowArtifact() — opens user selection and POSTs allowance. */
+  /** Stub allowArtifact() — opens user selection and POSTs allowance (gated to runtime). */
   async allowArtifact(artifactId: string, _mockApiFetch?: ReturnType<typeof vi.fn>) {
+    this._assertAllowanceAllowed()
     const user: SelectableUser | null = await this._userSelectionCell.show()
 
     if (!user) return null
@@ -172,6 +201,7 @@ class ArtifactsManagerCellStub {
 
   /** Stub listAllowances() — GET /api/local/allowance. */
   async listAllowances(artifactId: string, _mockApiFetch?: ReturnType<typeof vi.fn>): Promise<AllowanceEntry[]> {
+    this._assertAllowanceAllowed()
     if (!_mockApiFetch) {
       return []
     }
@@ -192,6 +222,7 @@ class ArtifactsManagerCellStub {
 
   /** Stub removeAllowance() — DELETE /api/local/allowance. */
   async removeAllowance(artifactId: string, userId: string, _mockApiFetch?: ReturnType<typeof vi.fn>): Promise<boolean> {
+    this._assertAllowanceAllowed()
     if (!_mockApiFetch) {
       return false
     }
@@ -208,6 +239,91 @@ class ArtifactsManagerCellStub {
 
     const data = await response.json()
     return data.removed === true
+  }
+
+  /** Stub promoteArtifact() — /bundle (sandbox) then /promote (no target). */
+  async promoteArtifact(
+    artifact_type: string,
+    slug: string,
+    mockApiFetch?: ReturnType<typeof vi.fn>,
+  ): Promise<{ bundleId: string; promotedCount: number; entries: Array<{ artifact_type: string; slug: string; target_path: string }> }> {
+    const typeDir = artifactTypeToDirName(artifact_type)
+    if (!typeDir) {
+      throw new PromoteError(
+        'promoteUnsupportedType',
+        `Unsupported artifact type "${artifact_type}" — only cell-type/book/service/worker/job-type are promotable`,
+      )
+    }
+    if (!mockApiFetch) {
+      throw new Error('promoteArtifact needs a mock apiFetch in tests')
+    }
+
+    // Step 1: bundle sandbox artifact + transitive deps.
+    const bundleResp = await mockApiFetch('/api/v1/artifacts/bundle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_stage: 'sandbox',
+        artifact_type: typeDir,
+        slug,
+        include_dependencies: true,
+        dry_run: false,
+      }),
+    })
+    if (!bundleResp.ok) {
+      throw classifyPromoteError(bundleResp.status, await bundleResp.text())
+    }
+    const bundleData = await bundleResp.json()
+    if (!bundleData.bundle_id) {
+      throw new PromoteError('promoteInvalid', 'Bundle creation returned no bundle_id')
+    }
+
+    // Step 2: promote — no target_user_id (backend defaults to the owner).
+    const promoteResp = await mockApiFetch('/api/v1/artifacts/promote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bundle_id: bundleData.bundle_id, strategy: 'copy' }),
+    })
+    if (!promoteResp.ok) {
+      throw classifyPromoteError(promoteResp.status, await promoteResp.text())
+    }
+    const promoData = await promoteResp.json()
+    const entries = promoData.entries || []
+    return { bundleId: bundleData.bundle_id, promotedCount: entries.length, entries }
+  }
+
+  /** Stub previewDependencies() — /bundle with dry_run:true. */
+  async previewDependencies(
+    artifact_type: string,
+    slug: string,
+    mockApiFetch?: ReturnType<typeof vi.fn>,
+  ): Promise<DependencyPreview[]> {
+    const typeDir = artifactTypeToDirName(artifact_type)
+    if (!typeDir) {
+      throw new PromoteError(
+        'promoteUnsupportedType',
+        `Unsupported artifact type "${artifact_type}" — only cell-type/book/service/worker/job-type are promotable`,
+      )
+    }
+    if (!mockApiFetch) {
+      return []
+    }
+    const resp = await mockApiFetch('/api/v1/artifacts/bundle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_stage: 'sandbox',
+        artifact_type: typeDir,
+        slug,
+        include_dependencies: true,
+        dry_run: true,
+      }),
+    })
+    if (!resp.ok) {
+      throw classifyPromoteError(resp.status, await resp.text())
+    }
+    const data = await resp.json()
+    return data.dependencies || []
   }
 
   /** Helper to configure user-selection outcome. */
@@ -231,6 +347,8 @@ describe('ArtifactsManagerCell', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     cell = new ArtifactsManagerCellStub()
+    // Allowance methods are gated on stage === 'runtime'.
+    cell.setStage('runtime')
   })
 
   // ── execute() ───────────────────────────────────────────────────────────
@@ -474,6 +592,217 @@ describe('ArtifactsManagerCell', () => {
     it('returns false without mock (no-op path)', async () => {
       const removed = await cell.removeAllowance('cell:test', 'user-1')
       expect(removed).toBe(false)
+    })
+  })
+
+  // ── artifactTypeToDirName() (real pure helper) ──────────────────────────
+
+  describe('artifactTypeToDirName()', () => {
+    it('maps cell-type → cell_types', () => {
+      expect(artifactTypeToDirName('cell-type')).toBe('cell_types')
+    })
+
+    it('maps book → book_types', () => {
+      expect(artifactTypeToDirName('book')).toBe('book_types')
+    })
+
+    it('maps service → services', () => {
+      expect(artifactTypeToDirName('service')).toBe('services')
+    })
+
+    it('maps worker → workers', () => {
+      expect(artifactTypeToDirName('worker')).toBe('workers')
+    })
+
+    it('maps job-type → workers', () => {
+      expect(artifactTypeToDirName('job-type')).toBe('workers')
+    })
+
+    it('rejects viewers (unsupported)', () => {
+      expect(artifactTypeToDirName('viewers')).toBeNull()
+    })
+
+    it('rejects shared_utils (unsupported)', () => {
+      expect(artifactTypeToDirName('shared_utils')).toBeNull()
+    })
+
+    it('rejects unknown types', () => {
+      expect(artifactTypeToDirName('something-else')).toBeNull()
+    })
+  })
+
+  // ── classifyPromoteError() (real pure helper) ────────────────────────────
+
+  describe('classifyPromoteError()', () => {
+    it('maps 403 → promoteForbidden', () => {
+      const err = classifyPromoteError(403, 'Only the planet owner')
+      expect(err).toBeInstanceOf(PromoteError)
+      expect(err.code).toBe('promoteForbidden')
+    })
+
+    it('maps 409 → promoteConflict', () => {
+      expect(classifyPromoteError(409, 'Slug conflict').code).toBe('promoteConflict')
+    })
+
+    it('maps 422 → promoteInvalid', () => {
+      expect(classifyPromoteError(422, 'Validation failed').code).toBe('promoteInvalid')
+    })
+
+    it('maps 500 → promoteFailed', () => {
+      expect(classifyPromoteError(500, 'Internal error').code).toBe('promoteFailed')
+    })
+  })
+
+  // ── canAllow() / setStage() ──────────────────────────────────────────────
+
+  describe('canAllow() / setStage()', () => {
+    it('canAllow returns true only for runtime', () => {
+      expect(cell.canAllow('runtime')).toBe(true)
+      expect(cell.canAllow('sandbox')).toBe(false)
+      expect(cell.canAllow('canonical')).toBe(false)
+    })
+  })
+
+  // ── promoteArtifact() ────────────────────────────────────────────────────
+
+  describe('promoteArtifact()', () => {
+    it('calls /bundle then /promote in order, with correct URLs/bodies and no target', async () => {
+      const mockApiFetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ bundle_id: 'bundle-1', dependencies: [] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            status: 'promoted',
+            entries: [{ artifact_type: 'cell_types', slug: 'my-cell', target_path: '/runtime/user/owner/cell_types/my-cell' }],
+          }),
+        })
+
+      const summary = await cell.promoteArtifact('cell-type', 'my-cell', mockApiFetch)
+
+      expect(summary.bundleId).toBe('bundle-1')
+      expect(summary.promotedCount).toBe(1)
+      expect(summary.entries[0].slug).toBe('my-cell')
+
+      expect(mockApiFetch).toHaveBeenCalledTimes(2)
+      const [bundleCall, promoteCall] = mockApiFetch.mock.calls
+
+      expect(bundleCall[0]).toBe('/api/v1/artifacts/bundle')
+      expect(JSON.parse(bundleCall[1].body)).toEqual({
+        source_stage: 'sandbox',
+        artifact_type: 'cell_types',
+        slug: 'my-cell',
+        include_dependencies: true,
+        dry_run: false,
+      })
+
+      expect(promoteCall[0]).toBe('/api/v1/artifacts/promote')
+      const promoteBody = JSON.parse(promoteCall[1].body)
+      expect(promoteBody).toEqual({ bundle_id: 'bundle-1', strategy: 'copy' })
+      expect(promoteBody).not.toHaveProperty('target_user_id')
+    })
+
+    it('throws promoteUnsupportedType for reviewers (unsupported)', async () => {
+      await expect(cell.promoteArtifact('viewers', 'my-viewer', vi.fn())).rejects.toMatchObject({
+        code: 'promoteUnsupportedType',
+      })
+    })
+
+    it('maps 403 → promoteForbidden', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        text: () => Promise.resolve('Only the planet owner'),
+      })
+      await expect(cell.promoteArtifact('cell-type', 'my-cell', mockApiFetch)).rejects.toMatchObject({
+        code: 'promoteForbidden',
+      })
+    })
+
+    it('maps 409 → promoteConflict', async () => {
+      const mockApiFetch = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ bundle_id: 'bundle-1' }) })
+        .mockResolvedValueOnce({ ok: false, status: 409, text: () => Promise.resolve('Slug conflict') })
+      await expect(cell.promoteArtifact('cell-type', 'my-cell', mockApiFetch)).rejects.toMatchObject({
+        code: 'promoteConflict',
+      })
+    })
+
+    it('maps 422 → promoteInvalid', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 422,
+        text: () => Promise.resolve('Validation failed'),
+      })
+      await expect(cell.promoteArtifact('cell-type', 'my-cell', mockApiFetch)).rejects.toMatchObject({
+        code: 'promoteInvalid',
+      })
+    })
+
+    it('throws promoteInvalid when bundle returns no bundle_id', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ dependencies: [] }),
+      })
+      await expect(cell.promoteArtifact('cell-type', 'my-cell', mockApiFetch)).rejects.toMatchObject({
+        code: 'promoteInvalid',
+      })
+    })
+  })
+
+  // ── previewDependencies() ────────────────────────────────────────────────
+
+  describe('previewDependencies()', () => {
+    it('calls /bundle with dry_run:true and returns dependencies', async () => {
+      const mockApiFetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          bundle_id: 'bundle-p',
+          dependencies: [{ artifact_type: 'cell_types', slug: 'dep-1' }],
+        }),
+      })
+
+      const deps = await cell.previewDependencies('cell-type', 'my-cell', mockApiFetch)
+
+      expect(deps).toEqual([{ artifact_type: 'cell_types', slug: 'dep-1' }])
+      const body = JSON.parse(mockApiFetch.mock.calls[0][1].body)
+      expect(body).toMatchObject({ source_stage: 'sandbox', dry_run: true, include_dependencies: true })
+    })
+
+    it('throws promoteUnsupportedType for unsupported types', async () => {
+      await expect(cell.previewDependencies('shared_utils', 'x', vi.fn())).rejects.toMatchObject({
+        code: 'promoteUnsupportedType',
+      })
+    })
+  })
+
+  // ── Allowance gating (stage !== runtime) ─────────────────────────────────
+
+  describe('allowance gating (stage !== runtime)', () => {
+    it('allowArtifact blocks when stage is sandbox', async () => {
+      cell.setStage('sandbox')
+      cell._setUserSelectionResult(mockUser)
+      await expect(cell.allowArtifact('cell:test', vi.fn())).rejects.toThrow('only available after promotion')
+    })
+
+    it('listAllowances blocks when stage is sandbox', async () => {
+      cell.setStage('sandbox')
+      await expect(cell.listAllowances('cell:test', vi.fn())).rejects.toThrow('only available after promotion')
+    })
+
+    it('removeAllowance blocks when stage is canonical', async () => {
+      cell.setStage('canonical')
+      await expect(cell.removeAllowance('cell:test', 'user-1', vi.fn())).rejects.toThrow('only available after promotion')
+    })
+
+    it('allowArtifact works when stage is runtime (set by the View)', async () => {
+      cell.setStage('runtime')
+      cell._setUserSelectionResult(mockUser)
+      const mockApiFetch = vi.fn().mockResolvedValue({ ok: true })
+      const user = await cell.allowArtifact('cell:test', mockApiFetch)
+      expect(user).toEqual(mockUser)
     })
   })
 })

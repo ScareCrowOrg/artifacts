@@ -12,6 +12,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 
 const log = createLogger('store:artifacts-explorer')
 
@@ -72,6 +73,15 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
   const error = ref<string | null>(null)
   const selectedArtifact = ref<ExplorerArtifact | null>(null)
   const manageArtifactTarget = ref<ExplorerArtifact | null>(null)
+
+  // ── Derived (owner-only gates for the "Manage" flow) ─────────────────────────
+
+  /**
+   * True when the current session user is the planet owner. Sourced from
+   * workspaceStore.isOwner (userId vs planetOwnerId from session-bind).
+   * Gates the "⚙️ Manage" (manage) action and the manager-cell access.
+   */
+  const isOwner = computed(() => useWorkspaceStore().isOwner)
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -148,6 +158,20 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
     manageArtifactTarget.value = null
   }
 
+  /**
+   * Mark an artifact as promoted (stage='runtime') in the local catalog, so a
+   * subsequent "Manage" open shows the runtime Allowance section instead of the
+   * stale sandbox Promote button (which would 409 on a repeat promote). The
+   * promotion action already mutated the backend; this only syncs the local snapshot.
+   */
+  function markArtifactPromoted(artifactId: string): void {
+    const match = availableArtifacts.value.find(a => a.artifact_id === artifactId)
+    if (match) {
+      match.stage = 'runtime'
+      log.info('[ArtifactsExplorerStore] Artifact promoted — stage synced to runtime', { artifactId })
+    }
+  }
+
   // ── Computed (derived from availableArtifacts) ────────────────────────────────
 
   /**
@@ -190,11 +214,13 @@ export const useArtifactsExplorerStore = defineStore('artifactsExplorer', () => 
     selectedArtifact,
     manageArtifactTarget,
     availableCellTypes,
+    isOwner,
     loadArtifacts,
     loadCellTypes,
     selectArtifact,
     clearSelection,
     triggerManageArtifact,
     clearManageArtifactTarget,
+    markArtifactPromoted,
   }
 })

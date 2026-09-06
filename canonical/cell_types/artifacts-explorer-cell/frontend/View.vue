@@ -166,9 +166,9 @@
                   </span>
                 </div>
 
-                <!-- Manage button (cell-type artifacts only) — opens artifacts-manager-cell -->
+                <!-- Manage button (owner-only, cell-type artifacts) — opens artifacts-manager-cell -->
                 <button
-                  v-if="artifact.artifact_type === 'cell-type'"
+                  v-if="artifact.artifact_type === 'cell-type' && explorerStore.isOwner"
                   class="inline-flex items-center gap-1 px-2 py-1 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700 transition-colors"
                   :aria-label="`Manage ${artifact.identity.name}`"
                   @click="handleManageArtifact(artifact)"

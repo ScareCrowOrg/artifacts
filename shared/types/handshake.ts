@@ -17,6 +17,8 @@ export interface InitWorkspaceMessage {
     sessionToken: string
     cockpitOrigin: string
     userId: string
+    /** Planet owner id (initially the session token holder) — namespace of promoted artifacts. */
+    planetOwnerId?: string
   }
   timestamp: number
 }

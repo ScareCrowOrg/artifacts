@@ -333,7 +333,8 @@ export function useBaseViewer(options: UseBaseViewerOptions = {}) {
 
     log.info('[WORKSPACE] INIT_WORKSPACE received', data)
 
-    const { workspaceId, sessionToken, userId, cockpitOrigin } = (data as Partial<InitWorkspaceMessage>).payload ?? {}
+    const { workspaceId, sessionToken, userId, cockpitOrigin, planetOwnerId } =
+      (data as Partial<InitWorkspaceMessage>).payload ?? {}
 
     if (!workspaceId || !sessionToken || !cockpitOrigin) {
       const code = 'INVALID_PAYLOAD'
@@ -343,7 +344,7 @@ export function useBaseViewer(options: UseBaseViewerOptions = {}) {
       return
     }
 
-    store.initWorkspace({ workspaceId, sessionToken, userId: userId ?? '' })
+    store.initWorkspace({ workspaceId, sessionToken, userId: userId ?? '', planetOwnerId })
 
     if (validationMode === 'validated') {
       // Two-step validation: request Cockpit to validate the session

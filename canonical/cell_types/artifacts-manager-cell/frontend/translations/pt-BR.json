@@ -21,6 +21,22 @@
     "cancel": "Cancelar",
     "confirmRemoveTitle": "Remover Permissão",
     "confirmRemoveMessage": "Remover permissão de {name}?",
-    "confirmRemoveConfirm": "Remover"
+    "confirmRemoveConfirm": "Remover",
+    "promote": "🚀 Promover",
+    "promoting": "Promovendo…",
+    "promoteSuccess": "{count} artefato(s) promovido(s)",
+    "promoteFailed": "Falha ao promover artefato",
+    "promoteForbidden": "Somente o dono do planeta pode promover artefatos",
+    "promoteConflict": "Já existe um artefato com este nome no runtime de destino",
+    "promoteInvalid": "Não foi possível promover: dados inválidos ou dependência ausente",
+    "promoteUnsupportedType": "Este tipo de artefato não pode ser promovido",
+    "dependencies": "Dependências",
+    "noDependencies": "Nenhuma dependência declarada",
+    "dependencyPreview": "Pré-visualizar dependências resolvidas",
+    "previewLoading": "Carregando…",
+    "previewFailed": "Falha ao pré-visualizar dependências",
+    "promotedCount": "{count} artefato(s) promovido(s)",
+    "allowanceOnlyAfterPromote": "Permissão disponível somente após a promoção",
+    "canonicalReadOnly": "Artefatos canônicos são somente leitura."
   }
 }

@@ -349,6 +349,16 @@ async function handleCellTypeSelected(
 ): Promise<string | undefined> {
   log.info('[App] handleCellTypeSelected', { cellTypeName: cellType.name })
 
+  // Owner-only gate (centralized): the artifacts-manager-cell is only openable by
+  // the planet owner. Placed at the root of handleCellTypeSelected so EVERY
+  // instantiation path is covered — the explorer "Manage" watcher, a restored
+  // layout (handleLoadLayout) and persisted-cell hydration (loadPersistedCells) —
+  // not just the Manage button click.
+  if (cellType.name === 'artifacts-manager-cell' && !store.isOwner) {
+    log.warn('[App] Refusing artifacts-manager-cell — non-owner', { cellTypeName: cellType.name })
+    return undefined
+  }
+
   const cellId = addCell(cellType.name, cellType)
 
   try {
@@ -578,6 +588,18 @@ watch(
   () => explorerStore.manageArtifactTarget,
   async (artifact: ExplorerArtifact | null) => {
     if (!artifact) return
+
+    // Defense-in-depth owner gate: the artifacts-manager-cell is owner-only.
+    // Even if a non-owner reaches manageArtifactTarget (e.g. via stale state or
+    // a removed button), refuse to open the manager cell.
+    if (!store.isOwner) {
+      log.warn('[App] Refusing manage artifact — non-owner', {
+        name: artifact.identity.name,
+        artifactId: artifact.artifact_id,
+      })
+      explorerStore.clearManageArtifactTarget()
+      return
+    }
 
     // Close the explorer modal
     isExplorerModalOpen.value = false

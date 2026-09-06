@@ -17,6 +17,12 @@ import { createLogger } from '@/utils/logger'
 import { apiFetch } from '@/services/apiService'
 import { UserSelectionCell } from '#canonical/cell_types/user-selection-cell/frontend/UserSelectionCell'
 import type { SelectableUser } from '#canonical/cell_types/user-selection-cell/frontend/store'
+// Pure promotion helpers — dependency-free module isolated for unit testing.
+import { artifactTypeToDirName, classifyPromoteError, PromoteError } from './promotion'
+import type { DependencyPreview, PromoteErrorCode, PromotionSummary } from './promotion'
+// Re-exported so the View / tests can import from this module.
+export { artifactTypeToDirName, classifyPromoteError, PromoteError } from './promotion'
+export type { PromoteErrorCode, DependencyPreview, PromotionSummary } from './promotion'
 
 const log = createLogger('cell:artifacts-manager')
 
@@ -32,6 +38,157 @@ export interface AllowanceEntry {
 export class ArtifactsManagerCell extends BaseCell {
   /** UserSelectionCell instance — created once and reused for all allowArtifact() calls. */
   private readonly _userSelectionCell = new UserSelectionCell()
+
+  /** Current artifact lifecycle stage (sandbox | runtime | canonical). Set via setStage(). */
+  private _stage = ''
+
+  /**
+   * Set the artifact lifecycle stage. Called by the View on mount and after a
+   * successful promotion, so allowance methods can be gated defensively
+   * (allowance only exists for promoted, stage='runtime', artifacts).
+   */
+  setStage(stage: string): void {
+    this._stage = stage
+  }
+
+  /**
+   * Allowance is only available after the artifact is promoted to runtime.
+   * Pure predicate — used by the View and by the allowance methods below.
+   */
+  canAllow(stage: string): boolean {
+    return stage === 'runtime'
+  }
+
+  /**
+   * Promote an artifact (plus its transitive dependencies) from sandbox to the
+   * planet owner's runtime namespace (`runtime/user/{owner}/`).
+   *
+   * Steps:
+   * 1. Map the artifact record type to the /bundle directory name (pure fn).
+   * 2. POST /api/v1/artifacts/bundle with `source_stage:'sandbox'` +
+   *    `include_dependencies:true` → `bundle_id` + resolved dependencies.
+   * 3. POST /api/v1/artifacts/promote with `{ bundle_id, strategy:'copy' }`
+   *    (NO target_user_id — the backend defaults to the planet owner).
+   *
+   * Errors are mapped to {@link PromoteError} with a specific code so the View
+   * can surface a friendly i18n message (403 non-owner / 409 conflict /
+   * 422 validation / unsupported type).
+   *
+   * @param artifact_type - Artifact record type, e.g. 'cell-type'.
+   * @param slug - Artifact slug/id (the artifact_id from the runtime map).
+   */
+  async promoteArtifact(artifact_type: string, slug: string): Promise<PromotionSummary> {
+    const typeDir = artifactTypeToDirName(artifact_type)
+    if (!typeDir) {
+      throw new PromoteError(
+        'promoteUnsupportedType',
+        `Unsupported artifact type "${artifact_type}" — only cell-type/book/service/worker/job-type are promotable`,
+      )
+    }
+    log.info('[ArtifactsManagerCell] promoteArtifact() start', { artifactType: artifact_type, typeDir, slug })
+
+    // Step 1: bundle the artifact + transitive deps from sandbox.
+    const bundleResp = await apiFetch('/api/v1/artifacts/bundle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_stage: 'sandbox',
+        artifact_type: typeDir,
+        slug,
+        include_dependencies: true,
+        dry_run: false,
+      }),
+    })
+    const bundleData = await this._parseArtifactsResponse<{ bundle_id?: string; dependencies?: DependencyPreview[] }>(
+      bundleResp,
+      'bundle',
+    )
+    const bundleId = bundleData.bundle_id
+    if (!bundleId) {
+      throw new PromoteError('promoteInvalid', 'Bundle creation returned no bundle_id')
+    }
+
+    // Step 2: promote — no target_user_id (backend defaults to the planet owner).
+    const promoteResp = await apiFetch('/api/v1/artifacts/promote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bundle_id: bundleId, strategy: 'copy' }),
+    })
+    const promoteData = await this._parseArtifactsResponse<{
+      status?: string
+      entries?: Array<{ artifact_type: string; slug: string; target_path: string }>
+    }>(promoteResp, 'promote')
+    const entries = promoteData.entries || []
+    const promotedCount = entries.length
+
+    log.info('[ArtifactsManagerCell] promoteArtifact() done', { bundleId, promotedCount })
+    return { bundleId, promotedCount, entries }
+  }
+
+  /**
+   * Preview the transitive dependencies that WOULD be bundled for promotion,
+   * without creating a bundle. Calls /bundle with `dry_run: true`.
+   *
+   * @param artifact_type - Artifact record type, e.g. 'cell-type'.
+   * @param slug - Artifact slug/id.
+   */
+  async previewDependencies(artifact_type: string, slug: string): Promise<DependencyPreview[]> {
+    const typeDir = artifactTypeToDirName(artifact_type)
+    if (!typeDir) {
+      throw new PromoteError(
+        'promoteUnsupportedType',
+        `Unsupported artifact type "${artifact_type}" — only cell-type/book/service/worker/job-type are promotable`,
+      )
+    }
+    log.info('[ArtifactsManagerCell] previewDependencies() start', { artifactType: artifact_type, typeDir, slug })
+
+    const bundleResp = await apiFetch('/api/v1/artifacts/bundle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_stage: 'sandbox',
+        artifact_type: typeDir,
+        slug,
+        include_dependencies: true,
+        dry_run: true,
+      }),
+    })
+    const data = await this._parseArtifactsResponse<{ dependencies?: DependencyPreview[] }>(bundleResp, 'bundle')
+    return data.dependencies || []
+  }
+
+  /**
+   * Defensive allowance gate: allowance only exists after promotion.
+   * Throws when the current stage !== 'runtime' (matches canAllow()).
+   */
+  private _assertAllowanceAllowed(): void {
+    if (!this.canAllow(this._stage)) {
+      throw new Error(
+        `Allowance is only available after promotion (current stage: '${this._stage || 'unknown'}').`,
+      )
+    }
+  }
+
+  /**
+   * Parse an artifacts API response, mapping non-OK statuses to a structured
+   * {@link PromoteError} (403 → forbidden, 409 → conflict, 422 → invalid).
+   */
+  private async _parseArtifactsResponse<T>(response: Response, context: string): Promise<T> {
+    if (response.ok) {
+      return await response.json()
+    }
+    throw await this._mapArtifactsError(response, context)
+  }
+
+  private async _mapArtifactsError(response: Response, _context: string): Promise<PromoteError> {
+    let detail = ''
+    try {
+      detail = await response.text()
+    } catch {
+      detail = ''
+    }
+    return classifyPromoteError(response.status, detail)
+  }
 
   /**
    * Execute: returns the artifact metadata stored in initial_data.
@@ -152,6 +309,7 @@ export class ArtifactsManagerCell extends BaseCell {
    * @returns The selected user, or null on cancel
    */
   async allowArtifact(artifactId: string): Promise<SelectableUser | null> {
+    this._assertAllowanceAllowed()
     log.info('[ArtifactsManagerCell] allowArtifact() called', { artifactId })
     const user = await this._userSelectionCell.show({}, {
       mode: 'pick-one',
@@ -230,6 +388,7 @@ export class ArtifactsManagerCell extends BaseCell {
    * @returns Array of AllowanceEntry objects
    */
   async listAllowances(artifactId: string): Promise<AllowanceEntry[]> {
+    this._assertAllowanceAllowed()
     log.info('[ArtifactsManagerCell] listAllowances() called', { artifactId })
 
     const response = await apiFetch(
@@ -266,6 +425,7 @@ export class ArtifactsManagerCell extends BaseCell {
    * @returns true if the allowance was removed, false if it didn't exist
    */
   async removeAllowance(artifactId: string, userId: string): Promise<boolean> {
+    this._assertAllowanceAllowed()
     log.info('[ArtifactsManagerCell] removeAllowance() called', {
       artifactId,
       userId,

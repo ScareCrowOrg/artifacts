@@ -21,6 +21,22 @@
     "cancel": "Cancel",
     "confirmRemoveTitle": "Remove Permission",
     "confirmRemoveMessage": "Remove permission for {name}?",
-    "confirmRemoveConfirm": "Remove"
+    "confirmRemoveConfirm": "Remove",
+    "promote": "🚀 Promote",
+    "promoting": "Promoting…",
+    "promoteSuccess": "Promoted {count} artifact(s)",
+    "promoteFailed": "Failed to promote artifact",
+    "promoteForbidden": "Only the planet owner can promote artifacts",
+    "promoteConflict": "An artifact with this name already exists in the target runtime",
+    "promoteInvalid": "Unable to promote: invalid data or a missing dependency",
+    "promoteUnsupportedType": "This artifact type cannot be promoted",
+    "dependencies": "Dependencies",
+    "noDependencies": "No declared dependencies",
+    "dependencyPreview": "Preview resolved dependencies",
+    "previewLoading": "Loading…",
+    "previewFailed": "Failed to preview dependencies",
+    "promotedCount": "{count} artifact(s) promoted",
+    "allowanceOnlyAfterPromote": "Allowance is available after promotion",
+    "canonicalReadOnly": "Canonical artifacts are read-only."
   }
 }
