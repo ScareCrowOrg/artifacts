@@ -45,18 +45,21 @@ export class ArtifactsManagerCell extends BaseCell {
   /**
    * Set the artifact lifecycle stage. Called by the View on mount and after a
    * successful promotion, so allowance methods can be gated defensively
-   * (allowance only exists for promoted, stage='runtime', artifacts).
+   * (allowance exists for canonical and for promoted, stage='runtime', artifacts).
    */
   setStage(stage: string): void {
     this._stage = stage
   }
 
   /**
-   * Allowance is only available after the artifact is promoted to runtime.
+   * Allowance is available for canonical artifacts (the repo catalog a planet
+   * grants guests access to) and for runtime artifacts (promoted into the
+   * owner's namespace). Sandbox artifacts are not yet real artifacts — they
+   * only offer Promote.
    * Pure predicate — used by the View and by the allowance methods below.
    */
   canAllow(stage: string): boolean {
-    return stage === 'runtime'
+    return stage === 'runtime' || stage === 'canonical'
   }
 
   /**
@@ -158,13 +161,13 @@ export class ArtifactsManagerCell extends BaseCell {
   }
 
   /**
-   * Defensive allowance gate: allowance only exists after promotion.
-   * Throws when the current stage !== 'runtime' (matches canAllow()).
+   * Defensive allowance gate: allowance only exists for canonical and promoted
+   * (runtime) artifacts. Throws otherwise (matches canAllow()).
    */
   private _assertAllowanceAllowed(): void {
     if (!this.canAllow(this._stage)) {
       throw new Error(
-        `Allowance is only available after promotion (current stage: '${this._stage || 'unknown'}').`,
+        `Allowance is only available for canonical or promoted (runtime) artifacts (current stage: '${this._stage || 'unknown'}').`,
       )
     }
   }

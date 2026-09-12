@@ -60,7 +60,7 @@
         {{ promotionFeedback }}
       </p>
 
-      <!-- Dependencies (sandbox: declared graph + dry-run preview; runtime: read-only) -->
+      <!-- Dependencies (always rendered; the dry-run preview toggle lives in the sandbox-only section) -->
       <div class="mb-4">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
           {{ $t('artifactsManager.dependencies') }}
@@ -110,8 +110,9 @@
         </button>
       </div>
 
-      <!-- Allowance section (runtime only — available only after promotion) -->
-      <template v-else-if="currentStage === 'runtime'">
+      <!-- Allowance section (canonical + runtime — never sandbox: a sandbox artifact
+           is not yet a real artifact, so it only offers Promote) -->
+      <template v-else-if="canManageAllowance">
         <!-- Allowed Users -->
         <div class="mb-4">
           <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -184,9 +185,9 @@
         </div>
       </template>
 
-      <!-- Canonical: read-only (no promote, no allow) -->
+      <!-- Unknown/missing stage: no action is safe (the allowance methods would throw) -->
       <div v-else class="text-sm text-gray-500 dark:text-gray-400">
-        {{ $t('artifactsManager.canonicalReadOnly') }}
+        {{ $t('artifactsManager.noActionsAvailable') }}
       </div>
     </template>
   </div>
@@ -336,6 +337,16 @@ const slug = ref<string>(initialData.artifact_id || (initialData as any).artifac
  * closing/reopening the cell.
  */
 const currentStage = ref<string>(initialData.stage || '')
+
+/**
+ * Stages where artifact allowance exists — mirrors `ArtifactsManagerCell.canAllow()`:
+ * canonical (the repo catalog a planet grants guests access to) and runtime
+ * (promoted into the owner's namespace). Sandbox artifacts are not yet real
+ * artifacts, so they only offer Promote.
+ */
+const canManageAllowance = computed<boolean>(
+  () => currentStage.value === 'runtime' || currentStage.value === 'canonical',
+)
 
 /** Declared dependency graph from initial_data.runtime.dependencies. */
 const runtimeDependencies = ref<Record<string, string[]>>(
@@ -698,8 +709,9 @@ onMounted(async () => {
     cell.setStage(currentStage.value)
   }
 
-  // Allowance only exists for promoted (runtime) artifacts.
-  if (currentStage.value === 'runtime') {
+  // Allowance exists for canonical and promoted (runtime) artifacts — same gate
+  // as the template's canManageAllowance.
+  if (canManageAllowance.value) {
     await loadAllowances()
   }
 })

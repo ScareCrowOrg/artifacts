@@ -36,7 +36,6 @@
     "previewLoading": "Carregando…",
     "previewFailed": "Falha ao pré-visualizar dependências",
     "promotedCount": "{count} artefato(s) promovido(s)",
-    "allowanceOnlyAfterPromote": "Permissão disponível somente após a promoção",
-    "canonicalReadOnly": "Artefatos canônicos são somente leitura."
+    "noActionsAvailable": "Nenhuma ação disponível para este artefato."
   }
 }

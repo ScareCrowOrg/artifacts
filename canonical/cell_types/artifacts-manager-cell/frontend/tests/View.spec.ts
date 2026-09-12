@@ -71,7 +71,7 @@ const mockUser: SelectableUser = { id: 'user-123', name: 'Alice' }
 class ArtifactsManagerCellStub {
   private _userSelectionCell: { show: ReturnType<typeof vi.fn> }
 
-  /** Current lifecycle stage — allowance is gated on it being 'runtime'. */
+  /** Current lifecycle stage — allowance is gated on it being 'canonical' or 'runtime'. */
   private _stage = ''
 
   constructor() {
@@ -85,15 +85,15 @@ class ArtifactsManagerCellStub {
     this._stage = stage
   }
 
-  /** Allowance only exists for promoted (runtime) artifacts. */
+  /** Allowance exists for canonical and promoted (runtime) artifacts. */
   canAllow(stage: string): boolean {
-    return stage === 'runtime'
+    return stage === 'runtime' || stage === 'canonical'
   }
 
   private _assertAllowanceAllowed(): void {
     if (!this.canAllow(this._stage)) {
       throw new Error(
-        `Allowance is only available after promotion (current stage: '${this._stage || 'unknown'}').`,
+        `Allowance is only available for canonical or promoted (runtime) artifacts (current stage: '${this._stage || 'unknown'}').`,
       )
     }
   }
@@ -174,7 +174,7 @@ class ArtifactsManagerCellStub {
     return { componentPath: 'frontend/View.vue' }
   }
 
-  /** Stub allowArtifact() — opens user selection and POSTs allowance (gated to runtime). */
+  /** Stub allowArtifact() — opens user selection and POSTs allowance (gated to canonical/runtime). */
   async allowArtifact(artifactId: string, _mockApiFetch?: ReturnType<typeof vi.fn>) {
     this._assertAllowanceAllowed()
     const user: SelectableUser | null = await this._userSelectionCell.show()
@@ -347,7 +347,7 @@ describe('ArtifactsManagerCell', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     cell = new ArtifactsManagerCellStub()
-    // Allowance methods are gated on stage === 'runtime'.
+    // Allowance methods are gated on stage === 'canonical' | 'runtime'.
     cell.setStage('runtime')
   })
 
@@ -656,10 +656,11 @@ describe('ArtifactsManagerCell', () => {
   // ── canAllow() / setStage() ──────────────────────────────────────────────
 
   describe('canAllow() / setStage()', () => {
-    it('canAllow returns true only for runtime', () => {
+    it('canAllow returns true for canonical and runtime, false for sandbox', () => {
       expect(cell.canAllow('runtime')).toBe(true)
+      expect(cell.canAllow('canonical')).toBe(true)
       expect(cell.canAllow('sandbox')).toBe(false)
-      expect(cell.canAllow('canonical')).toBe(false)
+      expect(cell.canAllow('')).toBe(false)
     })
   })
 
@@ -778,23 +779,23 @@ describe('ArtifactsManagerCell', () => {
     })
   })
 
-  // ── Allowance gating (stage !== runtime) ─────────────────────────────────
+  // ── Allowance gating (sandbox is the only stage without allowance) ───────
 
-  describe('allowance gating (stage !== runtime)', () => {
+  describe('allowance gating (sandbox blocks, canonical + runtime allow)', () => {
     it('allowArtifact blocks when stage is sandbox', async () => {
       cell.setStage('sandbox')
       cell._setUserSelectionResult(mockUser)
-      await expect(cell.allowArtifact('cell:test', vi.fn())).rejects.toThrow('only available after promotion')
+      await expect(cell.allowArtifact('cell:test', vi.fn())).rejects.toThrow('only available for canonical or promoted')
     })
 
     it('listAllowances blocks when stage is sandbox', async () => {
       cell.setStage('sandbox')
-      await expect(cell.listAllowances('cell:test', vi.fn())).rejects.toThrow('only available after promotion')
+      await expect(cell.listAllowances('cell:test', vi.fn())).rejects.toThrow('only available for canonical or promoted')
     })
 
-    it('removeAllowance blocks when stage is canonical', async () => {
-      cell.setStage('canonical')
-      await expect(cell.removeAllowance('cell:test', 'user-1', vi.fn())).rejects.toThrow('only available after promotion')
+    it('removeAllowance blocks when stage is unknown/empty', async () => {
+      cell.setStage('')
+      await expect(cell.removeAllowance('cell:test', 'user-1', vi.fn())).rejects.toThrow('only available for canonical or promoted')
     })
 
     it('allowArtifact works when stage is runtime (set by the View)', async () => {
@@ -803,6 +804,25 @@ describe('ArtifactsManagerCell', () => {
       const mockApiFetch = vi.fn().mockResolvedValue({ ok: true })
       const user = await cell.allowArtifact('cell:test', mockApiFetch)
       expect(user).toEqual(mockUser)
+    })
+
+    it('listAllowances works when stage is canonical (repo catalog)', async () => {
+      cell.setStage('canonical')
+      const mockApiFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ allowances: [{ user_id: 'user-1', artifact_id: 'cell:test', granted_at: 'now' }] }),
+      })
+      const entries = await cell.listAllowances('cell:test', mockApiFetch)
+      expect(entries).toHaveLength(1)
+    })
+
+    it('removeAllowance works when stage is canonical (repo catalog)', async () => {
+      cell.setStage('canonical')
+      const mockApiFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, removed: true }),
+      })
+      await expect(cell.removeAllowance('cell:test', 'user-1', mockApiFetch)).resolves.toBe(true)
     })
   })
 })

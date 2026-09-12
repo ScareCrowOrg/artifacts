@@ -36,7 +36,6 @@
     "previewLoading": "Loading…",
     "previewFailed": "Failed to preview dependencies",
     "promotedCount": "{count} artifact(s) promoted",
-    "allowanceOnlyAfterPromote": "Allowance is available after promotion",
-    "canonicalReadOnly": "Canonical artifacts are read-only."
+    "noActionsAvailable": "No actions are available for this artifact."
   }
 }
