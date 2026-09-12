@@ -35,7 +35,6 @@
     "dependencyPreview": "Pré-visualizar dependências resolvidas",
     "previewLoading": "Carregando…",
     "previewFailed": "Falha ao pré-visualizar dependências",
-    "promotedCount": "{count} artefato(s) promovido(s)",
     "noActionsAvailable": "Nenhuma ação disponível para este artefato."
   }
 }

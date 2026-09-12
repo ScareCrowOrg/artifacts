@@ -35,7 +35,6 @@
     "dependencyPreview": "Preview resolved dependencies",
     "previewLoading": "Loading…",
     "previewFailed": "Failed to preview dependencies",
-    "promotedCount": "{count} artifact(s) promoted",
     "noActionsAvailable": "No actions are available for this artifact."
   }
 }
