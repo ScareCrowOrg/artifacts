@@ -3,6 +3,7 @@
     "metadata": "Metadados",
     "allow": "🔐 Permitir",
     "saving": "Salvando…",
+    "loading": "Carregando…",
     "allowSuccess": "Usuário {name} adicionado à lista de permissão",
     "allowFailed": "Falha ao conceder permissão",
     "noData": "Nenhum dado de artefato disponível.",

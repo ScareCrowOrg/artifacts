@@ -209,7 +209,12 @@ export function useCellViewProvider() {
         throw new Error(`[useCellViewProvider] No default or named class export in ${importUrl}`)
       }
 
-      const instance = new CellClass()
+      // markRaw: the instance is stored inside the reactive grid array, and
+      // useGridLayout exposes it through readonly() — which proxies deeply, so
+      // any later write to the instance (setStage, internal state) silently
+      // fails with "target is readonly". A cell instance is a class with its own
+      // mutable state, so it must never be proxied.
+      const instance = markRaw(new CellClass())
 
       // Set semantic name so BaseCell.show() uses the correct folder for type.json loading
       ;(instance as any).__cellTypeName = cellTypeName

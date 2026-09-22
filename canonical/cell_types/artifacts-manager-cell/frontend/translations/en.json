@@ -3,6 +3,7 @@
     "metadata": "Metadata",
     "allow": "🔐 Allow",
     "saving": "Saving…",
+    "loading": "Loading…",
     "allowSuccess": "User {name} added to allowance list",
     "allowFailed": "Failed to grant permission",
     "noData": "No artifact data available.",
