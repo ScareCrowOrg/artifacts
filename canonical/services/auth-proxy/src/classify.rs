@@ -5,7 +5,8 @@
 //! 2. Returns a `RouteDecision` variant that tells `request_handler()` which
 //!    upstream or handler to use.
 //! 3. Binary artifacts (.glb, .png, etc.) bypass Vite entirely — Rust reads disk.
-//! 4. Runtime content goes through RBAC check before file serving.
+//! 4. Runtime content goes through the RBAC gate, then is delivered either as raw
+//!    bytes (default) or compiled by Vite (explicit extension allowlist).
 //! 5. Code + HMR goes through FastAPI (Python async buffer) to Vite.
 
 use axum::http::StatusCode;
@@ -35,8 +36,21 @@ pub enum RouteDecision {
     FastApiProxy,
     /// Canonical binary assets (.glb, .png, etc.) — Rust reads from disk directly.
     FileServer,
-    /// Runtime content with RBAC check — Rust reads from disk + Redis.
+    /// Runtime binary/unknown content with RBAC check — Rust reads from disk + Redis.
+    ///
+    /// This is the **default** delivery for `/artifacts/runtime/**`: bytes are
+    /// streamed with a non-renderable MIME type, so an unrecognized extension
+    /// becomes a download — never execution on the planet origin.
     RuntimeFileServer,
+    /// Runtime code that Vite must compile (.ts, .vue, .json, ...) — same RBAC
+    /// gate as [`RouteDecision::RuntimeFileServer`], then proxied to Vite.
+    ///
+    /// Membership is an **explicit allowlist** ([`is_compilable_artifact`]), never
+    /// the complement of [`is_binary_artifact`]: the binary list is an allowlist of
+    /// *download*, and its complement is not an allowlist of *compilation*
+    /// (`.html` lives in the complement and would be served as executable
+    /// `text/html` on the planet origin).
+    RuntimeCodeProxy,
     Deny,
 }
 
@@ -66,6 +80,30 @@ pub fn is_binary_artifact(path: &str) -> bool {
     extensions.iter().any(|ext| path.ends_with(ext))
 }
 
+/// Check whether a runtime artifact is code/data that Vite must compile or transform.
+///
+/// This is an **explicit allowlist**, and it is deliberately *not* the complement of
+/// [`is_binary_artifact`]. That list is an allowlist of extensions that are safe to
+/// stream as raw bytes; the complement would put `.html` (and any future
+/// unknown extension) on the Vite branch, where it would be served as `text/html`
+/// with `/@vite/client` injected — stored XSS on the planet origin, since uploaded
+/// content preserves its filename.
+///
+/// Everything not named here is delivered as raw bytes by [`RouteDecision::RuntimeFileServer`],
+/// i.e. as a download. A new extension is therefore *safe by default*: it takes the
+/// conservative branch, and adding it here is the deliberate act.
+///
+/// `.svg` is intentionally absent — it is a binary artifact (served as `image/svg+xml`
+/// from disk, never compiled). `.html`/`.htm` are intentionally absent.
+pub fn is_compilable_artifact(path: &str) -> bool {
+    let extensions = [
+        ".ts", ".tsx", ".js", ".mjs", ".cjs", ".jsx",
+        ".vue", ".css", ".scss", ".sass", ".less",
+        ".json",
+    ];
+    extensions.iter().any(|ext| path.ends_with(ext))
+}
+
 pub fn classify_route(path: &str) -> RouteDecision {
     debug!("CLASSIFY: path={}", path);
     if path == "/api/v1/auth/session-bind" || path == "/api/ws/rpc" {
@@ -80,9 +118,16 @@ pub fn classify_route(path: &str) -> RouteDecision {
     // Canonical binary assets → Rust reads from disk directly (no Vite).
     } else if path.starts_with("/artifacts/canonical/") && is_binary_artifact(path) {
         RouteDecision::FileServer
-    // Runtime content → Rust reads from disk with RBAC check via Redis.
+    // Runtime content → RBAC gate first (both sub-branches below); the extension
+    // only decides HOW the authorized file is delivered:
+    //   - compilable (allowlist) → Vite compiles it
+    //   - everything else       → raw bytes from disk (safe default)
     } else if path.starts_with("/artifacts/runtime/") {
-        RouteDecision::RuntimeFileServer
+        if is_compilable_artifact(path) {
+            RouteDecision::RuntimeCodeProxy
+        } else {
+            RouteDecision::RuntimeFileServer
+        }
     // Code + HMR → proxy via FastAPI (Python async buffers WAN traffic).
     } else if path.starts_with("/artifacts/") {
         RouteDecision::FastApiProxy
@@ -213,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn test_classify_route_runtime() {
+    fn test_classify_route_runtime_binary_goes_to_disk() {
         assert!(matches!(
             classify_route("/artifacts/runtime/user/550e8400/contents/x/model.glb"),
             RouteDecision::RuntimeFileServer
@@ -222,6 +267,88 @@ mod tests {
             classify_route("/artifacts/runtime/user/1234/viewers/my-viewer"),
             RouteDecision::RuntimeFileServer
         ));
+        assert!(matches!(
+            classify_route("/artifacts/runtime/user/1234/contents/c/icon.svg"),
+            RouteDecision::RuntimeFileServer
+        ));
+    }
+
+    #[test]
+    fn test_classify_route_runtime_code_goes_to_vite() {
+        // Cell code and its data go through the RBAC gate and then to Vite.
+        assert!(matches!(
+            classify_route("/artifacts/runtime/user/1234/cell_types/x/frontend/XCell.ts"),
+            RouteDecision::RuntimeCodeProxy
+        ));
+        assert!(matches!(
+            classify_route("/artifacts/runtime/user/1234/cell_types/x/frontend/View.vue"),
+            RouteDecision::RuntimeCodeProxy
+        ));
+        assert!(matches!(
+            classify_route("/artifacts/runtime/user/1234/cell_types/x/type.json"),
+            RouteDecision::RuntimeCodeProxy
+        ));
+        assert!(matches!(
+            classify_route("/artifacts/runtime/user/1234/cell_types/x/frontend/styles.css"),
+            RouteDecision::RuntimeCodeProxy
+        ));
+    }
+
+    #[test]
+    fn test_classify_route_runtime_html_goes_to_disk() {
+        // Uploaded content keeps its filename, so a user-supplied .html must never
+        // reach Vite: that branch would serve it as text/html on the planet origin
+        // (stored XSS). It falls to the disk branch → octet-stream + download.
+        assert!(matches!(
+            classify_route("/artifacts/runtime/user/1234/contents/cid/evil.html"),
+            RouteDecision::RuntimeFileServer
+        ));
+        assert!(matches!(
+            classify_route("/artifacts/runtime/user/1234/contents/cid/evil.htm"),
+            RouteDecision::RuntimeFileServer
+        ));
+        // An extension nobody has classified yet also takes the safe branch.
+        assert!(matches!(
+            classify_route("/artifacts/runtime/user/1234/contents/cid/archive.weird"),
+            RouteDecision::RuntimeFileServer
+        ));
+    }
+
+    #[test]
+    fn test_is_compilable_artifact_allowlist() {
+        assert!(is_compilable_artifact("/a/x.ts"));
+        assert!(is_compilable_artifact("/a/x.tsx"));
+        assert!(is_compilable_artifact("/a/x.js"));
+        assert!(is_compilable_artifact("/a/x.mjs"));
+        assert!(is_compilable_artifact("/a/x.cjs"));
+        assert!(is_compilable_artifact("/a/x.jsx"));
+        assert!(is_compilable_artifact("/a/x.vue"));
+        assert!(is_compilable_artifact("/a/x.css"));
+        assert!(is_compilable_artifact("/a/x.scss"));
+        assert!(is_compilable_artifact("/a/x.sass"));
+        assert!(is_compilable_artifact("/a/x.less"));
+        assert!(is_compilable_artifact("/a/x.json"));
+    }
+
+    #[test]
+    fn test_is_compilable_artifact_never_executable_content() {
+        // The XSS case, and anything else that is not explicitly known to be compiled.
+        assert!(!is_compilable_artifact("/a/evil.html"));
+        assert!(!is_compilable_artifact("/a/evil.htm"));
+        assert!(!is_compilable_artifact("/a/icon.svg"));
+        assert!(!is_compilable_artifact("/a/model.glb"));
+        assert!(!is_compilable_artifact("/a/photo.png"));
+        assert!(!is_compilable_artifact("/artifacts/runtime/user/u1/viewers/my-viewer"));
+        assert!(!is_compilable_artifact("/a/notes.txt"));
+    }
+
+    #[test]
+    fn test_is_compilable_and_binary_are_disjoint_on_shared_extensions() {
+        // .svg and .json are the interesting pair: binary list owns .svg (raw
+        // download), compilable list owns .json (Vite serves it). Neither list
+        // may grow into the other without this test failing.
+        assert!(is_binary_artifact("/a/icon.svg") && !is_compilable_artifact("/a/icon.svg"));
+        assert!(!is_binary_artifact("/a/type.json") && is_compilable_artifact("/a/type.json"));
     }
 
     #[test]

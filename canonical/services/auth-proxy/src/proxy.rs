@@ -17,9 +17,19 @@
 //! All `/artifacts/*` requests are validated here before any byte is served.
 //! Vite (port 5052) has no direct Traefik route — Auth-Proxy is the sole gatekeeper.
 //!
+//! # Path normalization
+//! The ingress normalizes the path **once**, before classification
+//! ([`normalize_ingress_path`]): a segment that is `.`/`..` after percent-decoding
+//! — or that would decode into extra segments — is rejected with 400 rather than
+//! collapsed. Classification, the RBAC gate and the bytes read from disk therefore
+//! all describe the same path.
+//!
 //! # Module Split
 //! - [`classify`] — route classification (RouteDecision, classify_route, extractors)
-//! - [`file_server`] — file serving, RBAC, path resolution
+//! - [`file_server`] — decoding, path resolution, MIME, streaming primitives
+//! - [`proxy::session`] — session/JWT identity + Backend session-check
+//! - [`proxy::canonical_server`] — canonical binary delivery (disk, Vite fallback)
+//! - [`proxy::runtime_server`] — runtime RBAC gate + its two deliveries
 //! - [`upstream`] — Redis SCAN upstream resolvers (WSS, FastAPI proxy)
 
 use axum::{
@@ -33,34 +43,34 @@ use tracing::{debug, error, info, warn};
 
 use crate::AppState;
 
+// ── Nested modules ────────────────────────────────────────────────────────
+// Declared as children of this module so they can use its private helpers
+// (`proxy_to_upstream`, `build_error_response`) without widening visibility.
+mod canonical_server;
+mod runtime_server;
+mod session;
+
 // ── Re-exports from sub-modules ───────────────────────────────────────────
 pub use crate::classify::{health_handler, HEARTBEAT_KEY, RouteDecision};
 use crate::classify::{classify_route, extract_viewer_id, extract_wss_alias, is_public_path};
-use crate::file_server::{
-    build_redirect_response, check_runtime_access, check_viewer_access,
-    extract_runtime_assignee, resolve_artifact_path, serve_file, ArtifactResolution,
-};
+use crate::file_server::{build_redirect_response, check_viewer_access, percent_decode_path};
 use crate::upstream::{resolve_proxy_upstream, resolve_wss_upstream};
+
+use session::{check_session, extract_session_id};
 
 /// Universal ingress handler.
 pub async fn request_handler(State(state): State<AppState>, req: Request) -> Response {
     let raw_path = req.uri().path().to_owned();
-    // ── Path normalization ─────────────────────────────────────────────────
-    // If a request arrives at /runtime/, /canonical/, or /sandbox/ without the
-    // /artifacts/ prefix, prepend /artifacts so classify_route() and the
-    // file_server module can process it against the correct artifact root.
-    // This lets the frontend use bare /runtime/... URLs without hardcoding
-    // the /artifacts/ prefix at every call site.
-    let path = if let Some(rest) = raw_path.strip_prefix('/') {
-        if rest.starts_with("runtime/") || rest.starts_with("canonical/") || rest.starts_with("sandbox/") {
-            let normalized = format!("/artifacts/{}", rest);
-            debug!("[AuthProxy] Path normalized: {} → {}", raw_path, normalized);
-            normalized
-        } else {
-            raw_path
+    // ── Path normalization (once, before anything looks at the path) ────────
+    // Structural segments are rejected here, and bare stage paths get the
+    // /artifacts prefix. Everything downstream — classification, the RBAC gate
+    // and the bytes read from disk — then sees this exact path.
+    let path = match normalize_ingress_path(&raw_path) {
+        Ok(normalized) => normalized,
+        Err(status) => {
+            warn!("[AuthProxy] Rejecting malformed path: {}", raw_path);
+            return build_error_response(status);
         }
-    } else {
-        raw_path
     };
     let query = req
         .uri()
@@ -182,9 +192,17 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
             return crate::ws_proxy::proxy_ws_to_upstream(req, &upstream).await;
         }
 
-        // FileServer and RuntimeFileServer should never receive WebSocket upgrades.
-        if matches!(decision, RouteDecision::FileServer | RouteDecision::RuntimeFileServer) {
-            warn!("[WS] FileServer/RuntimeFileServer decision reached WebSocket bifurcation — rejecting");
+        // File deliveries should never receive WebSocket upgrades.
+        if matches!(
+            decision,
+            RouteDecision::FileServer
+                | RouteDecision::RuntimeFileServer
+                | RouteDecision::RuntimeCodeProxy
+        ) {
+            warn!(
+                "[WS] Artifact delivery decision {:?} reached WebSocket bifurcation — rejecting",
+                decision
+            );
             return build_error_response(StatusCode::BAD_REQUEST);
         }
 
@@ -197,7 +215,7 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
             }
             RouteDecision::BackendBypass | RouteDecision::WssProxy |
             RouteDecision::FastApiProxy | RouteDecision::FileServer |
-            RouteDecision::RuntimeFileServer => {
+            RouteDecision::RuntimeFileServer | RouteDecision::RuntimeCodeProxy => {
                 error!("[WS] Unexpected decision {:?} reached protected WebSocket branch — internal inconsistency", decision);
                 return build_error_response(StatusCode::INTERNAL_SERVER_ERROR);
             }
@@ -348,173 +366,35 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                 }
             }
             RouteDecision::FileServer => {
-                let artifacts_base = "/app/artifacts";
-                match resolve_artifact_path(artifacts_base, &path) {
-                    ArtifactResolution::Found(file_path) => {
-                        debug!(
-                            "[FileServer] Serving canonical artifact: {} (path: {})",
-                            path, file_path.display()
-                        );
-                        let origin = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok());
-                        let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok());
-                        serve_file(&file_path, origin, host).await
-                    }
-                    ArtifactResolution::NotFound => {
-                        warn!("[FileServer] Artifact not found on disk, falling back: {}", path);
-                        // File not on disk — fall back to FastApiProxy (Vite may have it).
-                        match resolve_proxy_upstream(&state).await {
-                            Ok(upstream) => {
-                                info!("[FileServer] File not found, falling back to FastApiProxy: {}", path);
-                                proxy_to_upstream(&state, req, &full_path, &upstream, None).await
-                            }
-                            Err(status) => build_error_response(status),
-                        }
-                    }
-                    ArtifactResolution::PathTraversal => {
-                        warn!("[FileServer] Path traversal BLOCKED: {}", path);
-                        build_error_response(StatusCode::NOT_FOUND)
-                    }
-                }
+                canonical_server::serve_canonical_artifact(&state, req, &path, &full_path).await
             }
             RouteDecision::RuntimeFileServer => {
+                // Raw bytes: binary artifacts, or any extension nobody has
+                // classified as compilable yet. The RBAC gate runs inside the
+                // handler — the same gate the code path uses, so the extension
+                // only chooses the delivery, never whether access is allowed.
                 let session_id = cookie_header.as_deref().and_then(extract_session_id);
-                let assignee_id = extract_runtime_assignee(&path);
-                // DIAG [local-runtime-magro iteration 5]: Log handler entry
-                debug!(
-                    "[RuntimeFileServer-DIAG] Handler entry: path={}, cookie_present={}, \
-                     session_id={:?}, assignee_id={:?}",
-                    path, cookie_header.is_some(), session_id, assignee_id
-                );
-                // DIAG [job-manager-view-result iteration 1]: Log handling request and extracted assignee_id
-                debug!(
-                    "[RuntimeFileServer] handling request: path={}",
-                    path
-                );
-                debug!(
-                    "[RuntimeFileServer] extracted assignee_id={:?}",
-                    assignee_id
-                );
-                match (session_id, assignee_id) {
-                    (Some(sid), Some(aid)) => {
-                        if check_runtime_access(&state, &sid, &aid).await {
-                            let artifacts_base = "/app/artifacts";
-                            match resolve_artifact_path(artifacts_base, &path) {
-                                ArtifactResolution::Found(file_path) => {
-                                    debug!(
-                                        "[RuntimeFileServer] Serving runtime artifact: {} (assignee: {}, path: {})",
-                                        path, aid, file_path.display()
-                                    );
-                                    let origin = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok());
-                                    let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok());
-                                    serve_file(&file_path, origin, host).await
-                                }
-                                _ => {
-                                    warn!("[RuntimeFileServer] Runtime artifact not found: {} (assignee: {})", path, aid);
-                                    build_error_response(StatusCode::NOT_FOUND)
-                                }
-                            }
-                        } else {
-                            warn!(
-                                "[RuntimeFileServer] Runtime access DENIED for {} (session: {}, assignee: {})",
-                                path, sid, aid
-                            );
-                            build_error_response(StatusCode::FORBIDDEN)
-                        }
-                    }
-                    (None, Some(aid)) => {
-                        // No session cookie — check if Bearer token auth was used.
-                        // check_session() already validated the token, so we only need
-                        // to extract the user_id and compare it with assignee_id for
-                        // self-access (no Redis lookup needed).
-                        debug!("[DIAG-DOWNLOAD] RuntimeFileServer Bearer path: path={}, assignee={}, auth_present={}", path, aid, auth_header.is_some());
-                        if let Some(ref auth_val) = auth_header {
-                            if let Some(token) = auth_val.strip_prefix("Bearer ") {
-                                debug!("[DIAG-DOWNLOAD] RuntimeFileServer Bearer: token extracted, checking self-access");
-                                match extract_sub_from_jwt(token) {
-                                    Some(user_id) if user_id == aid => {
-                                        info!(
-                                            "[RuntimeFileServer] Bearer self-access ALLOWED: \
-                                             user {} == assignee {} for {}",
-                                            user_id, aid, path
-                                        );
-                                        let artifacts_base = "/app/artifacts";
-                                        match resolve_artifact_path(artifacts_base, &path) {
-                                            ArtifactResolution::Found(file_path) => {
-                                                debug!(
-                                                    "[RuntimeFileServer] Serving runtime \
-                                                     artifact (Bearer auth): {} (assignee: {}, \
-                                                     path: {})",
-                                                    path, aid, file_path.display()
-                                                );
-                                                let origin = req.headers()
-                                                    .get(header::ORIGIN)
-                                                    .and_then(|v| v.to_str().ok());
-                                                let host = req.headers()
-                                                    .get(header::HOST)
-                                                    .and_then(|v| v.to_str().ok());
-                                                serve_file(&file_path, origin, host).await
-                                            }
-                                            _ => {
-                                                warn!(
-                                                    "[RuntimeFileServer] Runtime artifact not \
-                                                     found: {} (assignee: {})",
-                                                    path, aid
-                                                );
-                                                build_error_response(StatusCode::NOT_FOUND)
-                                            }
-                                        }
-                                    }
-                                    Some(user_id) => {
-                                        warn!(
-                                            "[RuntimeFileServer] Bearer self-access DENIED: \
-                                             user {} != assignee {} for {}",
-                                            user_id, aid, path
-                                        );
-                                        build_error_response(StatusCode::FORBIDDEN)
-                                    }
-                                    None => {
-                                        warn!(
-                                            "[RuntimeFileServer] Could not extract user_id \
-                                             from Bearer token for {} (assignee: {})",
-                                            path, aid
-                                        );
-                                        build_error_response(StatusCode::FORBIDDEN)
-                                    }
-                                }
-                            } else {
-                                warn!(
-                                    "[RuntimeFileServer] Missing session_id with non-Bearer \
-                                     Authorization header for {} (assignee: {})",
-                                    path, aid
-                                );
-                                build_error_response(StatusCode::FORBIDDEN)
-                            }
-                        } else {
-                            warn!(
-                                "[RuntimeFileServer] Missing session_id (no session cookie) \
-                                 and no Authorization header for runtime path: {} (assignee: {})",
-                                path, aid
-                            );
-                            build_error_response(StatusCode::FORBIDDEN)
-                        }
-                    }
-                    (Some(sid), None) => {
-                        warn!(
-                            "[RuntimeFileServer] Missing assignee_id (path format unexpected) \
-                             for runtime path: {} (session: {})",
-                            path, sid
-                        );
-                        build_error_response(StatusCode::FORBIDDEN)
-                    }
-                    (None, None) => {
-                        warn!(
-                            "[RuntimeFileServer] Missing BOTH session_id and assignee_id for \
-                             runtime path: {}",
-                            path
-                        );
-                        build_error_response(StatusCode::FORBIDDEN)
-                    }
-                }
+                runtime_server::serve_runtime_artifact(
+                    &state,
+                    req,
+                    &path,
+                    session_id.as_deref(),
+                    auth_header.as_deref(),
+                )
+                .await
+            }
+            RouteDecision::RuntimeCodeProxy => {
+                // Compilable runtime code: same gate first, then Vite compiles it.
+                let session_id = cookie_header.as_deref().and_then(extract_session_id);
+                runtime_server::proxy_runtime_code(
+                    &state,
+                    req,
+                    &path,
+                    &full_path,
+                    session_id.as_deref(),
+                    auth_header.as_deref(),
+                )
+                .await
             }
             RouteDecision::BackendBypass | RouteDecision::Deny | RouteDecision::WssProxy => {
                 error!(
@@ -537,222 +417,6 @@ pub async fn request_handler(State(state): State<AppState>, req: Request) -> Res
                 );
             }
             build_error_response(status)
-        }
-    }
-}
-
-/// Extract the `sessionId` value from a raw `Cookie` header string.
-///
-/// Parses `sessionId=<value>` from a semicolon-separated list of cookie pairs.
-/// Returns `None` if the `sessionId` key is not present or the value is too long
-/// (> 512 bytes) to prevent cache-key pollution attacks.
-fn extract_session_id(cookie_header: &str) -> Option<String> {
-    const MAX_SESSION_ID_LEN: usize = 512;
-    for part in cookie_header.split(';') {
-        let part = part.trim();
-        if let Some(val) = part.strip_prefix("sessionId=") {
-            if !val.is_empty() && val.len() <= MAX_SESSION_ID_LEN {
-                return Some(val.to_owned());
-            }
-        }
-    }
-    None
-}
-
-/// Extract the `sub` claim from an already-validated JWT token.
-///
-/// # Safety
-/// This function does NOT verify the JWT signature — it only base64-decodes the
-/// payload segment and extracts the `sub` field.  The caller MUST have already
-/// validated the token (e.g. via `check_session()` which calls the Backend)
-/// before trusting the result.
-///
-/// Returns `None` if the token is malformed or the `sub` claim is missing.
-fn extract_sub_from_jwt(token: &str) -> Option<String> {
-    use base64::Engine;
-
-    let parts: Vec<&str> = token.split('.').collect();
-    if parts.len() != 3 {
-        warn!("[JWT] Malformed JWT: expected 3 parts, got {}", parts.len());
-        return None;
-    }
-
-    let payload_b64 = parts[1];
-
-    // RFC 7515 requires URL-safe base64 WITHOUT padding for JWT.
-    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(payload_b64)
-        .or_else(|_| {
-            // Fallback: some JWT libraries include optional padding.
-            base64::engine::general_purpose::URL_SAFE.decode(payload_b64)
-        })
-        .ok()?;
-
-    let payload_str = std::str::from_utf8(&decoded).ok()?;
-    let json: serde_json::Value = serde_json::from_str(payload_str).ok()?;
-
-    json.get("sub")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_owned())
-}
-
-/// Call Backend's `/api/v1/auth/session-check` endpoint.
-///
-/// Results are cached per `sessionId` to absorb burst traffic when a workspace loads
-/// multiple cell assets in parallel.  TTL: 5 s for valid sessions, 1 s for invalid
-/// sessions (short TTL avoids persisting a wrongly-denied result for a re-issued sessionId).
-///
-/// Returns:
-/// - `Ok(())` when Backend responds with 200 (session valid, RBAC passed).
-/// - `Err(403)` when Backend responds with 403 (denied).
-/// - `Err(500)` on network / unexpected Backend errors.
-async fn check_session(
-    state: &AppState,
-    cookie_header: &Option<String>,
-    auth_header: &Option<String>,
-    path: &str,
-) -> Result<(), StatusCode> {
-    const CACHE_TTL_VALID: u64 = 5;
-    const CACHE_TTL_INVALID: u64 = 1;
-
-    // --- BEARER TOKEN AUTH PATH ---
-    // When no session cookie is present but an Authorization: Bearer header is,
-    // forward the token directly to the Backend for JWT validation.  We skip the
-    // in-memory cache here because JWTs are self-validating — the Backend validates
-    // the signature and expiration without needing a Redis lookup.
-    if cookie_header.is_none() {
-        if let Some(auth) = auth_header {
-            if auth.starts_with("Bearer ") {
-                info!(
-                    "[AuthProxy] No cookie, using Bearer token auth for path: {}",
-                    path
-                );
-                let encoded_path = urlencoding::encode(path);
-                let auth_url = format!("{}?uri={}", state.backend_auth_url, encoded_path);
-                debug!("[AuthProxy] Bearer auth: calling Backend at {}", auth_url);
-
-                let response = state
-                    .http_client
-                    .post(&auth_url)
-                    .header(header::AUTHORIZATION, auth.as_str())
-                    .send()
-                    .await;
-
-                return match response {
-                    Ok(resp) => match resp.status() {
-                        reqwest::StatusCode::OK => {
-                            info!("[AuthProxy] Bearer token auth VALID for path: {}", path);
-                            Ok(())
-                        }
-                        reqwest::StatusCode::FORBIDDEN => {
-                            warn!(
-                                "[AuthProxy] Bearer token auth DENIED for path: {}",
-                                path
-                            );
-                            Err(StatusCode::FORBIDDEN)
-                        }
-                        other => {
-                            error!(
-                                "[AuthProxy] Bearer auth unexpected status {} for path: {}",
-                                other, path
-                            );
-                            Err(StatusCode::INTERNAL_SERVER_ERROR)
-                        }
-                    },
-                    Err(e) => {
-                        error!(
-                            "[AuthProxy] Bearer auth network error for path {}: {}",
-                            path, e
-                        );
-                        Err(StatusCode::INTERNAL_SERVER_ERROR)
-                    }
-                };
-            }
-        }
-    }
-
-    // --- COOKIE-BASED AUTH PATH ---
-    let session_id = cookie_header.as_deref().and_then(extract_session_id);
-    let session_id = match session_id {
-        Some(id) => id,
-        None => {
-            warn!(
-                "[AuthProxy] No sessionId found in Cookie header and \
-                 no Authorization Bearer header"
-            );
-            return Err(StatusCode::FORBIDDEN);
-        }
-    };
-
-    // Check in-memory cache first (5s TTL for valid, 1s for invalid).
-    {
-        let cache = state.session_cache.lock().await;
-        if let Some(&(checked_at, is_valid)) = cache.get(&session_id) {
-            let ttl = if is_valid { CACHE_TTL_VALID } else { CACHE_TTL_INVALID };
-            if checked_at.elapsed().as_secs() < ttl {
-                if is_valid {
-                    debug!("[AuthProxy] Session cache HIT (valid) for session {}", session_id);
-                    return Ok(());
-                } else {
-                    debug!("[AuthProxy] Session cache HIT (invalid) for session {}", session_id);
-                    return Err(StatusCode::FORBIDDEN);
-                }
-            }
-        }
-    }
-
-    // Cache miss — call Backend.
-    let encoded_path = urlencoding::encode(path);
-    let auth_url = format!("{}?uri={}", state.backend_auth_url, encoded_path);
-    debug!(
-        "[AuthProxy] Checking session via Backend: {} (sessionId={})",
-        auth_url, session_id
-    );
-
-    let response = state
-        .http_client
-        .post(&auth_url)
-        .header(header::COOKIE, cookie_header.as_deref().unwrap_or(""))
-        .send()
-        .await;
-
-    let status = match response {
-        Ok(resp) => resp.status(),
-        Err(e) => {
-            error!("[AuthProxy] Backend session-check network error: {}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-
-    match status {
-        reqwest::StatusCode::OK => {
-            debug!("[AuthProxy] Session VALID for session {}", session_id);
-            // Cache valid session (5s TTL).
-            let mut cache = state.session_cache.lock().await;
-            cache.insert(session_id.clone(), (std::time::Instant::now(), true));
-            // Prune stale entries to bound memory growth.
-            if cache.len() > 1000 {
-                cache.retain(|_, &mut (ts, _)| ts.elapsed().as_secs() < CACHE_TTL_VALID);
-            }
-            Ok(())
-        }
-        reqwest::StatusCode::FORBIDDEN => {
-            warn!("[AuthProxy] Session DENIED (403) for session {}", session_id);
-            // Cache invalid session (1s TTL).
-            let mut cache = state.session_cache.lock().await;
-            cache.insert(session_id.clone(), (std::time::Instant::now(), false));
-            // Prune stale entries.
-            if cache.len() > 1000 {
-                cache.retain(|_, &mut (ts, _)| ts.elapsed().as_secs() < CACHE_TTL_INVALID);
-            }
-            Err(StatusCode::FORBIDDEN)
-        }
-        other => {
-            error!(
-                "[AuthProxy] Backend session-check returned unexpected status: {}",
-                other
-            );
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }
@@ -872,6 +536,51 @@ async fn proxy_to_upstream(
     // Add CORS headers from the original request's Origin and Host (already extracted before body consume).
     add_cors_headers(&mut response, origin.as_deref(), host.as_deref());
     response
+}
+
+/// Normalize the request path once, at the ingress, before anything acts on it.
+///
+/// Two structural jobs:
+///
+/// 1. **Reject** any path segment that is `.` or `..` once percent-decoded, or
+///    that decodes to a value containing `/`. Encoded separators and dot segments
+///    are the two ways one path string can denote two different resources. They
+///    are rejected rather than collapsed because the path that is *authorized*
+///    must be the path that is *read*: collapsing first (`/a/../b` → `/b`) while
+///    authorizing the original is exactly the IDOR this closes.
+///
+///    Substring matching is deliberately not used — `foo..bar.png` and
+///    `boneca%20roxa.png` are legitimate names and must keep working. Only an
+///    exact `.`/`..`/separator is structural.
+///
+/// 2. **Add** the `/artifacts` prefix when a client used a bare stage path
+///    (`/runtime/...`, `/canonical/...`, `/sandbox/...`), so classification and
+///    path resolution agree on which tree is being addressed.
+///
+/// The returned path keeps its original percent-encoding — it is forwarded
+/// upstream verbatim; only the check above looks at decoded segments.
+fn normalize_ingress_path(raw_path: &str) -> Result<String, StatusCode> {
+    for segment in raw_path.split('/').filter(|s| !s.is_empty()) {
+        let decoded = percent_decode_path(segment);
+        if decoded == "." || decoded == ".." || decoded.contains('/') {
+            warn!(
+                "[AuthProxy] Rejecting structural path segment {:?} (decodes to {:?})",
+                segment, decoded
+            );
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
+    let Some(rest) = raw_path.strip_prefix('/') else {
+        return Ok(raw_path.to_owned());
+    };
+    if rest.starts_with("runtime/") || rest.starts_with("canonical/") || rest.starts_with("sandbox/")
+    {
+        let normalized = format!("/artifacts/{}", rest);
+        debug!("[AuthProxy] Path normalized: {} → {}", raw_path, normalized);
+        return Ok(normalized);
+    }
+    Ok(raw_path.to_owned())
 }
 
 fn extract_host(url: &str) -> &str {
@@ -1087,155 +796,101 @@ async fn register_heartbeat_once(redis_url: &str, ttl: u64) -> Result<(), String
         .map_err(|e| e.to_string())
 }
 
-// ─── URL encoding helper ──────────────────────────────────────────────────────
-mod urlencoding {
-    pub fn encode(s: &str) -> String {
-        let mut encoded = String::with_capacity(s.len());
-        for byte in s.bytes() {
-            match byte {
-                b'A'..=b'Z'
-                | b'a'..=b'z'
-                | b'0'..=b'9'
-                | b'-'
-                | b'_'
-                | b'.'
-                | b'~'
-                | b'/'
-                | b'='
-                | b'?'
-                | b'&' => encoded.push(byte as char),
-                b => encoded.push_str(&format!("%{b:02X}")),
-            }
-        }
-        encoded
-    }
-}
-
 // ─── Unit tests ───────────────────────────────────────────────────────────────
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_url_encode_path() {
-        let encoded = urlencoding::encode("/artifacts/canonical/cell_types/test");
-        assert_eq!(encoded, "/artifacts/canonical/cell_types/test");
-    }
+    // ── Ingress path normalization ───────────────────────────────────────────
+    // Session/JWT helpers live in `session.rs`; slug vectors in `runtime_server.rs`.
 
     #[test]
-    fn test_url_encode_special_chars() {
-        let encoded = urlencoding::encode("/artifacts/name with spaces");
-        assert!(encoded.contains("%20"));
-    }
-
-    #[test]
-    fn test_url_encode_preserves_slashes() {
-        let path = "/artifacts/a/b/c";
-        let encoded = urlencoding::encode(path);
-        assert!(encoded.contains("/artifacts/a/b/c"));
-    }
-
-    #[test]
-    fn test_extract_session_id_basic() {
+    fn test_normalize_ingress_rejects_dot_segments() {
+        // Traversal: the gate would authorize `{me}` while the bytes came from
+        // `{victim}` — both are the same string to a naive resolver.
         assert_eq!(
-            extract_session_id("sessionId=abc123"),
-            Some("abc123".to_owned())
+            normalize_ingress_path("/artifacts/runtime/user/me/../victim/contents/x/data.json"),
+            Err(StatusCode::BAD_REQUEST)
+        );
+        assert_eq!(
+            normalize_ingress_path("/artifacts/runtime/user/me/./contents/x/data.json"),
+            Err(StatusCode::BAD_REQUEST)
+        );
+        assert_eq!(
+            normalize_ingress_path("/artifacts/sandbox/../runtime/user/me/x.json"),
+            Err(StatusCode::BAD_REQUEST)
         );
     }
 
     #[test]
-    fn test_extract_session_id_with_other_cookies() {
+    fn test_normalize_ingress_rejects_encoded_dot_segments() {
+        // %2e is `.` — decoding happens before the check, so the encoded form is
+        // rejected exactly like the literal one.
         assert_eq!(
-            extract_session_id("lang=en; sessionId=xyz789; theme=dark"),
-            Some("xyz789".to_owned())
+            normalize_ingress_path("/artifacts/runtime/user/me/%2e%2e/victim/x.json"),
+            Err(StatusCode::BAD_REQUEST)
+        );
+        assert_eq!(
+            normalize_ingress_path("/artifacts/runtime/user/me/%2E%2E/victim/x.json"),
+            Err(StatusCode::BAD_REQUEST)
         );
     }
 
     #[test]
-    fn test_extract_session_id_missing() {
-        assert_eq!(extract_session_id("lang=en; theme=dark"), None);
+    fn test_normalize_ingress_rejects_encoded_separator() {
+        // %2F is `/`: one segment would become three once decoded, so the path
+        // checked here and the path resolved later would differ.
+        assert_eq!(
+            normalize_ingress_path("/artifacts/runtime/user/me/contents%2f..%2f..%2fvictim/x.png"),
+            Err(StatusCode::BAD_REQUEST)
+        );
     }
 
     #[test]
-    fn test_extract_session_id_empty_value() {
-        assert_eq!(extract_session_id("sessionId="), None);
+    fn test_normalize_ingress_keeps_legit_double_dots() {
+        // Only an exact `.`/`..` segment is structural — `foo..bar.png` is a name.
+        assert_eq!(
+            normalize_ingress_path("/artifacts/runtime/user/me/contents/foo..bar.png"),
+            Ok("/artifacts/runtime/user/me/contents/foo..bar.png".to_owned())
+        );
+        assert_eq!(
+            normalize_ingress_path("/artifacts/runtime/user/me/cell_types/a..b/type.json"),
+            Ok("/artifacts/runtime/user/me/cell_types/a..b/type.json".to_owned())
+        );
     }
 
     #[test]
-    fn test_extract_session_id_too_long() {
-        let long_id = "x".repeat(513);
-        let cookie = format!("sessionId={}", long_id);
-        assert_eq!(extract_session_id(&cookie), None);
+    fn test_normalize_ingress_prefixes_bare_stage_paths() {
+        assert_eq!(
+            normalize_ingress_path("/runtime/user/me/cell_types/x/type.json"),
+            Ok("/artifacts/runtime/user/me/cell_types/x/type.json".to_owned())
+        );
+        assert_eq!(
+            normalize_ingress_path("/sandbox/cell_types/x/View.vue"),
+            Ok("/artifacts/sandbox/cell_types/x/View.vue".to_owned())
+        );
     }
 
     #[test]
-    fn test_extract_session_id_exactly_max_len() {
-        let max_id = "a".repeat(512);
-        let cookie = format!("sessionId={}", max_id);
-        assert_eq!(extract_session_id(&cookie), Some(max_id));
+    fn test_normalize_ingress_leaves_other_paths_alone() {
+        assert_eq!(
+            normalize_ingress_path("/api/v1/models"),
+            Ok("/api/v1/models".to_owned())
+        );
+        assert_eq!(normalize_ingress_path("/"), Ok("/".to_owned()));
+        // Already prefixed — not double-prefixed.
+        assert_eq!(
+            normalize_ingress_path("/artifacts/runtime/user/me/x.json"),
+            Ok("/artifacts/runtime/user/me/x.json".to_owned())
+        );
     }
 
-    // ── Session cache tests ──────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn test_session_cache_hit_valid() {
-        use std::collections::HashMap;
-        use std::sync::Arc;
-        use std::time::Instant;
-        use tokio::sync::Mutex;
-
-        let cache: Arc<Mutex<HashMap<String, (Instant, bool)>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        {
-            let mut c = cache.lock().await;
-            c.insert("sid-valid".to_owned(), (Instant::now(), true));
-        }
-
-        let c = cache.lock().await;
-        let &(checked_at, is_valid) = c.get("sid-valid").unwrap();
-        assert!(is_valid);
-        assert!(checked_at.elapsed().as_secs() < 5);
-    }
-
-    #[tokio::test]
-    async fn test_session_cache_invalid_not_persisted_across_ttl() {
-        use std::collections::HashMap;
-        use std::sync::Arc;
-        use std::time::{Duration, Instant};
-        use tokio::sync::Mutex;
-
-        let cache: Arc<Mutex<HashMap<String, (Instant, bool)>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        {
-            let mut c = cache.lock().await;
-            let old_instant = Instant::now() - Duration::from_secs(2);
-            c.insert("sid-invalid".to_owned(), (old_instant, false));
-        }
-
-        let c = cache.lock().await;
-        let &(checked_at, _is_valid) = c.get("sid-invalid").unwrap();
-        let ttl_invalid: u64 = 1;
-        assert!(checked_at.elapsed().as_secs() >= ttl_invalid);
-    }
-
-    #[tokio::test]
-    async fn test_session_cache_miss_after_valid_ttl() {
-        use std::collections::HashMap;
-        use std::sync::Arc;
-        use std::time::{Duration, Instant};
-        use tokio::sync::Mutex;
-
-        let cache: Arc<Mutex<HashMap<String, (Instant, bool)>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        {
-            let mut c = cache.lock().await;
-            let old_instant = Instant::now() - Duration::from_secs(6);
-            c.insert("sid-valid-expired".to_owned(), (old_instant, true));
-        }
-
-        let c = cache.lock().await;
-        let &(checked_at, _is_valid) = c.get("sid-valid-expired").unwrap();
-        let ttl_valid: u64 = 5;
-        assert!(checked_at.elapsed().as_secs() >= ttl_valid);
+    #[test]
+    fn test_normalize_ingress_preserves_encoding_of_legit_names() {
+        // A space in a filename must survive: the upstream gets the same string.
+        assert_eq!(
+            normalize_ingress_path("/artifacts/runtime/user/me/contents/boneca%20roxa.png"),
+            Ok("/artifacts/runtime/user/me/contents/boneca%20roxa.png".to_owned())
+        );
     }
 }

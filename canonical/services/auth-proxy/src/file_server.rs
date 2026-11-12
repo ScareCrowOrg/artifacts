@@ -3,8 +3,10 @@
 //! The Auth Proxy (Rust/tokio) serves binary artifacts (.glb, .png, etc.)
 //! directly from disk using async file I/O, bypassing Vite entirely.
 //!
-//! Runtime artifacts additionally require a self-access check: the session's
-//! `userId` must match the `assignee_id` in the URL path before serving.
+//! This module owns the *primitives* — decoding, path resolution, MIME, streaming.
+//! The *decisions* live with the routes that use them: `proxy::runtime_server`
+//! (the runtime RBAC gate and its two deliveries) and `proxy::canonical_server`
+//! (canonical binaries).
 
 use std::path::Path;
 
@@ -19,6 +21,12 @@ use tracing::{debug, error, warn};
 
 use crate::proxy::add_cors_headers;
 use crate::AppState;
+
+/// Root of the artifact tree inside the container (mounted read-only).
+///
+/// Both artifact servers resolve against this base, so classification, the RBAC
+/// gate and the bytes on disk all describe the same file.
+pub const ARTIFACTS_BASE: &str = "/app/artifacts";
 
 /// Result of an artifact path resolution.
 ///
@@ -40,7 +48,12 @@ pub enum ArtifactResolution {
 /// **Backward compatibility**: If any percent sequence is malformed (a lone `%`,
 /// or `%` followed by non-hex characters), the original string is returned
 /// unchanged so existing behavior is preserved.
-fn percent_decode_path(path: &str) -> String {
+///
+/// Shared with the ingress: the query-free path check (`proxy::normalize_ingress_path`)
+/// and the runtime slug derivation (`proxy::runtime_server`) must decode exactly
+/// the way path resolution does, or a path could be authorized as one resource
+/// and read as another.
+pub(crate) fn percent_decode_path(path: &str) -> String {
     if !path.contains('%') {
         return path.to_string();
     }
@@ -135,161 +148,6 @@ pub fn extract_runtime_assignee(path: &str) -> Option<&str> {
     if assignee_id.is_empty() { None } else { Some(assignee_id) }
 }
 
-/// Check if a session has access to a specific runtime assignee's artifacts.
-///
-/// Compares the session's `userId` with the `assignee_id` extracted from the URL path.
-/// If they match, the user is accessing their own runtime content (self-access allowed).
-/// If they differ, the session is attempting to access another user's artifacts (denied).
-///
-/// Planet owners bypass this check entirely (access all).
-///
-/// **Fail-closed**: Redis errors → access denied.
-pub async fn check_runtime_access(
-    state: &AppState,
-    session_id: &str,
-    assignee_id: &str,
-) -> bool {
-    let mut conn = state.redis_cm.clone();
-
-    // DIAG [local-runtime-magro iteration 5]: Log entry with full context
-    debug!(
-        "[RuntimeFileServer-DIAG] check_runtime_access entry: session_id={}, assignee_id={}",
-        session_id, assignee_id
-    );
-
-    // Check if user is the planet owner (has access to all artifacts).
-    let is_owner_key = format!("state:session:{}:is_owner", session_id);
-    let is_owner: Option<String> = redis::cmd("GET")
-        .arg(&is_owner_key)
-        .query_async(&mut conn)
-        .await
-        .unwrap_or(None);
-
-    if let Some(ref val) = is_owner {
-        if val == "true" {
-            debug!("[RuntimeFileServer] Runtime access allowed: session owner");
-            return true;
-        }
-        debug!(
-            "[RuntimeFileServer-DIAG] is_owner key exists but value={:?} (not 'true'), \
-             proceeding to self-access check",
-            val
-        );
-    } else {
-        debug!(
-            "[RuntimeFileServer-DIAG] is_owner key '{}' not found in Redis, \
-             proceeding to self-access check",
-            is_owner_key
-        );
-    }
-
-    // Self-access check: compare the session's userId with the assignee_id from the URL path.
-    //
-    // Runtime artifacts live at /runtime/user/{assignee_id}/contents/{cell_id}/{filename}.
-    // The assignee_id (UUID from the URL) identifies which user owns the artifact.
-    // To allow access, the session's userId must match the assignee_id (self-access).
-    //
-    // This replaces the old SISMEMBER check which incorrectly compared assignee_id (UUID)
-    // against the allowed_artifacts set (which contains cell type slugs, not UUIDs).
-    // FIX ITERATION_2: Changed from "state:session:{}" to "session:{}" so that
-    // auth-proxy reads the SAME primary key that bind_session() maintains.
-    // Previously auth-proxy read "state:session:{sid}" (a duplicate that was only
-    // created once during session-bind and never renewed on session refresh), while
-    // the backend reads "session:{sid}" (the SSOT that stays current). This mismatch
-    // caused 403 Forbidden for valid sessions when "state:session:{sid}" expired but
-    // "session:{sid}" was still valid. The "state:session:{sid}" duplicate creation
-    // in auth_session_router.py has been removed — auth-proxy now reads the SSOT.
-    let session_key = format!("session:{}", session_id);
-    // DIAG [3d-mesh-guest-403-render]: Log context before self-access check
-    warn!(
-        "[RuntimeFileServer-DIAG] Self-access check: session_id={}, assignee_id={}, \
-         is_owner={:?}, reading key='{}'",
-        session_id, assignee_id, is_owner, session_key,
-    );
-    let session_data: Option<String> = redis::cmd("GET")
-        .arg(&session_key)
-        .query_async(&mut conn)
-        .await
-        .unwrap_or(None);
-
-    match session_data {
-        Some(json_str) => {
-            match serde_json::from_str::<serde_json::Value>(&json_str) {
-                Ok(val) => {
-                    let user_id = val.get("userId").and_then(|v| v.as_str());
-                    match user_id {
-                        Some(uid) if uid == assignee_id => {
-                            debug!(
-                                "[RuntimeFileServer] Runtime access allowed: self-access \
-                                 (userId={} matches assignee_id={})",
-                                uid, assignee_id
-                            );
-                            true
-                        }
-                        Some(uid) => {
-                            warn!(
-                                "[RuntimeFileServer-PERMANENTE] Runtime access DENIED: session userId={} \
-                                 != assignee_id={}",
-                                uid, assignee_id
-                            );
-                            debug!(
-                                "[RuntimeFileServer] Runtime access DENIED: session userId={} \
-                                 != assignee_id={}",
-                                uid, assignee_id
-                            );
-                            false
-                        }
-                        None => {
-                            warn!(
-                                "[RuntimeFileServer] Runtime access DENIED: no userId in \
-                                 session data: {}",
-                                json_str
-                            );
-                            false
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!(
-                        "[RuntimeFileServer] Runtime access DENIED: failed to parse session \
-                         JSON: {}",
-                        e
-                    );
-                    false
-                }
-            }
-        }
-        None => {
-            warn!(
-                "[RuntimeFileServer] Runtime access DENIED: session data not found for \
-                 session_id={}",
-                session_id
-            );
-            // DIAG [3d-mesh-guest-403-render]: Check the alternative key session:{sid}
-            // which IS created by auth_session_router.py (unlike state:session:{sid}).
-            // This confirms the Redis key mismatch root cause.
-            let alt_key = format!("session:{}", session_id);
-            let alt_data: Option<String> = redis::cmd("GET")
-                .arg(&alt_key)
-                .query_async(&mut conn)
-                .await
-                .unwrap_or(None);
-            warn!(
-                "[RuntimeFileServer-DIAG] Alternative key '{}' check: {}",
-                alt_key,
-                if alt_data.is_some() {
-                    format!("EXISTS (len={}, prefix='{}')",
-                        alt_data.as_ref().unwrap().len(),
-                        &alt_data.as_ref().unwrap()[..std::cmp::min(80, alt_data.as_ref().unwrap().len())])
-                } else {
-                    "NIL".to_string()
-                }
-            );
-            false
-        }
-    }
-}
-
 /// Check if a session has access to a specific viewer.
 ///
 /// Reads Redis state keys written by `auth_session_router.py:bind_session()`:
@@ -297,6 +155,13 @@ pub async fn check_runtime_access(
 /// - `state:session:{sessionId}:allowed_artifacts` → SISMEMBER check for guest allowances.
 ///
 /// **Fail-closed**: If Redis errors, access is denied.
+///
+/// ⚠️ **Currently unreachable over HTTP.** Its only caller is the `ViteProtected`
+/// arm of the ingress `match`, and every path that produces `ViteProtected`
+/// (`is_public_path` → `PUBLIC_PREFIXES`) returns earlier, in the public-path
+/// short-circuit — so the "viewer denied → planet-hall" redirect never fires. The
+/// WebSocket `ViteProtected` arm is a different arm and is live. Kept as-is;
+/// tracked as technical debt (see `AUTH_PROXY_GATEWAY_FLOW.md`).
 pub async fn check_viewer_access(
     state: &AppState,
     session_id: &str,

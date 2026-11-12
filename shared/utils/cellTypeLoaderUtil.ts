@@ -25,6 +25,36 @@
  */
 
 /**
+ * Build the stage segment of an artifact URL.
+ *
+ * Canonical and sandbox artifacts are addressed by stage alone
+ * (`/artifacts/canonical/...`). Runtime artifacts live inside a per-user
+ * namespace (`/artifacts/runtime/user/{namespace}/...`) — that segment is what
+ * Auth Proxy resolves to decide RBAC, so it is part of the address, not an
+ * optional decoration.
+ *
+ * This is the ONLY place the segment is built: `BaseCell` (type.json) and
+ * `useCellViewProvider` (dynamic import) both call it, so the two URLs for the
+ * same cell can never diverge.
+ *
+ * @param stage - Artifact stage (canonical, sandbox, runtime)
+ * @param namespace - Owner user id — REQUIRED for runtime
+ * @returns Stage segment, e.g. `canonical` or `runtime/user/{id}`
+ * @throws Error when stage is `runtime` and no namespace is given. Failing
+ * loudly is deliberate: a silent fallback is what hid the 403 that made
+ * runtime cells degrade to a generated form with no server-visible error.
+ */
+export function artifactStageSegment(stage: string, namespace?: string | null): string {
+  if (stage === 'runtime') {
+    if (!namespace) {
+      throw new Error('[artifactStageSegment] runtime artifact requires a namespace (owner id)')
+    }
+    return `runtime/user/${namespace}`
+  }
+  return stage
+}
+
+/**
  * Load cell type JSON from artifacts via Vite HTTP service
  * Handles both direct JSON and reference files with recursive resolution
  *

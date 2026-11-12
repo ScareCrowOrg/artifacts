@@ -39,6 +39,11 @@ export default defineConfig({
       // Screen display-audio + per-instance session isolation (issue
       // party-calls-screen-audio-session-isolation): Ajuste 1 (E1-E5) + Ajuste 2 (F1-F2).
       './shared/composables/__tests__/usePartyCalls.screenAudioSessionIsolation.test.ts',
+      // Shared utils live in shared/utils/__tests__/, outside the
+      // canonical/cell_types glob. `artifactStageSegment` is the single builder
+      // of the stage segment shared by BaseCell and useCellViewProvider
+      // (issue runtime-cell-types-usable).
+      './shared/utils/__tests__/*.test.ts',
     ],
   },
   resolve: {

@@ -1,0 +1,112 @@
+[
+  {
+    "description": "Canonical cell code under the owner namespace",
+    "input": "/artifacts/runtime/user/u1/cell_types/my-cell/frontend/MyCell.ts",
+    "expect": "my-cell"
+  },
+  {
+    "description": "Canonical type.json — the URL BaseCell builds",
+    "input": "/artifacts/runtime/user/u1/cell_types/my-cell/type.json",
+    "expect": "my-cell"
+  },
+  {
+    "description": "No trailing suffix after the slug",
+    "input": "/artifacts/runtime/user/u1/cell_types/my-cell",
+    "expect": "my-cell"
+  },
+  {
+    "description": "Bare stage path, without the /artifacts prefix (the ingress adds it)",
+    "input": "/runtime/user/u1/cell_types/my-cell/frontend/MyCell.ts",
+    "expect": "my-cell"
+  },
+  {
+    "description": "Uploaded content — no cell_types segment, so no artifact slug",
+    "input": "/artifacts/runtime/user/u1/contents/cid/photo.png",
+    "expect": null
+  },
+  {
+    "description": "Uploaded .html — also carries no slug",
+    "input": "/artifacts/runtime/user/u1/contents/cid/evil.html",
+    "expect": null
+  },
+  {
+    "description": "cell_types with nothing after it",
+    "input": "/artifacts/runtime/user/u1/cell_types",
+    "expect": null
+  },
+  {
+    "description": "cell_types with a trailing slash only",
+    "input": "/artifacts/runtime/user/u1/cell_types/",
+    "expect": null
+  },
+  {
+    "description": "Canonical tree — the allowance check must never run outside /runtime/",
+    "input": "/artifacts/canonical/cell_types/my-cell/View.vue",
+    "expect": null
+  },
+  {
+    "description": "Sandbox tree — same, never an allowance subject",
+    "input": "/artifacts/sandbox/cell_types/my-cell/View.vue",
+    "expect": null
+  },
+  {
+    "description": "Missing the 'user' segment",
+    "input": "/artifacts/runtime/u1/cell_types/my-cell/x",
+    "expect": null
+  },
+  {
+    "description": "Runtime root with no namespace",
+    "input": "/artifacts/runtime",
+    "expect": null
+  },
+  {
+    "description": "Namespace segment only",
+    "input": "/artifacts/runtime/user",
+    "expect": null
+  },
+  {
+    "description": "Assignee only, no cell_types",
+    "input": "/artifacts/runtime/user/u1",
+    "expect": null
+  },
+  {
+    "description": "Doubled slash before the slug — empty segments are ignored",
+    "input": "/artifacts/runtime/user/u1//cell_types/my-cell/type.json",
+    "expect": "my-cell"
+  },
+  {
+    "description": "Doubled slash after cell_types",
+    "input": "/artifacts/runtime/user/u1/cell_types//my-cell/type.json",
+    "expect": "my-cell"
+  },
+  {
+    "description": "Percent-encoded '..' as the slug — fail-closed, never a lookup key",
+    "input": "/artifacts/runtime/user/u1/cell_types/%2E%2E/type.json",
+    "expect": null
+  },
+  {
+    "description": "Literal '..' as a segment — structural, never a slug",
+    "input": "/artifacts/runtime/user/u1/cell_types/../my-cell/type.json",
+    "expect": null
+  },
+  {
+    "description": "'..' in the namespace position",
+    "input": "/artifacts/runtime/user/../u9/cell_types/x/y",
+    "expect": null
+  },
+  {
+    "description": "Query string at the end (the ingress strips it before extraction)",
+    "input": "/artifacts/runtime/user/u1/cell_types/my-cell/type.json?v=1",
+    "expect": "my-cell"
+  },
+  {
+    "description": "Legitimate name containing dots — only exact '.'/'..' are structural",
+    "input": "/artifacts/runtime/user/u1/cell_types/foo..bar/type.json",
+    "expect": "foo..bar"
+  },
+  {
+    "description": "Percent-encoded space in the slug: the slug is compared exactly as it appears in the URL, with no decoding, so an exotic folder name fails closed instead of being guessed at. Real cell type slugs are kebab-case.",
+    "input": "/artifacts/runtime/user/u1/cell_types/my%20cell/type.json",
+    "expect": "my%20cell"
+  }
+]

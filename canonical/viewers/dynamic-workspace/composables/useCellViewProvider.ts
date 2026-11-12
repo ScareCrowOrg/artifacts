@@ -27,6 +27,7 @@ import { defineAsyncComponent, markRaw, shallowRef, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import type { CellTypeDefinition, ViewSpec } from '../types'
 import { createLogger } from '@/utils/logger'
+import { artifactStageSegment } from '@/utils/cellTypeLoaderUtil'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { apiFetch } from '@/services/apiService'
 import GeneratedFormView from '../components/GeneratedFormView.vue'
@@ -39,6 +40,22 @@ const TUNNEL_FQDN =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_TUNNEL_FQDN) || ''
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the runtime artifact namespace (the planet owner's user id).
+ *
+ * Runtime artifacts live in the planet owner's namespace (owner = namespace), so
+ * the owner id is the segment Auth Proxy resolves for RBAC. Without it the URL
+ * points at a path that does not exist and the dynamic import fails with
+ * "Failed to fetch dynamically imported module".
+ *
+ * Returns `null` when unknown — `artifactStageSegment` is what rejects a missing
+ * namespace, so the failure is loud and has a single source.
+ */
+function resolveRuntimeNamespace(): string | null {
+  const store = useWorkspaceStore()
+  return store.planetOwnerId || store.userId || null
+}
 
 /**
  * Build an absolute (or origin-relative) URL for a cell artifact.
@@ -56,9 +73,19 @@ const TUNNEL_FQDN =
  * - Vite's artifactsRewritePlugin strips `/artifacts` → `/{stage}/cell_types/...`
  * - Vite resolves to /app/artifacts/{stage}/cell_types/{cellTypeName}/{filePath}
  *
+ * Runtime artifacts are namespaced per user, so they add a segment:
+ * /artifacts/runtime/user/{namespace}/cell_types/{cellTypeName}/{filePath}
+ * That is the tree Auth Proxy serves — it resolves `/artifacts/runtime/user/{id}/...`
+ * (extract_runtime_assignee) and keys RBAC on the assignee. Promotion targets the
+ * planet owner's namespace, so the owner is the segment here.
+ *
+ * The segment itself is built by `artifactStageSegment` (shared with BaseCell),
+ * so the URL used for the dynamic import and the URL used for the type.json
+ * fetch cannot drift apart.
+ *
  * @param cellTypeName  Semantic cell-type name (e.g. "calculator-cell")
  * @param filePath      Relative file path within the cell-type directory
- * @param stage         Artifact stage (canonical, sandbox) — defaults to "canonical"
+ * @param stage         Artifact stage (canonical, sandbox, runtime) — defaults to "canonical"
  * @returns             Absolute or root-relative URL string
  */
 function buildArtifactUrl(cellTypeName: string, filePath: string, stage: string = 'canonical'): string {
@@ -68,7 +95,8 @@ function buildArtifactUrl(cellTypeName: string, filePath: string, stage: string 
   if (cellTypeName.includes('..') || filePath.includes('..')) {
     throw new Error(`[useCellViewProvider] Invalid artifact path: cellTypeName="${cellTypeName}", filePath="${filePath}"`)
   }
-  const artifactPath = `/artifacts/${stage}/cell_types/${cellTypeName}/${filePath}`
+  const stageSegment = artifactStageSegment(stage, resolveRuntimeNamespace())
+  const artifactPath = `/artifacts/${stageSegment}/cell_types/${cellTypeName}/${filePath}`
   log.debug('[useCellViewProvider] buildArtifactUrl', { cellTypeName, filePath, stage, artifactPath, hasTunnelFqdn: !!TUNNEL_FQDN })
   return TUNNEL_FQDN ? `https://${TUNNEL_FQDN}${artifactPath}` : artifactPath
 }
@@ -146,6 +174,7 @@ export function useCellViewProvider() {
    *
    * Requires the cell type's type.json to have default_refs.basecell[0] set.
    * Import uses buildArtifactUrl(): /artifacts/{stage}/cell_types/{name}/{basecellPath}
+   * (stage "runtime" inserts the owner namespace: /artifacts/runtime/user/{owner}/...)
    *
    * @param cellTypeName  Semantic type name (e.g. "calculator-cell") — never UUID
    * @param cellType      Type definition (from getCellTypes or provided externally)
@@ -220,6 +249,10 @@ export function useCellViewProvider() {
       ;(instance as any).__cellTypeName = cellTypeName
       // Set stage so BaseCell.loadCellTypeFromDiscovery loads from correct path (sandbox vs canonical)
       ;(instance as any).__cellStage = cellType.stage || 'canonical'
+      // Set the runtime namespace so BaseCell builds the same URL this composable
+      // just used for the dynamic import. Single writer: read only by
+      // BaseCell.loadCellTypeFromDiscovery, via artifactStageSegment.
+      ;(instance as any).__cellArtifactNamespace = resolveRuntimeNamespace()
 
       // ── Signal cell when MFE handshake completes ─────────────────────────
       // If the handshake already completed, signal immediately.
